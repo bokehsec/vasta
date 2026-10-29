@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board),
 // optionally grouped. Used by type pages, query pages and queries embedded in documents.
-import { computed, ref, watch, type Directive } from 'vue'
+import { computed, nextTick, ref, watch, type Directive } from 'vue'
 import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout } from '@vasta/core'
 import { addSelectOption, setProperty } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
@@ -87,13 +87,19 @@ function startResize(event: PointerEvent, column: Column) {
   handle.addEventListener('pointerup', end)
   handle.addEventListener('pointercancel', end)
 }
-// Editing in the table: a click on a property's cell opens its editor there, one cell at a time.
-// A value shows as soon as it is picked (`edits`) and is saved like the object page saves it.
+// Editing in the table: a click anywhere on a property's cell (or Enter on it) opens its editor
+// there, one cell at a time; the related objects' chips and links in it do not navigate then. In a
+// query embedded in a page, presses in a cell stay out of the page editor, which would select the
+// embed and lose track of the document. A value shows as soon as it is picked (`edits`) and is saved like the object page
+// saves it; only the latest edit of a cell clears it, so quick changes do not flicker back.
 const EDITABLE = new Set<PropertyDef['kind']>(['text', 'url', 'number', 'checkbox', 'date', 'select', 'relation', 'person'])
 const editable = (column: Column) => !!column.def && EDITABLE.has(column.def.kind)
 const cellKey = (object: ObjectSummary, column: Column) => `${object.id} ${column.field}`
 const editing = ref('')
 const edits = ref<Record<string, PropertyValue | null>>({})
+const latest = new Map<string, number>()
+let saves = 0
+const container = ref<HTMLElement | null>(null)
 const valueOf = (object: ObjectSummary, column: Column) => {
   const key = cellKey(object, column)
   return key in edits.value ? (edits.value[key] ?? undefined) : object.props[column.field]
@@ -108,16 +114,32 @@ function startEdit(object: ObjectSummary, column: Column) {
   } else editing.value = cellKey(object, column)
 }
 
+/** Editing ended; the focus goes back to the cell when nothing else took it (Enter, Escape). */
+function endEdit(key: string) {
+  if (editing.value !== key) return
+  editing.value = ''
+  void nextTick(() => {
+    if (document.activeElement && document.activeElement !== document.body) return
+    container.value?.querySelector<HTMLElement>(`[data-cell="${CSS.escape(key)}"]`)?.focus()
+  })
+}
+
 async function saveCell(object: ObjectSummary, column: Column, value: PropertyValue | undefined) {
   const key = cellKey(object, column)
+  const save = ++saves
+  latest.set(key, save)
   edits.value = { ...edits.value, [key]: value ?? null }
   try {
-    emit('moved', await setProperty(object.id, column.field, value))
+    const saved = await setProperty(object.id, column.field, value)
+    if (latest.get(key) === save) emit('moved', saved)
   } catch (error) {
     lastError.value = (error as Error).message
   } finally {
-    const { [key]: _done, ...rest } = edits.value
-    edits.value = rest
+    if (latest.get(key) === save) {
+      latest.delete(key)
+      const { [key]: _done, ...rest } = edits.value
+      edits.value = rest
+    }
   }
 }
 
@@ -147,7 +169,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
   />
 
   <!-- Container queries: the same view sits in a full page or in a narrow document column. -->
-  <div v-else class="@container">
+  <div v-else ref="container" class="@container">
     <section v-for="group in groups" :key="group.key" class="mt-4 first:mt-0">
       <header v-if="groupField" class="mb-3 flex items-center gap-2 text-sm">
         <span v-if="group.objectId"><ObjectChip :id="group.objectId" :tag="groupField === 'tags'" /></span>
@@ -216,14 +238,22 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                   class="-mx-2 -my-1.5"
                   @update="saveCell(object, column, $event)"
                   @add-option="addOption(object, column, $event)"
-                  @close="editing === cellKey(object, column) && (editing = '')"
+                  @close="endEdit(cellKey(object, column))"
+                  @mousedown.stop
                 />
                 <div
                   v-else-if="column.def && editable(column)"
-                  class="-mx-1.5 -my-0.5 min-h-6 cursor-pointer rounded-md px-1.5 py-0.5 hover:bg-hover"
+                  role="button"
+                  tabindex="0"
+                  class="-mx-1.5 -my-0.5 min-h-6 cursor-pointer rounded-md px-1.5 py-0.5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/50"
                   :class="column.wrap ? '' : 'overflow-hidden'"
+                  :aria-label="`${column.label}: edit`"
                   :data-edit="column.field"
-                  @click="startEdit(object, column)"
+                  :data-cell="cellKey(object, column)"
+                  @mousedown.stop
+                  @click.capture.prevent="startEdit(object, column)"
+                  @keydown.enter.self.prevent="startEdit(object, column)"
+                  @keydown.space.self.prevent="startEdit(object, column)"
                 >
                   <PropertyDisplay :def="column.def" :value="valueOf(object, column)" :object="object" :wrap="column.wrap" />
                 </div>

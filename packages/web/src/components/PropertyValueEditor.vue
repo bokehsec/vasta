@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Editor for one property value, chosen by the property's kind.
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ObjectSummary, PropertyDef, PropertyValue, SelectOption, SelectPropertyDef } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
 import { chip, colorNames } from '../lib/colors.ts'
@@ -13,7 +13,8 @@ import PersonPicker from './PersonPicker.vue'
 import PopoverMenu from './PopoverMenu.vue'
 
 // `autofocus`: a table cell being edited; the field takes the focus or its picker opens on mount,
-// and `close` says when editing ends (the picker closed, or the field lost the focus).
+// and `close` says when editing ends: the picker closed, a press outside the editor, or the field
+// lost the focus (Enter keeps what was typed, Escape puts the value back).
 const props = defineProps<{ def: PropertyDef; value: PropertyValue | undefined; autofocus?: boolean }>()
 const emit = defineEmits<{
   update: [value: PropertyValue | undefined]
@@ -25,19 +26,46 @@ const emit = defineEmits<{
 const anchor = ref<HTMLElement | null>(null)
 const open = ref(false)
 const field = ref<HTMLInputElement | null>(null)
+const root = ref<HTMLElement | null>(null)
+const picks = computed(() => props.def.kind === 'select' || props.def.kind === 'relation' || props.def.kind === 'person')
+
+// A press inside the editor (a relation's remove button) closes the picker but keeps editing; one
+// outside the editor and its picker ends it. Registered before the picker's own listener, so it
+// knows where the press was when the picker closes.
+let pressedInside = false
+function onPress(event: PointerEvent) {
+  const target = event.target as Element
+  pressedInside = !!root.value?.contains(target)
+  if (!pressedInside && !target.closest('[data-overlay]')) emit('close')
+}
 
 onMounted(async () => {
   if (!props.autofocus) return
-  if (props.def.kind === 'select' || props.def.kind === 'relation' || props.def.kind === 'person') open.value = true
+  if (picks.value) {
+    document.addEventListener('pointerdown', onPress, true)
+    open.value = true
+  }
   await nextTick()
   field.value?.focus()
   field.value?.select()
 })
-watch(open, (value) => !value && emit('close'))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', onPress, true))
+watch(open, (value) => {
+  if (!value && !pressedInside) emit('close')
+  pressedInside = false
+})
 
 /** In a table cell, Enter ends editing like leaving the field (which saves it). */
 function enter(event: KeyboardEvent) {
   if (props.autofocus) (event.target as HTMLInputElement).blur()
+}
+
+/** In a table cell, Escape puts the value back and ends editing without saving. */
+function cancel(event: KeyboardEvent) {
+  if (!props.autofocus) return
+  const input = event.target as HTMLInputElement
+  input.value = props.def.kind === 'number' ? String(props.value?.kind === 'number' ? props.value.value : '') : text.value
+  input.blur()
 }
 
 const text = computed(() => (props.value && 'value' in props.value && typeof props.value.value === 'string' ? props.value.value : ''))
@@ -100,7 +128,7 @@ function removeRelation(id: string) {
 </script>
 
 <template>
-  <div class="min-h-8 flex min-w-0 flex-1 items-center">
+  <div ref="root" class="min-h-8 flex min-w-0 flex-1 items-center">
     <input
       v-if="def.kind === 'text'"
       ref="field"
@@ -109,6 +137,7 @@ function removeRelation(id: string) {
       placeholder="Empty"
       @change="setText(($event.target as HTMLInputElement).value)"
       @keydown.enter="enter"
+      @keydown.esc="cancel"
       @blur="emit('close')"
     />
 
@@ -120,6 +149,7 @@ function removeRelation(id: string) {
         placeholder="https://"
         @change="setText(($event.target as HTMLInputElement).value)"
         @keydown.enter="enter"
+        @keydown.esc="cancel"
         @blur="emit('close')"
       />
       <a v-if="text" :href="text" target="_blank" rel="noopener noreferrer" class="text-ink-faint hover:text-accent"><AppIcon fallback="ph:arrow-square-out" /></a>
@@ -134,6 +164,7 @@ function removeRelation(id: string) {
       placeholder="Empty"
       @change="setNumber(($event.target as HTMLInputElement).value)"
       @keydown.enter="enter"
+      @keydown.esc="cancel"
       @blur="emit('close')"
     />
 
