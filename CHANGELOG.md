@@ -6,6 +6,13 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Edit in tables.** Click a property's cell in a table view, or in a query shown as a table, to
+  change it right there: pick from a select, a person or a related object, set a date, type a
+  text or number (Enter saves), and a checkbox toggles with one click. Formulas and long text
+  stay read-only; the title still opens the object.
+
 ## 0.4.1 (2026-10-27)
 
 ### Added
