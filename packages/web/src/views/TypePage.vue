@@ -25,6 +25,7 @@ import { keysOf } from '../lib/shortcuts.ts'
 import { meId, sharedSpace } from '../lib/people.ts'
 import { primeSummaries, replaceType, typesById, unsavedTypes } from '../lib/state.ts'
 import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
+import { keepPane, openObject } from '../lib/open.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -137,7 +138,7 @@ watch(
 )
 function closeSettings() {
   settingsOpen.value = false
-  if (route.query.settings) void router.replace({ query: {} })
+  if (route.query.settings) void router.replace({ query: keepPane({}) })
 }
 
 function saveViews(mutate: (views: ViewDef[]) => void) {
@@ -192,7 +193,7 @@ async function deleteType() {
 function objectMenu(event: MouseEvent, object: ObjectSummary) {
   openContextMenu(event, [
     { kind: 'heading', label: displayTitle(object, type.value) },
-    { label: 'Open', icon: 'ph:arrow-square-out', run: () => router.push(`/o/${object.id}`) },
+    { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(object.id) },
     pinMenu(object.id),
     { kind: 'separator' },
     {
