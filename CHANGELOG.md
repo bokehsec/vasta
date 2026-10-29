@@ -8,10 +8,11 @@ GitHub release page.
 
 ### Added
 
-- **Edit in tables.** Click a property's cell in a table view, or in a query shown as a table, to
-  change it right there: pick from a select, a person or a related object, set a date, type a
-  text or number (Enter saves), and a checkbox toggles with one click. Formulas and long text
-  stay read-only; the title still opens the object.
+- **Edit in tables.** Click a property's cell in a table view, or in a query shown as a table (also
+  one embedded in a page), to change it right there: pick from a select, a person or a related
+  object, set a date, type a text, number or link, and a checkbox toggles with one click. With the
+  keyboard, Tab moves between cells, Enter or Space opens one, Enter saves what you typed and
+  Escape puts it back. Formulas and long text stay read-only; the title still opens the object.
 
 ### Changed
 
