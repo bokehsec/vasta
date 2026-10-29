@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // One calendar entry: a compact chip (month cells, all-day row) or a timed block (day columns).
-// Objects open on click; occurrences of repeating dates and external events emit `details`;
-// tasks get a checkbox. Entries the page allows move by dragging (after a long press on touch
+// Objects open in the side pane on click; occurrences of repeating dates and external events emit
+// `details`; tasks get a checkbox. Entries the page allows move by dragging (after a long press on touch
 // screens), and timed blocks resize by their bottom edge (lib/calendar-drag.ts).
 import { computed, inject } from 'vue'
 import type { CalendarEntry, CalendarSource } from '@vasta/core'
@@ -11,6 +11,7 @@ import { chip } from '../../lib/colors.ts'
 import { displayTitle } from '../../lib/format.ts'
 import { summaryOf, typesById } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
+import ObjectLink from '../ObjectLink.vue'
 
 const props = defineProps<{
   entry: CalendarEntry
@@ -69,10 +70,8 @@ function onContextMenu(event: MouseEvent) {
 <template>
   <!-- Occurrences of repeating dates open their details, so they are no links. -->
   <component
-    :is="opens ? 'RouterLink' : 'div'"
-    :to="opens ? `/o/${entry.objectId}` : undefined"
-    :role="opens ? undefined : 'button'"
-    :tabindex="opens ? undefined : 0"
+    :is="opens ? ObjectLink : 'div'"
+    v-bind="opens ? { id: entry.objectId, opens: 'pane' } : { role: 'button', tabindex: 0 }"
     :title="tooltip"
     draggable="false"
     data-calendar-entry

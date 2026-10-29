@@ -16,6 +16,7 @@ import ObjectCard from './ObjectCard.vue'
 import ObjectChip from './ObjectChip.vue'
 import PersonChip from './PersonChip.vue'
 import PropertyDisplay from './PropertyDisplay.vue'
+import ObjectLink from './ObjectLink.vue'
 
 const props = defineProps<{
   objects: ObjectSummary[]
@@ -117,14 +118,14 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
 
       <!-- List -->
       <div v-if="layout === 'list'" class="divide-y divide-line/70">
-        <RouterLink v-for="object in shown(group)" :key="object.id" :to="`/o/${object.id}`" class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover" @contextmenu="emit('menu', $event, object)">
+        <ObjectLink v-for="object in shown(group)" :key="object.id" :id="object.id" opens="pane" class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover" @contextmenu="emit('menu', $event, object)">
           <TypeIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
           <span class="min-w-0 flex-1 truncate font-medium">{{ displayTitle(object, typeOf(object)) }}</span>
           <span class="hidden gap-1 md:flex" @click.prevent>
             <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
           </span>
           <span class="w-24 shrink-0 text-right text-xs text-ink-faint">{{ formatRelative(object.updatedAt) }}</span>
-        </RouterLink>
+        </ObjectLink>
       </div>
 
       <!-- Table: fixed column widths; the last, empty column takes the space left. -->
@@ -155,9 +156,9 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                 class="overflow-hidden px-3 py-2 align-top"
                 :class="column.wrap ? 'break-words' : 'whitespace-nowrap text-ellipsis'"
               >
-                <RouterLink v-if="column.field === 'title'" :to="`/o/${object.id}`" class="font-medium hover:underline">
+                <ObjectLink v-if="column.field === 'title'" :id="object.id" opens="pane" class="font-medium hover:underline">
                   <AppIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" />{{ displayTitle(object, typeOf(object)) }}
-                </RouterLink>
+                </ObjectLink>
                 <span v-else-if="column.field === 'tags' || column.field === 'collections'" class="flex gap-1" :class="column.wrap ? 'flex-wrap' : 'overflow-hidden'">
                   <ObjectChip v-for="id in column.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="column.field === 'tags'" />
                 </span>
