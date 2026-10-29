@@ -2,12 +2,13 @@
 // A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board),
 // optionally grouped. Used by type pages, query pages and queries embedded in documents.
 import { computed, ref, watch, type Directive } from 'vue'
-import type { BoardSettings, Id, ObjectRecord, ObjectSummary, TableSettings, ViewLayout } from '@vasta/core'
+import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout } from '@vasta/core'
+import { addSelectOption, setProperty } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, MIN_COLUMN_WIDTH, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
 import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
-import { typesById } from '../lib/state.ts'
+import { lastError, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
 import BoardView from './BoardView.vue'
@@ -16,6 +17,7 @@ import ObjectCard from './ObjectCard.vue'
 import ObjectChip from './ObjectChip.vue'
 import PersonChip from './PersonChip.vue'
 import PropertyDisplay from './PropertyDisplay.vue'
+import PropertyValueEditor from './PropertyValueEditor.vue'
 
 const props = defineProps<{
   objects: ObjectSummary[]
@@ -85,6 +87,45 @@ function startResize(event: PointerEvent, column: Column) {
   handle.addEventListener('pointerup', end)
   handle.addEventListener('pointercancel', end)
 }
+// Editing in the table: a click on a property's cell opens its editor there, one cell at a time.
+// A value shows as soon as it is picked (`edits`) and is saved like the object page saves it.
+const EDITABLE = new Set<PropertyDef['kind']>(['text', 'url', 'number', 'checkbox', 'date', 'select', 'relation', 'person'])
+const editable = (column: Column) => !!column.def && EDITABLE.has(column.def.kind)
+const cellKey = (object: ObjectSummary, column: Column) => `${object.id} ${column.field}`
+const editing = ref('')
+const edits = ref<Record<string, PropertyValue | null>>({})
+const valueOf = (object: ObjectSummary, column: Column) => {
+  const key = cellKey(object, column)
+  return key in edits.value ? (edits.value[key] ?? undefined) : object.props[column.field]
+}
+
+function startEdit(object: ObjectSummary, column: Column) {
+  if (!editable(column)) return
+  // A checkbox has nothing to open: a click toggles it.
+  if (column.def?.kind === 'checkbox') {
+    const value = valueOf(object, column)
+    void saveCell(object, column, { kind: 'checkbox', value: !(value?.kind === 'checkbox' && value.value) })
+  } else editing.value = cellKey(object, column)
+}
+
+async function saveCell(object: ObjectSummary, column: Column, value: PropertyValue | undefined) {
+  const key = cellKey(object, column)
+  edits.value = { ...edits.value, [key]: value ?? null }
+  try {
+    emit('moved', await setProperty(object.id, column.field, value))
+  } catch (error) {
+    lastError.value = (error as Error).message
+  } finally {
+    const { [key]: _done, ...rest } = edits.value
+    edits.value = rest
+  }
+}
+
+function addOption(object: ObjectSummary, column: Column, option: SelectOption) {
+  const type = typeOf(object)
+  if (type) void addSelectOption(type, column.field, option).catch((error) => (lastError.value = (error as Error).message))
+}
+
 const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 'embed' ? 'wall' : props.layout === 'gallery' ? 'gallery' : 'grid'))
 
 </script>
@@ -167,6 +208,25 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                 <span v-else-if="column.field === 'createdAt' || column.field === 'updatedAt'" class="text-xs text-ink-faint">{{ formatRelative(object[column.field]) }}</span>
                 <span v-else-if="column.field === 'date'">{{ object.date ? formatDate(object.date) : '' }}</span>
                 <span v-else-if="column.field === 'host'">{{ object.media?.host?.replace(/^www\./, '') }}</span>
+                <PropertyValueEditor
+                  v-else-if="column.def && editing === cellKey(object, column)"
+                  :def="column.def"
+                  :value="valueOf(object, column)"
+                  autofocus
+                  class="-mx-2 -my-1.5"
+                  @update="saveCell(object, column, $event)"
+                  @add-option="addOption(object, column, $event)"
+                  @close="editing === cellKey(object, column) && (editing = '')"
+                />
+                <div
+                  v-else-if="column.def && editable(column)"
+                  class="-mx-1.5 -my-0.5 min-h-6 cursor-pointer rounded-md px-1.5 py-0.5 hover:bg-hover"
+                  :class="column.wrap ? '' : 'overflow-hidden'"
+                  :data-edit="column.field"
+                  @click="startEdit(object, column)"
+                >
+                  <PropertyDisplay :def="column.def" :value="valueOf(object, column)" :object="object" :wrap="column.wrap" />
+                </div>
                 <PropertyDisplay v-else-if="column.def" :def="column.def" :value="object.props[column.field]" :object="object" :wrap="column.wrap" />
               </td>
               <td />

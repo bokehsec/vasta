@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Editor for one property value, chosen by the property's kind.
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { ObjectSummary, PropertyDef, PropertyValue, SelectOption, SelectPropertyDef } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
 import { chip, colorNames } from '../lib/colors.ts'
@@ -12,15 +12,33 @@ import PersonChip from './PersonChip.vue'
 import PersonPicker from './PersonPicker.vue'
 import PopoverMenu from './PopoverMenu.vue'
 
-const props = defineProps<{ def: PropertyDef; value: PropertyValue | undefined }>()
+// `autofocus`: a table cell being edited; the field takes the focus or its picker opens on mount,
+// and `close` says when editing ends (the picker closed, or the field lost the focus).
+const props = defineProps<{ def: PropertyDef; value: PropertyValue | undefined; autofocus?: boolean }>()
 const emit = defineEmits<{
   update: [value: PropertyValue | undefined]
   /** A select option was created; the parent saves it on the type. */
   addOption: [option: SelectOption]
+  close: []
 }>()
 
 const anchor = ref<HTMLElement | null>(null)
 const open = ref(false)
+const field = ref<HTMLInputElement | null>(null)
+
+onMounted(async () => {
+  if (!props.autofocus) return
+  if (props.def.kind === 'select' || props.def.kind === 'relation' || props.def.kind === 'person') open.value = true
+  await nextTick()
+  field.value?.focus()
+  field.value?.select()
+})
+watch(open, (value) => !value && emit('close'))
+
+/** In a table cell, Enter ends editing like leaving the field (which saves it). */
+function enter(event: KeyboardEvent) {
+  if (props.autofocus) (event.target as HTMLInputElement).blur()
+}
 
 const text = computed(() => (props.value && 'value' in props.value && typeof props.value.value === 'string' ? props.value.value : ''))
 const ids = computed(() => (props.value?.kind === 'relation' || props.value?.kind === 'select' || props.value?.kind === 'person' ? props.value.value : []))
@@ -85,29 +103,38 @@ function removeRelation(id: string) {
   <div class="min-h-8 flex min-w-0 flex-1 items-center">
     <input
       v-if="def.kind === 'text'"
+      ref="field"
       :value="text"
       class="w-full rounded-md bg-transparent px-2 py-1 outline-none hover:bg-hover focus:bg-hover"
       placeholder="Empty"
       @change="setText(($event.target as HTMLInputElement).value)"
+      @keydown.enter="enter"
+      @blur="emit('close')"
     />
 
     <div v-else-if="def.kind === 'url'" class="flex w-full items-center gap-1">
       <input
+        ref="field"
         :value="text"
         class="w-full rounded-md bg-transparent px-2 py-1 outline-none hover:bg-hover focus:bg-hover"
         placeholder="https://"
         @change="setText(($event.target as HTMLInputElement).value)"
+        @keydown.enter="enter"
+        @blur="emit('close')"
       />
       <a v-if="text" :href="text" target="_blank" rel="noopener noreferrer" class="text-ink-faint hover:text-accent"><AppIcon fallback="ph:arrow-square-out" /></a>
     </div>
 
     <input
       v-else-if="def.kind === 'number'"
+      ref="field"
       type="number"
       :value="value?.kind === 'number' ? value.value : ''"
       class="w-full rounded-md bg-transparent px-2 py-1 outline-none hover:bg-hover focus:bg-hover"
       placeholder="Empty"
       @change="setNumber(($event.target as HTMLInputElement).value)"
+      @keydown.enter="enter"
+      @blur="emit('close')"
     />
 
     <label v-else-if="def.kind === 'checkbox'" class="px-2 py-1">
@@ -123,7 +150,9 @@ function removeRelation(id: string) {
       v-else-if="def.kind === 'date'"
       :value="value?.kind === 'date' ? value.value : undefined"
       :with-time="def.withTime"
+      :autofocus="autofocus"
       @update="emit('update', $event ? { kind: 'date', value: $event } : undefined)"
+      @close="emit('close')"
     />
 
     <template v-else-if="def.kind === 'select'">
