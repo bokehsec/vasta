@@ -11,6 +11,12 @@ GitHub release page.
 - **The toggle's arrow** is bigger and sits centered on the title's line; the lines inside line up
   with the title.
 
+### Fixed
+
+- **Mentions with Markdown characters in their title**, such as an underscore, no longer gain
+  backslashes each time an agent rewrites the page; the backslashes doubled every time and could
+  make a page too big to save.
+
 ## 0.4.1 (2026-10-27)
 
 ### Added
