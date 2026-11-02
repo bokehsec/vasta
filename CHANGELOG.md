@@ -20,6 +20,12 @@ GitHub release page.
   Comments and activity stay on the full page. Mentions in text still open the page, ⌘-click
   still opens a new tab, and phones open the page as before.
 
+### Fixed
+
+- **Mentions with Markdown characters in their title**, such as an underscore, no longer gain
+  backslashes each time an agent rewrites the page; the backslashes doubled every time and could
+  make a page too big to save.
+
 ## 0.4.1 (2026-10-27)
 
 ### Added
