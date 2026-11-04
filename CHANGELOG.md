@@ -6,6 +6,26 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Edit in tables.** Click a property's cell in a table view, or in a query shown as a table (also
+  one embedded in a page), to change it right there: pick from a select, a person or a related
+  object, set a date, type a text, number or link, and a checkbox toggles with one click. With the
+  keyboard, Tab moves between cells, Enter or Space opens one, Enter saves what you typed and
+  Escape puts it back. Formulas and long text stay read-only; the title still opens the object.
+- **Side pane.** A click on an object in a list, table, board or the calendar opens it in a pane
+  next to the page, where it can be edited without losing your place; another click switches it.
+  The pane has Open full page and Close (Esc), is made wider or narrower by its left edge (kept on
+  this device), and is part of the address, so back, forward, reload and copied links keep it.
+  Comments and activity stay on the full page. Mentions in text still open the page, ⌘-click
+  still opens a new tab, and phones open the page as before.
+
+### Fixed
+
+- **Mentions with Markdown characters in their title**, such as an underscore, no longer gain
+  backslashes each time an agent rewrites the page; the backslashes doubled every time and could
+  make a page too big to save.
+
 ## 0.5.0 (2026-11-03)
 
 ### Added
@@ -26,25 +46,6 @@ GitHub release page.
 
 - **The toggle's arrow** is bigger and sits centered on the title's line; the lines inside line up
   with the title.
-### Added
-
-- **Edit in tables.** Click a property's cell in a table view, or in a query shown as a table (also
-  one embedded in a page), to change it right there: pick from a select, a person or a related
-  object, set a date, type a text, number or link, and a checkbox toggles with one click. With the
-  keyboard, Tab moves between cells, Enter or Space opens one, Enter saves what you typed and
-  Escape puts it back. Formulas and long text stay read-only; the title still opens the object.
-- **Side pane.** A click on an object in a list, table, board or the calendar opens it in a pane
-  next to the page, where it can be edited without losing your place; another click switches it.
-  The pane has Open full page and Close (Esc), is made wider or narrower by its left edge (kept on
-  this device), and is part of the address, so back, forward, reload and copied links keep it.
-  Comments and activity stay on the full page. Mentions in text still open the page, ⌘-click
-  still opens a new tab, and phones open the page as before.
-
-### Fixed
-
-- **Mentions with Markdown characters in their title**, such as an underscore, no longer gain
-  backslashes each time an agent rewrites the page; the backslashes doubled every time and could
-  make a page too big to save.
 
 ## 0.4.1 (2026-10-27)
 
