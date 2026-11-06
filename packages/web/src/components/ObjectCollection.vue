@@ -2,7 +2,7 @@
 // A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board),
 // optionally grouped. Used by type pages, query pages and queries embedded in documents.
 import { computed, nextTick, ref, watch, type Directive } from 'vue'
-import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout } from '@vasta/core'
+import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { addSelectOption, setProperty } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, MIN_COLUMN_WIDTH, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
@@ -32,6 +32,8 @@ const props = defineProps<{
   /** The board layout's settings, and whether its cards keep their manual order (no sort chosen). */
   board?: BoardSettings
   manual?: boolean
+  /** Where a click on an object opens it, as saved on the view or query; unset: its page. */
+  openIn?: ViewOpenIn
   /** Shown where nothing should change (a whiteboard card, a page that cannot be edited): property cells do not edit. */
   readonly?: boolean
 }>()
@@ -171,6 +173,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
     :type-ids="typeIds"
     :board="board"
     :manual="manual ?? true"
+    :open-in="openIn"
     @menu="(event, object) => emit('menu', event, object)"
     @moved="emit('moved', $event)"
     @created="emit('created', $event)"
@@ -190,7 +193,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
 
       <!-- List -->
       <div v-if="layout === 'list'" class="divide-y divide-line/70">
-        <ObjectLink v-for="object in shown(group)" :key="object.id" :id="object.id" opens="pane" class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover" @contextmenu="emit('menu', $event, object)">
+        <ObjectLink v-for="object in shown(group)" :key="object.id" :id="object.id" :opens="openIn" class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover" @contextmenu="emit('menu', $event, object)">
           <TypeIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
           <span class="min-w-0 flex-1 truncate font-medium">{{ displayTitle(object, typeOf(object)) }}</span>
           <span class="hidden gap-1 md:flex" @click.prevent>
@@ -228,7 +231,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                 class="overflow-hidden px-3 py-2 align-top"
                 :class="column.wrap ? 'break-words' : 'whitespace-nowrap text-ellipsis'"
               >
-                <ObjectLink v-if="column.field === 'title'" :id="object.id" opens="pane" class="font-medium hover:underline">
+                <ObjectLink v-if="column.field === 'title'" :id="object.id" :opens="openIn" class="font-medium hover:underline">
                   <AppIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" />{{ displayTitle(object, typeOf(object)) }}
                 </ObjectLink>
                 <span v-else-if="column.field === 'tags' || column.field === 'collections'" class="flex gap-1" :class="column.wrap ? 'flex-wrap' : 'overflow-hidden'">
@@ -277,12 +280,12 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
 
       <!-- Wall: masonry columns -->
       <div v-else-if="cardVariant === 'wall'" class="columns-1 gap-3 @lg:columns-2 @4xl:columns-3 @7xl:columns-4">
-        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" variant="wall" @contextmenu="emit('menu', $event, object)" />
+        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" variant="wall" :open-in="openIn" @contextmenu="emit('menu', $event, object)" />
       </div>
 
       <!-- Grid and gallery -->
       <div v-else class="grid gap-3" :class="cardVariant === 'gallery' ? 'grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]'">
-        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" :variant="cardVariant" @contextmenu="emit('menu', $event, object)" />
+        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" :variant="cardVariant" :open-in="openIn" @contextmenu="emit('menu', $event, object)" />
       </div>
 
       <button

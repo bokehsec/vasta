@@ -4,7 +4,7 @@
 // a mouse at once, a finger after a long press), and are made with "+" at the bottom of a column.
 // Columns fold and can have a WIP limit; both are the view's settings (`board`).
 import { computed, nextTick, ref } from 'vue'
-import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef } from '@vasta/core'
+import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef, ViewOpenIn } from '@vasta/core'
 import { RANK_PROPERTY_ID, byRank, rankOf, rankBetween } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
 import { boardDrag, moveCard, pressCard, type BoardAxis, type CardTarget } from '../lib/board.ts'
@@ -24,6 +24,8 @@ const props = defineProps<{
   board?: BoardSettings
   /** Cards in their manual order (the view has no sort of its own). */
   manual: boolean
+  /** Where a click on a card opens it; unset: its page. */
+  openIn?: ViewOpenIn
 }>()
 const emit = defineEmits<{
   menu: [event: MouseEvent, object: ObjectSummary]
@@ -241,7 +243,7 @@ async function addCard(column: Group, lane: Group) {
                   @contextmenu="onContextMenu($event, object)"
                   @dragstart.prevent
                 >
-                  <ObjectCard :object="object" :type="typeOf(object)" variant="kanban" :fields="cardFields" :hide="hiddenFields" />
+                  <ObjectCard :object="object" :type="typeOf(object)" variant="kanban" :fields="cardFields" :hide="hiddenFields" :open-in="openIn" />
                 </div>
               </template>
               <div v-if="landing(column, lane) >= 0 && landing(column, lane) >= placed(column, lane).filter((p) => p.place >= 0).length" class="h-1 rounded-full bg-accent" />

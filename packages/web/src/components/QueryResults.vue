@@ -85,6 +85,7 @@ defineExpose({ count: computed(() => results.value.length) })
         :table="query.table"
         :board="query.board"
         :manual="!query.sort?.length"
+        :open-in="query.openIn"
         :readonly="readonly"
         @table="emit('table', $event)"
         @board="emit('board', $event)"

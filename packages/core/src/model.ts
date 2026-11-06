@@ -493,6 +493,8 @@ export interface QueryDef {
   table?: TableSettings
   /** The board layout's settings. */
   board?: BoardSettings
+  /** Where a click on a result opens it; unset: its page. */
+  openIn?: ViewOpenIn
 }
 
 export interface FilterGroup {
@@ -538,7 +540,12 @@ export interface ViewDef {
   groupBy?: GroupRule[]
   table?: TableSettings
   board?: BoardSettings
+  /** Where a click on an object opens it; unset: its page. */
+  openIn?: ViewOpenIn
 }
+
+/** Where a view opens the object clicked: its own page, or the side pane next to the view. */
+export type ViewOpenIn = 'page' | 'pane'
 
 /**
  * The board layout's settings: which fields cards show, a second grouping in rows (swimlanes),

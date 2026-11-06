@@ -560,7 +560,7 @@ async function newMenu(event: MouseEvent) {
       <PopoverMenu v-model:open="columnsOpen" :anchor="columnsAnchor" placement="bottom-end" width="17rem">
         <ColumnsMenu :table="view.table" :type-ids="[id]" @update="updateView({ table: $event })" />
       </PopoverMenu>
-      <PopoverMenu v-model:open="layoutOpen" :anchor="layoutAnchor" placement="bottom-end" width="11rem">
+      <PopoverMenu v-model:open="layoutOpen" :anchor="layoutAnchor" placement="bottom-end" width="13rem">
         <button
           v-for="l in layouts"
           :key="l.layout"
@@ -569,6 +569,16 @@ async function newMenu(event: MouseEvent) {
         >
           <AppIcon :fallback="l.icon" class="text-ink-soft" /> {{ l.label }}
           <AppIcon v-if="view.layout === l.layout" fallback="ph:check" class="ml-auto text-accent" />
+        </button>
+        <div class="my-1 border-t border-line" />
+        <button
+          class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover"
+          :aria-pressed="view.openIn === 'pane'"
+          title="A click on an object opens it next to the view instead of on its own page"
+          @click="updateView({ openIn: view.openIn === 'pane' ? undefined : 'pane' })"
+        >
+          <AppIcon :fallback="view.openIn === 'pane' ? 'ph:check-square-fill' : 'ph:square'" :class="view.openIn === 'pane' ? 'text-accent' : 'text-ink-faint'" />
+          Open in side pane
         </button>
       </PopoverMenu>
     </div>
@@ -594,6 +604,7 @@ async function newMenu(event: MouseEvent) {
       :table="view.table"
       :board="view.board"
       :manual="manual"
+      :open-in="view.openIn"
       @table="updateView({ table: $event })"
       @board="updateView({ board: $event })"
       @manual="updateView({ sort: undefined })"

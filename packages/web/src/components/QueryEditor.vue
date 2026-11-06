@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Edits a query: which types, filters, sort, grouping and layout. Emits the whole new query.
+// Edits a query: which types, filters, sort, grouping, layout and where results open. Emits the
+// whole new query.
 import { computed, ref } from 'vue'
 import type { FilterGroup, Id, QueryDef, SortRule, TableSettings, ViewLayout } from '@vasta/core'
 import { chip } from '../lib/colors.ts'
@@ -121,6 +122,10 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
       <PopoverMenu v-model:open="columnsOpen" :anchor="columnsAnchor" placement="bottom-end" width="17rem">
         <ColumnsMenu :table="query.table" :type-ids="query.typeIds" @update="setTable" />
       </PopoverMenu>
+      <label class="flex items-center gap-1.5 text-ink-soft" title="A click on a result opens it next to the page instead of on its own page">
+        <input type="checkbox" class="accent-[var(--color-accent)]" :checked="query.openIn === 'pane'" @change="update({ openIn: ($event.target as HTMLInputElement).checked ? 'pane' : undefined })" />
+        Open in side pane
+      </label>
     </section>
   </div>
 </template>
