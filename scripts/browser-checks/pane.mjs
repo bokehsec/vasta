@@ -1,6 +1,8 @@
-// The side pane in the test env: a view without "Open in side pane" opens the page; the layout
-// menu turns it on (saved on the view); then a click on an object in a list, table, board, a query
-// with the setting or the calendar opens it next to the page (?pane=<id>), where it is edited;
+// The side pane in the test env: with nothing set, a view opens the page; Type settings › "Open
+// in side pane" turns it on for the type's objects, and a view's layout menu can choose otherwise
+// (Full page, Side pane, Same as the type); then a click on an object in a list, table, board, a
+// query (as each type says, or its own choice) or the calendar opens it next to the page
+// (?pane=<id>), where it is edited;
 // another click switches it; back and forward, reload, Esc, "Open full page", resizing (kept after
 // a reload), the calendar keeping it while its view changes, a move to the trash from the pane (and
 // Undo), and that links still go to the object's page. On a phone profile, the same click opens
@@ -72,7 +74,10 @@ const made = {}
 for (const name of ['Alpha', 'Bravo', 'Charlie']) {
   made[name] = await post('/api/objects', { typeId: task.id, title: `Pane ${name} ${tag}`, props: { status: { kind: 'select', value: ['todo'] }, due: { kind: 'date', value: { start: `${day}T00:00:00.000Z`, resolution: 'day' } } } })
 }
-const setLayout = async (layout, openIn = 'pane') => put(`/api/types/${task.id}`, { ...(await get(`/api/types/${task.id}`)), views: [{ id: `${task.id}:all`, name: 'All', layout, ...(openIn ? { openIn } : {}), ...(layout === 'kanban' ? { groupBy: [{ field: 'status' }] } : {}) }] })
+const typeOpenIn = async () => (await get(`/api/types/${task.id}`)).openIn
+const { openIn: _openIn, ...plainTask } = await get(`/api/types/${task.id}`)
+await put(`/api/types/${task.id}`, plainTask)
+const setLayout = async (layout, openIn = null) => put(`/api/types/${task.id}`, { ...(await get(`/api/types/${task.id}`)), views: [{ id: `${task.id}:all`, name: 'All', layout, ...(openIn ? { openIn } : {}), ...(layout === 'kanban' ? { groupBy: [{ field: 'status' }] } : {}) }] })
 const savedOpenIn = async () => (await get(`/api/types/${task.id}`)).views.find((v) => v.id === `${task.id}:all`)?.openIn
 await setLayout('list', null)
 
@@ -96,15 +101,29 @@ if (phone) {
   await until(() => new URL(page.url()).pathname === `/o/${made.Alpha.id}` && !paneId(), 'the page of Alpha')
   if (await pane.count()) throw new Error('a pane without the setting')
 
-  step('the layout menu turns "Open in side pane" on, saved on the view')
+  step('Type settings › "Open in side pane" turns it on for the type')
   await openType()
-  await page.locator('main button').filter({ hasText: /^\s*List\s*$/ }).click()
-  const toggle = page.locator('[data-overlay] button', { hasText: 'Open in side pane' })
-  if ((await toggle.getAttribute('aria-pressed')) !== 'false') throw new Error('the setting starts on')
-  await toggle.click()
-  await until(async () => (await savedOpenIn()) === 'pane', 'openIn saved on the view')
-  await until(async () => (await toggle.getAttribute('aria-pressed')) === 'true', 'the menu shows it on')
-  await page.keyboard.press('Escape')
+  await page.getByTitle('Type settings').click()
+  const box = page.getByLabel('Open in side pane')
+  if (await box.isChecked()) throw new Error('the type setting starts on')
+  await box.check()
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await until(async () => (await typeOpenIn()) === 'pane', 'openIn saved on the type')
+
+  step('a view can choose "Full page" instead, and back to "Same as Task"')
+  const layoutMenu = () => page.locator('main button').filter({ hasText: /^\s*List\s*$/ }).click()
+  const choice = (name) => page.locator('[data-overlay] button', { hasText: name })
+  await layoutMenu()
+  if ((await choice('Same as Task').getAttribute('aria-pressed')) !== 'true') throw new Error('the view does not start as the type')
+  if (!(await choice('Same as Task').innerText()).includes('side pane')) throw new Error('the choice does not say what the type does')
+  await choice('Full page').click()
+  await until(async () => (await savedOpenIn()) === 'page', 'openIn page saved on the view')
+  await page.locator(`main a[href="/o/${made.Alpha.id}"]`).first().click()
+  await until(() => new URL(page.url()).pathname === `/o/${made.Alpha.id}` && !paneId(), 'Full page: the page of Alpha')
+  await openType()
+  await layoutMenu()
+  await choice('Same as Task').click()
+  await until(async () => (await savedOpenIn()) === undefined, 'the view follows the type again')
 
   step('a click in a list opens the pane next to the page')
   await page.locator(`main a[href="/o/${made.Alpha.id}"]`).first().click()
@@ -173,20 +192,20 @@ if (phone) {
   await page.locator(`[data-board-card="${made.Charlie.id}"] a`).first().click()
   await until(async () => paneId() === made.Charlie.id && (await paneTitle.inputValue().catch(() => '')) === t('Charlie'), 'Charlie from the board')
 
-  step('a query with the setting opens the pane; without it, the page')
+  step('a query opens as each type says (the pane for tasks); set to Full page, the page')
   const queryType = (await get(`/api/spaces/${space.id}`)).types.find((t) => t.system === 'query')
-  const list = await post('/api/objects', { typeId: queryType.id, title: `Pane query ${tag}`, query: { typeIds: [task.id], layout: 'list', openIn: 'pane' } })
+  const list = await post('/api/objects', { typeId: queryType.id, title: `Pane query ${tag}`, query: { typeIds: [task.id], layout: 'list' } })
   made.query = list
   await page.goto(`${base}/o/${list.id}`)
   const result = page.locator(`main a[href="/o/${made.Bravo.id}"]`).first()
   await until(async () => (await result.count()) > 0, 'the query lists Bravo', 20000)
   await result.click()
   await until(() => paneId() === made.Bravo.id && new URL(page.url()).pathname === `/o/${list.id}`, 'Bravo from the query, in the pane')
-  await put(`/api/objects/${list.id}`, { ...(await get(`/api/objects/${list.id}`)), query: { typeIds: [task.id], layout: 'list' } })
+  await put(`/api/objects/${list.id}`, { ...(await get(`/api/objects/${list.id}`)), query: { typeIds: [task.id], layout: 'list', openIn: 'page' } })
   await page.goto(`${base}/o/${list.id}`)
   await until(async () => (await result.count()) > 0, 'the query lists Bravo again', 20000)
   await result.click()
-  await until(() => new URL(page.url()).pathname === `/o/${made.Bravo.id}` && !paneId(), 'without the setting, the page of Bravo')
+  await until(() => new URL(page.url()).pathname === `/o/${made.Bravo.id}` && !paneId(), 'Full page: the page of Bravo')
 
   step('calendar: an entry opens the pane, which stays while the view changes')
   await page.goto(`${base}/calendar?view=week&date=${day}`)
@@ -208,7 +227,10 @@ if (phone) {
 }
 
 for (const object of Object.values(made)) await page.request.delete(`${base}/api/objects/${object.id}`, { headers })
-await put(`/api/types/${task.id}`, { ...(await get(`/api/types/${task.id}`)), views })
+{
+  const { openIn: _set, ...type } = await get(`/api/types/${task.id}`)
+  await put(`/api/types/${task.id}`, { ...type, views })
+}
 
 if (problems.length) {
   console.log(problems.join('\n'))

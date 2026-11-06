@@ -21,8 +21,9 @@ back/forward and where you are (an object's type, then the object); the page is 
 (`bg-surface`, border, faint shadow) sitting on the canvas. On phones the panel is flat and full
 width, the sidebar is a drawer, and the top bar shows the menu, the page and Search.
 
-**Side pane**: objects in views and queries with `openIn: 'pane'` (the view's "Open in side pane";
-unset: the page) and in the calendar open in a second panel to the right of the page (`SidePane`, same surface and border), keeping the list in view; links elsewhere (mentions,
+**Side pane**: objects in views and queries open in a second panel to the right of the page when
+the view or query says `openIn: 'pane'`, or says nothing and their type does (Type settings ›
+"Open in side pane"; unset everywhere: the page); the calendar always uses it (`SidePane`, same surface and border), keeping the list in view; links elsewhere (mentions,
 the sidebar, ⌘K) open the page. Everything that opens an object goes through `lib/open.ts`
 (`openObject`, and `ObjectLink` in templates), which decides page or pane; the pane is `?pane=<id>`
 on the page's address. The link of the object the pane shows is tinted (`bg-hover`). Phones: no pane.

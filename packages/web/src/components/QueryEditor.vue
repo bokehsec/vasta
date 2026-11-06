@@ -54,6 +54,7 @@ const setGroup = (field: string) => update({ groupBy: field ? [{ field }] : unde
 const columnsAnchor = ref<HTMLElement | null>(null)
 const columnsOpen = ref(false)
 const setTable = (table: TableSettings | undefined) => update({ table })
+const setOpenIn = (value: string) => update({ openIn: value === 'pane' || value === 'page' ? value : undefined })
 
 const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
 </script>
@@ -122,9 +123,13 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
       <PopoverMenu v-model:open="columnsOpen" :anchor="columnsAnchor" placement="bottom-end" width="17rem">
         <ColumnsMenu :table="query.table" :type-ids="query.typeIds" @update="setTable" />
       </PopoverMenu>
-      <label class="flex items-center gap-1.5 text-ink-soft" title="A click on a result opens it next to the page instead of on its own page">
-        <input type="checkbox" class="accent-[var(--color-accent)]" :checked="query.openIn === 'pane'" @change="update({ openIn: ($event.target as HTMLInputElement).checked ? 'pane' : undefined })" />
-        Open in side pane
+      <label class="flex items-center gap-1.5 text-ink-soft">
+        Open in
+        <select :value="query.openIn ?? ''" :class="control" @change="setOpenIn(($event.target as HTMLSelectElement).value)">
+          <option value="">As each type says</option>
+          <option value="pane">Side pane</option>
+          <option value="page">Full page</option>
+        </select>
       </label>
     </section>
   </div>

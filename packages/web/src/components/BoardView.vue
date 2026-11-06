@@ -24,7 +24,7 @@ const props = defineProps<{
   board?: BoardSettings
   /** Cards in their manual order (the view has no sort of its own). */
   manual: boolean
-  /** Where a click on a card opens it; unset: its page. */
+  /** Where a click on a card opens it; unset: as the card's type says. */
   openIn?: ViewOpenIn
 }>()
 const emit = defineEmits<{

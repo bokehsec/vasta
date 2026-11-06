@@ -8,10 +8,11 @@ GitHub release page.
 
 ### Added
 
-- **Side pane.** Views and queries have **Open in side pane** (in a view's layout menu, in a
-  query's settings; off unless turned on): a click on an object in that list, table, board or
-  gallery opens it in a pane next to the page, where it can be edited without losing your place;
-  another click switches it. The calendar always opens its entries there.
+- **Side pane.** Type settings have **Open in side pane** (off unless turned on): a click on one of
+  the type's objects in a list, table, board, gallery or query opens it in a pane next to the page,
+  where it can be edited without losing your place; another click switches it. A view's layout
+  menu and a query's settings can choose otherwise (Side pane or Full page). The calendar always
+  opens its entries there.
   The pane has Open full page and Close (Esc), is made wider or narrower by its left edge (kept on
   this device), and is part of the address, so back, forward, reload and copied links keep it.
   Comments and activity stay on the full page. Mentions in text still open the page, ⌘-click
