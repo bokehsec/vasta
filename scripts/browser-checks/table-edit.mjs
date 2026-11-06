@@ -214,11 +214,11 @@ try {
   await page.locator('[data-overlay] button', { hasText: 'me' }).first().click()
   await until(async () => (await props(laundry.id)).who?.value?.length === 1, 'person saved')
 
-  step('F14 K3 read-only columns, the title still opens the object, the cell’s role and name')
+  step('F14 K3 read-only columns, the title still opens the object (in the side pane), the cell’s role and name')
   for (const field of ['double', 'details', 'updatedAt']) if (await edit(D, field).count()) throw new Error(`${field} is editable`)
   if ((await edit(D, 'priority').getAttribute('role')) !== 'button' || !(await edit(D, 'priority').getAttribute('aria-label')).startsWith('Priority')) throw new Error('cell has no button role or name')
   await row(D).locator('td:first-child a').click()
-  await until(() => page.url().includes(`/o/${dishes.id}`), 'the title opens the object')
+  await until(() => new URL(page.url()).searchParams.get('pane') === dishes.id, 'the title opens the object in the side pane')
   await page.goBack()
   await until(async () => (await page.locator('tbody tr').count()) === 2, 'back on the table')
   await readColumns()
