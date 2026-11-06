@@ -1,9 +1,8 @@
 <script setup lang="ts">
 // Card used by grid, wall, gallery and kanban views. A board chooses the fields its cards show
-// (`fields`), or leaves out the ones its columns and lanes already say (`hide`). A click opens the
-// object where its view says (`openIn`), else where its type says: its page, or the side pane.
+// (`fields`), or leaves out the ones its columns and lanes already say (`hide`).
 import { computed, ref } from 'vue'
-import type { ObjectSummary, ObjectType, PropertyDef, ViewOpenIn } from '@vasta/core'
+import type { ObjectSummary, ObjectType, PropertyDef } from '@vasta/core'
 import { BLOCKED_PROPERTY_ID } from '@vasta/core'
 import { imageOf } from '../lib/media.ts'
 import { chip, iconTextClasses } from '../lib/colors.ts'
@@ -14,7 +13,7 @@ import ObjectChip from './ObjectChip.vue'
 import PropertyDisplay from './PropertyDisplay.vue'
 import ObjectLink from './ObjectLink.vue'
 
-const props = defineProps<{ object: ObjectSummary; type: ObjectType | undefined; variant: 'grid' | 'wall' | 'gallery' | 'kanban'; fields?: PropertyDef[]; hide?: string[]; openIn?: ViewOpenIn }>()
+const props = defineProps<{ object: ObjectSummary; type: ObjectType | undefined; variant: 'grid' | 'wall' | 'gallery' | 'kanban'; fields?: PropertyDef[]; hide?: string[] }>()
 
 const broken = ref(false)
 const image = computed(() => (broken.value ? undefined : imageOf(props.object)))
@@ -33,7 +32,6 @@ const shownProps = computed(() =>
 <template>
   <ObjectLink
     :id="object.id"
-    :opens="openIn ?? type?.openIn"
     class="group flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-sm transition hover:border-line-strong hover:shadow-md"
     :class="variant === 'wall' ? 'mb-3 break-inside-avoid' : ''"
   >

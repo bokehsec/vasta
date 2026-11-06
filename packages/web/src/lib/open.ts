@@ -2,7 +2,7 @@
 // showing (?pane=<id> on that page's address). Everything that opens an object goes through here,
 // so the choice is made in one place. The pane lives in the address, so back/forward, reload and
 // copied links bring it back; leaving the page closes it.
-import { computed } from 'vue'
+import { computed, type InjectionKey } from 'vue'
 import type { LocationQueryRaw, RouteLocationRaw } from 'vue-router'
 import type { Id } from '@vasta/core'
 import { router } from '../router.ts'
@@ -26,6 +26,13 @@ export const objectPath = (id: Id) => `/o/${id}`
 export function objectRoute(id: Id, options: Pick<OpenOptions, 'block' | 'query'> = {}): RouteLocationRaw {
   return { path: objectPath(id), ...(options.query ? { query: options.query } : {}), ...(options.block ? { hash: `#b-${options.block}` } : {}) }
 }
+
+/**
+ * Where a view (a type's view or a query) opens the objects it shows, by id: its own choice, else
+ * the object's type's; undefined for anything else in it (a relation's chip), which opens its page.
+ * Provided by the collection, read by every ObjectLink inside it, whatever the layout.
+ */
+export const VIEW_OPENS: InjectionKey<(id: Id) => OpenPlace | undefined> = Symbol('view-opens')
 
 /** The object in the side pane, if one is open. */
 export const paneObjectId = computed(() => {
