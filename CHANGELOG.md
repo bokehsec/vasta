@@ -6,6 +6,11 @@ GitHub release page.
 
 ## Unreleased
 
+### Fixed
+
+- **Links to a page in another space.** Opening a link to an object in a space other than the open
+  one showed only its title; the page now switches to that space and shows its text and fields.
+
 ### Added
 
 - **Side pane.** Type settings have **Open in side pane** (off unless turned on): a click on one of
