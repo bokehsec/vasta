@@ -15,6 +15,9 @@ GitHub release page.
 
 ### Fixed
 
+- **Editing a query embedded in a page.** Each change (a type, a filter, a sort) closed the query's
+  settings a moment later, once it saved; they now stay open. Objects shown in a page (cards,
+  embeds) also no longer flicker when they change elsewhere.
 - **Links to a page in another space.** Opening a link to an object in a space other than the open
   one showed only its title; the page now switches to that space and shows its text and fields.
 
