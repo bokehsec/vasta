@@ -37,6 +37,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node sprints.mjs [chromium|webkit] [base]   # Settings › Sprints (on, named Rodada), Current rodada and Backlog, a sprint's panel, Finish, Next (MODE=json too)
     node metrics.mjs [chromium|webkit] [base]  # the Tasks page's Metrics: numbers, done per week, cumulative flow (hover), what waits longest (SHOTS=<dir>: light and dark)
     node people.mjs [chromium|webkit] [base]   # a shared space: Assignee picked on a task, "Edited … by", Mine, a filter on Me, a board by assignee, assignee: in ⌘K, comments, the bell, activity (needs a second account: see the script; MODE=json too)
+    node crossspace.mjs [chromium|webkit] [base]   # a link to a page in another space opens that space and shows its text (MODE=json too)
     node invites.mjs [base]      # Settings › Server accounts makes an invite link; someone new joins with it, once (seed data: tester is the first account)
     node scale.mjs [base]        # times on a big space (pnpm load-test 50000 --keep): first login, full replica, a big type page, Today, ⌘K, reload
     node panel.mjs               # the desktop capture panel page with the app faked: list, pick, Esc, growing (no server)
