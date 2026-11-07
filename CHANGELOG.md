@@ -6,6 +6,11 @@ GitHub release page.
 
 ## Unreleased
 
+### Fixed
+
+- **Links to a page in another space.** Opening a link to an object in a space other than the open
+  one showed only its title; the page now switches to that space and shows its text and fields.
+
 ## 0.7.1 (2026-11-07)
 
 A hotfix for [0.7.0](https://github.com/ariedotme/vasta/releases/tag/v0.7.0).
