@@ -15,6 +15,9 @@ GitHub release page.
 
 ### Fixed
 
+- **Daily note templates on the calendar.** When the Daily note type has a default template, a
+  day without a note shows a Start the daily note button that makes it from the template; the box
+  to write in hid the template until something was saved.
 - **Editing a query embedded in a page.** Each change (a type, a filter, a sort) closed the query's
   settings a moment later, once it saved; they now stay open. Objects shown in a page (cards,
   embeds) also no longer flicker when they change elsewhere.
