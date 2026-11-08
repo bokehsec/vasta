@@ -6,6 +6,11 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **A type opens on the view you last picked in it**, per type, on this device (it opened on its
+  first view before).
+
 ### Changed
 
 - **A repeating task set to done is due next time**: it keeps its to-do status with its due date
