@@ -12,6 +12,7 @@ import {
   moveSection,
   newSectionFlow,
   newTypeFlow,
+  parseViewItem,
   pinMenu,
   placeInSection,
   placeSection,
@@ -44,7 +45,7 @@ const collapsed = ref(new Set<string>())
 
 interface Item {
   id: Id
-  kind: 'type' | 'object'
+  kind: 'type' | 'object' | 'view'
   to: string
   /** Its place in the section's items (Tasks, kept out of the list, still has one). */
   index: number
@@ -53,9 +54,12 @@ interface Item {
 const sections = computed(() =>
   (workspace.space?.sidebar ?? []).map((section) => ({
     ...section,
-    entries: section.items.flatMap((id, index): Item[] =>
-      id === taskType.value?.id ? [] : [{ id, index, kind: typesById.value.has(id) ? 'type' : 'object', to: typesById.value.has(id) ? `/t/${id}` : objectPath(id) }]
-    ),
+    entries: section.items.flatMap((id, index): Item[] => {
+      if (id === taskType.value?.id) return []
+      // A pinned view of a type, left out once the view or its type is gone.
+      if (parseViewItem(id)) return pinnedView(id) ? [{ id, index, kind: 'view', to: `/t/${id}` }] : []
+      return [{ id, index, kind: typesById.value.has(id) ? 'type' : 'object', to: typesById.value.has(id) ? `/t/${id}` : objectPath(id) }]
+    }),
   }))
 )
 
@@ -84,7 +88,18 @@ function toggle(id: string) {
   collapsed.value = next
 }
 
-const isActive = (to: string) => route.path === to
+/** A type's page is the open row unless a pinned view of it is (/t/<id>?view=…). */
+function isActive(to: string) {
+  const [path, view] = to.split('?view=')
+  return route.path === path && (route.query.view ?? undefined) === (view === undefined ? undefined : decodeURIComponent(view))
+}
+
+function pinnedView(item: string) {
+  const parsed = parseViewItem(item)
+  const type = parsed && typesById.value.get(parsed.typeId)
+  const view = type?.views.find((v) => v.id === parsed!.viewId)
+  return type && view ? { type, view } : null
+}
 
 // ---------------------------------------------------------------------------
 // Right-click menus
@@ -125,6 +140,18 @@ function objectMenu(event: MouseEvent, id: Id, sectionId: string) {
     ...inSectionItems(id, sectionId),
     { kind: 'separator' },
     { label: 'Move to trash', icon: 'ph:trash', danger: true, run: () => deleteObjectFlow(id) },
+  ])
+}
+
+function viewMenu(event: MouseEvent, item: string, sectionId: string) {
+  const pinned = pinnedView(item)
+  if (!pinned) return
+  openContextMenu(event, [
+    { kind: 'heading', label: `${pinned.type.pluralName} · ${pinned.view.name}` },
+    { label: 'Open', icon: 'ph:arrow-square-out', run: () => router.push(`/t/${item}`) },
+    { kind: 'separator' },
+    pinMenu(item),
+    ...inSectionItems(item, sectionId),
   ])
 }
 
@@ -425,7 +452,8 @@ async function pickType(type: ObjectType) {
             <RouterLink
               :to="entry.to"
               :class="row(isActive(entry.to))"
-              @contextmenu="entry.kind === 'type' ? typeMenu($event, typesById.get(entry.id)!, section.id) : objectMenu($event, entry.id, section.id)"
+              :title="entry.kind === 'view' ? `${pinnedView(entry.id)?.type.pluralName} · ${pinnedView(entry.id)?.view.name}` : undefined"
+              @contextmenu="entry.kind === 'type' ? typeMenu($event, typesById.get(entry.id)!, section.id) : entry.kind === 'view' ? viewMenu($event, entry.id, section.id) : objectMenu($event, entry.id, section.id)"
               @dragstart="startItemDrag($event, entry.id, section.id)"
               @dragend="endDrag"
               @dragover="overRow($event, section.id, entry.index)"
@@ -433,6 +461,10 @@ async function pickType(type: ObjectType) {
               <template v-if="entry.kind === 'type'">
                 <TypeIcon :icon="typesById.get(entry.id)?.icon" fallback="ph:cube" :color="typesById.get(entry.id)?.color" />
                 <span class="truncate">{{ typesById.get(entry.id)?.pluralName }}</span>
+              </template>
+              <template v-else-if="entry.kind === 'view'">
+                <TypeIcon :icon="pinnedView(entry.id)?.type.icon" fallback="ph:cube" :color="pinnedView(entry.id)?.type.color" />
+                <span class="truncate">{{ pinnedView(entry.id)?.view.name }}</span>
               </template>
               <template v-else>
                 <TypeIcon
