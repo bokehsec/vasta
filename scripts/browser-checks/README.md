@@ -36,6 +36,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node pane.mjs [chromium|webkit] [base] [phone]    # the side pane: off by default, Type settings' switch, a view's Full page choice, list, table, board, query and calendar clicks, editing, back/forward, reload, Esc, Open full page, resizing, trash + Undo; phone = the page (MODE=json too)
     node sprints.mjs [chromium|webkit] [base]   # Settings › Sprints (on, named Rodada), Current rodada and Backlog, a sprint's panel, Finish, Next (MODE=json too)
     node metrics.mjs [chromium|webkit] [base]  # the Tasks page's Metrics: numbers, done per week, cumulative flow (hover), what waits longest (SHOTS=<dir>: light and dark)
+    node viewpin.mjs [chromium|webkit] [base]  # a view pinned in the sidebar from Tasks' … menu: its row opens the view and is the raised one, another view drops the link, deleting the view removes the row
     node people.mjs [chromium|webkit] [base]   # a shared space: Assignee picked on a task, "Edited … by", Mine, a filter on Me, a board by assignee, assignee: in ⌘K, comments, the bell, activity (needs a second account: see the script; MODE=json too)
     node crossspace.mjs [chromium|webkit] [base]   # a link to a page in another space opens that space and shows its text (MODE=json too)
     node invites.mjs [base]      # Settings › Server accounts makes an invite link; someone new joins with it, once (seed data: tester is the first account)

@@ -10,6 +10,9 @@ GitHub release page.
 
 - **A type opens on the view you last picked in it**, per type, on this device (it opened on its
   first view before).
+- **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu (or a right-click on
+  the view's tab) puts that one view, such as a "Today" view of Tasks, in the sidebar; its row opens
+  the type on that view.
 
 ### Changed
 
@@ -17,6 +20,8 @@ GitHub release page.
   at the next occurrence, as in other reminder apps; done on the last occurrence of a series that
   ends, it stays done, and another status meaning done (a "Dropped") ends it. On the calendar,
   only the occurrence it is due next has a checkbox. Before, done finished the whole series.
+- **"Pin to sidebar" on Tasks did nothing**: Tasks already have their own row at the top of the
+  sidebar, so the pinned type never showed. Their "…" menu now pins the open view instead.
 
 ### Fixed
 
