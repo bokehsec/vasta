@@ -6,6 +6,24 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu, a right-click on the
+  view's tab, or the tab dragged into a sidebar section puts that one view, such as a "Today" view
+  of Tasks, in the sidebar; its row opens the type on that view.
+
+### Changed
+
+- **A type remembers only a view you picked**: until you pick one, it still opens on its first
+  view, also after the views are reordered.
+
+### Fixed
+
+- **"Pin to sidebar" on Tasks did nothing**: the pinned type never showed, as Tasks have their own
+  row at the top of the sidebar. Pinned, Tasks now also show in that section. New spaces no longer
+  pin Tasks, since they have that row; in an older space, Tasks may show once under Pinned (Remove
+  from Pinned takes it away).
+
 ## 0.8.0 (2026-11-08)
 
 ### Added
