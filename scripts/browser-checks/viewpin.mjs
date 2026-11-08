@@ -1,6 +1,7 @@
-// A view pinned in the sidebar, in the test env: Tasks' "…" menu pins the open view (not the type,
-// which has its own row), the row opens that view even from another view of Tasks, only it is the
-// raised row, picking another view drops the link, and deleting the view takes the row away.
+// A view pinned in the sidebar, in the test env: Tasks' "…" menu pins the open view, the row opens
+// that view even from another view of Tasks, only it is the raised row, picking another view drops
+// the link, deleting the view takes the row away, a view's tab drags into a section, and Tasks
+// itself pinned shows in its section too.
 //   node viewpin.mjs [chromium|webkit] [base]
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -67,29 +68,28 @@ await page.locator('form button[type=submit]').click()
 await until(async () => (await get(`/api/spaces/${space.id}`)).types.find((t) => t.id === tasks.id).views.some((v) => v.name === 'Today'), 'Today saved')
 const today = (await get(`/api/spaces/${space.id}`)).types.find((t) => t.id === tasks.id).views.find((v) => v.name === 'Today')
 
-step("Tasks' menu has no type pin, only the view's")
+step("Tasks' menu pins the open view")
 await page.locator('button[title="More"]').click()
-if (await page.getByRole('button', { name: /^Pin to sidebar/ }).count()) throw new Error('Tasks still offers to pin the type')
 await page.getByRole('button', { name: /Pin view to sidebar/ }).click()
 await page.locator('[role=menu] button', { hasText: 'Pinned' }).click()
 await page.keyboard.press('Escape')
-const item = `${tasks.id}?view=${today.id}`
+const item = `${tasks.id}?view=${encodeURIComponent(today.id)}`
 await until(async () => (await sidebar())[0].items.includes(item), 'view pinned')
 const viewRow = page.locator('nav a', { hasText: /^\s*Today\s*$/ })
 await until(() => viewRow.count(), 'Today row in the sidebar')
 
 step('the row opens Today from another view, and only it is raised')
 const firstView = (await get(`/api/spaces/${space.id}`)).types.find((t) => t.id === tasks.id).views[0]
-await page.locator('main button', { hasText: firstView.name }).first().click()
+await page.locator('main [role=button]', { hasText: firstView.name }).first().click()
 await viewRow.click()
 await until(async () => new URL(page.url()).searchParams.get('view') === today.id, 'Today in the address')
-await until(async () => (await page.locator('main button.font-medium', { hasText: 'Today' }).count()) > 0, 'Today tab picked')
+await until(async () => (await page.locator('main [role=button].font-medium', { hasText: 'Today' }).count()) > 0, 'Today tab picked')
 const raised = (row) => row.evaluate((el) => el.className.includes('shadow'))
 if (!(await raised(viewRow))) throw new Error('Today row not raised')
 if (await raised(tasksRow)) throw new Error('Tasks row raised too')
 
 step('another view drops the link, Tasks is raised again')
-await page.locator('main button', { hasText: firstView.name }).first().click()
+await page.locator('main [role=button]', { hasText: firstView.name }).first().click()
 await until(async () => !new URL(page.url()).searchParams.get('view'), 'view link dropped')
 await until(async () => (await raised(tasksRow)) && !(await raised(viewRow)), 'Tasks raised')
 
@@ -101,6 +101,21 @@ await page.getByRole('button', { name: /Delete view/ }).click()
 await page.locator('form button[type=submit]', { hasText: 'Delete view' }).click()
 await until(async () => !(await sidebar()).some((s) => s.items.includes(item)), 'pin removed')
 await until(async () => (await viewRow.count()) === 0, 'row gone')
+
+step("a view's tab dragged into Pinned pins it")
+const firstItem = `${tasks.id}?view=${encodeURIComponent(firstView.id)}`
+await page.locator('main [role=button]', { hasText: firstView.name }).first().dragTo(page.locator('nav [data-section]').first())
+await until(async () => (await sidebar())[0].items.includes(firstItem), 'dragged view pinned')
+await until(() => page.locator('nav a', { hasText: new RegExp(`^\\s*${firstView.name}\\s*$`) }).count(), 'dragged view row')
+
+step('Tasks pinned shows in its section as well as at the top')
+if ((await sidebar()).some((s) => s.items.includes(tasks.id))) throw new Error('a new space pins Tasks')
+await page.locator('button[title="More"]').click()
+await page.getByRole('button', { name: /^Pin to sidebar/ }).click()
+await page.locator('[role=menu] button', { hasText: 'Pinned' }).click()
+await page.keyboard.press('Escape')
+await until(async () => (await sidebar())[0].items.includes(tasks.id), 'Tasks pinned')
+await until(async () => (await page.locator('nav a', { hasText: /^\s*Tasks/ }).count()) === 2, 'two Tasks rows')
 
 if (problems.length) throw new Error(problems.join('\n'))
 console.log('ok')
