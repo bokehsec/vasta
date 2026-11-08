@@ -81,10 +81,14 @@ function lastView() {
     return ''
   }
 }
-watch(activeViewId, (id) => {
+// Only a view picked is remembered, not one opened by default (the first view on a first visit).
+function pickView(id: string) {
+  activeViewId.value = id
   try {
-    if (id) localStorage.setItem(viewKey, id)
+    localStorage.setItem(viewKey, id)
   } catch {}
+}
+watch(activeViewId, (id) => {
   // Opened from a view pinned in the sidebar (?view=), then another view picked: the link goes.
   if (route.query.view && route.query.view !== id) void router.replace({ query: { ...route.query, view: undefined } })
 })
@@ -92,13 +96,16 @@ watch(activeViewId, (id) => {
 // A pinned view opens its view, also when this type's page is already open.
 const queryView = () => (typeof route.query.view === 'string' ? route.query.view : '')
 watch(queryView, (id) => {
-  if (id) activeViewId.value = id
+  if (id) pickView(id)
 })
 
 watch(type, (t) => {
   if (!t) return
   const fixed = FIXED_VIEWS[t.system ?? '']
-  if (!activeViewId.value) activeViewId.value = queryView() || lastView() || fixed?.id || ''
+  if (!activeViewId.value) {
+    if (queryView()) pickView(queryView())
+    else activeViewId.value = lastView() || fixed?.id || ''
+  }
   const metrics = activeViewId.value === METRICS_VIEW && !!statusProperty(t)
   if (activeViewId.value !== fixed?.id && !metrics && !t.views.some((v) => v.id === activeViewId.value)) activeViewId.value = t.views[0]?.id ?? ''
 }, { immediate: true })
@@ -145,7 +152,7 @@ async function addView() {
   const next = clone(type.value)
   next.views.push({ id, name, layout: view.value.layout })
   replaceType(next)
-  activeViewId.value = id
+  pickView(id)
   void api.saveType(next).then(replaceType)
 }
 
@@ -188,7 +195,7 @@ function duplicateView() {
   menuOpen.value = false
   const copy: ViewDef = { ...clone(view.value), id: newId(), name: `${view.value.name} copy` }
   saveViews((views) => views.push(copy))
-  activeViewId.value = copy.id
+  pickView(copy.id)
 }
 
 async function deleteView() {
@@ -498,7 +505,7 @@ async function newMenu(event: MouseEvent) {
         v-if="fixedView"
         class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm"
         :class="fixedActive ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'"
-        @click="activeViewId = fixedView.id"
+        @click="pickView(fixedView.id)"
       >
         <AppIcon :fallback="fixedView.icon" :size="14" /> {{ fixedView.label }}
       </button>
@@ -511,8 +518,8 @@ async function newMenu(event: MouseEvent) {
         draggable="true"
         class="cursor-default select-none rounded-lg px-3 py-1.5 text-sm"
         :class="v.id === view.id ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'"
-        @click="activeViewId = v.id"
-        @keydown.enter.space.prevent="activeViewId = v.id"
+        @click="pickView(v.id)"
+        @keydown.enter.space.prevent="pickView(v.id)"
         @contextmenu="viewTabMenu($event, v)"
         @dragstart="dragViewTab($event, v)"
       >
@@ -525,7 +532,7 @@ async function newMenu(event: MouseEvent) {
         v-if="hasMetrics"
         class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm"
         :class="metricsActive ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'"
-        @click="activeViewId = METRICS_VIEW"
+        @click="pickView(METRICS_VIEW)"
       >
         <AppIcon fallback="ph:chart-line-up" :size="14" /> Metrics
       </button>

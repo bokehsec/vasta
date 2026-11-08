@@ -9,7 +9,7 @@ GitHub release page.
 ### Added
 
 - **A type opens on the view you last picked in it**, per type, on this device (it opened on its
-  first view before).
+  first view before). Until you pick one, it still opens on its first view, also after reordering.
 - **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu, a right-click on the
   view's tab, or the tab dragged into a sidebar section puts that one view, such as a "Today" view
   of Tasks, in the sidebar; its row opens the type on that view.
