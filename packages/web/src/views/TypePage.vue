@@ -14,7 +14,7 @@ import HabitBoard from '../components/HabitBoard.vue'
 import TagTree from '../components/TagTree.vue'
 import PopoverMenu from '../components/PopoverMenu.vue'
 import TypeSettings from '../components/TypeSettings.vue'
-import { deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu } from '../lib/actions.ts'
+import { deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu, removeFromSidebar, viewItem } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { onChange } from '../lib/events.ts'
 import { clone } from '../lib/clone.ts'
@@ -30,6 +30,7 @@ import { openObject } from '../lib/open.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
+const route = useRoute()
 
 const type = computed(() => typesById.value.get(props.id))
 const objects = ref<ObjectSummary[]>([])
@@ -84,12 +85,20 @@ watch(activeViewId, (id) => {
   try {
     if (id) localStorage.setItem(viewKey, id)
   } catch {}
+  // Opened from a view pinned in the sidebar (?view=), then another view picked: the link goes.
+  if (route.query.view && route.query.view !== id) void router.replace({ query: { ...route.query, view: undefined } })
+})
+
+// A pinned view opens its view, also when this type's page is already open.
+const queryView = () => (typeof route.query.view === 'string' ? route.query.view : '')
+watch(queryView, (id) => {
+  if (id) activeViewId.value = id
 })
 
 watch(type, (t) => {
   if (!t) return
   const fixed = FIXED_VIEWS[t.system ?? '']
-  if (!activeViewId.value) activeViewId.value = lastView() || fixed?.id || ''
+  if (!activeViewId.value) activeViewId.value = queryView() || lastView() || fixed?.id || ''
   const metrics = activeViewId.value === METRICS_VIEW && !!statusProperty(t)
   if (activeViewId.value !== fixed?.id && !metrics && !t.views.some((v) => v.id === activeViewId.value)) activeViewId.value = t.views[0]?.id ?? ''
 }, { immediate: true })
@@ -145,7 +154,6 @@ async function addView() {
 
 const menuAnchor = ref<HTMLElement | null>(null)
 const menuOpen = ref(false)
-const route = useRoute()
 const settingsOpen = ref(route.query.settings === '1')
 watch(
   () => route.query.settings,
@@ -190,15 +198,29 @@ async function deleteView() {
   if (!(await confirmDialog({ title: `Delete the view “${view.value.name}”?`, confirmLabel: 'Delete view', danger: true }))) return
   saveViews((views) => views.splice(views.findIndex((v) => v.id === id), 1))
   activeViewId.value = type.value?.views[0]?.id ?? ''
+  void removeFromSidebar(viewItem(props.id, id))
 }
 
 const pinned = computed(() => isInSidebar(props.id))
+const viewPinned = computed(() => isInSidebar(viewItem(props.id, view.value.id)))
 
 /** The sections to pin the type in, beside the More menu's row. */
 function pinFrom(event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   menuOpen.value = false
   openMenuAt(rect.left, rect.top, pinItems(props.id))
+}
+
+/** The sections to pin the open view in, so it opens from the sidebar on its own. */
+function pinViewFrom(event: MouseEvent) {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  menuOpen.value = false
+  openMenuAt(rect.left, rect.top, pinItems(viewItem(props.id, view.value.id)))
+}
+
+/** Right-click on a view's tab: pin it. */
+function viewTabMenu(event: MouseEvent, v: ViewDef) {
+  openContextMenu(event, [{ kind: 'heading', label: v.name }, pinMenu(viewItem(props.id, v.id))])
 }
 
 async function deleteType() {
@@ -428,7 +450,8 @@ async function newMenu(event: MouseEvent) {
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="(settingsOpen = true), (menuOpen = false)">
         <AppIcon fallback="ph:gear-six" class="text-ink-soft" /> Type settings…
       </button>
-      <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="pinFrom">
+      <!-- Tasks have their own row at the top of the sidebar: only their views are pinned. -->
+      <button v-if="type.system !== 'task'" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="pinFrom">
         <AppIcon fallback="ph:push-pin" class="text-ink-soft" /> {{ pinned ? 'Pinned in sidebar' : 'Pin to sidebar' }}
         <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
       </button>
@@ -440,6 +463,10 @@ async function newMenu(event: MouseEvent) {
       </button>
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="duplicateView">
         <AppIcon fallback="ph:copy" class="text-ink-soft" /> Duplicate view
+      </button>
+      <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="pinViewFrom">
+        <AppIcon fallback="ph:push-pin" class="text-ink-soft" /> {{ viewPinned ? 'View pinned in sidebar' : 'Pin view to sidebar' }}
+        <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
       </button>
       <button
         class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover disabled:opacity-40 disabled:hover:bg-transparent"
@@ -474,6 +501,7 @@ async function newMenu(event: MouseEvent) {
         class="rounded-lg px-3 py-1.5 text-sm"
         :class="v.id === view.id ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'"
         @click="activeViewId = v.id"
+        @contextmenu="viewTabMenu($event, v)"
       >
         {{ v.name }}
       </button>
