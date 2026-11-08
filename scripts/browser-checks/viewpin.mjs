@@ -1,7 +1,8 @@
 // A view pinned in the sidebar, in the test env: Tasks' "…" menu pins the open view, the row opens
 // that view even from another view of Tasks, only it is the raised row, picking another view drops
 // the link, deleting the view takes the row away, a view's tab drags into a section, and Tasks
-// itself pinned shows in its section too.
+// itself pinned shows in its section too. A type reopens on the view last picked, not on one opened
+// by default.
 //   node viewpin.mjs [chromium|webkit] [base]
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -116,6 +117,21 @@ await page.locator('[role=menu] button', { hasText: 'Pinned' }).click()
 await page.keyboard.press('Escape')
 await until(async () => (await sidebar())[0].items.includes(tasks.id), 'Tasks pinned')
 await until(async () => (await page.locator('nav a', { hasText: /^\s*Tasks/ }).count()) === 2, 'two Tasks rows')
+
+step('a view opened by default is not remembered, one picked is')
+const remembered = () => page.evaluate((key) => localStorage.getItem(key), `vasta.view.${tasks.id}`)
+await page.evaluate((key) => localStorage.removeItem(key), `vasta.view.${tasks.id}`)
+await page.goto(`${base}/t/${tasks.id}`)
+await until(async () => (await page.locator('main [role=button].font-medium', { hasText: firstView.name }).count()) > 0, 'first view open')
+if ((await remembered()) !== null) throw new Error('the first view, never picked, was remembered')
+await page.locator('button[title="Add view"]').click()
+await page.locator('form input').last().fill('Later')
+await page.locator('form button[type=submit]').click()
+await until(async () => (await get(`/api/spaces/${space.id}`)).types.find((t) => t.id === tasks.id).views.some((v) => v.name === 'Later'), 'Later saved')
+await page.reload()
+await until(async () => (await page.locator('main [role=button].font-medium', { hasText: 'Later' }).count()) > 0, 'reopens on Later')
+await page.locator('main [role=button]', { hasText: firstView.name }).first().click()
+await until(async () => (await remembered()) === firstView.id, 'picked view remembered')
 
 if (problems.length) throw new Error(problems.join('\n'))
 console.log('ok')
