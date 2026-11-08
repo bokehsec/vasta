@@ -218,6 +218,14 @@ function pinViewFrom(event: MouseEvent) {
   openMenuAt(rect.left, rect.top, pinItems(viewItem(props.id, view.value.id)))
 }
 
+/** A view's tab dragged out carries its link, which the sidebar pins where it is dropped. */
+function dragViewTab(event: DragEvent, v: ViewDef) {
+  const link = new URL(router.resolve(`/t/${viewItem(props.id, v.id)}`).href, location.href).href
+  event.dataTransfer!.effectAllowed = 'copy'
+  event.dataTransfer!.setData('text/uri-list', link)
+  event.dataTransfer!.setData('text/plain', link)
+}
+
 /** Right-click on a view's tab: pin it. */
 function viewTabMenu(event: MouseEvent, v: ViewDef) {
   openContextMenu(event, [{ kind: 'heading', label: v.name }, pinMenu(viewItem(props.id, v.id))])
@@ -450,8 +458,7 @@ async function newMenu(event: MouseEvent) {
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="(settingsOpen = true), (menuOpen = false)">
         <AppIcon fallback="ph:gear-six" class="text-ink-soft" /> Type settings…
       </button>
-      <!-- Tasks have their own row at the top of the sidebar: only their views are pinned. -->
-      <button v-if="type.system !== 'task'" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="pinFrom">
+      <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="pinFrom">
         <AppIcon fallback="ph:push-pin" class="text-ink-soft" /> {{ pinned ? 'Pinned in sidebar' : 'Pin to sidebar' }}
         <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
       </button>
@@ -495,16 +502,22 @@ async function newMenu(event: MouseEvent) {
       >
         <AppIcon :fallback="fixedView.icon" :size="14" /> {{ fixedView.label }}
       </button>
-      <button
+      <!-- A div: WebKit does not start a drag on a button. A tab drags into the sidebar to pin the view. -->
+      <div
         v-for="v in type.views"
         :key="v.id"
-        class="rounded-lg px-3 py-1.5 text-sm"
+        role="button"
+        tabindex="0"
+        draggable="true"
+        class="cursor-default select-none rounded-lg px-3 py-1.5 text-sm"
         :class="v.id === view.id ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'"
         @click="activeViewId = v.id"
+        @keydown.enter.space.prevent="activeViewId = v.id"
         @contextmenu="viewTabMenu($event, v)"
+        @dragstart="dragViewTab($event, v)"
       >
         {{ v.name }}
-      </button>
+      </div>
       <button class="rounded-lg px-2 py-1.5 text-ink-faint hover:bg-hover hover:text-ink" title="Add view" @click="addView">
         <AppIcon fallback="ph:plus" :size="14" />
       </button>
