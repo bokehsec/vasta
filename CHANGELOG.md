@@ -10,14 +10,16 @@ GitHub release page.
 
 - **A type opens on the view you last picked in it**, per type, on this device (it opened on its
   first view before).
-- **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu (or a right-click on
-  the view's tab) puts that one view, such as a "Today" view of Tasks, in the sidebar; its row opens
-  the type on that view.
+- **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu, a right-click on the
+  view's tab, or the tab dragged into a sidebar section puts that one view, such as a "Today" view
+  of Tasks, in the sidebar; its row opens the type on that view.
 
 ### Fixed
 
-- **"Pin to sidebar" on Tasks did nothing**: Tasks already have their own row at the top of the
-  sidebar, so the pinned type never showed. Their "…" menu now pins the open view instead.
+- **"Pin to sidebar" on Tasks did nothing**: the pinned type never showed, as Tasks have their own
+  row at the top of the sidebar. Pinned, Tasks now also show in that section. New spaces no longer
+  pin Tasks, since they have that row; in an older space, Tasks may show once under Pinned (Remove
+  from Pinned takes it away).
 - **A link to an object of another space** opens that space and shows the object's text and
   properties; only its title showed before.
 
