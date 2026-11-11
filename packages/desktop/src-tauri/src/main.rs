@@ -290,7 +290,7 @@ fn new_window_response(app: &AppHandle, url: Url) -> NewWindowResponse<tauri::Wr
     if server(app).is_some_and(|server| same_origin(&url, &server)) {
         return NewWindowResponse::Allow;
     }
-    if matches!(url.scheme(), "http" | "https" | "mailto" | "tel") {
+    if matches!(url.scheme(), "http" | "https" | "mailto" | "tel" | "message") {
         if let Err(error) = app.opener().open_url(url.as_str(), None::<&str>) {
             eprintln!("Could not open {url}: {error}");
         }

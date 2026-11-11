@@ -155,4 +155,21 @@ describe('editor schema', () => {
     fragment.insert(0, [new Y.XmlElement('mystery'), new Y.XmlElement('paragraph')])
     expect(readContent(ydoc)).toEqual({ body: { type: 'doc', content: [paragraph()] } })
   })
+
+  it('keeps Apple Mail message: links and still drops script-like schemes', () => {
+    const href = 'message://%3Cabc123@mail.example.com%3E'
+    const linked = (url: string) => normalizeDoc({ type: 'doc', content: [paragraph(text('Open email', [{ type: 'link', attrs: { href: url } }]))] })
+    // The href the link mark renders (no DOM here, so its toDOM spec is read directly).
+    const rendered = (doc: JsonDoc) => {
+      const schema = vastaSchema()
+      const mark = PmNode.fromJSON(schema, doc).firstChild!.firstChild!.marks[0]!
+      return String((mark.type.spec.toDOM!(mark, true) as [string, Record<string, unknown>])[1].href)
+    }
+    expect(rendered(linked(href))).toBe(href)
+    // Through Yjs, as stored and synced.
+    const ydoc = new Y.Doc()
+    writeContent(ydoc, { body: linked(href) })
+    expect(JSON.stringify(readContent(ydoc))).toContain(href)
+    for (const bad of ['javascript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'vbscript:msgbox(1)']) expect(rendered(linked(bad))).toBe('')
+  })
 })

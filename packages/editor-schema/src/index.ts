@@ -23,7 +23,8 @@ const jsonAttr = (name: string) => ({
 export const VastaStarterKit = StarterKit.configure({
   heading: { levels: [1, 2, 3, 4] },
   underline: false,
-  link: { openOnClick: true, autolink: true, HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' } },
+  // `message:` is Apple Mail's deep link (message://%3Cid@host%3E); TipTap's default allow-list would empty its href.
+  link: { openOnClick: true, autolink: true, protocols: [{ scheme: 'message', optionalSlashes: true }], HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' } },
   codeBlock: false,
 })
 

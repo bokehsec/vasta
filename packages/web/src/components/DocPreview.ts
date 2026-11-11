@@ -8,12 +8,12 @@ import { imageOf } from '../lib/media.ts'
 import { iconTextClasses } from '../lib/colors.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
 import { MERMAID } from '../lib/mermaid.ts'
+import { safeHref } from '../lib/safe-href.ts'
 import AppIcon from './AppIcon.vue'
 import MermaidDiagram from './MermaidDiagram.vue'
 import ObjectChip from './ObjectChip.vue'
 import ObjectLink from './ObjectLink.vue'
 
-const safeHref = (href: string) => (/^(https?:|mailto:)/i.test(href) ? href : undefined)
 
 function withMark(child: VNode | string, mark: DocMark): VNode | string {
   switch (mark.type) {

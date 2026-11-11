@@ -148,3 +148,10 @@ describe('markdown', () => {
     expect(docToMarkdown(doc)).toBe('▸ More\n\nhidden\n\nleft\n\nright')
   })
 })
+
+it('round-trips Apple Mail message: links byte for byte', () => {
+  const markdown = '[Open email](message://%3Cabc123@mail.example.com%3E)'
+  const doc = markdownToDoc(markdown)
+  expect(doc.content[0]?.content).toEqual([text('Open email', [{ type: 'link', attrs: { href: 'message://%3Cabc123@mail.example.com%3E' } }])])
+  expect(docToMarkdown(doc).trim()).toBe(markdown)
+})

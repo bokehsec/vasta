@@ -8,6 +8,7 @@ GitHub release page.
 
 ### Added
 
+- **Apple Mail links work in notes.** A link to an email (`message://…`) stays a link in the editor and in previews, and opens Mail when clicked, also from the desktop app.
 - **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu, a right-click on the
   view's tab, or the tab dragged into a sidebar section puts that one view, such as a "Today" view
   of Tasks, in the sidebar; its row opens the type on that view.
