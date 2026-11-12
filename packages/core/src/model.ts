@@ -453,7 +453,7 @@ export type DocNodeType =
   | 'columns' | 'column' // side-by-side layout; column attrs: { width?: number }
   | 'table' | 'tableRow' | 'tableHeader' | 'tableCell'
   | 'mention'        // inline object link; attrs: { objectId: Id, label: string }
-  | 'objectEmbed'    // block-level object; attrs: { objectId: Id, display: 'inline' | 'card' | 'wide-card' | 'embed' | 'image' | 'compact' /* queries only */ }
+  | 'objectEmbed'    // block-level object; attrs: { objectId: Id, display: 'inline' | 'card' | 'wide-card' | 'embed' | 'image' | 'block' | 'compact' /* queries and blocks */, blockId?: Id }
   | 'unsupported'    // block we could not convert; attrs: { source: string, raw: unknown }
   // Only in templates and snippets (templates.ts):
   | 'templatePlaceholder' // inline `{{…}}`; attrs: { value: string }

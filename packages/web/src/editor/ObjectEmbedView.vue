@@ -41,8 +41,8 @@ const player = computed(() => (display.value === 'embed' && type.value?.system =
     <!-- A whiteboard, whole or one frame of it, in any display but one line -->
     <BoardEmbed v-if="isBoard && display !== 'inline'" :board-id="objectId" :frame-id="blockId" :editable="editor.isEditable" @scene="setScene" />
 
-    <!-- One block of the object: a read-only copy that follows it -->
-    <BlockEmbed v-else-if="blockId" :object-id="objectId" :block-id="blockId" />
+    <!-- One block of the object: a read-only copy that follows it; compact without the frame -->
+    <BlockEmbed v-else-if="blockId" :object-id="objectId" :block-id="blockId" :compact="display === 'compact'" />
 
     <!-- Inline: one line, like a link that takes a whole row -->
     <button v-else-if="display === 'inline'" class="flex w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-hover" @click="open">

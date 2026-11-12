@@ -330,6 +330,7 @@ function embedDisplays(view: EditorView, pos: number, node: PMNode): MenuItem[] 
   const type = typesById.value.get(summary?.typeId ?? '')
   if (!summary) return []
   if (type?.system === 'query') return queryDisplays(view, pos, node)
+  if (node.attrs.blockId && type?.system !== 'whiteboard') return blockDisplays(view, pos, node)
   const current = node.attrs.display as string
   const mimeType = summary.media?.mimeType ?? summary.media?.file?.mimeType ?? ''
   const isImage = (type?.system === 'image' || mimeType.startsWith('image/')) && !!imageOf(summary)
@@ -375,6 +376,26 @@ function queryDisplays(view: EditorView, pos: number, node: PMNode): MenuItem[] 
     const tell = (action: 'edit' | 'open') => () => void view.nodeDOM(pos)?.dispatchEvent(new CustomEvent('vasta-query', { detail: action }))
     items.push({ label: 'Edit query', icon: 'ph:sliders-horizontal', run: tell('edit') }, { label: 'Open query', icon: 'ph:arrow-square-out', run: tell('open') })
   }
+  return [...items, { kind: 'separator' }]
+}
+
+/**
+ * "Show as" for one embedded block: the full frame (a header with the object's name and Open) or
+ * compact (just the content, hidden while empty). Compact has no header, so its Open block lives
+ * here and reaches the embed as an event on its DOM node (BlockEmbed listens).
+ */
+function blockDisplays(view: EditorView, pos: number, node: PMNode): MenuItem[] {
+  const compact = node.attrs.display === 'compact'
+  // 'block' is what a newly embedded block gets; any display but 'compact' is the full frame.
+  const show = (display: string) => {
+    if ((display === 'compact') !== compact) view.dispatch(view.state.tr.setNodeAttribute(pos, 'display', display))
+  }
+  const items: MenuItem[] = [
+    { kind: 'heading', label: 'Show as' },
+    { label: 'Full', icon: compact ? 'ph:browser' : 'ph:check', run: () => show('block') },
+    { label: 'Compact', icon: compact ? 'ph:check' : 'ph:text-align-left', run: () => show('compact') },
+  ]
+  if (compact) items.push({ label: 'Open block', icon: 'ph:arrow-square-out', run: () => void view.nodeDOM(pos)?.dispatchEvent(new CustomEvent('vasta-block')) })
   return [...items, { kind: 'separator' }]
 }
 

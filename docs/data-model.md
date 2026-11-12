@@ -165,7 +165,8 @@ is `mermaid` is a diagram: the app draws it with [Pele](https://pele.run) and ke
 - `mention` — inline link to an object (`objectId`, `label`)
 - `objectEmbed` — an object shown as a block (`display`: inline, card, wide-card, embed; a query is also
   shown `compact`, just its results without the header bar and border, and any other display
-  shows its full frame)
+  shows its full frame; with `blockId` it shows one block of the object, `block` in a frame with
+  the object's name, `compact` just the content (a group without its panel), hidden while empty)
 - `callout` — block with an icon; with a `capture` attribute (`CaptureInfo`: id, channel, time) it is
   an item that arrived through a capture channel ([capture.md](capture.md))
 - `details` / `detailsSummary` / `detailsContent` — toggle, optionally with an icon

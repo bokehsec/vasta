@@ -24,6 +24,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node blocks.mjs [chromium|webkit] [base]   # block colors, copy link to block, opening it, ids of duplicates (MODE=json too)
     node quotes.mjs [chromium|webkit] [base]   # save a passage as a quote, open it from the highlight, delete it (MODE=json too)
     node compactembed.mjs [chromium|webkit] [base]   # a query embedded in a page shown Compact (block menu): no header, Edit query + Done, kept on reload, back to Full (MODE=json too)
+    node compactblock.mjs [chromium|webkit] [base]   # an embedded block shown compact: no frame or group panel, Open block in the block menu, hidden while empty
     node handover.mjs [base]     # a second tab takes the replica over when the first closes
     node capture.mjs [base]      # /Type in quick capture (embedded in today's note), a relation's values, ⌘K, the panel's bridge (MODE=json too)
     node toggles.mjs [base]      # Tab nests under the line above (a toggle), ⇧Tab takes it out, /Toggle on a written line (MODE=json too)
