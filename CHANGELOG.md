@@ -6,6 +6,12 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Group by a date**: lists, tables and the other layouts can group by a date field, under
+  Earlier (Overdue for a task's due date), Today, Tomorrow, This week, Next week, Later and No
+  date. A board grouped this way shows the columns; its cards do not move between them.
+
 ## 0.8.0 (2026-11-08)
 
 ### Added
