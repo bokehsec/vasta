@@ -36,7 +36,7 @@ const player = computed(() => (display.value === 'embed' && type.value?.system =
 </script>
 
 <template>
-  <!-- Queries put the drag handle on their header, so their controls stay usable. -->
+  <!-- Queries put the drag handle on their header (a compact one has none: the ⋮⋮ handle moves it), so their controls stay usable. -->
   <NodeViewWrapper class="my-1" contenteditable="false" :data-drag-handle="isQuery ? undefined : ''">
     <!-- A whiteboard, whole or one frame of it, in any display but one line -->
     <BoardEmbed v-if="isBoard && display !== 'inline'" :board-id="objectId" :frame-id="blockId" :editable="editor.isEditable" @scene="setScene" />
@@ -66,8 +66,8 @@ const player = computed(() => (display.value === 'embed' && type.value?.system =
       <figcaption v-if="summary?.preview" class="mt-1 text-sm text-ink-faint">{{ summary.preview }}</figcaption>
     </figure>
 
-    <!-- Queries show their live results -->
-    <QueryEmbed v-else-if="isQuery" :object-id="objectId" :parent-id="pageId" :readonly="!editor.isEditable" />
+    <!-- Queries show their live results; any display but "compact" (including ones an older build wrote) is the full frame -->
+    <QueryEmbed v-else-if="isQuery" :object-id="objectId" :parent-id="pageId" :readonly="!editor.isEditable" :compact="display === 'compact'" />
 
     <!-- Weblink player, with a line that opens the weblink -->
     <div v-else-if="player" class="max-w-2xl">

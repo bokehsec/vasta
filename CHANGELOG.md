@@ -6,6 +6,12 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **An embedded query can be shown compact**: just its results, without the header bar and the
+  border, for a page that has its own heading above each list. Pick Show as → Compact in the
+  block's menu; Edit query and Open query move there.
+
 ## 0.8.0 (2026-11-08)
 
 ### Added
