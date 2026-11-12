@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board),
-// optionally grouped. Used by type pages, query pages and queries embedded in documents.
+// A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board,
+// agenda), optionally grouped. Used by type pages, query pages and queries embedded in documents.
 import { computed, nextTick, provide, ref, watch, type Directive } from 'vue'
-import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
+import type { AgendaSettings, BoardSettings, FilterGroup, Id, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { addSelectOption, setProperty } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, MIN_COLUMN_WIDTH, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
@@ -11,6 +11,7 @@ import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
+import AgendaView from './AgendaView.vue'
 import BoardView from './BoardView.vue'
 import TypeIcon from './TypeIcon.vue'
 import ObjectCard from './ObjectCard.vue'
@@ -33,6 +34,10 @@ const props = defineProps<{
   /** The board layout's settings, and whether its cards keep their manual order (no sort chosen). */
   board?: BoardSettings
   manual?: boolean
+  /** The agenda layout's settings; it shows what the filter selects from the calendar feed, not `objects` (parentId: the object a query is embedded in). */
+  agenda?: AgendaSettings
+  filter?: FilterGroup
+  parentId?: Id
   /** Where a click on an object opens it, as saved on the view or query; unset: as its type says. */
   openIn?: ViewOpenIn
   /** Shown where nothing should change (a whiteboard card, a page that cannot be edited): property cells do not edit. */
@@ -183,6 +188,9 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
     @board="emit('board', $event)"
     @manual="emit('manual')"
   />
+
+  <!-- Agenda: reads the calendar feed itself; grouping and sort do not apply. -->
+  <AgendaView v-else-if="layout === 'agenda'" :type-ids="typeIds" :filter="filter" :agenda="agenda" :parent-id="parentId" />
 
   <!-- Container queries: the same view sits in a full page or in a narrow document column. -->
   <div v-else ref="container" class="@container">

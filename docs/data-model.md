@@ -209,7 +209,7 @@ and sorts and groups the result. Filter values are literals or variables resolve
 `parent` is the object the query is embedded in (optionally one of its fields), `today` is the
 current date (shifted by `offsetDays`). Dates compare by day in the viewer's time zone; a daily
 note's `createdAt` resolves to its date, as Capacities dates daily notes that way. Filters without
-a value yet do not narrow the results. `me` is the user looking (for person fields). Views (`list`, `grid`, `wall`, `table`, `kanban`, `gallery`, `embed`) are display
+a value yet do not narrow the results. `me` is the user looking (for person fields). Views (`list`, `grid`, `wall`, `table`, `kanban`, `gallery`, `embed`, `agenda`) are display
 settings saved on a type, or carried by a query object in `query.layout`.
 
 A filter's `field` can go through a relation: `author.country` is the field `country` (a property
@@ -233,6 +233,14 @@ shows the title, tags, the types' properties and last edited. Property cells edi
 place (`components/ObjectCollection.vue`, with the object page's `PropertyValueEditor`), except
 formulas and rich text: a cell saves only its field (`setProperty` in `lib/actions.ts`, the fetched
 object as the save's base), so a field changed elsewhere meanwhile is kept.
+
+**Agenda** (the `agenda` layout, `components/AgendaView.vue`, `lib/agenda.ts`): a day-by-day list
+from today, for a home page. It reads the calendar feed rather than the result list: the dated
+entries of objects that match the query or view (types and filter). Its settings are
+`AgendaSettings` (`ViewDef.agenda`, `QueryDef.agenda`): `field` (a date property id or `date`; unset: every date
+field), `days` (1–14, default 3) and `calendars` (`true` = all subscribed calendars of the space,
+an array = those sources, unset = none). Sort and grouping do not apply. A build without the
+layout shows it as a grid.
 
 **Boards** (the `kanban` layout, `components/BoardView.vue`): a column per group of the view's
 group field, with `ViewDef.board` / `QueryDef.board` (`BoardSettings`) for the rest:

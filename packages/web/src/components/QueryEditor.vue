@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // Edits a query: which types, filters, sort, grouping, layout and where results open. Emits the
-// whole new query.
+// whole new query. The agenda layout has no sort or grouping (it is by day and time).
 import { computed, ref } from 'vue'
-import type { FilterGroup, Id, QueryDef, SortRule, TableSettings, ViewLayout } from '@vasta/core'
+import type { AgendaSettings, FilterGroup, Id, QueryDef, SortRule, TableSettings, ViewLayout } from '@vasta/core'
 import { chip } from '../lib/colors.ts'
 import { fieldOptions, groupOptions } from '../lib/query.ts'
 import { workspace } from '../lib/state.ts'
+import AgendaMenu from './AgendaMenu.vue'
 import AppIcon from './AppIcon.vue'
 import ColumnsMenu from './ColumnsMenu.vue'
 import FilterGroupEditor from './FilterGroupEditor.vue'
@@ -21,6 +22,7 @@ const LAYOUTS: { layout: ViewLayout; label: string; icon: string }[] = [
   { layout: 'gallery', label: 'Gallery', icon: 'ph:images' },
   { layout: 'table', label: 'Table', icon: 'ph:table' },
   { layout: 'kanban', label: 'Board', icon: 'ph:kanban' },
+  { layout: 'agenda', label: 'Agenda', icon: 'ph:calendar-dots' },
 ]
 
 const update = (patch: Partial<QueryDef>) => {
@@ -54,6 +56,9 @@ const setGroup = (field: string) => update({ groupBy: field ? [{ field }] : unde
 const columnsAnchor = ref<HTMLElement | null>(null)
 const columnsOpen = ref(false)
 const setTable = (table: TableSettings | undefined) => update({ table })
+const agendaAnchor = ref<HTMLElement | null>(null)
+const agendaOpen = ref(false)
+const setAgenda = (agenda: AgendaSettings | undefined) => update({ agenda })
 const setOpenIn = (value: string) => update({ openIn: value === 'pane' || value === 'page' ? value : undefined })
 
 const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
@@ -83,7 +88,7 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
     </section>
 
     <section class="flex flex-wrap items-center gap-x-5 gap-y-2">
-      <label class="flex items-center gap-1.5 text-ink-soft">
+      <label v-if="query.layout !== 'agenda'" class="flex items-center gap-1.5 text-ink-soft">
         Sort by
         <select :value="sort?.field ?? ''" :class="control" @change="setSort(($event.target as HTMLSelectElement).value)">
           <option value="">Newest first</option>
@@ -93,7 +98,7 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
           <AppIcon :fallback="sort.direction === 'asc' ? 'ph:sort-ascending' : 'ph:sort-descending'" />
         </button>
       </label>
-      <label class="flex items-center gap-1.5 text-ink-soft">
+      <label v-if="query.layout !== 'agenda'" class="flex items-center gap-1.5 text-ink-soft">
         Group by
         <select :value="groupField" :class="control" @change="setGroup(($event.target as HTMLSelectElement).value)">
           <option value="">Nothing</option>
@@ -120,6 +125,17 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
       >
         <AppIcon fallback="ph:columns" /> Columns
       </button>
+      <button
+        v-if="query.layout === 'agenda'"
+        ref="agendaAnchor"
+        class="flex items-center gap-1 rounded-md px-1.5 py-1 text-ink-soft hover:bg-hover hover:text-ink"
+        @click="agendaOpen = !agendaOpen"
+      >
+        <AppIcon fallback="ph:calendar-dots" /> Agenda
+      </button>
+      <PopoverMenu v-model:open="agendaOpen" :anchor="agendaAnchor" placement="bottom-end" width="18rem">
+        <AgendaMenu :agenda="query.agenda" :type-ids="query.typeIds" @update="setAgenda" />
+      </PopoverMenu>
       <PopoverMenu v-model:open="columnsOpen" :anchor="columnsAnchor" placement="bottom-end" width="17rem">
         <ColumnsMenu :table="query.table" :type-ids="query.typeIds" @update="setTable" />
       </PopoverMenu>

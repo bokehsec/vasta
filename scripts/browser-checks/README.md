@@ -23,6 +23,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node formula.mjs [chromium|webkit] [base]  # a formula column, writing one in Type settings, sort, filter, the object page (MODE=json too)
     node blocks.mjs [chromium|webkit] [base]   # block colors, copy link to block, opening it, ids of duplicates (MODE=json too)
     node quotes.mjs [chromium|webkit] [base]   # save a passage as a quote, open it from the highlight, delete it (MODE=json too)
+    node agenda.mjs [chromium|webkit] [base]   # the Agenda layout: a query in a page as day sections (chips, timed rows, the line for now, a checkbox, an empty day), Days in its settings, a type view and its date field (MODE=json too)
     node handover.mjs [base]     # a second tab takes the replica over when the first closes
     node capture.mjs [base]      # /Type in quick capture (embedded in today's note), a relation's values, ⌘K, the panel's bridge (MODE=json too)
     node toggles.mjs [base]      # Tab nests under the line above (a toggle), ⇧Tab takes it out, /Toggle on a written line (MODE=json too)
