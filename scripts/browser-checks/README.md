@@ -23,6 +23,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node listrows.mjs [chromium|webkit] [base]   # fields on list rows: the Fields menu (Due, wrap titles), a task's checkbox, reset to default (MODE=json too)
     node formula.mjs [chromium|webkit] [base]  # a formula column, writing one in Type settings, sort, filter, the object page (MODE=json too)
     node blocks.mjs [chromium|webkit] [base]   # block colors, copy link to block, opening it, ids of duplicates (MODE=json too)
+    node columnhandle.mjs [chromium|webkit] [base]   # the ⋮⋮ handle of a block in a second column: in the gap, holds still, opens its menu
     node quotes.mjs [chromium|webkit] [base]   # save a passage as a quote, open it from the highlight, delete it (MODE=json too)
     node compactembed.mjs [chromium|webkit] [base]   # a query embedded in a page shown Compact (block menu): no header, Edit query + Done, kept on reload, back to Full (MODE=json too)
     node handover.mjs [base]     # a second tab takes the replica over when the first closes

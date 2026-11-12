@@ -527,6 +527,8 @@ class BlockHandle {
   private onMouseMove = (event: MouseEvent) => {
     // Stay put over the handle itself and while a button is down (about to drag, or selecting text).
     if (event.target === this.handle || this.handle.contains(event.target as Node) || event.buttons || this.dragging || !this.editor.isEditable) return
+    // On the way from the block to its handle (through a panel's padding, say): keep that block.
+    if (this.block && !this.handle.hidden && this.onWayToHandle(event.clientX, event.clientY)) return
     const block = this.blockAtPoint(event.clientX, event.clientY)
     if (block) this.show(block)
     else this.hide()
@@ -546,9 +548,24 @@ class BlockHandle {
     }
     // Always in the gutter, whatever the nesting, so it never covers content (a callout's icon…).
     this.handle.style.top = `${top - wrapperRect.top}px`
+    // A block in a column further right gets the gap before its column instead: the page's gutter
+    // is out of reach, as the pointer would cross the other columns' blocks on the way.
+    const column = dom.closest('.vasta-column')
+    const before = column?.previousElementSibling?.getBoundingClientRect()
+    const columnLeft = column?.getBoundingClientRect().left ?? 0
+    // Side by side (stacked on phones, then the gutter as usual): centred in the gap.
+    const left = before && before.right < columnLeft ? (before.right + columnLeft) / 2 - wrapperRect.left - 10 : this.view.dom.getBoundingClientRect().left - wrapperRect.left - 26
     // A narrow gutter (phones) keeps the handle on screen, against the edge.
-    this.handle.style.left = `${Math.max(0, this.view.dom.getBoundingClientRect().left - wrapperRect.left - 26)}px`
+    this.handle.style.left = `${Math.max(0, left)}px`
     this.handle.hidden = false
+  }
+
+  /** The pointer is left of the shown block, between it and its handle, at the block's height. */
+  private onWayToHandle(x: number, y: number): boolean {
+    const dom = this.block && this.view.nodeDOM(this.block.pos)
+    if (!(dom instanceof HTMLElement)) return false
+    const rect = dom.getBoundingClientRect()
+    return x < rect.left && x >= this.handle.getBoundingClientRect().left && y >= rect.top && y <= rect.bottom
   }
 
   private selectBlock(extend: boolean) {

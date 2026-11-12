@@ -30,6 +30,9 @@ GitHub release page.
 
 ### Fixed
 
+- **The ⋮⋮ handle of a block in a second or third column** sits in the gap before that column
+  and holds still while the pointer goes to it. It sat at the page's left edge, so on the way the
+  pointer crossed the first column and the handle jumped to a block there.
 - **"Pin to sidebar" on Tasks did nothing**: the pinned type never showed, as Tasks have their own
   row at the top of the sidebar. Pinned, Tasks now also show in that section. New spaces no longer
   pin Tasks, since they have that row; in an older space, Tasks may show once under Pinned (Remove
