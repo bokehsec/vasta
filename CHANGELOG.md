@@ -19,6 +19,9 @@ GitHub release page.
 - **Group by a date**: lists, tables and the other layouts can group by a date field, under
   Earlier (Overdue for a task's due date), Today, Tomorrow, This week, Next week, Later and No
   date. A board grouped this way shows the columns; its cards do not move between them.
+- **An embedded query can be shown compact**: just its results, without the header bar and the
+  border, for a page that has its own heading above each list. Pick Show as → Compact in the
+  block's menu; Edit query and Open query move there.
 
 ### Changed
 

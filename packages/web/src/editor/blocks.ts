@@ -328,8 +328,8 @@ function openBlockMenu(editor: Editor, x: number, y: number, objectId: string | 
 function embedDisplays(view: EditorView, pos: number, node: PMNode): MenuItem[] {
   const summary = cachedSummary(node.attrs.objectId as string)
   const type = typesById.value.get(summary?.typeId ?? '')
-  // Queries always show their results.
-  if (!summary || type?.system === 'query') return []
+  if (!summary) return []
+  if (type?.system === 'query') return queryDisplays(view, pos, node)
   const current = node.attrs.display as string
   const mimeType = summary.media?.mimeType ?? summary.media?.file?.mimeType ?? ''
   const isImage = (type?.system === 'image' || mimeType.startsWith('image/')) && !!imageOf(summary)
@@ -353,6 +353,29 @@ function embedDisplays(view: EditorView, pos: number, node: PMNode): MenuItem[] 
     ),
     { kind: 'separator' },
   ]
+}
+
+/**
+ * "Show as" for an embedded query: the full frame (header bar and border) or compact (just the
+ * results). Compact has no header, so its Edit query and Open query live here; they reach the
+ * embed as an event on its DOM node (QueryEmbed listens), which keeps the router out of the editor.
+ */
+function queryDisplays(view: EditorView, pos: number, node: PMNode): MenuItem[] {
+  const compact = node.attrs.display === 'compact'
+  // 'embed' is what a newly inserted query gets (commands.ts); any display but 'compact' is full.
+  const show = (display: string) => {
+    if ((display === 'compact') !== compact) view.dispatch(view.state.tr.setNodeAttribute(pos, 'display', display))
+  }
+  const items: MenuItem[] = [
+    { kind: 'heading', label: 'Show as' },
+    { label: 'Full', icon: compact ? 'ph:browser' : 'ph:check', run: () => show('embed') },
+    { label: 'Compact', icon: compact ? 'ph:check' : 'ph:list-bullets', run: () => show('compact') },
+  ]
+  if (compact) {
+    const tell = (action: 'edit' | 'open') => () => void view.nodeDOM(pos)?.dispatchEvent(new CustomEvent('vasta-query', { detail: action }))
+    items.push({ label: 'Edit query', icon: 'ph:sliders-horizontal', run: tell('edit') }, { label: 'Open query', icon: 'ph:arrow-square-out', run: tell('open') })
+  }
+  return [...items, { kind: 'separator' }]
 }
 
 // ---------------------------------------------------------------------------

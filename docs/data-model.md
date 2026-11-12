@@ -163,7 +163,9 @@ code block, horizontal rule, table) Vasta defines the nodes below. A code block 
 is `mermaid` is a diagram: the app draws it with [Pele](https://pele.run) and keeps the text.
 
 - `mention` — inline link to an object (`objectId`, `label`)
-- `objectEmbed` — an object shown as a block (`display`: inline, card, wide-card, embed)
+- `objectEmbed` — an object shown as a block (`display`: inline, card, wide-card, embed; a query is also
+  shown `compact`, just its results without the header bar and border, and any other display
+  shows its full frame)
 - `callout` — block with an icon; with a `capture` attribute (`CaptureInfo`: id, channel, time) it is
   an item that arrived through a capture channel ([capture.md](capture.md))
 - `details` / `detailsSummary` / `detailsContent` — toggle, optionally with an icon
