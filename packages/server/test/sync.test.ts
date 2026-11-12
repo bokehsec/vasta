@@ -297,6 +297,21 @@ describe('sync', () => {
     expect(store.getObject('obj-x')).toBeUndefined()
   })
 
+  it('syncs the page a space opens on, and refuses anything else', async () => {
+    const { store, a } = setup()
+    await a.pull()
+    a.edit('spaces', 's', { opensOn: { kind: 'object', id: 'plan' } })
+    a.edit('spaces', 's', { opensOn: { kind: 'object', id: 7 } })
+    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for opensOn'])
+    expect(store.getSpace('s')!.opensOn).toEqual({ kind: 'object', id: 'plan' })
+    a.edit('spaces', 's', { opensOn: { kind: 'today' } })
+    await a.push()
+    expect(store.getSpace('s')!.opensOn).toEqual({ kind: 'today' })
+    a.edit('spaces', 's', { opensOn: null })
+    await a.push()
+    expect(store.getSpace('s')).not.toHaveProperty('opensOn')
+  })
+
   it('refuses what a client may not change, unknown protocols and clocks far ahead', async () => {
     const { user, a, page } = setup()
     const note = await createPage(user.request, page, 'Note')

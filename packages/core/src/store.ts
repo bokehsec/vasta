@@ -51,6 +51,7 @@ export function rowToSpace(row: Row): Space {
     sidebar: parse(row.sidebar) ?? [],
     ...(row.nutrition ? { nutrition: parse(row.nutrition) } : {}),
     ...(row.sprints ? { sprints: parse(row.sprints) } : {}),
+    ...(row.opens_on ? { opensOn: parse(row.opens_on) } : {}),
     createdAt: row.created_at as string,
   }
 }
@@ -510,11 +511,11 @@ export class Store {
       // An upsert, not INSERT OR REPLACE: replacing deletes the row, which would cascade to its members.
       this.db
         .prepare(
-          `INSERT INTO spaces (id, name, icon, sidebar, nutrition, sprints, created_at, rev, clock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT (id) DO UPDATE SET name = excluded.name, icon = excluded.icon, sidebar = excluded.sidebar, nutrition = excluded.nutrition, sprints = excluded.sprints,
+          `INSERT INTO spaces (id, name, icon, sidebar, nutrition, sprints, opens_on, created_at, rev, clock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (id) DO UPDATE SET name = excluded.name, icon = excluded.icon, sidebar = excluded.sidebar, nutrition = excluded.nutrition, sprints = excluded.sprints, opens_on = excluded.opens_on,
              created_at = excluded.created_at, rev = excluded.rev, clock = excluded.clock`
         )
-        .run(space.id, space.name, json(space.icon), json(space.sidebar), json(space.nutrition), json(space.sprints), space.createdAt, stamp.rev, stamp.clock)
+        .run(space.id, space.name, json(space.icon), json(space.sidebar), json(space.nutrition), json(space.sprints), json(space.opensOn), space.createdAt, stamp.rev, stamp.clock)
     })
   }
 

@@ -3,7 +3,7 @@
 // than the stored one, and Yjs updates of rich text; `text` hands out the Yjs updates a client
 // lacks. The app's other routes keep writing whole records; the store stamps them.
 import type { Id, ObjectRecord, ObjectType } from '@vasta/core'
-import { ClockDriftError, SYNC_TABLES, WriteRefused, applyFields, builtinTypeKey, canonicalJson, contentOfText, hlcTime, isHlc, isPushable, mergeFields, type SyncRecords, type SyncTable } from '@vasta/core'
+import { ClockDriftError, SYNC_TABLES, WriteRefused, applyFields, builtinTypeKey, canonicalJson, contentOfText, hlcTime, isHlc, isOpensOn, isPushable, mergeFields, type SyncRecords, type SyncTable } from '@vasta/core'
 import type { NodeStore, PulledRow, SyncChange, SyncChangeResult, SyncRow, SyncTombstone } from '@vasta/core/node'
 import { Y } from '@vasta/editor-schema/yjs'
 
@@ -85,6 +85,7 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   sidebar: Array.isArray,
   nutrition: optional((v) => isObject(v) && Array.isArray((v as { meals?: unknown }).meals)),
   sprints: optional((v) => isObject(v) && isNonEmpty((v as { name?: unknown }).name) && isNonEmpty((v as { pluralName?: unknown }).pluralName)),
+  opensOn: optional(isOpensOn),
   properties: Array.isArray,
   views: Array.isArray,
   openIn: optional((v) => v === 'page' || v === 'pane'),

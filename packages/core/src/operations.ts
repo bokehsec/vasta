@@ -4,7 +4,7 @@
 import { newId } from './ids.ts'
 import { ADDED_BUILTIN_PROPERTIES, BODY_PROPERTY_ID, SOURCE_PROPERTY_ID, builtinProperty, builtinTypeId, missingBuiltinTypes } from './builtin-types.ts'
 import { docReferences } from './doc.ts'
-import type { CaptureInfo, DocNode, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, Person, QueryDef } from './model.ts'
+import type { CaptureInfo, DocNode, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, OpensOn, Person, QueryDef, Space } from './model.ts'
 import { addHabitFoodProperty } from './nutrition.ts'
 import { queryRelations, relatedIds, runQuery, timeBounds } from './query.ts'
 import type { Store } from './store.ts'
@@ -13,6 +13,22 @@ import { currentSprint } from './sprints.ts'
 import { applyTemplate, defaultTemplate, seededText } from './templates.ts'
 import { textToBlocks } from './text-doc.ts'
 import { addDays, isValidDay } from './time.ts'
+
+/** Whether a value is a space's "opens on" setting: `{ kind: 'today' }` or `{ kind: 'object', id }`. */
+export function isOpensOn(value: unknown): value is OpensOn {
+  if (!value || typeof value !== 'object') return false
+  const { kind, id } = value as { kind?: unknown; id?: unknown }
+  return kind === 'today' || (kind === 'object' && typeof id === 'string' && id.trim() !== '')
+}
+
+/** `space` with its "opens on" setting changed: undefined keeps it, null clears it; anything else invalid throws. */
+export function withOpensOn(space: Space, value: unknown): Space {
+  if (value === undefined) return space
+  const { opensOn: _old, ...rest } = space
+  if (value === null) return rest
+  if (!isOpensOn(value)) throw new TypeError('opensOn must be null, { kind: "today" } or { kind: "object", id }')
+  return { ...rest, opensOn: value.kind === 'today' ? { kind: 'today' } : { kind: 'object', id: value.id } }
+}
 
 /** A new object of `type` from what the caller gave; ids, space and times are not theirs to choose. */
 export function newObject(type: ObjectType, data: Partial<ObjectRecord>, id: Id, at: IsoDateTime): ObjectRecord {

@@ -107,6 +107,26 @@ describe('local replica', () => {
     expect(store.getType(builtinTypeId('s', 'task'))!.properties.some((p) => p.id === 'sprint')).toBe(true)
   })
 
+  it('changes what a space opens on offline, and the server and another device follow', async () => {
+    const { store, phone, laptop } = setup()
+    await phone.sync.sync()
+    await laptop.sync.sync()
+    phone.online = false
+    phone.store.updateSpace('s', { opensOn: { kind: 'object', id: 'plan' } })
+    expect(() => phone.store.updateSpace('s', { opensOn: { kind: 'object' } as never })).toThrow(/opensOn/)
+    phone.online = true
+    await phone.sync.sync()
+    expect(store.getSpace('s')!.opensOn).toEqual({ kind: 'object', id: 'plan' })
+    await laptop.sync.sync()
+    expect(laptop.store.getSpace('s')!.opensOn).toEqual({ kind: 'object', id: 'plan' })
+
+    phone.store.updateSpace('s', { opensOn: null })
+    await phone.sync.sync()
+    await laptop.sync.sync()
+    expect(store.getSpace('s')).not.toHaveProperty('opensOn')
+    expect(laptop.store.getSpace('s')).not.toHaveProperty('opensOn')
+  })
+
   it('merges offline edits of two devices: other fields both kept, the same field the later one, text both', async () => {
     const { user, phone, laptop, page } = setup()
     const note = (await (await user.request('/api/objects', json({ typeId: page, title: 'Plan', content: { body: paragraphs('One') } }))).json()) as ObjectRecord

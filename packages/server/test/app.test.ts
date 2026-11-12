@@ -176,6 +176,29 @@ describe('server API', () => {
     expect((await app.request(`/api/objects/${note.id}/food/${entryId}`, { method: 'DELETE' })).status).toBe(404)
   })
 
+  it('sets the page a space opens on, clears it, and refuses anything else', async () => {
+    const { app, store } = setup()
+    const put = (body: unknown) => app.request('/api/spaces/s', { ...json(body), method: 'PUT' })
+    expect(store.getSpace('s')).not.toHaveProperty('opensOn')
+    expect(((await (await put({ opensOn: { kind: 'object', id: 'plan', extra: 1 } })).json()) as { opensOn: unknown }).opensOn).toEqual({ kind: 'object', id: 'plan' })
+    expect(store.getSpace('s')!.opensOn).toEqual({ kind: 'object', id: 'plan' })
+    // Other changes leave it; Today replaces it; null clears it.
+    await put({ name: 'Home' })
+    expect(store.getSpace('s')!.opensOn).toEqual({ kind: 'object', id: 'plan' })
+    await put({ opensOn: { kind: 'today' } })
+    expect(store.getSpace('s')!.opensOn).toEqual({ kind: 'today' })
+    await put({ opensOn: null })
+    expect(store.getSpace('s')).not.toHaveProperty('opensOn')
+
+    await put({ opensOn: { kind: 'today' } })
+    for (const bad of [{}, 'today', 3, [], { kind: 'tomorrow' }, { kind: 'object' }, { kind: 'object', id: '' }, { kind: 'object', id: 7 }]) {
+      const refused = await put({ opensOn: bad })
+      expect(refused.status).toBe(400)
+      expect(((await refused.json()) as { error: string }).error).toContain('opensOn')
+    }
+    expect(store.getSpace('s')!.opensOn).toEqual({ kind: 'today' })
+  })
+
   it('serves stored media, whole or a range, and rejects invalid keys', async () => {
     const { app, media, store } = setup()
     const file = await media.put(new Uint8Array([137, 80, 78, 71]), 'pic.png')

@@ -2,15 +2,17 @@
 // A space's name and icon, its members, and creating new spaces. Owners manage members (the server
 // enforces it); everyone may rename the space or leave it.
 import { computed, ref, watch } from 'vue'
-import type { Icon, Id, SpaceRole } from '@vasta/core'
+import type { Icon, Id, ObjectSummary, OpensOn, SpaceRole } from '@vasta/core'
 import { api, type Member } from '../../lib/api.ts'
 import { confirmDialog, promptDialog } from '../../lib/overlays.ts'
 import { session } from '../../lib/session.ts'
-import { loadWorkspace, workspace } from '../../lib/state.ts'
+import { displayTitle } from '../../lib/format.ts'
+import { loadWorkspace, summaryOf, typesById, workspace } from '../../lib/state.ts'
 import { loadPeople } from '../../lib/people.ts'
 import AppIcon from '../AppIcon.vue'
 import PersonAvatar from '../PersonAvatar.vue'
 import IconPicker from '../IconPicker.vue'
+import ObjectPicker from '../ObjectPicker.vue'
 import PopoverMenu from '../PopoverMenu.vue'
 import SettingsSection from './SettingsSection.vue'
 import { errorText, field, label, primary, secondary } from './styles.ts'
@@ -36,6 +38,38 @@ const newRole = ref<SpaceRole>('editor')
 const me = computed(() => session.user!.id)
 const isOwner = computed(() => members.value.some((m) => m.userId === me.value && m.role === 'owner'))
 const dirty = computed(() => name.value.trim() !== space.value.name || JSON.stringify(icon.value) !== JSON.stringify(space.value.icon))
+
+// Opens on: the page Vasta shows for this space (Space.opensOn); the first pinned item when unset.
+const opensOnAnchor = ref<HTMLElement | null>(null)
+const opensOnPicking = ref(false)
+const opensOnPage = computed(() => (space.value.opensOn?.kind === 'object' ? summaryOf(space.value.opensOn.id) : undefined))
+const opensOnGone = computed(() => space.value.opensOn?.kind === 'object' && !!opensOnPage.value?.deletedAt)
+async function saveOpensOn(opensOn: OpensOn | null) {
+  error.value = ''
+  try {
+    const saved = await api.updateSpace(spaceId.value, { opensOn })
+    const index = workspace.spaces.findIndex((s) => s.id === saved.id)
+    if (index >= 0) workspace.spaces[index] = saved
+    if (workspace.space?.id === saved.id) {
+      const { opensOn: _old, ...rest } = workspace.space
+      workspace.space = { ...rest, ...(saved.opensOn ? { opensOn: saved.opensOn } : {}) }
+    }
+  } catch (failure) {
+    error.value = (failure as Error).message
+  }
+}
+function chooseOpensOn(event: Event) {
+  const select = event.target as HTMLSelectElement
+  const kind = select.value
+  // "A page…" waits for the page: until one is picked the setting stays as it was.
+  select.value = space.value.opensOn?.kind ?? 'pinned'
+  if (kind === 'object') opensOnPicking.value = true
+  else void saveOpensOn(kind === 'today' ? { kind: 'today' } : null)
+}
+function pickOpensOn(page: ObjectSummary) {
+  opensOnPicking.value = false
+  void saveOpensOn({ kind: 'object', id: page.id })
+}
 
 // Activity: how long the space keeps who did what (core activity.ts); owners change it.
 const retention = ref<number | null>(null)
@@ -220,6 +254,29 @@ async function remove(member: Member) {
       <button type="submit" :class="primary" class="mb-0.5" :disabled="!dirty || !name.trim() || busy">Save</button>
     </form>
     <p v-if="error" :class="errorText" class="mt-2">{{ error }}</p>
+
+    <div class="mt-6 flex flex-wrap items-center gap-3">
+      <div class="min-w-0 flex-1 text-sm">
+        <div class="font-medium">Opens on</div>
+        <div class="text-xs text-ink-faint">
+          What this space shows when you open Vasta.
+          <template v-if="opensOnGone">The page is in the trash, so the first pinned item opens instead.</template>
+        </div>
+      </div>
+      <div ref="opensOnAnchor" class="flex items-center gap-2">
+        <select :value="space.opensOn?.kind ?? 'pinned'" class="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm outline-none" aria-label="Opens on" @change="chooseOpensOn">
+          <option value="pinned">First pinned item</option>
+          <option value="today">Today</option>
+          <option value="object">A page…</option>
+        </select>
+        <button v-if="space.opensOn?.kind === 'object'" :class="secondary" class="max-w-48 truncate" title="Change the page" @click="opensOnPicking = true">
+          {{ displayTitle(opensOnPage, opensOnPage && typesById.get(opensOnPage.typeId)) }}
+        </button>
+      </div>
+      <PopoverMenu v-model:open="opensOnPicking" :anchor="opensOnAnchor" width="16rem" placement="bottom-end">
+        <ObjectPicker no-create @pick="pickOpensOn" />
+      </PopoverMenu>
+    </div>
 
     <h3 class="mt-6 mb-2 text-sm font-medium">Members</h3>
     <ul class="divide-y divide-line rounded-xl border border-line">

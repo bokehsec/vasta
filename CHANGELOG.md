@@ -28,6 +28,8 @@ GitHub release page.
   and tasks keep their checkbox. Options set the date field to place things by, how many days (1
   to 14, three by default) and whether to include the events of your subscribed calendars, all or
   some. A build without the layout shows it as a grid.
+- **Choose what a space opens on**, in Settings › Space: its first pinned item (as before), Today,
+  or any page.
 
 ### Changed
 

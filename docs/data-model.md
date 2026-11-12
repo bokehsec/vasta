@@ -9,6 +9,11 @@ Source of truth: [`packages/core/src/model.ts`](../packages/core/src/model.ts) (
 list of sections ("Pinned", user-made groups such as "Reading"), each an ordered list of type or
 object ids; one id may sit in several sections, as in Capacities. A space is also the unit of access: users reach the spaces they are members of
 (owner or editor), so a space is either private or shared as a whole (see accounts.md).
+`Space.opensOn` is the page Vasta opens on in that space (Settings › Space › Opens on; route `/`,
+`HomeView`): `{ kind: 'today' }` (the day view) or `{ kind: 'object', id }`. Absent, it opens the first
+item of the first sidebar section, as before; an object that is gone or in the trash falls back to that
+too (`startPage` in `lib/start-page.ts`). Set with `PUT /api/spaces/:id` `{ opensOn }` (`null` clears it;
+anything else but those two shapes is a `400`); a synced field like `nutrition`.
 
 **User** — someone who logs in. Has a username, display name, password hash, and optionally a
 time zone, a capture space and a linked Telegram user id. Not part of the synced note data.
