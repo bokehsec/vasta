@@ -6,6 +6,13 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Choose the fields on a list's rows**: in a list view or query, the new Fields menu picks which
+  fields follow each title (a due date, status, tags, any property), puts them in order by
+  dragging, and can wrap long titles. Once fields are chosen, tasks get a checkbox to mark them
+  done from the list. Reset to default brings back tags and the last change.
+
 ## 0.8.0 (2026-11-08)
 
 ### Added

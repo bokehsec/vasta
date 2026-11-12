@@ -495,6 +495,8 @@ export interface QueryDef {
   table?: TableSettings
   /** The board layout's settings. */
   board?: BoardSettings
+  /** The list layout's rows. */
+  list?: ListSettings
   /** Where a click on a result opens it; unset: as each result's type says. */
   openIn?: ViewOpenIn
 }
@@ -542,6 +544,7 @@ export interface ViewDef {
   groupBy?: GroupRule[]
   table?: TableSettings
   board?: BoardSettings
+  list?: ListSettings
   /** Where a click on an object opens it; unset: as the type says. */
   openIn?: ViewOpenIn
 }
@@ -568,6 +571,13 @@ export interface BoardSettings {
  * follow the listed ones. Width in pixels; `wrap` lets long values take several lines.
  */
 export interface TableSettings { columns: TableColumn[]; wrap?: boolean }
+
+/**
+ * The list layout's rows: which fields follow the title, in order (a property id or a built-in
+ * field, as in the table's columns; unset: the tags and the last change), and whether long titles
+ * wrap instead of being cut short. Rows of tasks get a checkbox once `fields` is set.
+ */
+export interface ListSettings { fields?: string[]; wrap?: boolean }
 
 export interface TableColumn { field: string; width?: number; hidden?: boolean; wrap?: boolean }
 
