@@ -99,7 +99,7 @@ const hiddenFields = computed(() => [props.groupField, laneField.value].filter(B
 // Dragging -------------------------------------------------------------------
 const columnAxis = computed<BoardAxis>(() => ({ field: props.groupField, groups: columns.value }))
 const laneAxis = computed<BoardAxis | undefined>(() => (laneField.value ? { field: laneField.value, groups: lanes.value } : undefined))
-const draggable = computed(() => movableField(props.groupField) && (!laneField.value || movableField(laneField.value)))
+const draggable = computed(() => movableField(props.groupField, types.value) && (!laneField.value || movableField(laneField.value, types.value)))
 
 async function drop(cardId: Id, target: CardTarget) {
   const card = props.objects.find((o) => o.id === cardId)

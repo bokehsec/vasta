@@ -16,6 +16,9 @@ GitHub release page.
   fields follow each title (a due date, status, tags, any property), puts them in order by
   dragging, and can wrap long titles. Once fields are chosen, tasks get a checkbox to mark them
   done from the list. Reset to default brings back tags and the last change.
+- **Group by a date**: lists, tables and the other layouts can group by a date field, under
+  Earlier (Overdue for a task's due date), Today, Tomorrow, This week, Next week, Later and No
+  date. A board grouped this way shows the columns; its cards do not move between them.
 
 ### Changed
 
