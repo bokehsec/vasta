@@ -22,6 +22,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node table.mjs [chromium|webkit] [base]   # Columns menu, resizing, filters through a relation (MODE=json too)
     node formula.mjs [chromium|webkit] [base]  # a formula column, writing one in Type settings, sort, filter, the object page (MODE=json too)
     node blocks.mjs [chromium|webkit] [base]   # block colors, copy link to block, opening it, ids of duplicates (MODE=json too)
+    node columnhandle.mjs [chromium|webkit] [base]   # the ⋮⋮ handle of a block in a second column: in the gap, holds still, opens its menu
     node quotes.mjs [chromium|webkit] [base]   # save a passage as a quote, open it from the highlight, delete it (MODE=json too)
     node handover.mjs [base]     # a second tab takes the replica over when the first closes
     node capture.mjs [base]      # /Type in quick capture (embedded in today's note), a relation's values, ⌘K, the panel's bridge (MODE=json too)

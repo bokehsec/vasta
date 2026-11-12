@@ -6,6 +6,12 @@ GitHub release page.
 
 ## Unreleased
 
+### Fixed
+
+- **The ⋮⋮ handle of a block in a second or third column** sits in the gap before that column
+  and holds still while the pointer goes to it. It sat at the page's left edge, so on the way the
+  pointer crossed the first column and the handle jumped to a block there.
+
 ## 0.8.0 (2026-11-08)
 
 ### Added
