@@ -146,7 +146,7 @@ export type FieldClock = Record<string, Hlc>
  * it is a Yjs document that merges edit by edit (see `object_docs`).
  */
 export const PLAIN_FIELDS: Record<SyncTable, readonly string[]> = {
-  spaces: ['name', 'icon', 'sidebar', 'nutrition', 'sprints', 'deletedAt'],
+  spaces: ['name', 'icon', 'sidebar', 'nutrition', 'sprints', 'opensOn', 'deletedAt'],
   types: ['name', 'pluralName', 'description', 'icon', 'color', 'properties', 'views', 'openIn', 'deletedAt'],
   objects: ['typeId', 'title', 'description', 'icon', 'coverUrl', 'color', 'parentId', 'aliases', 'tagIds', 'collectionIds', 'date', 'query', 'media', 'template', 'deletedAt'],
   calendar_sources: ['name', 'url', 'color', 'username', 'enabled'],
@@ -161,7 +161,7 @@ export const MAP_FIELDS: Partial<Record<SyncTable, readonly string[]>> = { objec
  * ownership or fetch the feed.
  */
 export function isPushable(table: SyncTable, name: string): boolean {
-  if (table === 'spaces') return ['name', 'icon', 'sidebar', 'nutrition', 'sprints'].includes(name)
+  if (table === 'spaces') return ['name', 'icon', 'sidebar', 'nutrition', 'sprints', 'opensOn'].includes(name)
   if (table === 'calendar_sources') return ['name', 'color', 'enabled'].includes(name)
   return name !== 'media' && isSyncField(table, name)
 }

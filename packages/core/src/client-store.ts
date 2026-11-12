@@ -10,8 +10,8 @@ import { newId } from './ids.ts'
 import { Y } from '@vasta/editor-schema/yjs'
 import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, completeRepeat, dayReferences, objectEntries, type DayRange, type OccurrenceEdit } from './calendar.ts'
 import { calendarEntries, parseCalendar, type ParsedCalendar } from './ics.ts'
-import type { CalendarEntry, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, Person, Space } from './model.ts'
-import { QuoteError, recordCapture, standaloneCapture, type CaptureDestinations, applyEdit, createQuote, findOrCreateDailyNote, writeDailyText, listInbox, newObject, newType, querySpace, setCaptureDone, type InboxItem } from './operations.ts'
+import type { CalendarEntry, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, OpensOn, Person, Space } from './model.ts'
+import { QuoteError, recordCapture, standaloneCapture, type CaptureDestinations, applyEdit, createQuote, findOrCreateDailyNote, writeDailyText, listInbox, newObject, newType, querySpace, setCaptureDone, withOpensOn, type InboxItem } from './operations.ts'
 import { NutritionError, deleteFoodEntry, foodLineAnswer, logFood, logFoodLine, normalizeNutritionSettings, setNutritionEnabled, type FoodLineAnswer, type LogFoodInput } from './nutrition.ts'
 import { SprintError, setSprints } from './sprints.ts'
 import { textToBlocks } from './text-doc.ts'
@@ -703,17 +703,22 @@ export class ClientStore extends Store {
     return result
   }
 
-  /** Rename a space, change its icon, its sidebar or its meals. */
-  updateSpace(id: Id, body: Partial<Space>): Space {
+  /** Rename a space, change its icon, its sidebar, its meals or what it opens on. */
+  updateSpace(id: Id, body: Partial<Omit<Space, 'opensOn'>> & { opensOn?: OpensOn | null }): Space {
     const existing = this.getSpace(id)
     if (!existing) throw new NotFoundError('not found')
     const nutrition = normalizeNutritionSettings(body.nutrition)
-    const space: Space = {
+    let space: Space = {
       ...existing,
       ...(body.name?.trim() ? { name: body.name.trim() } : {}),
       ...(body.icon ? { icon: body.icon } : {}),
       ...(Array.isArray(body.sidebar) ? { sidebar: body.sidebar } : {}),
       ...(nutrition ? { nutrition } : {}),
+    }
+    try {
+      space = withOpensOn(space, body.opensOn)
+    } catch (error) {
+      throw new InvalidError((error as Error).message)
     }
     this.putSpace(space)
     return space

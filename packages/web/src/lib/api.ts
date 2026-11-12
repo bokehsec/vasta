@@ -2,7 +2,7 @@
 // it runs, and by the server over HTTP otherwise. What only the server can do (fetch a page, store
 // a file, delete for good, members, subscriptions) always goes to it, with the replica synced
 // before and after.
-import type { ActivityEntry, ApiToken, FlowMetrics, Backlink, CalendarEntry, CalendarSource, ColorName, DocNode, FoodEntry, FoodLineAnswer, Icon, Id, InboxPreferences, Invite, LogFoodInput, NutritionSettings, ObjectRecord, ObjectSummary, ObjectType, QueryDef, Space, SpaceRole, TokenScope, User } from '@vasta/core'
+import type { ActivityEntry, ApiToken, FlowMetrics, Backlink, CalendarEntry, CalendarSource, ColorName, DocNode, FoodEntry, FoodLineAnswer, Icon, Id, InboxPreferences, Invite, LogFoodInput, NutritionSettings, ObjectRecord, ObjectSummary, ObjectType, OpensOn, QueryDef, Space, SpaceRole, TokenScope, User } from '@vasta/core'
 import { SYNC_PROTOCOL, dayIn, type CaptureDestinations } from '@vasta/core'
 import type { OccurrenceEdit } from '@vasta/core/calendar'
 import type { CaptureAnswer } from '@vasta/core/client'
@@ -377,8 +377,8 @@ const http = {
   deletedSpaces: () => request<(Space & { deletedAt: string })[]>('GET', '/api/deleted-spaces'),
   restoreSpace: (id: Id) => request<Space>('POST', `/api/deleted-spaces/${id}/restore`),
   saveSpace: (space: Space) => request<Space>('PUT', `/api/spaces/${space.id}`, space),
-  /** Rename a space or change its icon, leaving its sidebar as it is. */
-  updateSpace: (id: Id, data: { name?: string; icon?: Icon; nutrition?: NutritionSettings }) => request<Space>('PUT', `/api/spaces/${id}`, data),
+  /** Rename a space or change its icon, meals or opening page (null: the first pinned item), leaving its sidebar as it is. */
+  updateSpace: (id: Id, data: { name?: string; icon?: Icon; nutrition?: NutritionSettings; opensOn?: OpensOn | null }) => request<Space>('PUT', `/api/spaces/${id}`, data),
   createSpace: (data: { name: string; icon?: Icon }) => request<Space>('POST', '/api/spaces', data),
   /** To the trash for 30 days (owners only); `name` must repeat the space's name. */
   deleteSpace: (id: Id, name: string) => request<void>('DELETE', `/api/spaces/${id}`, { name }),

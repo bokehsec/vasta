@@ -26,8 +26,13 @@ export interface Space {
   nutrition?: NutritionSettings
   /** Sprints in this space (sprints.ts); absent until they are turned on. */
   sprints?: SprintSettings
+  /** The page Vasta opens on in this space (HomeView); absent = the first sidebar item. */
+  opensOn?: OpensOn
   createdAt: IsoDateTime
 }
+
+/** What a space opens on: today's day view, or one object's page. */
+export type OpensOn = { kind: 'today' } | { kind: 'object'; id: Id }
 
 /** A space's food tracking: on or off (turning it off hides it and keeps the data) and its meals. */
 export interface NutritionSettings {

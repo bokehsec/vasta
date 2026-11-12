@@ -41,6 +41,7 @@ import {
   setSprints,
   SprintError,
   textToBlocks,
+  withOpensOn,
   writeDailyText,
 } from '@vasta/core'
 import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, completeRepeat, dayReferences, objectEntries, type OccurrenceEdit } from '@vasta/core/calendar'
@@ -751,16 +752,21 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   // Routes that change a stored row read it after the body: a write landing while the body
   // arrives (a device's push) would otherwise be overwritten with the copy read before it.
   api.put('/spaces/:id', async (c) => {
-    const body = await c.req.json<Partial<Space>>()
+    const body = await c.req.json<Partial<Omit<Space, 'opensOn'>> & { opensOn?: unknown }>()
     const existing = store.getSpace(c.req.param('id'))
     if (!existing) return c.json({ error: 'not found' }, 404)
     const nutrition = normalizeNutritionSettings(body.nutrition)
-    const space: Space = {
+    let space: Space = {
       ...existing,
       ...(body.name?.trim() ? { name: body.name.trim() } : {}),
       ...(body.icon ? { icon: body.icon } : {}),
       ...(Array.isArray(body.sidebar) ? { sidebar: body.sidebar } : {}),
       ...(nutrition ? { nutrition } : {}),
+    }
+    try {
+      space = withOpensOn(space, body.opensOn)
+    } catch (error) {
+      return c.json({ error: (error as Error).message }, 400)
     }
     store.putSpace(space)
     return c.json(space)

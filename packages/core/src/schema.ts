@@ -31,6 +31,8 @@ export const ADDED_COLUMNS: { table: string; column: string; definition: string 
   { table: 'spaces', column: 'nutrition', definition: 'TEXT' },
   // JSON SprintSettings: sprints turned on, and what the space calls them.
   { table: 'spaces', column: 'sprints', definition: 'TEXT' },
+  // JSON OpensOn: the page the space opens on; absent = the first sidebar item.
+  { table: 'spaces', column: 'opens_on', definition: 'TEXT' },
   // Who made an object and who changed it last (user ids; ObjectRecord.createdBy, updatedBy).
   { table: 'objects', column: 'created_by', definition: 'TEXT' },
   { table: 'objects', column: 'updated_by', definition: 'TEXT' },

@@ -6,6 +6,11 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Choose what a space opens on**, in Settings › Space: its first pinned item (as before), Today,
+  or any page.
+
 ## 0.8.0 (2026-11-08)
 
 ### Added
