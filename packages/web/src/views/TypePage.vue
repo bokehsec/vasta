@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { RANK_PROPERTY_ID, matchesFilter, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
+import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
 import ColumnsMenu from '../components/ColumnsMenu.vue'
@@ -382,6 +383,7 @@ const layouts: { layout: ViewLayout; label: string; icon: string }[] = [
   { layout: 'gallery', label: 'Gallery', icon: 'ph:images' },
   { layout: 'table', label: 'Table', icon: 'ph:table' },
   { layout: 'kanban', label: 'Board', icon: 'ph:kanban' },
+  { layout: 'agenda', label: 'Agenda', icon: 'ph:calendar-dots' },
 ]
 const layoutAnchor = ref<HTMLElement | null>(null)
 const layoutOpen = ref(false)
@@ -395,6 +397,10 @@ const sortAnchor = ref<HTMLElement | null>(null)
 const sortOpen = ref(false)
 const columnsAnchor = ref<HTMLElement | null>(null)
 const columnsOpen = ref(false)
+const agendaAnchor = ref<HTMLElement | null>(null)
+const agendaOpen = ref(false)
+// The agenda is by day and time: sort, grouping, "Mine" and the text filter do not apply, so they hide.
+const agendaActive = computed(() => view.value.layout === 'agenda' && !fixedActive.value)
 const groupAnchor = ref<HTMLElement | null>(null)
 const groupOpen = ref(false)
 
@@ -539,13 +545,13 @@ async function newMenu(event: MouseEvent) {
       </button>
 
       <div class="ml-auto flex items-center gap-1 whitespace-nowrap text-sm max-md:-mx-1 max-md:w-full max-md:overflow-x-auto [&>*]:shrink-0">
-        <div class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-ink-faint focus-within:bg-hover">
+        <div v-if="!agendaActive" class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-ink-faint focus-within:bg-hover">
           <AppIcon fallback="ph:magnifying-glass" :size="14" />
           <input v-model="filterText" class="w-28 bg-transparent md:w-36 text-ink outline-none placeholder:text-ink-faint" placeholder="Filter…" />
         </div>
         <template v-if="!fixedActive">
         <button
-          v-if="showMine"
+          v-if="showMine && !agendaActive"
           class="flex items-center gap-1 rounded-lg px-2 py-1.5 hover:bg-hover"
           :class="mineOnly ? 'bg-accent/10 text-accent' : 'text-ink-soft'"
           :title="`Only what ${personProps.map((p) => p.name).join(' or ')} names you in`"
@@ -561,11 +567,11 @@ async function newMenu(event: MouseEvent) {
         >
           <AppIcon fallback="ph:funnel" /> Filter<span v-if="filterCount"> · {{ filterCount }}</span>
         </button>
-        <button ref="sortAnchor" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" @click="sortOpen = !sortOpen">
+        <button v-if="!agendaActive" ref="sortAnchor" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" @click="sortOpen = !sortOpen">
           <AppIcon :fallback="sort.direction === 'asc' ? 'ph:sort-ascending' : 'ph:sort-descending'" />
           {{ sortFields.find((f) => f.field === sort.field)?.label }}
         </button>
-        <button ref="groupAnchor" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" @click="groupOpen = !groupOpen">
+        <button v-if="!agendaActive" ref="groupAnchor" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" @click="groupOpen = !groupOpen">
           <AppIcon fallback="ph:rows" />
           {{ groupField ? groupFields.find((f) => f.field === groupField)?.label ?? 'Group' : 'Group' }}
         </button>
@@ -587,6 +593,9 @@ async function newMenu(event: MouseEvent) {
           @click="columnsOpen = !columnsOpen"
         >
           <AppIcon fallback="ph:list-checks" /> Fields
+        </button>
+        <button v-if="view.layout === 'agenda'" ref="agendaAnchor" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" @click="agendaOpen = !agendaOpen">
+          <AppIcon fallback="ph:sliders-horizontal" /> Options
         </button>
         <button ref="layoutAnchor" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" @click="layoutOpen = !layoutOpen">
           <AppIcon :fallback="currentLayout.icon" /> {{ currentLayout.label }}
@@ -640,6 +649,9 @@ async function newMenu(event: MouseEvent) {
         <ColumnsMenu v-if="view.layout === 'table'" :table="view.table" :type-ids="[id]" @update="updateView({ table: $event })" />
         <ListFieldsMenu v-else :list="view.list" :type-ids="[id]" @update="updateView({ list: $event })" />
       </PopoverMenu>
+      <PopoverMenu v-model:open="agendaOpen" :anchor="agendaAnchor" placement="bottom-end" width="18rem">
+        <AgendaMenu :agenda="view.agenda" :type-ids="[id]" @update="updateView({ agenda: $event })" />
+      </PopoverMenu>
       <PopoverMenu v-model:open="layoutOpen" :anchor="layoutAnchor" placement="bottom-end" width="15rem">
         <button
           v-for="l in layouts"
@@ -675,7 +687,7 @@ async function newMenu(event: MouseEvent) {
     <FlowMetrics v-else-if="metricsActive" :type="type" />
     <TagTree v-else-if="fixedActive && type.system === 'tag'" :tags="objects" :filter="filterText" @menu="objectMenu" />
     <HabitBoard v-else-if="fixedActive && type.system === 'habit'" :habits="objects" :filter="filterText" @menu="objectMenu" />
-    <p v-else-if="!visible.length" class="py-16 text-center text-sm text-ink-faint">No {{ type.pluralName.toLowerCase() }} match the filter.</p>
+    <p v-else-if="!visible.length && !agendaActive" class="py-16 text-center text-sm text-ink-faint">No {{ type.pluralName.toLowerCase() }} match the filter.</p>
     <ObjectCollection
       v-else
       class="mt-6"
@@ -687,6 +699,8 @@ async function newMenu(event: MouseEvent) {
       :board="view.board"
       :list="view.list"
       :manual="manual"
+      :agenda="view.agenda"
+      :filter="view.filter"
       :open-in="view.openIn"
       @table="updateView({ table: $event })"
       @board="updateView({ board: $event })"

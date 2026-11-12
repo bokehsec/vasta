@@ -497,6 +497,8 @@ export interface QueryDef {
   board?: BoardSettings
   /** The list layout's rows. */
   list?: ListSettings
+  /** The agenda layout's settings. */
+  agenda?: AgendaSettings
   /** Where a click on a result opens it; unset: as each result's type says. */
   openIn?: ViewOpenIn
 }
@@ -533,7 +535,7 @@ export type FilterValue =
 export interface SortRule { field: string; direction: 'asc' | 'desc' }
 export interface GroupRule { field: string }
 
-export type ViewLayout = 'list' | 'grid' | 'wall' | 'table' | 'kanban' | 'gallery' | 'embed'
+export type ViewLayout = 'list' | 'grid' | 'wall' | 'table' | 'kanban' | 'gallery' | 'embed' | 'agenda'
 
 export interface ViewDef {
   id: Id
@@ -545,8 +547,22 @@ export interface ViewDef {
   table?: TableSettings
   board?: BoardSettings
   list?: ListSettings
+  agenda?: AgendaSettings
   /** Where a click on an object opens it; unset: as the type says. */
   openIn?: ViewOpenIn
+}
+
+/**
+ * The agenda layout's settings: a day-by-day list of what is dated, from today on, and optionally
+ * the events of the space's subscribed calendars.
+ */
+export interface AgendaSettings {
+  /** The date field to place objects by (a date property's id, or 'date'); unset: every date field of the objects. */
+  field?: string
+  /** How many days from today, 1 to 14; unset: 3. */
+  days?: number
+  /** Events of subscribed calendars too: true = all of the space's, an array = those sources; unset or false = none. */
+  calendars?: boolean | Id[]
 }
 
 /** Where a view opens the object clicked: its own page, or the side pane next to the view. */

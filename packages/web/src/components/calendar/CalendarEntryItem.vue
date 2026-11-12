@@ -1,13 +1,15 @@
 <script setup lang="ts">
-// One calendar entry: a compact chip (month cells, all-day row) or a timed block (day columns).
+// One calendar entry: a compact chip (month cells, all-day row), a timed block (day columns) or a
+// row (the agenda layout: its time or All day, then its title, wrapped, and where it comes from).
 // Objects open on click; occurrences of repeating dates and external events emit `details`;
 // tasks get a checkbox. Entries the page allows move by dragging (after a long press on touch
-// screens), and timed blocks resize by their bottom edge (lib/calendar-drag.ts).
+// screens), and timed blocks resize by their bottom edge (lib/calendar-drag.ts). Pressing the
+// checkbox stays out of a page editor around an agenda, which would select the embed first.
 import { computed, inject } from 'vue'
 import type { CalendarEntry, CalendarSource } from '@vasta/core'
-import { entryTime, isDone, setTaskDone } from '../../lib/calendar.ts'
+import { entryTime, formatClock, isDone, setTaskDone } from '../../lib/calendar.ts'
 import { ENTRY_DRAGGING, drag, pressEntry } from '../../lib/calendar-drag.ts'
-import { chip } from '../../lib/colors.ts'
+import { blockTextClasses, chip } from '../../lib/colors.ts'
 import { displayTitle } from '../../lib/format.ts'
 import { summaryOf, typesById } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
@@ -15,7 +17,7 @@ import ObjectLink from '../ObjectLink.vue'
 
 const props = defineProps<{
   entry: CalendarEntry
-  variant: 'chip' | 'block'
+  variant: 'chip' | 'block' | 'row'
   source?: CalendarSource | undefined
   /** The entry started on an earlier day (multi-day chips repeat on each day). */
   continued?: boolean
@@ -38,6 +40,8 @@ const title = computed(() => (props.entry.kind === 'external' ? (props.entry.tit
 const color = computed(() => (props.entry.kind === 'external' ? (props.source?.color ?? 'sky') : (type.value?.color ?? 'gray')))
 const fieldName = computed(() => (props.entry.field && props.entry.field !== 'date' ? type.value?.properties.find((p) => p.id === props.entry.field)?.name : undefined))
 const time = computed(() => entryTime(props.entry))
+/** What a row says after the title, faint: the calendar an event is from, else the object's type. */
+const origin = computed(() => (props.entry.kind === 'external' ? props.source?.name : type.value?.name))
 const tooltip = computed(() =>
   [title.value, time.value, props.entry.kind === 'external' ? props.source?.name : [type.value?.name, fieldName.value].filter(Boolean).join(' · ')].filter(Boolean).join('\n')
 )
@@ -77,10 +81,10 @@ function onContextMenu(event: MouseEvent) {
     :title="tooltip"
     draggable="false"
     data-calendar-entry
-    class="vasta-entry group/entry relative flex w-full min-w-0 text-left text-xs leading-tight"
+    class="vasta-entry group/entry relative flex w-full min-w-0 text-left leading-tight"
     :class="[
-      chip(color),
-      variant === 'chip' ? 'items-center gap-1 rounded-md px-1.5 py-[3px]' : 'h-full flex-col gap-0.5 overflow-hidden rounded-md border-l-[3px] border-current/40 px-1.5 py-1',
+      variant === 'row' ? 'items-start gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-hover' : ['text-xs', chip(color)],
+      variant === 'chip' ? 'items-center gap-1 rounded-md px-1.5 py-[3px]' : variant === 'block' ? 'h-full flex-col gap-0.5 overflow-hidden rounded-md border-l-[3px] border-current/40 px-1.5 py-1' : '',
       done ? 'opacity-60' : '',
       continued ? 'rounded-l-none' : '',
       continues ? 'rounded-r-none' : '',
@@ -92,19 +96,27 @@ function onContextMenu(event: MouseEvent) {
     @pointerdown="onPointerDown($event, 'move')"
     @contextmenu="onContextMenu"
   >
-    <span class="flex min-w-0 items-center gap-1">
+    <span v-if="variant === 'row'" class="w-[4.25rem] shrink-0 pt-px text-xs tabular-nums text-ink-soft">{{ entry.allDay ? 'All day' : formatClock(entry.start) }}</span>
+    <!-- A row wraps its title (an agenda sits in narrow columns); chips and blocks cut it short. -->
+    <span class="flex min-w-0 gap-1" :class="variant === 'row' ? 'items-start' : 'items-center'">
       <button
         v-if="checkable"
         class="shrink-0 rounded-sm hover:opacity-70"
+        :class="variant === 'row' ? 'mt-[3px]' : ''"
         :title="done ? 'Mark as to do' : 'Mark as done'"
+        @mousedown.stop
         @click.prevent.stop="toggleDone"
       >
         <AppIcon :fallback="done ? 'ph:check-circle-fill' : 'ph:circle'" :size="13" />
       </button>
-      <AppIcon v-else-if="entry.kind === 'external'" fallback="ph:calendar-dots" :size="12" class="shrink-0 opacity-70" />
-      <AppIcon v-else :icon="summary?.icon ?? type?.icon" fallback="ph:cube" :size="12" class="shrink-0 opacity-80" />
+      <AppIcon v-else-if="entry.kind === 'external'" fallback="ph:calendar-dots" :size="12" class="shrink-0 opacity-70" :class="variant === 'row' ? ['mt-[3px]', blockTextClasses[color]] : ''" />
+      <AppIcon v-else :icon="summary?.icon ?? type?.icon" fallback="ph:cube" :size="12" class="shrink-0 opacity-80" :class="variant === 'row' ? ['mt-[3px]', blockTextClasses[color]] : ''" />
       <span v-if="variant === 'chip' && time && !continued" class="shrink-0 tabular-nums opacity-70">{{ time.split(' – ')[0] }}</span>
-      <span class="truncate font-medium" :class="done ? 'line-through' : ''">{{ title }}</span>
+      <span v-if="variant === 'row'" class="min-w-0 break-words"
+        ><span class="font-medium" :class="done ? 'line-through' : ''">{{ title }}</span
+        ><span v-if="origin" class="text-xs text-ink-faint"> · {{ origin }}</span></span
+      >
+      <span v-else class="truncate font-medium" :class="done ? 'line-through' : ''">{{ title }}</span>
       <AppIcon v-if="entry.recurring" fallback="ph:repeat" :size="11" class="shrink-0 opacity-60" />
     </span>
     <span v-if="variant === 'block' && time" class="truncate tabular-nums opacity-70">{{ time }}</span>

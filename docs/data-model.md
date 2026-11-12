@@ -212,7 +212,7 @@ earlier, today, tomorrow, this week, next week, later; `dayBucket` in `core/time
 `parent` is the object the query is embedded in (optionally one of its fields), `today` is the
 current date (shifted by `offsetDays`). Dates compare by day in the viewer's time zone; a daily
 note's `createdAt` resolves to its date, as Capacities dates daily notes that way. Filters without
-a value yet do not narrow the results. `me` is the user looking (for person fields). Views (`list`, `grid`, `wall`, `table`, `kanban`, `gallery`, `embed`) are display
+a value yet do not narrow the results. `me` is the user looking (for person fields). Views (`list`, `grid`, `wall`, `table`, `kanban`, `gallery`, `embed`, `agenda`) are display
 settings saved on a type, or carried by a query object in `query.layout`.
 
 A filter's `field` can go through a relation: `author.country` is the field `country` (a property
@@ -242,6 +242,14 @@ that follow the title in order (same vocabulary as the table's, without the titl
 let long titles take several lines. Without `fields` a row shows tags and the last change; with
 them (even none) it shows those, read-only and only where an object has a value, and a task gets a
 checkbox that marks it done. The key is optional, so a build that does not know it keeps working.
+
+**Agenda** (the `agenda` layout, `components/AgendaView.vue`, `lib/agenda.ts`): a day-by-day list
+from today, for a home page. It reads the calendar feed rather than the result list: the dated
+entries of objects that match the query or view (types and filter). Its settings are
+`AgendaSettings` (`ViewDef.agenda`, `QueryDef.agenda`): `field` (a date property id or `date`; unset: every date
+field), `days` (1–14, default 3) and `calendars` (`true` = all subscribed calendars of the space,
+an array = those sources, unset = none). Sort and grouping do not apply. A build without the
+layout shows it as a grid.
 
 **Boards** (the `kanban` layout, `components/BoardView.vue`): a column per group of the view's
 group field, with `ViewDef.board` / `QueryDef.board` (`BoardSettings`) for the rest:

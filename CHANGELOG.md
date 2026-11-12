@@ -22,6 +22,12 @@ GitHub release page.
 - **An embedded query can be shown compact**: just its results, without the header bar and the
   border, for a page that has its own heading above each list. Pick Show as → Compact in the
   block's menu; Edit query and Open query move there.
+- **An Agenda layout** for queries and type views: the next few days from today, one section
+  each, for a home page. What the query or view selects that has a date shows under its day: all-day
+  items first, then timed ones in time order with a thin line marking now and what is over faded,
+  and tasks keep their checkbox. Options set the date field to place things by, how many days (1
+  to 14, three by default) and whether to include the events of your subscribed calendars, all or
+  some. A build without the layout shows it as a grid.
 
 ### Changed
 
