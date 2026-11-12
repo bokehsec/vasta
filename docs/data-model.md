@@ -234,6 +234,12 @@ place (`components/ObjectCollection.vue`, with the object page's `PropertyValueE
 formulas and rich text: a cell saves only its field (`setProperty` in `lib/actions.ts`, the fetched
 object as the save's base), so a field changed elsewhere meanwhile is kept.
 
+The list layout's rows are `ListSettings` (`ViewDef.list`, `QueryDef.list`): `fields`, the fields
+that follow the title in order (same vocabulary as the table's, without the title), and `wrap` to
+let long titles take several lines. Without `fields` a row shows tags and the last change; with
+them (even none) it shows those, read-only and only where an object has a value, and a task gets a
+checkbox that marks it done. The key is optional, so a build that does not know it keeps working.
+
 **Boards** (the `kanban` layout, `components/BoardView.vue`): a column per group of the view's
 group field, with `ViewDef.board` / `QueryDef.board` (`BoardSettings`) for the rest:
 `swimlanes` (a second grouping, in rows), `cardFields` (property ids the cards show; unset: the

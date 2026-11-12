@@ -84,6 +84,7 @@ defineExpose({ count: computed(() => results.value.length) })
         :type-ids="query.typeIds"
         :table="query.table"
         :board="query.board"
+        :list="query.list"
         :manual="!query.sort?.length"
         :open-in="query.openIn"
         :readonly="readonly"

@@ -12,6 +12,10 @@ GitHub release page.
 - **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu, a right-click on the
   view's tab, or the tab dragged into a sidebar section puts that one view, such as a "Today" view
   of Tasks, in the sidebar; its row opens the type on that view.
+- **Choose the fields on a list's rows**: in a list view or query, the new Fields menu picks which
+  fields follow each title (a due date, status, tags, any property), puts them in order by
+  dragging, and can wrap long titles. Once fields are chosen, tasks get a checkbox to mark them
+  done from the list. Reset to default brings back tags and the last change.
 
 ### Changed
 

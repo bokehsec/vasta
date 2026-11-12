@@ -2,13 +2,14 @@
 // Edits a query: which types, filters, sort, grouping, layout and where results open. Emits the
 // whole new query.
 import { computed, ref } from 'vue'
-import type { FilterGroup, Id, QueryDef, SortRule, TableSettings, ViewLayout } from '@vasta/core'
+import type { FilterGroup, Id, ListSettings, QueryDef, SortRule, TableSettings, ViewLayout } from '@vasta/core'
 import { chip } from '../lib/colors.ts'
 import { fieldOptions, groupOptions } from '../lib/query.ts'
 import { workspace } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
 import ColumnsMenu from './ColumnsMenu.vue'
 import FilterGroupEditor from './FilterGroupEditor.vue'
+import ListFieldsMenu from './ListFieldsMenu.vue'
 import PopoverMenu from './PopoverMenu.vue'
 
 const props = defineProps<{ query: QueryDef }>()
@@ -54,6 +55,7 @@ const setGroup = (field: string) => update({ groupBy: field ? [{ field }] : unde
 const columnsAnchor = ref<HTMLElement | null>(null)
 const columnsOpen = ref(false)
 const setTable = (table: TableSettings | undefined) => update({ table })
+const setList = (list: ListSettings | undefined) => update({ list })
 const setOpenIn = (value: string) => update({ openIn: value === 'pane' || value === 'page' ? value : undefined })
 
 const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
@@ -120,8 +122,17 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
       >
         <AppIcon fallback="ph:columns" /> Columns
       </button>
+      <button
+        v-else-if="(query.layout ?? 'list') === 'list'"
+        ref="columnsAnchor"
+        class="flex items-center gap-1 rounded-md px-1.5 py-1 text-ink-soft hover:bg-hover hover:text-ink"
+        @click="columnsOpen = !columnsOpen"
+      >
+        <AppIcon fallback="ph:list-checks" /> Fields
+      </button>
       <PopoverMenu v-model:open="columnsOpen" :anchor="columnsAnchor" placement="bottom-end" width="17rem">
-        <ColumnsMenu :table="query.table" :type-ids="query.typeIds" @update="setTable" />
+        <ColumnsMenu v-if="query.layout === 'table'" :table="query.table" :type-ids="query.typeIds" @update="setTable" />
+        <ListFieldsMenu v-else :list="query.list" :type-ids="query.typeIds" @update="setList" />
       </PopoverMenu>
       <label class="flex items-center gap-1.5 text-ink-soft">
         Open in

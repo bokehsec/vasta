@@ -337,10 +337,12 @@ export function isDone(type: ObjectType | undefined, statusIds: Id[] | undefined
 
 export async function setTaskDone(objectId: Id, type: ObjectType | undefined, done: boolean) {
   const option = statusOption(type, done ? 'done' : 'todo')
-  if (!option) return
+  if (!option) return undefined
   const object = await api.object(objectId)
   object.props.status = { kind: 'select', value: [option] }
-  primeFromObject(await api.saveObject(object))
+  const saved = await api.saveObject(object)
+  primeFromObject(saved)
+  return saved
 }
 
 /** What a day holds, for the dots of the small month calendar. */

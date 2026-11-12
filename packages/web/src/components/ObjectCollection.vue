@@ -2,10 +2,11 @@
 // A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board),
 // optionally grouped. Used by type pages, query pages and queries embedded in documents.
 import { computed, nextTick, provide, ref, watch, type Directive } from 'vue'
-import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
+import type { BoardSettings, Id, ListSettings, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { addSelectOption, setProperty } from '../lib/actions.ts'
+import { isDone, setTaskDone } from '../lib/calendar.ts'
 import { chip } from '../lib/colors.ts'
-import { columnWidth, MIN_COLUMN_WIDTH, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
+import { columnWidth, listFields, MIN_COLUMN_WIDTH, rowFields, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
 import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById } from '../lib/state.ts'
@@ -32,6 +33,8 @@ const props = defineProps<{
   table?: TableSettings
   /** The board layout's settings, and whether its cards keep their manual order (no sort chosen). */
   board?: BoardSettings
+  /** The list layout's rows, as saved on the view or query; unset: tags and the last change. */
+  list?: ListSettings
   manual?: boolean
   /** Where a click on an object opens it, as saved on the view or query; unset: as its type says. */
   openIn?: ViewOpenIn
@@ -164,6 +167,19 @@ function addOption(object: ObjectSummary, column: Column, option: SelectOption) 
   if (type) void addSelectOption(type, column.field, option).catch((error) => (lastError.value = (error as Error).message))
 }
 
+// List rows: with fields chosen, each row shows those after its title, and a task gets a checkbox.
+const listColumns = computed(() => (props.list?.fields ? listFields(props.list, props.typeIds) : undefined))
+const isDoneTask = (object: ObjectSummary) => isDone(typeOf(object), object.props.status?.kind === 'select' ? object.props.status.value : undefined)
+
+async function toggleDone(object: ObjectSummary) {
+  try {
+    const saved = await setTaskDone(object.id, typeOf(object), !isDoneTask(object))
+    if (saved) emit('moved', saved)
+  } catch (error) {
+    lastError.value = (error as Error).message
+  }
+}
+
 const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 'embed' ? 'wall' : props.layout === 'gallery' ? 'gallery' : 'grid'))
 
 </script>
@@ -196,13 +212,50 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
 
       <!-- List -->
       <div v-if="layout === 'list'" class="divide-y divide-line/70">
-        <ObjectLink v-for="object in shown(group)" :key="object.id" :id="object.id" class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover" @contextmenu="emit('menu', $event, object)">
-          <TypeIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
-          <span class="min-w-0 flex-1 truncate font-medium">{{ displayTitle(object, typeOf(object)) }}</span>
-          <span class="hidden gap-1 md:flex" @click.prevent>
-            <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
+        <ObjectLink
+          v-for="object in shown(group)"
+          :key="object.id"
+          :id="object.id"
+          class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover"
+          :class="listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : ''"
+          @contextmenu="emit('menu', $event, object)"
+        >
+          <button
+            v-if="listColumns && typeOf(object)?.system === 'task'"
+            class="shrink-0 rounded-full text-ink-soft enabled:hover:text-ink"
+            :class="isDoneTask(object) ? 'text-accent' : ''"
+            :disabled="readonly"
+            :title="isDoneTask(object) ? 'Mark as to do' : 'Mark as done'"
+            data-task-check
+            @click.prevent.stop="toggleDone(object)"
+          >
+            <AppIcon :fallback="isDoneTask(object) ? 'ph:check-circle-fill' : 'ph:circle'" :size="18" />
+          </button>
+          <TypeIcon v-else :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
+          <span
+            class="min-w-0 flex-1 font-medium"
+            :class="[list?.wrap ? 'break-words' : 'truncate', listColumns && typeOf(object)?.system === 'task' && isDoneTask(object) ? 'text-ink-faint line-through' : '']"
+          >{{ displayTitle(object, typeOf(object)) }}</span>
+          <span v-if="listColumns" class="flex min-w-0 shrink-0 items-center gap-2 text-xs @max-2xl:order-last @max-2xl:w-full @max-2xl:flex-wrap @max-2xl:pl-[28px]" @click.prevent>
+            <template v-for="field in rowFields(object, typeOf(object), listColumns)" :key="field.field">
+              <span v-if="field.field === 'tags' || field.field === 'collections'" class="flex gap-1">
+                <ObjectChip v-for="id in field.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="field.field === 'tags'" />
+              </span>
+              <span v-else-if="field.field === 'type'" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5" :class="chip(typeOf(object)?.color)">
+                <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object)?.name }}
+              </span>
+              <span v-else-if="field.field === 'createdAt' || field.field === 'updatedAt'" class="whitespace-nowrap text-ink-faint">{{ formatRelative(object[field.field]) }}</span>
+              <span v-else-if="field.field === 'date'" class="whitespace-nowrap">{{ object.date ? formatDate(object.date) : '' }}</span>
+              <span v-else-if="field.field === 'host'" class="whitespace-nowrap">{{ object.media?.host?.replace(/^www\./, '') }}</span>
+              <PropertyDisplay v-else-if="field.def" :def="field.def" :value="object.props[field.field]" :object="object" :wrap="false" />
+            </template>
           </span>
-          <span class="w-24 shrink-0 text-right text-xs text-ink-faint">{{ formatRelative(object.updatedAt) }}</span>
+          <template v-else>
+            <span class="hidden gap-1 md:flex" @click.prevent>
+              <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
+            </span>
+            <span class="w-24 shrink-0 text-right text-xs text-ink-faint">{{ formatRelative(object.updatedAt) }}</span>
+          </template>
         </ObjectLink>
       </div>
 
