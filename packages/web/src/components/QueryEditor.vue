@@ -62,6 +62,10 @@ const agendaAnchor = ref<HTMLElement | null>(null)
 const agendaOpen = ref(false)
 const setAgenda = (agenda: AgendaSettings | undefined) => update({ agenda })
 const setOpenIn = (value: string) => update({ openIn: value === 'pane' || value === 'page' ? value : undefined })
+// Quick actions on task rows: offered when the query can find tasks, in the layouts that show them.
+const findsTasks = computed(() => !props.query.typeIds.length || workspace.types.some((t) => t.system === 'task' && props.query.typeIds.includes(t.id)))
+const rowsLayout = computed(() => (props.query.layout ?? 'list') === 'list' || props.query.layout === 'table')
+const setQuickActions = (on: boolean) => update({ quickActions: on || undefined })
 
 const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
 </script>
@@ -157,6 +161,10 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
           <option value="pane">Side pane</option>
           <option value="page">Full page</option>
         </select>
+      </label>
+      <label v-if="findsTasks && rowsLayout" class="flex items-center gap-1.5 text-ink-soft" title="Done, Defer, Drop and the next step on each task's row">
+        <input type="checkbox" class="accent-[var(--color-accent)]" :checked="!!query.quickActions" @change="setQuickActions(($event.target as HTMLInputElement).checked)" />
+        Quick actions
       </label>
     </section>
   </div>

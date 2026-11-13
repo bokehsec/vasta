@@ -44,6 +44,10 @@ GitHub release page.
   status it also sets (such as "Scheduled") and the status Drop sets (by default a second "done"
   status such as "Dropped"; without one there is no Drop button). Deferring past the due date is
   allowed and said.
+- **Triage task lists with quick actions on each row**: turn on "Quick actions" in a task view's
+  menu (list or table layout) or a query's settings, and every open task's row gets Done, Defer and
+  Drop, plus its next step: a text property chosen in Type settings › Quick actions ("Next step in"),
+  typed in a small box and shown under the title.
 - **"Next week" in date pickers**, beside Today and Tomorrow.
 
 ### Changed

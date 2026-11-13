@@ -675,6 +675,19 @@ async function newMenu(event: MouseEvent) {
           {{ o.label }}
           <AppIcon v-if="view.openIn === o.openIn" fallback="ph:check" class="ml-auto text-accent" />
         </button>
+        <template v-if="type.system === 'task' && (view.layout === 'list' || view.layout === 'table')">
+          <div class="my-1 border-t border-line" />
+          <button
+            class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover"
+            :aria-pressed="!!view.quickActions"
+            title="Done, Defer, Drop and the next step on each task's row"
+            data-view-quick-actions
+            @click="updateView({ quickActions: view.quickActions ? undefined : true })"
+          >
+            <AppIcon fallback="ph:lightning" class="text-ink-soft" /> Quick actions
+            <AppIcon v-if="view.quickActions" fallback="ph:check" class="ml-auto text-accent" />
+          </button>
+        </template>
       </PopoverMenu>
     </div>
 
@@ -703,6 +716,7 @@ async function newMenu(event: MouseEvent) {
       :agenda="view.agenda"
       :filter="view.filter"
       :open-in="view.openIn"
+      :quick-actions="view.quickActions"
       @table="updateView({ table: $event })"
       @board="updateView({ board: $event })"
       @manual="updateView({ sort: undefined })"

@@ -53,6 +53,8 @@ export interface QuickActions {
   deferStatus?: Id
   /** The status option Drop sets; default the first option meaning done after Done ("Dropped"). */
   dropStatus?: Id
+  /** A text property for the task's next step, typed from a list's row; default none. */
+  nextStepField?: Id
 }
 
 /** A space's sprints: on or off, and the word the space uses for them ("Sprint", "Rodada"…). */
@@ -522,6 +524,8 @@ export interface QueryDef {
   agenda?: AgendaSettings
   /** Where a click on a result opens it; unset: as each result's type says. */
   openIn?: ViewOpenIn
+  /** Tasks among the results show their quick actions on their rows (list and table layouts). */
+  quickActions?: boolean
 }
 
 export interface FilterGroup {
@@ -571,6 +575,8 @@ export interface ViewDef {
   agenda?: AgendaSettings
   /** Where a click on an object opens it; unset: as the type says. */
   openIn?: ViewOpenIn
+  /** Tasks show their quick actions on their rows (list and table layouts), for triage. */
+  quickActions?: boolean
 }
 
 /**

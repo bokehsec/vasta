@@ -15,7 +15,8 @@ function triageTask(quickActions?: ObjectType['quickActions']): ObjectType {
       ? { ...p, options: [...p.options, { id: 'scheduled', label: 'Scheduled', status: 'todo' }, { id: 'dropped', label: 'Dropped', status: 'done' }] }
       : p
   )
-  return { ...task, properties: [...properties, { id: 'dodate', kind: 'date', name: 'Do date' }], ...(quickActions ? { quickActions } : {}) }
+  const added: PropertyDef[] = [{ id: 'dodate', kind: 'date', name: 'Do date' }, { id: 'next', kind: 'text', name: 'Next step' }]
+  return { ...task, properties: [...properties, ...added], ...(quickActions ? { quickActions } : {}) }
 }
 
 const status = (id: string): PropertyValue => ({ kind: 'select', value: [id] })
@@ -42,10 +43,16 @@ describe('resolveQuickActions', () => {
   })
 
   it('falls back when a setting names something gone or of the wrong kind', () => {
-    const resolved = resolveQuickActions(triageTask({ deferField: 'priority', deferStatus: 'gone', dropStatus: 'done' }))
+    const resolved = resolveQuickActions(triageTask({ deferField: 'priority', deferStatus: 'gone', dropStatus: 'done', nextStepField: 'dodate' }))
     expect(resolved.deferField?.id).toBe('due')
     expect(resolved.deferStatus).toBeUndefined()
     expect(resolved.drop?.id).toBe('dropped')
+    expect(resolved.nextStepField).toBeUndefined()
+  })
+
+  it('has a next step field only when the type names a text property', () => {
+    expect(resolveQuickActions(triageTask()).nextStepField).toBeUndefined()
+    expect(resolveQuickActions(triageTask({ nextStepField: 'next' })).nextStepField?.id).toBe('next')
   })
 
   it('offers nothing on other types', () => {
@@ -69,6 +76,13 @@ describe('quickActionValues', () => {
   it('keeps a repeating date repeating', () => {
     const values = quickActionValues(task, { props: { due: day('2026-11-13', 'FREQ=WEEKLY') } }, { kind: 'defer', day: '2026-11-20' })
     expect(values).toEqual({ due: day('2026-11-20', 'FREQ=WEEKLY') })
+  })
+
+  it('sets or clears the next step', () => {
+    const type = triageTask({ nextStepField: 'next' })
+    expect(quickActionValues(type, { props: {} }, { kind: 'next-step', text: '  Ask Nabil ' })).toEqual({ next: { kind: 'text', value: 'Ask Nabil' } })
+    expect(quickActionValues(type, { props: {} }, { kind: 'next-step', text: ' ' })).toEqual({ next: undefined })
+    expect(quickActionValues(triageTask(), { props: {} }, { kind: 'next-step', text: 'x' })).toBeUndefined()
   })
 
   it('has nothing to do where the type cannot', () => {

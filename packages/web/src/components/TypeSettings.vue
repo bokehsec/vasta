@@ -51,6 +51,7 @@ function setOpenIn(pane: boolean) {
 
 // Quick actions (tasks): what Done, Defer and Drop set; '' is the default (task-actions.ts).
 const deferFields = computed(() => draft.value.properties.filter((p) => p.kind === 'date' && p.id !== DUE_PROPERTY_ID))
+const textFields = computed(() => draft.value.properties.filter((p) => p.kind === 'text'))
 const statusOptions = computed(() => {
   const def = draft.value.properties.find((p) => p.id === STATUS_PROPERTY_ID)
   return def?.kind === 'select' ? def.options : []
@@ -264,7 +265,7 @@ async function leave(path: string) {
     </section>
     <section v-if="draft.system === 'task'" class="mt-4" data-quick-action-settings>
       <div class="text-sm">Quick actions</div>
-      <p class="mt-0.5 text-xs text-ink-faint">Done, Defer and Drop on a {{ (draft.name || 'task').toLowerCase() }}'s page. Done sets “{{ doneOption?.label ?? 'Done' }}”.</p>
+      <p class="mt-0.5 text-xs text-ink-faint">Done, Defer and Drop on a {{ (draft.name || 'task').toLowerCase() }}'s page and, where a view turns them on, its row. Done sets “{{ doneOption?.label ?? 'Done' }}”.</p>
       <div class="mt-2 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 text-sm">
         <span class="text-ink-soft">Defer sets</span>
         <select :value="draft.quickActions?.deferField ?? ''" class="rounded-md bg-hover px-1.5 py-1 text-sm outline-none" @change="setQuickAction('deferField', ($event.target as HTMLSelectElement).value)">
@@ -281,7 +282,13 @@ async function leave(path: string) {
           <option value="">{{ defaultDrop ? `${defaultDrop.label} (default)` : 'Nothing: no Drop button' }}</option>
           <option v-for="o in statusOptions.filter((o) => o.id !== doneOption?.id && o.id !== defaultDrop?.id)" :key="o.id" :value="o.id">{{ o.label }}</option>
         </select>
+        <span class="text-ink-soft">Next step in</span>
+        <select :value="draft.quickActions?.nextStepField ?? ''" class="rounded-md bg-hover px-1.5 py-1 text-sm outline-none" @change="setQuickAction('nextStepField', ($event.target as HTMLSelectElement).value)">
+          <option value="">None</option>
+          <option v-for="p in textFields" :key="p.id" :value="p.id">{{ p.name }}</option>
+        </select>
       </div>
+      <p class="mt-1.5 text-xs text-ink-faint">A view's menu (or a query's settings) can show them on each row, with the next step under the title: add a text property such as “Next step” for it.</p>
     </section>
 
     <TypeTemplates :type="type" @leave="leave" />

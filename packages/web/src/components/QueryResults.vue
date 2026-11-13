@@ -100,6 +100,7 @@ defineExpose({ count: computed(() => results.value.length), empty })
         :filter="query.filter"
         :parent-id="parentId"
         :open-in="query.openIn"
+        :quick-actions="query.quickActions"
         :readonly="readonly"
         @table="emit('table', $event)"
         @board="emit('board', $event)"
