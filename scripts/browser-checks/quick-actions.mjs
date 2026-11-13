@@ -2,7 +2,8 @@
 // calendar) and Drop under its tags (a button each, [data-action="<id>"]), with their Undo notices;
 // what the old settings still shape in the defaults (a "Dropped" status, a "Do date" field and a
 // "Scheduled" status), the "Due …" line and the late note; the section showing for Task only; the
-// "Next week" pick in a date property's editor; a phone width.
+// "Next week" pick in a date property's editor; a phone width (list rows, and a table's actions under
+// each title).
 // Type settings › Quick actions: the defaults listed, the first edit making them the type's own list
 // (keeping the other settings), "Use the defaults"; a custom "Waiting" action (Status and a date in 7
 // days) on the page and on a row, setting both with Undo; renaming and moving an action up; an
@@ -869,6 +870,22 @@ const line = await row(rowTask.id).locator('[data-next-step-line]').boundingBox(
 if (!line || line.x < 0 || line.x + line.width > 390) throw new Error(`next step line outside the screen: ${JSON.stringify(line)}`)
 await rowButton(rowTask.id, 'done').click()
 await until(async () => (await statusOf(rowTask.id)) === 'done', 'Done tapped on the phone')
+
+step('phone width: a table puts its Quick actions under each title instead of a column')
+await page.setViewportSize({ width: 1400, height: 900 })
+await page.goto(`${base}/o/${tableQuery.id}`)
+await tableBox.waitFor()
+await tableBox.check()
+await until(async () => (await headerFields()).includes('quickActions'), 'the desktop table shows the column')
+await page.setViewportSize({ width: 390, height: 844 })
+await until(async () => !(await headerFields()).includes('quickActions'), 'the phone table has no Quick actions column')
+const underTitle = page.locator('main tbody td:first-child [data-quick-actions]').first()
+await underTitle.waitFor()
+const underBox = await underTitle.boundingBox()
+if (!underBox || underBox.x < 0 || underBox.x + underBox.width > 390) throw new Error(`the actions under the title are outside the screen: ${JSON.stringify(underBox)}`)
+await page.setViewportSize({ width: 1400, height: 900 })
+await until(async () => (await headerFields()).includes('quickActions') && (await page.locator('main tbody td:first-child [data-quick-actions]').count()) === 0, 'back on a wide screen the column returns')
+await tableBox.uncheck()
 
 // ---------------------------------------------------------------------------
 await resetType()

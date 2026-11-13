@@ -21,7 +21,8 @@ GitHub release page.
 - **Triage task lists with quick actions on each row**: turn on "Quick actions" in a task view's
   menu or a query's settings, and every open task's row gets its quick actions; a text property
   chosen in Type settings › Quick actions shows under the title as the task's next step. In a
-  table they are a "Quick actions" column, moved, resized and hidden in Columns like any other.
+  table they are a "Quick actions" column, moved, resized and hidden in Columns like any other;
+  on a phone they go under each title instead, so they need no sideways scrolling.
 - **"Next week" in date pickers**, beside Today and Tomorrow.
 
 ### Fixed
