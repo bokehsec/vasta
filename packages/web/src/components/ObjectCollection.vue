@@ -7,7 +7,7 @@ import { addSelectOption, setProperty } from '../lib/actions.ts'
 import { isDone, setTaskDone } from '../lib/calendar.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, listFields, MIN_COLUMN_WIDTH, rowFields, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
-import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
+import { displayTitle, formatDate, formatDateShort, formatRelative } from '../lib/format.ts'
 import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
@@ -253,9 +253,9 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                 <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object)?.name }}
               </span>
               <span v-else-if="field.field === 'createdAt' || field.field === 'updatedAt'" class="whitespace-nowrap text-ink-faint">{{ formatRelative(object[field.field]) }}</span>
-              <span v-else-if="field.field === 'date'" class="whitespace-nowrap">{{ object.date ? formatDate(object.date) : '' }}</span>
+              <span v-else-if="field.field === 'date'" class="whitespace-nowrap">{{ object.date ? formatDateShort(object.date) : '' }}</span>
               <span v-else-if="field.field === 'host'" class="whitespace-nowrap">{{ object.media?.host?.replace(/^www\./, '') }}</span>
-              <PropertyDisplay v-else-if="field.def" :def="field.def" :value="object.props[field.field]" :object="object" :wrap="false" />
+              <PropertyDisplay v-else-if="field.def" :def="field.def" :value="object.props[field.field]" :object="object" :wrap="false" short />
             </template>
           </span>
           <template v-else>

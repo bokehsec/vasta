@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes, builtinTypeId, type CalendarEntry, type FilterGroup, type ObjectSummary, type QueryContext } from '@vasta/core'
-import { agendaDays, agendaLength, isPast, nowIndex, placeEntries, selectEntries, tidyAgenda } from './agenda.ts'
+import { agendaDays, agendaLength, isPast, nowIndex, placeEntries, selectEntries, splitAllDay, tidyAgenda } from './agenda.ts'
 
 const at = '2026-11-12T12:00:00.000Z'
 const task = builtinTypeId('s', 'task')
@@ -108,6 +108,20 @@ describe('placing entries on days', () => {
     const placed = placeEntries([morning, night], days)
     expect(placed[0]!.timed).toEqual([night])
     expect(placed[1]!.timed).toEqual([night, morning])
+  })
+})
+
+describe('all-day entries', () => {
+  it('shows events as chips and objects as rows, each in its order', () => {
+    const school = entry({ kind: 'external', sourceId: 's1', title: 'No school' })
+    const due = entry({ objectId: 't1' })
+    const holiday = entry({ kind: 'external', sourceId: 's1', title: 'Remembrance Day' })
+    const due2 = entry({ objectId: 't2' })
+    expect(splitAllDay([school, due, holiday, due2])).toEqual({ chips: [school, holiday], rows: [due, due2] })
+  })
+
+  it('has nothing in either when there is nothing all day', () => {
+    expect(splitAllDay([])).toEqual({ chips: [], rows: [] })
   })
 })
 

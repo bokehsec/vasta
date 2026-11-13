@@ -13,6 +13,8 @@ import ObjectPicker from './ObjectPicker.vue'
 import PopoverMenu from './PopoverMenu.vue'
 
 const props = defineProps<{ objectId: Id; typeId: Id; showEmpty?: boolean }>()
+/** How many rows show, for a page that hides its properties' footer when nothing is there. */
+const emit = defineEmits<{ count: [number] }>()
 
 const links = ref<Backlink[]>([])
 async function load() {
@@ -53,6 +55,8 @@ const rows = computed<Row[]>(() => {
   }
   return [...byKey.values()].filter((row) => row.objects.length || props.showEmpty)
 })
+
+watch(() => rows.value.length, (n) => emit('count', n), { immediate: true })
 
 const anchors = ref<Record<string, HTMLElement | null>>({})
 const openKey = ref<string | null>(null)

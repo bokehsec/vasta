@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // One calendar entry: a compact chip (month cells, all-day row), a timed block (day columns) or a
-// row (the agenda layout: its time or All day, then its title, wrapped, and where it comes from).
+// row (the agenda layout: its time, empty all day, then its title, wrapped, and where it comes from).
 // Objects open on click; occurrences of repeating dates and external events emit `details`;
 // tasks get a checkbox. Entries the page allows move by dragging (after a long press on touch
 // screens), and timed blocks resize by their bottom edge (lib/calendar-drag.ts). Pressing the
@@ -96,7 +96,7 @@ function onContextMenu(event: MouseEvent) {
     @pointerdown="onPointerDown($event, 'move')"
     @contextmenu="onContextMenu"
   >
-    <span v-if="variant === 'row'" class="w-[4.25rem] shrink-0 pt-px text-xs tabular-nums text-ink-soft">{{ entry.allDay ? 'All day' : formatClock(entry.start) }}</span>
+    <span v-if="variant === 'row'" class="w-[4.25rem] shrink-0 pt-px text-xs tabular-nums text-ink-soft">{{ entry.allDay ? '' : formatClock(entry.start) }}</span>
     <!-- A row wraps its title (an agenda sits in narrow columns); chips and blocks cut it short. -->
     <span class="flex min-w-0 gap-1" :class="variant === 'row' ? 'items-start' : 'items-center'">
       <button

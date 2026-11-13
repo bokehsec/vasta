@@ -75,6 +75,14 @@ export function placeEntries(entries: CalendarEntry[], days: string[]): AgendaDa
   return placed
 }
 
+/**
+ * A day's all-day entries as the agenda shows them: events (no object behind them) as chips, objects
+ * (a task due that day…) as rows, which keep their checkbox.
+ */
+export function splitAllDay(allDay: CalendarEntry[]): { chips: CalendarEntry[]; rows: CalendarEntry[] } {
+  return { chips: allDay.filter((entry) => !entry.objectId), rows: allDay.filter((entry) => !!entry.objectId) }
+}
+
 /** Over: it ended (or, with no end, began) before `now`. */
 export const isPast = (entry: CalendarEntry, now: number): boolean => Date.parse(entry.end ?? entry.start) < now
 

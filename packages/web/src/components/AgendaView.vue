@@ -8,7 +8,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { AgendaSettings, CalendarEntry, CalendarSource, FilterGroup, Id } from '@vasta/core'
 import { addDays } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
-import { agendaDays, isPast, nowIndex, placeEntries, selectEntries } from '../lib/agenda.ts'
+import { agendaDays, isPast, nowIndex, placeEntries, selectEntries, splitAllDay } from '../lib/agenda.ts'
 import { api } from '../lib/api.ts'
 import { formatDayShort, formatWeekday, viewerTimeZone } from '../lib/calendar.ts'
 import { onChange } from '../lib/events.ts'
@@ -147,8 +147,13 @@ async function detailsDone() {
           <span v-else class="font-semibold text-ink">{{ heading(day).date }}</span>
         </h3>
 
-        <!-- All day first, as rows too: long titles (school notices…) need the room to wrap. -->
-        <div v-for="entry in allDay" :key="entry.key">
+        <!-- All day first: events as one wrapping row of chips, lined up with the titles below; objects (a task due) stay rows. -->
+        <div v-if="splitAllDay(allDay).chips.length" class="flex flex-wrap gap-1 py-1 pl-[4.75rem] pr-1.5" data-agenda-chips>
+          <div v-for="entry in splitAllDay(allDay).chips" :key="entry.key" class="min-w-0 max-w-64">
+            <CalendarEntryItem :entry="entry" variant="chip" :source="sourcesById.get(entry.sourceId ?? '')" @details="showDetails" />
+          </div>
+        </div>
+        <div v-for="entry in splitAllDay(allDay).rows" :key="entry.key">
           <CalendarEntryItem :entry="entry" variant="row" :source="sourcesById.get(entry.sourceId ?? '')" @details="showDetails" />
         </div>
 

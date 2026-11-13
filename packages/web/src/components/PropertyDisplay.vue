@@ -3,14 +3,15 @@
 import { computed } from 'vue'
 import type { FormulaSubject, PropertyDef, PropertyValue } from '@vasta/core'
 import { chip } from '../lib/colors.ts'
-import { formatDate } from '../lib/format.ts'
+import { formatDate, formatDateShort } from '../lib/format.ts'
 import { formatFormula, formulaValue } from '../lib/properties.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectChip from './ObjectChip.vue'
 import PersonChip from './PersonChip.vue'
 
-// `wrap`: in a table column, long values take several lines (true) or one (false).
-const props = defineProps<{ def: PropertyDef; value: PropertyValue | undefined; object?: FormulaSubject; wrap?: boolean }>()
+// `wrap`: in a table column, long values take several lines (true) or one (false). `short`: dates
+// without this year (a list row's).
+const props = defineProps<{ def: PropertyDef; value: PropertyValue | undefined; object?: FormulaSubject; wrap?: boolean; short?: boolean }>()
 
 const formula = computed(() => (props.def.kind === 'formula' && props.object ? formulaValue(props.object, props.def) : undefined))
 </script>
@@ -34,7 +35,7 @@ const formula = computed(() => (props.def.kind === 'formula' && props.object ? f
   <span v-else-if="value.kind === 'person'" class="flex gap-1" :class="wrap === false ? 'overflow-hidden' : 'flex-wrap'">
     <PersonChip v-for="id in value.value" :key="id" :id="id" />
   </span>
-  <span v-else-if="value.kind === 'date'" class="whitespace-nowrap">{{ formatDate(value.value) }}</span>
+  <span v-else-if="value.kind === 'date'" class="whitespace-nowrap">{{ short ? formatDateShort(value.value) : formatDate(value.value) }}</span>
   <AppIcon v-else-if="value.kind === 'checkbox'" :fallback="value.value ? 'ph:check-square-fill' : 'ph:square'" class="text-ink-soft" />
   <a v-else-if="value.kind === 'url'" :href="value.value" target="_blank" rel="noopener noreferrer" class="truncate text-accent hover:underline" @click.stop>{{ value.value }}</a>
   <span v-else :class="wrap ? 'whitespace-pre-wrap break-words' : 'truncate'">{{ value.value }}</span>

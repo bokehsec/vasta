@@ -74,7 +74,10 @@ function objectMenu(event: MouseEvent, object: ObjectSummary) {
   ])
 }
 
-defineExpose({ count: computed(() => results.value.length) })
+/** The query ran and nothing matched (an agenda is never empty: it says "Nothing planned"). */
+const empty = computed(() => !loading.value && !failed.value && !isAgenda.value && !results.value.length)
+
+defineExpose({ count: computed(() => results.value.length), empty })
 </script>
 
 <template>

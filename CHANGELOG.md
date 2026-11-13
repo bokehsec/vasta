@@ -37,6 +37,18 @@ GitHub release page.
 
 ### Changed
 
+- **The page a space opens on is calmer**: its icon is a small tile beside the title, and the tags
+  row and the "Add property" line show only once there is something in them. Tags and Property
+  join Icon and Cover in the buttons that appear when you hover the page's top, so they stay
+  one click away. Other pages look as before.
+- **All-day events in an Agenda are chips**: one wrapping row under the day, lined up with the
+  titles below, so a school notice or a holiday takes one line instead of a row each. A task due
+  that day stays a row with its checkbox, now with an empty time column instead of "All day".
+- **Dates on list rows are shorter**: this year's show as "Tue Nov 17" (or "Tue Nov 17, 9:00 AM"
+  with a time), without the year. Other years, tables and boards are unchanged.
+- **A compact query that finds nothing disappears**, with the heading right above it, instead of
+  saying "No objects match this query." The same goes for a compact embedded block that is empty.
+  It stays while it loads, while its settings are open and when the query fails.
 - **A type remembers only a view you picked**: until you pick one, it still opens on its first
   view, also after the views are reordered.
 

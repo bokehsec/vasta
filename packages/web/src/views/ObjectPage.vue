@@ -98,6 +98,8 @@ const authorship = computed(() => {
   return { by, title: created }
 })
 const showAllFields = ref(false)
+/** Rows of what links here by a relation (ReverseRelations reports them). */
+const reverseCount = ref(0)
 const hiddenCount = computed(() => valueFields.value.length - visibleFields.value.length)
 /** Dashboards built with columns need room; everything else reads better at text width. */
 const wide = computed(() => isWhiteboard.value || Object.values(object.value?.content ?? {}).some((doc) => doc.content.some((node) => node.type === 'columns')))
@@ -113,6 +115,18 @@ let base: ObjectRecord | undefined
 const textFields = computed(() => Object.fromEntries(richFields.value.map((p) => [p.id, text.value ? { doc: text.value.doc, field: p.id } : undefined])))
 /** A whiteboard's document: the text session, or one over the sync routes without the replica. */
 const isWhiteboard = computed(() => type.value?.system === 'whiteboard')
+/**
+ * The page its space opens on is a calm home: the icon beside the title, and the tags row and the
+ * properties' "Add property" line only once they have something to show (Tags and Property in the
+ * header stay for adding them).
+ */
+const isStartPage = computed(() => {
+  const on = workspace.space?.opensOn
+  return on?.kind === 'object' && on.id === props.id && !embedded.value && !inPane.value && !isWhiteboard.value && !object.value?.deletedAt && !object.value?.template
+})
+const hideTagsRow = computed(() => isStartPage.value && !object.value?.tagIds.length)
+const propertiesEmpty = computed(() => !showOwnDate.value && !isTagObject.value && !isHabit.value && !visibleFields.value.length && !hiddenCount.value && !reverseCount.value)
+const hideAddProperty = computed(() => isStartPage.value && propertiesEmpty.value)
 const board = shallowRef<TextSession | null>(null)
 const boardFailed = ref(false)
 const boardFull = ref(false)
@@ -431,6 +445,7 @@ async function addOption(def: PropertyDef, option: SelectOption) {
 
 // Tags ---------------------------------------------------------------------
 const tagAnchor = ref<HTMLElement | null>(null)
+const tagHeaderAnchor = ref<HTMLElement | null>(null)
 const tagOpen = ref(false)
 
 function addTag(tag: ObjectSummary) {
@@ -508,6 +523,7 @@ function setIcon(icon: Icon | undefined) {
 
 // Properties ---------------------------------------------------------------
 const addAnchor = ref<HTMLElement | null>(null)
+const addHeaderAnchor = ref<HTMLElement | null>(null)
 const addOpen = ref(false)
 const newProperty = ref({ name: '', kind: 'text' as PropertyDef['kind'], formula: '' })
 const KINDS = PROPERTY_KINDS
@@ -755,10 +771,10 @@ async function startFrom(template: ObjectRecord) {
     <input ref="coverInput" type="file" accept="image/*" class="hidden" @change="uploadCover" />
 
     <Teleport defer :to="`#${detailsSlot}`" :disabled="!boardLayout">
-    <div class="relative" :class="boardLayout ? 'px-5 pt-4' : embedded ? '' : inPane ? ['px-6', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-4') : 'pt-5'] : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-6') : isWhiteboard ? 'pt-4 md:pt-6' : 'pt-8 md:pt-14', wide ? 'max-w-6xl' : 'max-w-3xl']">
+    <div class="relative" :class="boardLayout ? 'px-5 pt-4' : embedded ? '' : inPane ? ['px-6', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-4') : 'pt-5'] : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon && !isStartPage ? '-mt-10' : 'pt-6') : isWhiteboard ? 'pt-4 md:pt-6' : 'pt-8 md:pt-14', wide ? 'max-w-6xl' : 'max-w-3xl']">
       <template v-if="!embedded">
       <button
-        v-if="object.icon"
+        v-if="object.icon && !isStartPage"
         ref="iconAnchor"
         class="mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-surface text-4xl shadow-sm ring-1 ring-line hover:bg-raised"
         title="Change icon"
@@ -779,13 +795,19 @@ async function startFrom(template: ObjectRecord) {
           <button v-if="!isToday" class="rounded-md px-1.5 py-0.5 text-xs hover:bg-hover hover:text-ink" @click="openDay(dayKey())">Today</button>
           <button class="rounded-md p-1 hover:bg-hover hover:text-ink" title="Next day" @click="stepDay(1)"><AppIcon fallback="ph:caret-right" :size="14" /></button>
         </div>
-        <!-- Icon and cover: on hover, so an object without them shows nothing there (always on touch). -->
+        <!-- Icon, cover and, on a start page, tags and property: on hover, so an object without them shows nothing there (always on touch). -->
         <div v-if="!object.deletedAt" class="flex items-center gap-0.5 text-xs text-ink-faint opacity-0 transition-opacity group-hover/header:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
           <button v-if="!object.icon" ref="iconAnchor" class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink" @click="iconOpen = !iconOpen">
             <AppIcon fallback="ph:smiley" :size="14" /> <span class="max-sm:hidden">Icon</span>
           </button>
           <button v-if="!object.coverUrl" class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink" @click="coverMenuFrom">
             <AppIcon fallback="ph:image" :size="14" /> <span class="max-sm:hidden">{{ coverUploading ? 'Uploading…' : 'Cover' }}</span>
+          </button>
+          <button v-if="hideTagsRow" ref="tagHeaderAnchor" class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink" @click="tagOpen = !tagOpen">
+            <AppIcon fallback="ph:tag" :size="14" /> <span class="max-sm:hidden">Tags</span>
+          </button>
+          <button v-if="hideAddProperty" ref="addHeaderAnchor" class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink" @click="addOpen = !addOpen">
+            <AppIcon fallback="ph:plus" :size="14" /> <span class="max-sm:hidden">Property</span>
           </button>
         </div>
         <div class="ml-auto flex items-center gap-1 text-xs text-ink-faint">
@@ -825,17 +847,28 @@ async function startFrom(template: ObjectRecord) {
         </div>
       </div>
 
-      <textarea
-        v-if="info?.kind !== 'snippet' && !boardLayout"
-        ref="titleInput"
-        v-model="object.title"
-        data-large-text
-        rows="1"
-        class="mt-2 w-full resize-none overflow-hidden bg-transparent text-[1.8rem] font-bold md:text-[2.1rem] leading-tight tracking-tight outline-none placeholder:text-ink-faint/60"
-        :placeholder="titlePlaceholder"
-        @input="autosize(), changed()"
-        @keydown.enter.prevent="focusBody"
-      />
+      <div v-if="info?.kind !== 'snippet' && !boardLayout" :class="isStartPage ? 'mt-2 flex items-center gap-3' : 'contents'">
+        <button
+          v-if="object.icon && isStartPage"
+          ref="iconAnchor"
+          class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface shadow-sm ring-1 ring-line hover:bg-raised"
+          title="Change icon"
+          @click="iconOpen = !iconOpen"
+        >
+          <AppIcon :icon="object.icon" :size="24" :class="type?.color && object.icon.kind === 'icon' ? iconTextClasses[type.color] : ''" />
+        </button>
+        <textarea
+          ref="titleInput"
+          v-model="object.title"
+          data-large-text
+          rows="1"
+          class="w-full resize-none overflow-hidden bg-transparent text-[1.8rem] font-bold md:text-[2.1rem] leading-tight tracking-tight outline-none placeholder:text-ink-faint/60"
+          :class="isStartPage ? 'min-w-0 flex-1' : 'mt-2'"
+          :placeholder="titlePlaceholder"
+          @input="autosize(), changed()"
+          @keydown.enter.prevent="focusBody"
+        />
+      </div>
 
       <div v-if="offeredTemplates.length && bodyEmpty" class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-ink-faint" data-template-offer>
         <AppIcon fallback="ph:copy-simple" :size="14" />
@@ -846,18 +879,18 @@ async function startFrom(template: ObjectRecord) {
         </template>
       </div>
 
-      <div v-if="info?.kind !== 'snippet'" class="mt-2 flex flex-wrap items-center gap-1.5">
+      <div v-if="info?.kind !== 'snippet' && !hideTagsRow" class="mt-2 flex flex-wrap items-center gap-1.5">
         <AppIcon fallback="ph:tag" class="text-ink-faint" />
         <ObjectChip v-for="id in object.tagIds" :key="id" :id="id" tag removable @remove="removeTag(id)" />
         <button ref="tagAnchor" class="rounded-md px-1.5 py-0.5 text-sm text-ink-faint hover:bg-hover hover:text-ink" @click="tagOpen = !tagOpen">
           {{ object.tagIds.length ? '+' : 'Add tags' }}
         </button>
-        <PopoverMenu v-model:open="tagOpen" :anchor="tagAnchor" width="16rem">
-          <ObjectPicker :type-ids="tagType ? [tagType.id] : []" :exclude="object.tagIds" create-label="New tag" @pick="addTag" @create="createTag" />
-        </PopoverMenu>
       </div>
+      <PopoverMenu v-if="info?.kind !== 'snippet'" v-model:open="tagOpen" :anchor="hideTagsRow ? tagHeaderAnchor : tagAnchor" width="16rem">
+        <ObjectPicker :type-ids="tagType ? [tagType.id] : []" :exclude="object.tagIds" create-label="New tag" @pick="addTag" @create="createTag" />
+      </PopoverMenu>
 
-      <div v-if="(valueFields.length || type) && info?.kind !== 'snippet'" class="mt-6">
+      <div v-if="(valueFields.length || type) && info?.kind !== 'snippet'" :class="hideAddProperty ? '' : 'mt-6'">
         <div v-if="showOwnDate" class="vasta-prop-row">
           <div class="vasta-prop-name">
             <AppIcon fallback="ph:calendar-blank" class="text-ink-faint" />
@@ -930,14 +963,14 @@ async function startFrom(template: ObjectRecord) {
           </div>
           <PropertyValueEditor v-else :def="def" :value="object.props[def.id]" @update="setProp(def, $event)" @add-option="addOption(def, $event)" />
         </div>
-        <ReverseRelations v-if="!info" :object-id="object.id" :type-id="object.typeId" :show-empty="showAllFields" />
-        <div class="mt-1 flex gap-3 text-xs text-ink-faint">
+        <ReverseRelations v-if="!info" :object-id="object.id" :type-id="object.typeId" :show-empty="showAllFields" @count="reverseCount = $event" />
+        <div v-if="!hideAddProperty" class="mt-1 flex gap-3 text-xs text-ink-faint">
           <button v-if="hiddenCount" class="rounded px-1 py-1 hover:text-ink" @click="showAllFields = true">Show {{ hiddenCount }} empty properties</button>
           <button ref="addAnchor" class="flex items-center gap-1 rounded px-1 py-1 hover:text-ink" @click="addOpen = !addOpen">
             <AppIcon fallback="ph:plus" :size="12" /> Add property to {{ type?.name }}
           </button>
         </div>
-        <PopoverMenu v-model:open="addOpen" :anchor="addAnchor" width="15rem">
+        <PopoverMenu v-model:open="addOpen" :anchor="hideAddProperty ? addHeaderAnchor : addAnchor" width="15rem">
           <input
             v-model="newProperty.name"
             class="mb-1 w-full rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint"

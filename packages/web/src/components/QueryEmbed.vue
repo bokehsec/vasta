@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // A saved query embedded in a document: its live results, and its settings on demand. Editing
 // here changes the query object itself, so every page embedding it follows. Compact shows only the
-// results: no header or border, and Edit query comes from the block menu (blocks.ts).
+// results: no header or border, and Edit query comes from the block menu (blocks.ts). A compact
+// one whose query found nothing is hidden (data-empty, as a compact block's; style.css), while its
+// settings are open or the query failed it is not.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Id, QueryDef } from '@vasta/core'
 import { api } from '../lib/api.ts'
@@ -22,6 +24,8 @@ const query = computed<QueryDef>(() => draft.value ?? summary.value?.query ?? { 
 // A query that selects nothing yet (just created) opens its settings.
 const editing = ref(!summary.value?.query?.typeIds.length && !summary.value?.query?.filter)
 const draft = ref<QueryDef | null>(null)
+const results = ref<InstanceType<typeof QueryResults>>()
+const hidden = computed(() => props.compact && !editing.value && !!results.value?.empty)
 
 let timer: ReturnType<typeof setTimeout> | undefined
 function edit(next: QueryDef) {
@@ -59,7 +63,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="root" class="vasta-ui" :class="compact ? '' : 'rounded-xl border border-line bg-surface'">
+  <div ref="root" class="vasta-ui" :class="compact ? '' : 'rounded-xl border border-line bg-surface'" :data-empty="hidden ? '' : undefined">
     <header v-if="!compact" class="flex items-center gap-2 px-3 py-2" data-drag-handle>
       <AppIcon :icon="summary?.icon ?? type?.icon" fallback="ph:funnel" class="text-ink-soft" />
       <ObjectLink :id="objectId" class="truncate text-sm font-semibold hover:underline">{{ displayTitle(summary, type) }}</ObjectLink>
@@ -80,8 +84,8 @@ onBeforeUnmount(() => {
       </div>
       <QueryEditor :query="query" @update="edit" />
     </div>
-    <div :class="compact ? '' : 'border-t border-line px-3 py-3'">
-      <QueryResults :query="query" :parent-id="parentId" :limit="24" :readonly="readonly" @table="edit({ ...query, table: $event })" @board="edit({ ...query, board: $event })" />
+    <div v-show="!hidden" :class="compact ? '' : 'border-t border-line px-3 py-3'">
+      <QueryResults ref="results" :query="query" :parent-id="parentId" :limit="24" :readonly="readonly" @table="edit({ ...query, table: $event })" @board="edit({ ...query, board: $event })" />
     </div>
   </div>
 </template>
