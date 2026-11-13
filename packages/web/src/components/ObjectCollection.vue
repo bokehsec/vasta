@@ -7,7 +7,7 @@ import { resolveQuickActions } from '@vasta/core'
 import { addSelectOption, setProperties, setProperty } from '../lib/actions.ts'
 import { isDone, setTaskDone } from '../lib/calendar.ts'
 import { chip } from '../lib/colors.ts'
-import { columnWidth, listFields, MIN_COLUMN_WIDTH, rowFields, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
+import { columnWidth, listFields, MIN_COLUMN_WIDTH, QUICK_ACTIONS_COLUMN, rowFields, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatDateShort, formatRelative } from '../lib/format.ts'
 import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById } from '../lib/state.ts'
@@ -88,17 +88,17 @@ const resized = ref<Record<string, number>>({})
 watch(() => props.table, () => (resized.value = {}))
 const columns = computed(() => tableColumns(props.table, props.typeIds).filter((c) => !c.hidden))
 const widthOf = (column: Column) => resized.value[column.field] ?? columnWidth(column)
-const tableWidth = computed(() => columns.value.reduce((sum, c) => sum + widthOf(c), quickActionsShown.value ? ACTIONS_WIDTH : 0))
+const tableWidth = computed(() => columns.value.reduce((sum, c) => sum + widthOf(c), 0))
 
-// Quick actions on task rows (TaskQuickActions), for triage: in the table a first column of their
-// own; in the list at the end of the row (on a line of their own in a narrow column), with the
-// task's next step under its title. They save as a table cell does.
-const ACTIONS_WIDTH = 150
-const quickActionsShown = computed(() => !!props.quickActions && !props.readonly)
-const quickType = (object: ObjectSummary): ObjectType | undefined => {
-  const type = quickActionsShown.value ? typeOf(object) : undefined
+// Quick actions on task rows (TaskQuickActions), for triage: in the table a column like any other
+// (lib/columns.ts), in the list at the end of the row when the view or query turns them on (on a
+// line of their own in a narrow column), with the task's next step under its title. They save as a
+// table cell does.
+const taskType = (object: ObjectSummary): ObjectType | undefined => {
+  const type = props.readonly ? undefined : typeOf(object)
   return type?.system === 'task' ? type : undefined
 }
+const quickType = (object: ObjectSummary) => (props.quickActions ? taskType(object) : undefined)
 const nextStepOf = (object: ObjectSummary) => {
   const field = resolveQuickActions(quickType(object)).nextStepField
   const value = field ? object.props[field.id] : undefined
@@ -313,13 +313,11 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
       <div v-else-if="layout === 'table'" class="overflow-x-auto rounded-xl border border-line">
         <table class="table-fixed text-sm" :style="{ width: `max(100%, ${tableWidth}px)` }">
           <colgroup>
-            <col v-if="quickActionsShown" :style="{ width: `${ACTIONS_WIDTH}px` }" />
             <col v-for="column in columns" :key="column.field" :style="{ width: `${widthOf(column)}px` }" />
             <col />
           </colgroup>
           <thead class="bg-raised text-left text-xs text-ink-faint">
             <tr>
-              <th v-if="quickActionsShown" />
               <th v-for="column in columns" :key="column.field" class="relative px-3 py-2 font-medium" :data-column="column.field">
                 <span class="block truncate">{{ column.field === 'title' ? 'Title' : column.label }}</span>
                 <span
@@ -333,9 +331,6 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
           </thead>
           <tbody>
             <tr v-for="object in shown(group)" :key="object.id" class="border-t border-line hover:bg-hover/60" @contextmenu="emit('menu', $event, object)">
-              <td v-if="quickActionsShown" class="px-1.5 py-1 align-top">
-                <TaskQuickActions v-if="quickType(object)" :type="quickType(object)!" :object="object" variant="row" @set="saveQuick(object, $event)" />
-              </td>
               <td
                 v-for="column in columns"
                 :key="column.field"
@@ -354,6 +349,9 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                 <span v-else-if="column.field === 'createdAt' || column.field === 'updatedAt'" class="text-xs text-ink-faint">{{ formatRelative(object[column.field]) }}</span>
                 <span v-else-if="column.field === 'date'">{{ object.date ? formatDate(object.date) : '' }}</span>
                 <span v-else-if="column.field === 'host'">{{ object.media?.host?.replace(/^www\./, '') }}</span>
+                <template v-else-if="column.field === QUICK_ACTIONS_COLUMN">
+                  <TaskQuickActions v-if="taskType(object)" :type="taskType(object)!" :object="object" variant="row" class="-my-1.5 -ml-1.5" @set="saveQuick(object, $event)" />
+                </template>
                 <PropertyValueEditor
                   v-else-if="column.def && editing === cellKey(object, column)"
                   :def="column.def"
