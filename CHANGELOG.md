@@ -34,6 +34,10 @@ GitHub release page.
   some. A build without the layout shows it as a grid.
 - **Choose what a space opens on**, in Settings › Space: its first pinned item (as before), Today,
   or any page.
+- **"Copy link to page" in object menus**: the right-click menu of an object in the sidebar, a
+  type view or query results, and the ⋯ More menu of an object's page and side pane now have a
+  "Copy link to page" action. It copies `<server>/o/<id>` in the browser and `vasta://o/<id>`
+  in the desktop app, matching existing block-link behaviour.
 
 ### Changed
 
