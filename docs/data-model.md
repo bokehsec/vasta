@@ -57,10 +57,12 @@ The Task type's `quickActions` (`deferField`, `deferStatus`, `dropStatus`, the c
 `types.quick_actions`, Type settings › Quick actions) chooses them; unset, or naming a property or
 option the type no longer has, Defer sets `due` and leaves the status, and Drop sets the second
 option meaning done (none: no Drop). A repeating date keeps its rule when deferred. Closed tasks
-(any option meaning done) show no quick actions. A view or query with `quickActions: true` (list and
-table layouts) shows them on each task's row, for triage: in the list at the end of the row, in the
-table as a first column. There they also set the task's **next step**, the text property the type's
-`quickActions.nextStepField` names (none: no next step), shown under the title in the list.
+(any option meaning done) show no quick actions. For triage they also go on rows: a list view or
+query with `quickActions: true` ends each task's row with them, and a table of tasks has a
+"Quick actions" column (`quickActions` in `table.columns`, hidden until shown, moved and sized like
+the others; the view menu's Quick actions shows it after the title). There they also set the task's
+**next step**, the text property the type's `quickActions.nextStepField` names (none: no next
+step), shown under the title in the list.
 Title, description, icon, cover, color, parent, aliases, tags and collections are fixed fields on
 every object, not property definitions (`color` and `parentId` are only used by tags so far).
 

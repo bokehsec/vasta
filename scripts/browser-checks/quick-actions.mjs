@@ -2,9 +2,11 @@
 // Drop under its tags, with their Undo notices; what Type settings › Quick actions makes them set (a
 // "Dropped" status, a "Do date" field and a "Scheduled" status), the "Due …" line and the late note;
 // the section showing for Task only; the "Next week" pick in a date property's editor; a phone width.
-// Then the same actions on task rows: a view's "Quick actions" toggle (list and table, Task only), the
-// next step typed on a row (saved, Undo, cleared), Done / Drop / Defer from a row without leaving the
-// list, the table's first column, a query with quickActions, Type settings' "Next step in", a phone.
+// Then the same actions on task rows: a view's "Quick actions" toggle (list: on each row; table: a
+// "Quick actions" column, hidden by default, second after Title when first shown, then shown, hidden
+// and dragged in the Columns menu like any other; Task only), the next step typed on a row (saved,
+// Undo, cleared), Done / Drop / Defer from a row without leaving the list, a query with quickActions
+// (list) or its checkbox in a table (the column), Type settings' "Next step in", a phone.
 //   node quick-actions.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -67,7 +69,7 @@ const found = await get(`/api/types/${taskType.id}`)
 const originalTask = {
   ...found,
   // Row quick actions: the "Plain" view and the toggle are this check's.
-  views: found.views.filter((v) => !v.id.endsWith(':plain')).map(({ quickActions, ...v }) => ({ ...v, layout: v.layout === 'table' ? 'list' : v.layout })),
+  views: found.views.filter((v) => !v.id.endsWith(':plain')).map(({ quickActions, table, ...v }) => ({ ...v, layout: v.layout === 'table' ? 'list' : v.layout })),
   properties: found.properties
     .filter((p) => p.id !== 'dodate' && p.id !== 'nextstep')
     .map((p) => (p.id === 'status' ? { ...p, options: p.options.filter((o) => o.id !== 'dropped' && o.id !== 'scheduled') } : p)),
@@ -294,6 +296,24 @@ async function pickLayout(label) {
   await page.locator('[data-view-quick-actions]').waitFor()
   await page.locator('button', { hasText: new RegExp(`^\\s*${label}\\s*$`) }).first().click()
 }
+const headerFields = () => page.locator('main thead th[data-column]').evaluateAll((ths) => ths.map((th) => th.dataset.column))
+const savedView = async () => (await get(`/api/types/${taskType.id}`)).views.find((v) => v.id === allId)
+async function dragBetween(from, to) {
+  const a = await from.boundingBox()
+  const b = await to.boundingBox()
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
+  await page.mouse.down()
+  for (let i = 1; i <= 8; i++) await page.mouse.move(a.x + a.width / 2 + ((b.x - a.x) * i) / 8, a.y + a.height / 2 + ((b.y + b.height / 2 - a.y - a.height / 2) * i) / 8)
+  await page.mouse.up()
+}
+const toggleState = async () => {
+  await layoutButton().click()
+  const toggle = page.locator('[data-view-quick-actions]')
+  await toggle.waitFor()
+  const on = (await toggle.getAttribute('aria-pressed')) === 'true'
+  await page.keyboard.press('Escape')
+  return on
+}
 async function setToggle(on) {
   await layoutButton().click()
   const toggle = page.locator('[data-view-quick-actions]')
@@ -450,15 +470,32 @@ step('list: a click elsewhere on the row still opens the task')
 await row(rowTask2.id).locator('span.font-medium').first().click()
 await until(async () => new URL(page.url()).pathname === `/o/${rowTask2.id}`, 'the title click opened the task')
 
-step('table: the actions are the first column; Done works from it')
+step('table: Quick actions is a column of its own, hidden by default; the list toggle does not show it')
+// The view has quickActions on from the list steps above: it must not affect a table.
 await openTasks()
 await pickLayout('Table')
 await until(async () => (await row(rowTask2.id).locator('td').count()) > 1, 'the table lists the tasks')
-await until(async () => (await row(rowTask2.id).locator('td').first().locator('[data-quick-actions]').count()) === 1, 'the first column holds the actions')
-if ((await row(rowTask2.id).locator('td [data-quick-actions]').count()) !== 1) throw new Error('actions in more than one column')
-if ((await page.locator('main thead th').first().innerText()).trim() !== '') throw new Error('the actions column has a heading')
-if ((await page.locator('main thead th').nth(1).innerText()).trim() !== 'Title') throw new Error('Title is not the second column')
+if ((await headerFields()).includes('quickActions')) throw new Error(`the column is shown by default: ${await headerFields()}`)
+if ((await page.locator('main [data-quick-actions]').count()) !== 0) throw new Error('row actions in a table although the column is hidden')
+if ((await toggleState()) !== false) throw new Error('the table toggle starts checked although the column is hidden')
+if ((await savedView()).quickActions !== true) throw new Error('view.quickActions lost')
+
+step('table: the toggle shows the column right after Title and saves it')
+await setToggle(true)
+await until(async () => (await headerFields())[1] === 'quickActions', 'Quick actions is the second column')
+if ((await headerFields())[0] !== 'title') throw new Error(`Title is not first: ${await headerFields()}`)
+if ((await page.locator('main thead th[data-column="quickActions"]').innerText()).trim() !== 'Quick actions') throw new Error('the column heading is not "Quick actions"')
+await until(async () => {
+  const columns = (await savedView()).table?.columns ?? []
+  return columns[0]?.field === 'title' && columns[1]?.field === 'quickActions' && !columns[1].hidden
+}, 'the column is saved second in view.table.columns, not hidden')
+if ((await toggleState()) !== true) throw new Error('the toggle is not checked with the column shown')
+await until(async () => (await row(rowTask2.id).locator('td').nth(1).locator('[data-quick-actions]').count()) === 1, 'the second cell holds the actions')
+if ((await row(rowTask2.id).locator('td [data-quick-actions]').count()) !== 1) throw new Error('actions in more than one cell')
 if ((await row(closedRow.id).locator('[data-quick-actions]').count()) !== 0) throw new Error('a done task has actions in the table')
+if ((await row(closedRow.id).locator('td').count()) !== (await row(rowTask2.id).locator('td').count())) throw new Error('the done row has a different number of cells')
+
+step('table: Done from the column, with Undo')
 const tableUrl = page.url()
 await rowButton(rowTask2.id, 'Done').click()
 await until(async () => (await statusOf(rowTask2.id)) === 'done', 'table Done sets done')
@@ -467,14 +504,78 @@ if (page.url() !== tableUrl) throw new Error(`table Done navigated to ${page.url
 await toast.filter({ hasText: 'Marked done' }).locator('button', { hasText: 'Undo' }).click()
 await until(async () => (await statusOf(rowTask2.id)) !== 'done', 'table Undo reopened the task')
 await openTasks()
-await until(async () => (await rowActions(rowTask2.id).count()) === 1, 'the table is still a table with actions after a reload')
+await until(async () => (await rowActions(rowTask2.id).count()) === 1, 'the table is still a table with the column after a reload')
+if ((await headerFields())[1] !== 'quickActions') throw new Error(`the column moved on reload: ${await headerFields()}`)
+
+step('table: the Columns menu lists Quick actions; hide and show it')
+await page.locator('main button', { hasText: 'Columns' }).click()
+const menuRow = page.locator('div[data-column="quickActions"]')
+await menuRow.waitFor()
+if (!(await menuRow.innerText()).includes('Quick actions')) throw new Error('the Columns menu entry is not named Quick actions')
+await menuRow.locator('button[title="Hide column"]').click()
+await until(async () => !(await headerFields()).includes('quickActions'), 'the column disappears')
+await until(async () => (await savedView()).table?.columns.find((c) => c.field === 'quickActions')?.hidden === true, 'hidden saved on the view')
+if ((await page.locator('main [data-quick-actions]').count()) !== 0) throw new Error('actions remain with the column hidden')
+await menuRow.locator('button[title="Show column"]').click()
+await until(async () => (await headerFields())[1] === 'quickActions', 'the column is back, second')
+await until(async () => (await savedView()).table?.columns.find((c) => c.field === 'quickActions')?.hidden !== true, 'shown saved on the view')
+await until(async () => (await rowActions(rowTask2.id).count()) === 1, 'the actions are back')
+
+step('table: drag Quick actions to the end in the Columns menu')
+await dragBetween(menuRow.locator('[title="Drag to reorder"]'), page.locator('div[data-column]').last())
+await until(async () => (await headerFields()).at(-1) === 'quickActions', 'Quick actions is the last column')
+if ((await headerFields())[0] !== 'title') throw new Error('Title moved')
+await until(async () => {
+  const columns = (await savedView()).table?.columns ?? []
+  return columns.at(-1)?.field === 'quickActions' && !columns.at(-1).hidden && columns[0].field === 'title'
+}, 'the new position is saved')
+await page.keyboard.press('Escape')
+await until(async () => (await rowActions(rowTask2.id).count()) === 1, 'the actions work from the last column')
+const cells = await row(rowTask2.id).locator('td').count()
+await until(async () => (await row(rowTask2.id).locator('td').nth(cells - 2).locator('[data-quick-actions]').count()) === 1 || (await row(rowTask2.id).locator('td').nth(cells - 1).locator('[data-quick-actions]').count()) === 1, 'the actions are in the last column')
+// The toggle hides and shows it again where it was left (not back after Title).
 await setToggle(false)
-await until(async () => (await get(`/api/types/${taskType.id}`)).views.find((v) => v.id === allId)?.quickActions === undefined, 'view.quickActions cleared')
-await until(async () => (await page.locator('main [data-quick-actions]').count()) === 0, 'the table shows no actions with the toggle off')
-if ((await page.locator('main thead th').first().innerText()).trim() !== 'Title') throw new Error('an empty actions column remains with the toggle off')
+await until(async () => !(await headerFields()).includes('quickActions'), 'the toggle hides the column')
+await until(async () => (await savedView()).table?.columns.find((c) => c.field === 'quickActions')?.hidden === true, 'the toggle saved hidden')
+await setToggle(true)
+await until(async () => (await headerFields()).at(-1) === 'quickActions', 'the toggle shows it again at its place')
+await until(async () => (await savedView()).table?.columns.at(-1)?.field === 'quickActions', 'its place is kept in the saved columns')
+
+step('table: back to a list the view keeps its own quick actions setting')
+if ((await savedView()).quickActions !== true) throw new Error('the table toggling changed view.quickActions')
 await pickLayout('List')
+await until(async () => (await rowActions(rowTask2.id).count()) === 1, 'the list shows actions (view.quickActions)')
+if ((await toggleState()) !== true) throw new Error('the list toggle is not checked')
+await setToggle(false)
+await until(async () => (await savedView())?.quickActions === undefined, 'view.quickActions cleared in the list')
+await until(async () => (await page.locator('main [data-quick-actions]').count()) === 0, 'the list shows no actions with the toggle off')
+if (((await savedView()).table?.columns ?? []).find((c) => c.field === 'quickActions')?.hidden) throw new Error('the list toggle hid the table column')
 await setToggle(true)
 await until(async () => (await rowActions(rowTask2.id).count()) === 1, 'the list shows actions again')
+
+step('table: a type without tasks does not offer the column')
+const otherTypes = [pageType, bundle.types.find((t) => t.name === 'Book')].filter(Boolean)
+for (const other of otherTypes) {
+  const before = await get(`/api/types/${other.id}`)
+  try {
+    await put(`/api/types/${other.id}`, { ...before, views: before.views.map((v) => ({ ...v, layout: 'table' })) })
+    await sleep(1500)
+    await page.goto(`${base}/t/${other.id}`)
+    await until(async () => (await page.locator('main thead th[data-column="title"]').count()) === 1, `${other.name} shows a table`)
+    if ((await headerFields()).includes('quickActions')) throw new Error(`${other.name}'s table shows Quick actions`)
+    await page.locator('main button', { hasText: 'Columns' }).click()
+    await page.locator('div[data-column="title"]').waitFor()
+    if ((await page.locator('div[data-column="quickActions"]').count()) !== 0) throw new Error(`the Columns menu of ${other.name} offers Quick actions`)
+    await page.keyboard.press('Escape')
+    await layoutButton().click()
+    await page.locator('button', { hasText: /^\s*Full page\s*$/ }).first().waitFor()
+    if ((await page.locator('[data-view-quick-actions]').count()) !== 0) throw new Error(`Quick actions toggle offered for ${other.name}'s table`)
+    await page.keyboard.press('Escape')
+  } finally {
+    await put(`/api/types/${other.id}`, before)
+    await sleep(1000)
+  }
+}
 
 step('a query with quickActions shows row actions for its tasks')
 const queryType = bundle.types.find((t) => t.system === 'query')
@@ -511,6 +612,36 @@ await until(async () => (await rowActions(rowTask.id).count()) === 1, 'the query
 await queryBox.uncheck()
 await until(async () => (await get(`/api/objects/${plainQuery.id}`)).query?.quickActions === undefined, 'unchecking removed quickActions')
 await until(async () => (await rowActions(rowTask.id).count()) === 0, 'the query shows no actions after unchecking')
+
+step('a query in a table: its Quick actions checkbox shows the column')
+const tableQuery = await post('/api/objects', { typeId: queryType.id, title: `QuickActions Table query ${tag}`, query: { typeIds: [taskType.id], layout: 'table' } })
+await sleep(1000)
+await page.goto(`${base}/o/${tableQuery.id}`)
+const tableBox = page.locator('label', { hasText: /^\s*Quick actions\s*$/ }).locator('input[type=checkbox]')
+await tableBox.waitFor()
+await until(async () => (await row(rowTask4.id).locator('td').count()) > 1, 'the query shows a table')
+if ((await headerFields()).includes('quickActions') || (await page.locator('main [data-quick-actions]').count()) !== 0) throw new Error('the query table shows the column by default')
+if (await tableBox.isChecked()) throw new Error('the table query checkbox starts checked')
+await tableBox.check()
+await until(async () => (await headerFields())[1] === 'quickActions', 'the query table shows the column after Title')
+await until(async () => {
+  const saved = (await get(`/api/objects/${tableQuery.id}`)).query
+  return saved?.table?.columns?.[1]?.field === 'quickActions' && !saved.table.columns[1].hidden && saved.quickActions === undefined
+}, 'the query saved the column (not quickActions)')
+await until(async () => (await rowActions(rowTask.id).count()) === 1, 'the query table rows show actions')
+if (!(await tableBox.isChecked())) throw new Error('the checkbox is not checked with the column shown')
+await page.locator('main button', { hasText: 'Columns' }).click()
+await page.locator('div[data-column="quickActions"]').waitFor()
+await page.keyboard.press('Escape')
+await tableBox.uncheck()
+await until(async () => !(await headerFields()).includes('quickActions'), 'unchecking hides the column')
+await until(async () => (await get(`/api/objects/${tableQuery.id}`)).query?.table?.columns?.find((c) => c.field === 'quickActions')?.hidden === true, 'the query saved it hidden')
+// A table query with the old list setting does not show the column.
+const oldQuery = await post('/api/objects', { typeId: queryType.id, title: `QuickActions Old query ${tag}`, query: { typeIds: [taskType.id], layout: 'table', quickActions: true } })
+await sleep(1000)
+await page.goto(`${base}/o/${oldQuery.id}`)
+await until(async () => (await row(rowTask4.id).locator('td').count()) > 1, 'the old query shows a table')
+if ((await headerFields()).includes('quickActions') || (await page.locator('main [data-quick-actions]').count()) !== 0) throw new Error('query.quickActions affects a table')
 
 step('phone width: the row buttons are visible and inside the screen')
 await page.setViewportSize({ width: 390, height: 844 })

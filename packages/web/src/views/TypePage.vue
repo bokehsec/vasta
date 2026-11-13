@@ -18,6 +18,7 @@ import { deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu } from
 import { api } from '../lib/api.ts'
 import { onChange } from '../lib/events.ts'
 import { clone } from '../lib/clone.ts'
+import { quickActionsColumnShown, toggleQuickActionsColumn } from '../lib/columns.ts'
 import { chip } from '../lib/colors.ts'
 import { displayTitle } from '../lib/format.ts'
 import { confirmDialog, openContextMenu, openMenuAt, promptDialog } from '../lib/overlays.ts'
@@ -349,6 +350,14 @@ const layouts: { layout: ViewLayout; label: string; icon: string }[] = [
 const layoutAnchor = ref<HTMLElement | null>(null)
 const layoutOpen = ref(false)
 /** Where the view opens what is clicked: as the type says (unset), or its own choice. */
+// Quick actions for tasks: in a table, a column (shown, hidden and moved like the others); in a list,
+// on each row.
+const quickActionsOn = computed(() => (view.value.layout === 'table' ? quickActionsColumnShown(view.value.table, [props.id]) : !!view.value.quickActions))
+function toggleQuickActions() {
+  if (view.value.layout === 'table') updateView({ table: toggleQuickActionsColumn(view.value.table, [props.id]) })
+  else updateView({ quickActions: view.value.quickActions ? undefined : true })
+}
+
 const openChoices = computed<{ openIn: ViewOpenIn | undefined; label: string }[]>(() => [
   { openIn: undefined, label: `Same as ${type.value?.name ?? 'the type'} (${type.value?.openIn === 'pane' ? 'side pane' : 'full page'})` },
   { openIn: 'pane', label: 'Side pane' },
@@ -609,13 +618,13 @@ async function newMenu(event: MouseEvent) {
           <div class="my-1 border-t border-line" />
           <button
             class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover"
-            :aria-pressed="!!view.quickActions"
-            title="Done, Defer, Drop and the next step on each task's row"
+            :aria-pressed="quickActionsOn"
+            :title="view.layout === 'table' ? 'A column with Done, Defer, Drop and the next step (Columns moves it)' : 'Done, Defer, Drop and the next step on each task\'s row'"
             data-view-quick-actions
-            @click="updateView({ quickActions: view.quickActions ? undefined : true })"
+            @click="toggleQuickActions"
           >
             <AppIcon fallback="ph:lightning" class="text-ink-soft" /> Quick actions
-            <AppIcon v-if="view.quickActions" fallback="ph:check" class="ml-auto text-accent" />
+            <AppIcon v-if="quickActionsOn" fallback="ph:check" class="ml-auto text-accent" />
           </button>
         </template>
       </PopoverMenu>
