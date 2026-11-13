@@ -289,7 +289,8 @@ describe('sync', () => {
     // What its quick actions set: ids of its properties and options, or (null) the defaults.
     a.edit('types', 'type-book', { quickActions: { deferField: 'due' } }, 's')
     a.edit('types', 'type-book', { quickActions: { deferField: 3 } }, 's')
-    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for quickActions'])
+    a.edit('types', 'type-book', { quickActions: { actions: [{ id: 'x', name: 'X', changes: [{ field: 'f' }] }] } }, 's')
+    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for quickActions', 'invalid value for quickActions'])
     expect(store.getType('type-book')?.quickActions).toEqual({ deferField: 'due' })
     a.edit('types', 'type-book', { quickActions: null }, 's')
     await a.push()

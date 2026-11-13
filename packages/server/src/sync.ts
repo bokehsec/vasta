@@ -70,6 +70,11 @@ const optional = (check: (v: unknown) => boolean) => (v: unknown) => v === null 
 const isString = (v: unknown) => typeof v === 'string'
 const isNonEmpty = (v: unknown) => typeof v === 'string' && v.trim() !== ''
 
+const isQuickAction = (v: unknown) => {
+  const action = v as { id?: unknown; name?: unknown; changes?: unknown }
+  return isObject(v) && isNonEmpty(action.id) && isString(action.name) && Array.isArray(action.changes) && action.changes.every((c) => isObject(c) && isNonEmpty(c.field) && isObject(c.value))
+}
+
 /** The shape each field's value must have; null clears an optional one. */
 const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   name: isNonEmpty,
@@ -89,7 +94,7 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   properties: Array.isArray,
   views: Array.isArray,
   openIn: optional((v) => v === 'page' || v === 'pane'),
-  quickActions: optional((v) => isObject(v) && Object.values(v as object).every(isNonEmpty)),
+  quickActions: optional((v) => isObject(v) && Object.entries(v as object).every(([key, x]) => (key === 'actions' ? Array.isArray(x) && x.every(isQuickAction) : isNonEmpty(x)))),
   aliases: isStringArray,
   tagIds: isStringArray,
   collectionIds: isStringArray,

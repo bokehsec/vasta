@@ -3,7 +3,7 @@
 // agenda), optionally grouped. Used by type pages, query pages and queries embedded in documents.
 import { computed, nextTick, provide, ref, watch, type Directive } from 'vue'
 import type { AgendaSettings, BoardSettings, FilterGroup, Id, ListSettings, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { resolveQuickActions } from '@vasta/core'
+import { nextStepFieldOf } from '@vasta/core'
 import { addSelectOption, setProperties, setProperty } from '../lib/actions.ts'
 import { isDone, setTaskDone } from '../lib/calendar.ts'
 import { chip } from '../lib/colors.ts'
@@ -100,7 +100,7 @@ const taskType = (object: ObjectSummary): ObjectType | undefined => {
 }
 const quickType = (object: ObjectSummary) => (props.quickActions ? taskType(object) : undefined)
 const nextStepOf = (object: ObjectSummary) => {
-  const field = resolveQuickActions(quickType(object)).nextStepField
+  const field = nextStepFieldOf(quickType(object))
   const value = field ? object.props[field.id] : undefined
   return value?.kind === 'text' ? value.value : ''
 }

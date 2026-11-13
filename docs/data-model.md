@@ -56,18 +56,20 @@ side, shown on the objects it links to: "Wrote" for a book's Author, on a person
 The built-in Task has `status`, `due`, `assignee` (a single person, added to older spaces once,
 after Due) and `priority`.
 A task's page has **quick actions** ([`task-actions.ts`](../packages/core/src/task-actions.ts)):
-Done sets the first status option meaning done; Defer sets a date property on a day (tomorrow,
-next week or one picked) and, if chosen, a status; Drop sets another status option ("Dropped").
-The Task type's `quickActions` (`deferField`, `deferStatus`, `dropStatus`, the column
-`types.quick_actions`, Type settings › Quick actions) chooses them; unset, or naming a property or
-option the type no longer has, Defer sets `due` and leaves the status, and Drop sets the second
-option meaning done (none: no Drop). A repeating date keeps its rule when deferred. Closed tasks
-(any option meaning done) show no quick actions. For triage they also go on rows: a list view or
-query with `quickActions: true` ends each task's row with them, and a table of tasks has a
-"Quick actions" column (`quickActions` in `table.columns`, hidden until shown, moved and sized like
-the others; the view menu's Quick actions shows it after the title). There they also set the task's
-**next step**, the text property the type's `quickActions.nextStepField` names (none: no next
-step), shown under the title in the list.
+buttons that change its fields in one click. The Task type's `quickActions.actions` (Type settings ›
+Quick actions, column `types.quick_actions`) lists them, each a name, an icon and changes: a
+property set to a fixed value, a day from today (`{ kind: 'day', days }`) or next week, the user
+pressing it (`me`), nothing (`clear`), or a value asked for when pressed (`ask`, one per action: a day
+on a small calendar for dates, a line for text, numbers and links). Changes naming a property the
+type no longer has, or a value that does not fit it, are left out. Without a list, the defaults:
+Done (the first status option meaning done), Defer (asks a day for `due`, or `quickActions.deferField`,
+and sets `deferStatus` if any), Drop (`dropStatus`, else the second option meaning done; none: no
+Drop) and Next step (asks the text of `nextStepField`). A repeating date keeps its rule when set.
+Closed tasks (any option meaning done) show no quick actions. For triage they also go on rows: a
+list view or query with `quickActions: true` ends each task's row with them, and a table of tasks
+has a "Quick actions" column (`quickActions` in `table.columns`, hidden until shown, moved and sized
+like the others; the view menu's Quick actions shows it after the title). `nextStepField`, a text
+property, shows under the title in the list.
 Title, description, icon, cover, color, parent, aliases, tags and collections are fixed fields on
 every object, not property definitions (`color` and `parentId` are only used by tags so far).
 

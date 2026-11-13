@@ -4,7 +4,6 @@ import { newId } from '@vasta/core'
 // Changes are made on a draft and saved together.
 import { computed, reactive, ref } from 'vue'
 import type { ColorName, FormulaPropertyDef, Icon, ObjectType, PropertyDef, QuickActions, SelectOption } from '@vasta/core'
-import { DUE_PROPERTY_ID, STATUS_PROPERTY_ID } from '@vasta/core'
 import { FORMULA_BUILTIN_FIELDS, FORMULA_FUNCTIONS, checkFormula, formulaFromNames, formulaKind, formulaToNames, formulaUses } from '@vasta/core'
 import { api } from '../lib/api.ts'
 import { clone } from '../lib/clone.ts'
@@ -17,6 +16,7 @@ import ColorPicker from './ColorPicker.vue'
 import IconPicker from './IconPicker.vue'
 import ModalDialog from './ModalDialog.vue'
 import PopoverMenu from './PopoverMenu.vue'
+import QuickActionsSettings from './QuickActionsSettings.vue'
 import TypeTemplates from './TypeTemplates.vue'
 import { useRouter } from 'vue-router'
 
@@ -49,22 +49,9 @@ function setOpenIn(pane: boolean) {
   else delete draft.value.openIn
 }
 
-// Quick actions (tasks): what Done, Defer and Drop set; '' is the default (task-actions.ts).
-const deferFields = computed(() => draft.value.properties.filter((p) => p.kind === 'date' && p.id !== DUE_PROPERTY_ID))
-const textFields = computed(() => draft.value.properties.filter((p) => p.kind === 'text'))
-const statusOptions = computed(() => {
-  const def = draft.value.properties.find((p) => p.id === STATUS_PROPERTY_ID)
-  return def?.kind === 'select' ? def.options : []
-})
-const doneOption = computed(() => statusOptions.value.find((o) => o.status === 'done'))
-const defaultDrop = computed(() => statusOptions.value.filter((o) => o.status === 'done')[1])
-const dueName = computed(() => draft.value.properties.find((p) => p.id === DUE_PROPERTY_ID)?.name ?? 'Due')
-
-function setQuickAction(key: keyof QuickActions, value: string) {
-  const next: QuickActions = { ...draft.value.quickActions }
-  if (value) next[key] = value
-  else delete next[key]
-  if (Object.keys(next).length) draft.value.quickActions = next
+// Quick actions (tasks): the buttons and the next step field (QuickActionsSettings).
+function setQuickActions(value: QuickActions | undefined) {
+  if (value) draft.value.quickActions = value
   else delete draft.value.quickActions
 }
 
@@ -263,33 +250,7 @@ async function leave(path: string) {
       </label>
       <p class="mt-0.5 pl-6 text-xs text-ink-faint">A click on a {{ (draft.name || 'object').toLowerCase() }} in a list, table, board or query opens it next to the page. A view can choose otherwise.</p>
     </section>
-    <section v-if="draft.system === 'task'" class="mt-4" data-quick-action-settings>
-      <div class="text-sm">Quick actions</div>
-      <p class="mt-0.5 text-xs text-ink-faint">Done, Defer and Drop on a {{ (draft.name || 'task').toLowerCase() }}'s page and, where a view turns them on, its row. Done sets “{{ doneOption?.label ?? 'Done' }}”.</p>
-      <div class="mt-2 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 text-sm">
-        <span class="text-ink-soft">Defer sets</span>
-        <select :value="draft.quickActions?.deferField ?? ''" class="rounded-md bg-hover px-1.5 py-1 text-sm outline-none" @change="setQuickAction('deferField', ($event.target as HTMLSelectElement).value)">
-          <option value="">{{ dueName }} (default)</option>
-          <option v-for="p in deferFields" :key="p.id" :value="p.id">{{ p.name }}</option>
-        </select>
-        <span class="text-ink-soft">and the status</span>
-        <select :value="draft.quickActions?.deferStatus ?? ''" class="rounded-md bg-hover px-1.5 py-1 text-sm outline-none" @change="setQuickAction('deferStatus', ($event.target as HTMLSelectElement).value)">
-          <option value="">Unchanged</option>
-          <option v-for="o in statusOptions.filter((o) => o.status !== 'done')" :key="o.id" :value="o.id">{{ o.label }}</option>
-        </select>
-        <span class="text-ink-soft">Drop sets</span>
-        <select :value="draft.quickActions?.dropStatus ?? ''" class="rounded-md bg-hover px-1.5 py-1 text-sm outline-none" @change="setQuickAction('dropStatus', ($event.target as HTMLSelectElement).value)">
-          <option value="">{{ defaultDrop ? `${defaultDrop.label} (default)` : 'Nothing: no Drop button' }}</option>
-          <option v-for="o in statusOptions.filter((o) => o.id !== doneOption?.id && o.id !== defaultDrop?.id)" :key="o.id" :value="o.id">{{ o.label }}</option>
-        </select>
-        <span class="text-ink-soft">Next step in</span>
-        <select :value="draft.quickActions?.nextStepField ?? ''" class="rounded-md bg-hover px-1.5 py-1 text-sm outline-none" @change="setQuickAction('nextStepField', ($event.target as HTMLSelectElement).value)">
-          <option value="">None</option>
-          <option v-for="p in textFields" :key="p.id" :value="p.id">{{ p.name }}</option>
-        </select>
-      </div>
-      <p class="mt-1.5 text-xs text-ink-faint">A view's menu (or a query's settings) can show them on each row, with the next step under the title: add a text property such as “Next step” for it.</p>
-    </section>
+    <QuickActionsSettings v-if="draft.system === 'task'" :type="draft" @update="setQuickActions" />
 
     <TypeTemplates :type="type" @leave="leave" />
 
