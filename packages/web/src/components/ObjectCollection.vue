@@ -12,6 +12,7 @@ import { displayTitle, formatDate, formatDateShort, formatRelative } from '../li
 import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
+import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import AgendaView from './AgendaView.vue'
 import BoardView from './BoardView.vue'
@@ -86,7 +87,11 @@ const vNear: Directive<HTMLElement & { near?: IntersectionObserver }, () => void
 // Table columns; a column being resized shows its new width until the settings come back saved.
 const resized = ref<Record<string, number>>({})
 watch(() => props.table, () => (resized.value = {}))
-const columns = computed(() => tableColumns(props.table, props.typeIds).filter((c) => !c.hidden))
+// On a phone the Quick actions column leaves the table and its buttons go under each title, where
+// they can be reached without scrolling sideways.
+const shownColumns = computed(() => tableColumns(props.table, props.typeIds).filter((c) => !c.hidden))
+const actionsUnderTitle = computed(() => isPhone.value && shownColumns.value.some((c) => c.field === QUICK_ACTIONS_COLUMN))
+const columns = computed(() => (actionsUnderTitle.value ? shownColumns.value.filter((c) => c.field !== QUICK_ACTIONS_COLUMN) : shownColumns.value))
 const widthOf = (column: Column) => resized.value[column.field] ?? columnWidth(column)
 const tableWidth = computed(() => columns.value.reduce((sum, c) => sum + widthOf(c), 0))
 
@@ -337,9 +342,12 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                 class="overflow-hidden px-3 py-2 align-top"
                 :class="column.wrap ? 'break-words' : 'whitespace-nowrap text-ellipsis'"
               >
-                <ObjectLink v-if="column.field === 'title'" :id="object.id" class="font-medium hover:underline">
-                  <AppIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" />{{ displayTitle(object, typeOf(object)) }}
-                </ObjectLink>
+                <template v-if="column.field === 'title'">
+                  <ObjectLink :id="object.id" class="font-medium hover:underline">
+                    <AppIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" />{{ displayTitle(object, typeOf(object)) }}
+                  </ObjectLink>
+                  <TaskQuickActions v-if="actionsUnderTitle && taskType(object)" :type="taskType(object)!" :object="object" variant="row" class="-mb-1 mt-0.5 -ml-1.5" @set="saveQuick(object, $event)" />
+                </template>
                 <span v-else-if="column.field === 'tags' || column.field === 'collections'" class="flex gap-1" :class="column.wrap ? 'flex-wrap' : 'overflow-hidden'">
                   <ObjectChip v-for="id in column.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="column.field === 'tags'" />
                 </span>

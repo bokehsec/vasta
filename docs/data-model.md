@@ -68,7 +68,8 @@ Drop) and Next step (asks the text of `nextStepField`). A repeating date keeps i
 Closed tasks (any option meaning done) show no quick actions. For triage they also go on rows: a
 list view or query with `quickActions: true` ends each task's row with them, and a table of tasks
 has a "Quick actions" column (`quickActions` in `table.columns`, hidden until shown, moved and sized
-like the others; the view menu's Quick actions shows it after the title). `nextStepField`, a text
+like the others; the view menu's Quick actions shows it after the title; on a phone the column
+leaves the table and its buttons go under each title). `nextStepField`, a text
 property, shows under the title in the list.
 Title, description, icon, cover, color, parent, aliases, tags and collections are fixed fields on
 every object, not property definitions (`color` and `parentId` are only used by tags so far).
