@@ -47,7 +47,7 @@ const dots = (day: string) => DAY_MARKS.filter((m) => props.marks?.get(day)?.[m.
         </span>
       </button>
     </div>
-    <div class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-faint">
+    <div v-if="marks" class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-faint">
       <span v-for="mark in DAY_MARKS" :key="mark.key" class="flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full" :class="mark.dot" />{{ mark.label }}</span>
     </div>
   </div>

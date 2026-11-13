@@ -3,7 +3,8 @@ import { newId } from '@vasta/core'
 // Edit a type: identity (name, icon, color, description) and its property definitions.
 // Changes are made on a draft and saved together.
 import { computed, reactive, ref } from 'vue'
-import type { ColorName, FormulaPropertyDef, Icon, ObjectType, PropertyDef, SelectOption } from '@vasta/core'
+import type { ColorName, FormulaPropertyDef, Icon, ObjectType, PropertyDef, QuickActions, SelectOption } from '@vasta/core'
+import { DUE_PROPERTY_ID, STATUS_PROPERTY_ID } from '@vasta/core'
 import { FORMULA_BUILTIN_FIELDS, FORMULA_FUNCTIONS, checkFormula, formulaFromNames, formulaKind, formulaToNames, formulaUses } from '@vasta/core'
 import { api } from '../lib/api.ts'
 import { clone } from '../lib/clone.ts'
@@ -46,6 +47,24 @@ function setColor(color: ColorName) {
 function setOpenIn(pane: boolean) {
   if (pane) draft.value.openIn = 'pane'
   else delete draft.value.openIn
+}
+
+// Quick actions (tasks): what Done, Defer and Drop set; '' is the default (task-actions.ts).
+const deferFields = computed(() => draft.value.properties.filter((p) => p.kind === 'date' && p.id !== DUE_PROPERTY_ID))
+const statusOptions = computed(() => {
+  const def = draft.value.properties.find((p) => p.id === STATUS_PROPERTY_ID)
+  return def?.kind === 'select' ? def.options : []
+})
+const doneOption = computed(() => statusOptions.value.find((o) => o.status === 'done'))
+const defaultDrop = computed(() => statusOptions.value.filter((o) => o.status === 'done')[1])
+const dueName = computed(() => draft.value.properties.find((p) => p.id === DUE_PROPERTY_ID)?.name ?? 'Due')
+
+function setQuickAction(key: keyof QuickActions, value: string) {
+  const next: QuickActions = { ...draft.value.quickActions }
+  if (value) next[key] = value
+  else delete next[key]
+  if (Object.keys(next).length) draft.value.quickActions = next
+  else delete draft.value.quickActions
 }
 
 const richTextCount = computed(() => draft.value.properties.filter((p) => p.kind === 'rich-text').length)
@@ -242,6 +261,27 @@ async function leave(path: string) {
         Open in side pane
       </label>
       <p class="mt-0.5 pl-6 text-xs text-ink-faint">A click on a {{ (draft.name || 'object').toLowerCase() }} in a list, table, board or query opens it next to the page. A view can choose otherwise.</p>
+    </section>
+    <section v-if="draft.system === 'task'" class="mt-4" data-quick-action-settings>
+      <div class="text-sm">Quick actions</div>
+      <p class="mt-0.5 text-xs text-ink-faint">Done, Defer and Drop on a {{ (draft.name || 'task').toLowerCase() }}'s page. Done sets “{{ doneOption?.label ?? 'Done' }}”.</p>
+      <div class="mt-2 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 text-sm">
+        <span class="text-ink-soft">Defer sets</span>
+        <select :value="draft.quickActions?.deferField ?? ''" class="rounded-md bg-hover px-1.5 py-1 text-sm outline-none" @change="setQuickAction('deferField', ($event.target as HTMLSelectElement).value)">
+          <option value="">{{ dueName }} (default)</option>
+          <option v-for="p in deferFields" :key="p.id" :value="p.id">{{ p.name }}</option>
+        </select>
+        <span class="text-ink-soft">and the status</span>
+        <select :value="draft.quickActions?.deferStatus ?? ''" class="rounded-md bg-hover px-1.5 py-1 text-sm outline-none" @change="setQuickAction('deferStatus', ($event.target as HTMLSelectElement).value)">
+          <option value="">Unchanged</option>
+          <option v-for="o in statusOptions.filter((o) => o.status !== 'done')" :key="o.id" :value="o.id">{{ o.label }}</option>
+        </select>
+        <span class="text-ink-soft">Drop sets</span>
+        <select :value="draft.quickActions?.dropStatus ?? ''" class="rounded-md bg-hover px-1.5 py-1 text-sm outline-none" @change="setQuickAction('dropStatus', ($event.target as HTMLSelectElement).value)">
+          <option value="">{{ defaultDrop ? `${defaultDrop.label} (default)` : 'Nothing: no Drop button' }}</option>
+          <option v-for="o in statusOptions.filter((o) => o.id !== doneOption?.id && o.id !== defaultDrop?.id)" :key="o.id" :value="o.id">{{ o.label }}</option>
+        </select>
+      </div>
     </section>
 
     <TypeTemplates :type="type" @leave="leave" />

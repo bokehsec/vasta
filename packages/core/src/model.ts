@@ -36,6 +36,20 @@ export interface NutritionSettings {
   meals: Meal[]
 }
 
+/**
+ * What a task's quick actions set (Type settings › Quick actions). Done always sets the first status
+ * option meaning done. Unset fields, or ones naming a property or option the type no longer has,
+ * fall back to the defaults (task-actions.ts).
+ */
+export interface QuickActions {
+  /** The date property Defer sets; default `due`. */
+  deferField?: Id
+  /** A status option Defer also sets ("Scheduled"); default none. */
+  deferStatus?: Id
+  /** The status option Drop sets; default the first option meaning done after Done ("Dropped"). */
+  dropStatus?: Id
+}
+
 /** A space's sprints: on or off, and the word the space uses for them ("Sprint", "Rodada"…). */
 export interface SprintSettings {
   enabled: boolean
@@ -153,6 +167,8 @@ export interface ObjectType {
   views: ViewDef[]
   /** Where a click on one of its objects in a view or query opens it, unless the view says; unset: its page. */
   openIn?: ViewOpenIn
+  /** What a task's Done, Defer and Drop buttons set (task-actions.ts); unset: the defaults. */
+  quickActions?: QuickActions
   createdAt: IsoDateTime
   updatedAt: IsoDateTime
   /** Set when the type is in the trash; its objects are trashed with it. */

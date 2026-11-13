@@ -171,6 +171,18 @@ describe.each(backends)('shared store on %s', (_name, open) => {
     store.close()
   })
 
+  it('keeps what a type\'s quick actions set, and clears it', () => {
+    const store = setUp()
+    const task = store.getType(builtinTypeId('s', 'task'))!
+    expect(task.quickActions).toBeUndefined()
+    store.putType({ ...task, quickActions: { deferField: 'due', dropStatus: 'done' } })
+    expect(store.getType(task.id)?.quickActions).toEqual({ deferField: 'due', dropStatus: 'done' })
+    const { quickActions: _quickActions, ...cleared } = store.getType(task.id)!
+    store.putType(cleared)
+    expect(store.getType(task.id)).not.toHaveProperty('quickActions')
+    store.close()
+  })
+
   it('runs queries that filter on a related object\'s field', () => {
     const store = setUp()
     const page = store.getType(builtinTypeId('s', 'page'))!

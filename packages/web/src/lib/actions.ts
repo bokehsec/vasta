@@ -26,11 +26,18 @@ export async function createObject(typeId: Id, data: Partial<ObjectRecord> = {},
  * Sets one property of an object and saves it, as a table cell does. The fetched copy goes along
  * as the base, so a field changed elsewhere meanwhile is kept and only this one is written.
  */
-export async function setProperty(id: Id, propertyId: Id, value: PropertyValue | undefined): Promise<ObjectRecord> {
+export function setProperty(id: Id, propertyId: Id, value: PropertyValue | undefined): Promise<ObjectRecord> {
+  return setProperties(id, { [propertyId]: value })
+}
+
+/** Sets several properties of an object in one save, as setProperty does one (undefined clears). */
+export async function setProperties(id: Id, values: Record<Id, PropertyValue | undefined>): Promise<ObjectRecord> {
   const object = await api.object(id)
   const base = clone(object)
-  if (value) object.props[propertyId] = value
-  else delete object.props[propertyId]
+  for (const [propertyId, value] of Object.entries(values)) {
+    if (value) object.props[propertyId] = value
+    else delete object.props[propertyId]
+  }
   const saved = await api.saveObject(object, base)
   primeFromObject(saved)
   return saved

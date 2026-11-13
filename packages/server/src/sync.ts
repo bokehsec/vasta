@@ -88,6 +88,7 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   properties: Array.isArray,
   views: Array.isArray,
   openIn: optional((v) => v === 'page' || v === 'pane'),
+  quickActions: optional((v) => isObject(v) && Object.values(v as object).every(isNonEmpty)),
   aliases: isStringArray,
   tagIds: isStringArray,
   collectionIds: isStringArray,

@@ -5,7 +5,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import type { DateValue } from '@vasta/core'
 import { addDays } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
-import { WEEKDAY_CODES, buildRepeat, describeRepeat, formatWeekday, parseRepeat, viewerTimeZone, weekdayOf, type RepeatFreq, type RepeatRule } from '../lib/calendar.ts'
+import { WEEKDAY_CODES, buildRepeat, describeRepeat, formatWeekday, nextWeekStart, parseRepeat, viewerTimeZone, weekdayOf, type RepeatFreq, type RepeatRule } from '../lib/calendar.ts'
 import { formatDate } from '../lib/format.ts'
 import AppIcon from './AppIcon.vue'
 import PopoverMenu from './PopoverMenu.vue'
@@ -128,6 +128,7 @@ function setToday() {
       <div v-if="!value" class="flex gap-2">
         <button class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 hover:bg-line" @click="setToday">Today</button>
         <button class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 hover:bg-line" @click="commit({ startDay: addDays(dayKey(), 1) })">Tomorrow</button>
+        <button class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 hover:bg-line" @click="commit({ startDay: nextWeekStart() })">Next week</button>
       </div>
 
       <label class="flex items-center justify-between">

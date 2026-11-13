@@ -38,6 +38,9 @@ export function startOfWeek(day: string): string {
   return addDays(day, -((weekdayOf(day) - firstWeekday + 7) % 7))
 }
 
+/** The first day of next week, for "Next week" in date pickers. */
+export const nextWeekStart = (today = dayKey()) => addDays(startOfWeek(today), 7)
+
 export const monthOf = (day: string) => day.slice(0, 7)
 
 /** Days shown by a view around an anchor day. The month view shows whole weeks. */

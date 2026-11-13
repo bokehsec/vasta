@@ -12,6 +12,13 @@ GitHub release page.
   type view or query results, and the ⋯ More menu of an object's page and side pane now have a
   "Copy link to page" action. It copies `<server>/o/<id>` in the browser and `vasta://o/<id>`
   in the desktop app, matching existing block-link behaviour.
+- **Done, Defer and Drop on a task's page**: one click marks a task done, drops it, or defers it
+  to tomorrow, next week or a day picked on a small calendar, with Undo. Type settings › Quick
+  actions chooses which date Defer sets (Due by default, or another date such as a "Do date"), a
+  status it also sets (such as "Scheduled") and the status Drop sets (by default a second "done"
+  status such as "Dropped"; without one there is no Drop button). Deferring past the due date is
+  allowed and said.
+- **"Next week" in date pickers**, beside Today and Tomorrow.
 
 ### Fixed
 
