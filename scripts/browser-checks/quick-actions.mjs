@@ -2,6 +2,9 @@
 // Drop under its tags, with their Undo notices; what Type settings › Quick actions makes them set (a
 // "Dropped" status, a "Do date" field and a "Scheduled" status), the "Due …" line and the late note;
 // the section showing for Task only; the "Next week" pick in a date property's editor; a phone width.
+// Then the same actions on task rows: a view's "Quick actions" toggle (list and table, Task only), the
+// next step typed on a row (saved, Undo, cleared), Done / Drop / Defer from a row without leaving the
+// list, the table's first column, a query with quickActions, Type settings' "Next step in", a phone.
 //   node quick-actions.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -63,8 +66,10 @@ const pageType = bundle.types.find((t) => t.system === 'page')
 const found = await get(`/api/types/${taskType.id}`)
 const originalTask = {
   ...found,
+  // Row quick actions: the "Plain" view and the toggle are this check's.
+  views: found.views.filter((v) => !v.id.endsWith(':plain')).map(({ quickActions, ...v }) => ({ ...v, layout: v.layout === 'table' ? 'list' : v.layout })),
   properties: found.properties
-    .filter((p) => p.id !== 'dodate')
+    .filter((p) => p.id !== 'dodate' && p.id !== 'nextstep')
     .map((p) => (p.id === 'status' ? { ...p, options: p.options.filter((o) => o.id !== 'dropped' && o.id !== 'scheduled') } : p)),
   quickActions: undefined,
 }
@@ -148,7 +153,7 @@ if ((await actions.count()) !== 0) throw new Error('quick actions shown on a don
 step('Type settings: Quick actions for Task, not for Page')
 await page.goto(`${base}/t/${taskType.id}?settings=1`)
 await page.waitForSelector('[data-quick-action-settings]')
-if ((await page.locator('[data-quick-action-settings] select').count()) !== 3) throw new Error('expected three selects in Quick actions')
+if ((await page.locator('[data-quick-action-settings] select').count()) !== 4) throw new Error('expected four selects in Quick actions')
 await page.goto(`${base}/t/${pageType.id}?settings=1`)
 await page.getByText('Properties', { exact: true }).first().waitFor()
 if ((await page.locator('[data-quick-action-settings]').count()) !== 0) throw new Error('Quick actions shown for Page')
@@ -254,6 +259,285 @@ await page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }).click(
 await until(async () => dayOf((await propsOf(task.id)).dodate) === days.tomorrow, 'Tomorrow tapped on the phone')
 await button('Drop').click()
 await until(async () => (await propsOf(task.id)).status?.value?.[0] === 'dropped', 'Drop tapped on the phone')
+
+
+// ---------------------------------------------------------------------------
+// Quick actions on task rows.
+await page.setViewportSize({ width: 1400, height: 900 })
+const taskStatus = originalTask.properties.find((p) => p.id === 'status')
+const allId = `${taskType.id}:all`
+const plainId = `${taskType.id}:plain`
+const rowsType = {
+  ...originalTask,
+  properties: [
+    ...originalTask.properties.map((p) => (p.id === 'status' ? { ...taskStatus, options: [...taskStatus.options, { id: 'dropped', label: 'Dropped', status: 'done', color: 'red' }] } : p)),
+    { id: 'nextstep', kind: 'text', name: 'Next step' },
+  ],
+  views: [{ id: allId, name: 'All', layout: 'list' }, { id: plainId, name: 'Plain', layout: 'list' }],
+}
+await resetType()
+await put(`/api/types/${taskType.id}`, rowsType)
+await sleep(1500)
+const statusOf = async (id) => (await propsOf(id)).status?.value?.[0]
+const nextOf = async (id) => (await propsOf(id)).nextstep?.value
+const row = (id) => page.locator(`main a[href="/o/${id}"], main tr:has(a[href="/o/${id}"])`).first()
+const rowActions = (id) => row(id).locator('[data-quick-actions]')
+const rowButton = (id, title) => rowActions(id).locator(`button[title="${title}"]`)
+const layoutButton = () => page.locator('main button').filter({ hasText: /^\s*(List|Table)\s*$/ })
+async function openTasks() {
+  await page.goto(`${base}/t/${taskType.id}`)
+  await page.locator('main button', { hasText: /^\s*All\s*$/ }).first().click() // the view last used is remembered
+  await page.getByPlaceholder('Filter…').fill('QuickActions')
+}
+async function pickLayout(label) {
+  await layoutButton().click()
+  await page.locator('[data-view-quick-actions]').waitFor()
+  await page.locator('button', { hasText: new RegExp(`^\\s*${label}\\s*$`) }).first().click()
+}
+async function setToggle(on) {
+  await layoutButton().click()
+  const toggle = page.locator('[data-view-quick-actions]')
+  await toggle.waitFor()
+  if (((await toggle.getAttribute('aria-pressed')) === 'true') !== on) await toggle.click()
+  await page.keyboard.press('Escape')
+}
+
+step('Type settings: "Next step in" lists the text properties and saves')
+await page.goto(`${base}/t/${taskType.id}?settings=1`)
+await page.waitForSelector('[data-quick-action-settings]')
+const nextSelect = page.locator('[data-quick-action-settings] select').nth(3)
+await until(async () => (await nextSelect.locator('option', { hasText: /^Next step$/ }).count()) === 1, 'the select offers the Next step property')
+if ((await nextSelect.inputValue()) !== '') throw new Error('Next step in should start on None')
+if ((await nextSelect.locator('option').first().innerText()).trim() !== 'None') throw new Error('first option of Next step in is not None')
+await nextSelect.selectOption('nextstep')
+await page.locator('button', { hasText: /^\s*Save\s*$/ }).click()
+await until(async () => (await get(`/api/types/${taskType.id}`)).quickActions?.nextStepField === 'nextstep', 'nextStepField saved by Save')
+await sleep(1500)
+await page.goto(`${base}/t/${taskType.id}?settings=1`)
+await page.waitForSelector('[data-quick-action-settings]')
+await until(async () => (await nextSelect.inputValue()) === 'nextstep', 'the select shows Next step after a reload')
+await nextSelect.selectOption('')
+await page.locator('button', { hasText: /^\s*Save\s*$/ }).click()
+await until(async () => (await get(`/api/types/${taskType.id}`)).quickActions?.nextStepField === undefined, 'nextStepField cleared by Save')
+await sleep(1500)
+await page.goto(`${base}/t/${taskType.id}?settings=1`)
+await page.waitForSelector('[data-quick-action-settings]')
+await until(async () => (await nextSelect.inputValue()) === '', 'the select shows None after clearing')
+await nextSelect.selectOption('nextstep')
+await page.locator('button', { hasText: /^\s*Save\s*$/ }).click()
+await until(async () => (await get(`/api/types/${taskType.id}`)).quickActions?.nextStepField === 'nextstep', 'nextStepField saved again')
+await sleep(1500)
+
+step('a view without the toggle shows no row actions')
+const rowTask = await makeTask('Row A')
+const rowTask2 = await makeTask('Row B')
+const rowTask3 = await makeTask('Row C')
+const rowTask4 = await makeTask('Row D')
+const closedRow = await makeTask('Row Closed', { status: { kind: 'select', value: ['done'] } })
+await openTasks()
+await until(async () => (await row(rowTask.id).count()) > 0, 'the list shows the test tasks')
+if ((await page.locator('main [data-quick-actions]').count()) !== 0) throw new Error('row actions shown before the view turned them on')
+if ((await page.locator('main [data-next-step-line]').count()) !== 0) throw new Error('next step line shown without the toggle')
+
+step('the layout menu toggles Quick actions on the view and saves it')
+await layoutButton().click()
+const toggle = page.locator('[data-view-quick-actions]')
+await toggle.waitFor()
+if ((await toggle.getAttribute('aria-pressed')) !== 'false') throw new Error('the toggle starts on')
+await toggle.click()
+await page.keyboard.press('Escape')
+await until(async () => (await get(`/api/types/${taskType.id}`)).views.find((v) => v.id === allId)?.quickActions === true, 'view.quickActions saved')
+await until(async () => (await rowActions(rowTask.id).count()) === 1, 'the row shows its actions')
+for (const title of ['Done', 'Defer', 'Drop', 'Next step']) await rowButton(rowTask.id, title).waitFor()
+if ((await rowActions(closedRow.id).count()) !== 0) throw new Error('a done task shows row actions')
+if ((await page.locator('main [data-next-step-line]').count()) !== 0) throw new Error('a next step line shown with no next step')
+// The other view of the type keeps its own setting.
+await page.locator('main button', { hasText: /^\s*Plain\s*$/ }).click()
+await sleep(400)
+await page.getByPlaceholder('Filter…').fill('QuickActions')
+await until(async () => (await row(rowTask.id).count()) > 0, 'Plain lists the tasks')
+if ((await page.locator('main [data-quick-actions]').count()) !== 0) throw new Error('the Plain view shows row actions')
+await layoutButton().click()
+if (((await page.locator('[data-view-quick-actions]').getAttribute('aria-pressed')) ?? '') !== 'false') throw new Error('Plain says Quick actions are on')
+await page.keyboard.press('Escape')
+
+step('another type never offers the toggle')
+await page.goto(`${base}/t/${pageType.id}`)
+await page.locator('main button').filter({ hasText: /^\s*(List|Table|Grid|Wall|Gallery|Board)\s*$/ }).first().click()
+await page.locator('button', { hasText: /^\s*Full page\s*$/ }).first().waitFor()
+if ((await page.locator('[data-view-quick-actions]').count()) !== 0) throw new Error('Quick actions toggle offered for Page')
+await page.keyboard.press('Escape')
+
+step('list: the next step is typed on the row, saved, shown under the title; Undo restores it')
+await openTasks()
+await rowActions(rowTask.id).waitFor()
+const url = page.url()
+await rowButton(rowTask.id, 'Next step').click()
+await page.locator('[data-next-step] input').waitFor()
+await sleep(300)
+await page.locator('[data-next-step] input').fill('Call the plumber')
+await sleep(300)
+await page.keyboard.press('Enter')
+await until(async () => (await nextOf(rowTask.id)) === 'Call the plumber', 'next step saved on the server')
+await toast.filter({ hasText: 'Next step saved' }).locator('button', { hasText: 'Undo' }).waitFor()
+await until(async () => (await row(rowTask.id).locator('[data-next-step-line]').innerText().catch(() => '')).includes('Call the plumber'), 'the next step shows under the title')
+if (page.url() !== url) throw new Error(`the page moved: ${page.url()}`)
+await toast.locator('button', { hasText: 'Undo' }).click()
+await until(async () => (await nextOf(rowTask.id)) === undefined, 'Undo emptied the next step')
+await until(async () => (await row(rowTask.id).locator('[data-next-step-line]').count()) === 0, 'the line is gone after Undo')
+// Change an existing one: the box opens with it; Escape closes without saving.
+await rowButton(rowTask.id, 'Next step').click()
+await page.locator('[data-next-step] input').waitFor()
+await sleep(300)
+await page.locator('[data-next-step] input').fill('Book the flights')
+await sleep(300)
+await page.keyboard.press('Enter')
+await until(async () => (await nextOf(rowTask.id)) === 'Book the flights', 'second next step saved')
+await rowButton(rowTask.id, 'Next step').click()
+await page.locator('[data-next-step] input').waitFor()
+await sleep(300)
+if ((await page.locator('[data-next-step] input').inputValue()) !== 'Book the flights') throw new Error('the box did not open with the saved next step')
+await page.locator('[data-next-step] input').fill('Never saved')
+await page.keyboard.press('Escape')
+await until(async () => (await page.locator('[data-next-step]').count()) === 0, 'Escape closes the box')
+await sleep(500)
+if ((await nextOf(rowTask.id)) !== 'Book the flights') throw new Error('Escape saved the typed text')
+if (page.url() !== url) throw new Error(`Escape moved the page: ${page.url()}`)
+// An empty box clears it.
+await rowButton(rowTask.id, 'Next step').click()
+await page.locator('[data-next-step] input').waitFor()
+await sleep(300)
+await page.locator('[data-next-step] input').fill('')
+await sleep(300)
+await page.keyboard.press('Enter')
+await until(async () => (await nextOf(rowTask.id)) === undefined, 'an empty box clears the next step')
+await toast.filter({ hasText: 'Next step cleared' }).waitFor()
+await until(async () => (await row(rowTask.id).locator('[data-next-step-line]').count()) === 0, 'the line is gone once cleared')
+// The page's own buttons do not show the pencil.
+await page.goto(`${base}/o/${rowTask.id}`)
+await page.waitForSelector('textarea[data-large-text]')
+await actions.waitFor()
+if ((await actions.locator('button[title="Next step"]').count()) !== 0) throw new Error('the object page shows the next step pencil')
+
+step('list: Done from a row closes the task and stays on the list')
+await openTasks()
+await rowActions(rowTask2.id).waitFor()
+const listUrl = page.url()
+await rowButton(rowTask2.id, 'Done').click()
+await until(async () => (await statusOf(rowTask2.id)) === 'done', 'row Done sets done')
+await until(async () => (await rowActions(rowTask2.id).count()) === 0, 'the closed row loses its actions')
+if (page.url() !== listUrl) throw new Error(`Done navigated to ${page.url()}`)
+if ((await row(rowTask2.id).count()) !== 1) throw new Error('the row disappeared from the list')
+await toast.filter({ hasText: 'Marked done' }).locator('button', { hasText: 'Undo' }).click()
+await until(async () => (await statusOf(rowTask2.id)) !== 'done', 'Undo reopened the task')
+await until(async () => (await rowActions(rowTask2.id).count()) === 1, 'the actions are back')
+if (page.url() !== listUrl) throw new Error(`Undo navigated to ${page.url()}`)
+
+step('list: Drop and Defer › Tomorrow from a row')
+await rowButton(rowTask3.id, 'Drop').click()
+await until(async () => (await statusOf(rowTask3.id)) === 'dropped', 'row Drop sets dropped')
+await until(async () => (await rowActions(rowTask3.id).count()) === 0, 'the dropped row loses its actions')
+if (page.url() !== listUrl) throw new Error(`Drop navigated to ${page.url()}`)
+await rowButton(rowTask4.id, 'Defer').click()
+await page.waitForSelector('[data-defer-menu]')
+await page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }).click()
+await until(async () => dayOf((await propsOf(rowTask4.id)).due) === days.tomorrow, `row Defer set Due to ${days.tomorrow}`)
+await toast.filter({ hasText: 'Deferred to' }).waitFor()
+if (page.url() !== listUrl) throw new Error(`Defer navigated to ${page.url()}`)
+if ((await rowActions(rowTask4.id).count()) !== 1) throw new Error('a deferred task lost its actions')
+
+step('list: a click elsewhere on the row still opens the task')
+await row(rowTask2.id).locator('span.font-medium').first().click()
+await until(async () => new URL(page.url()).pathname === `/o/${rowTask2.id}`, 'the title click opened the task')
+
+step('table: the actions are the first column; Done works from it')
+await openTasks()
+await pickLayout('Table')
+await until(async () => (await row(rowTask2.id).locator('td').count()) > 1, 'the table lists the tasks')
+await until(async () => (await row(rowTask2.id).locator('td').first().locator('[data-quick-actions]').count()) === 1, 'the first column holds the actions')
+if ((await row(rowTask2.id).locator('td [data-quick-actions]').count()) !== 1) throw new Error('actions in more than one column')
+if ((await page.locator('main thead th').first().innerText()).trim() !== '') throw new Error('the actions column has a heading')
+if ((await page.locator('main thead th').nth(1).innerText()).trim() !== 'Title') throw new Error('Title is not the second column')
+if ((await row(closedRow.id).locator('[data-quick-actions]').count()) !== 0) throw new Error('a done task has actions in the table')
+const tableUrl = page.url()
+await rowButton(rowTask2.id, 'Done').click()
+await until(async () => (await statusOf(rowTask2.id)) === 'done', 'table Done sets done')
+await until(async () => (await rowActions(rowTask2.id).count()) === 0, 'the table row loses its actions')
+if (page.url() !== tableUrl) throw new Error(`table Done navigated to ${page.url()}`)
+await toast.filter({ hasText: 'Marked done' }).locator('button', { hasText: 'Undo' }).click()
+await until(async () => (await statusOf(rowTask2.id)) !== 'done', 'table Undo reopened the task')
+await openTasks()
+await until(async () => (await rowActions(rowTask2.id).count()) === 1, 'the table is still a table with actions after a reload')
+await setToggle(false)
+await until(async () => (await get(`/api/types/${taskType.id}`)).views.find((v) => v.id === allId)?.quickActions === undefined, 'view.quickActions cleared')
+await until(async () => (await page.locator('main [data-quick-actions]').count()) === 0, 'the table shows no actions with the toggle off')
+if ((await page.locator('main thead th').first().innerText()).trim() !== 'Title') throw new Error('an empty actions column remains with the toggle off')
+await pickLayout('List')
+await setToggle(true)
+await until(async () => (await rowActions(rowTask2.id).count()) === 1, 'the list shows actions again')
+
+step('a query with quickActions shows row actions for its tasks')
+const queryType = bundle.types.find((t) => t.system === 'query')
+const queryObject = await post('/api/objects', { typeId: queryType.id, title: `QuickActions Query ${tag}`, query: { typeIds: [taskType.id], layout: 'list', quickActions: true } })
+const plainQuery = await post('/api/objects', { typeId: queryType.id, title: `QuickActions Plain query ${tag}`, query: { typeIds: [taskType.id], layout: 'list' } })
+await sleep(1000)
+await page.goto(`${base}/o/${plainQuery.id}`)
+await until(async () => (await row(rowTask4.id).count()) > 0, 'the plain query lists the tasks')
+if ((await page.locator('main [data-quick-actions]').count()) !== 0) throw new Error('a query without quickActions shows row actions')
+await page.goto(`${base}/o/${queryObject.id}`)
+await until(async () => (await rowActions(rowTask4.id).count()) === 1, 'the query row shows its actions')
+await until(async () => (await row(closedRow.id).count()) > 0, 'the query lists the done task')
+if ((await rowActions(closedRow.id).count()) !== 0) throw new Error('a done task shows actions in the query')
+const queryUrl = page.url()
+await rowButton(rowTask4.id, 'Next step').click()
+await page.locator('[data-next-step] input').waitFor()
+await sleep(300)
+await page.locator('[data-next-step] input').fill('From the query')
+await sleep(300)
+await page.keyboard.press('Enter')
+await until(async () => (await nextOf(rowTask4.id)) === 'From the query', 'the query row saved the next step')
+await until(async () => (await row(rowTask4.id).locator('[data-next-step-line]').innerText().catch(() => '')).includes('From the query'), 'the query row shows the next step')
+await rowButton(rowTask4.id, 'Drop').click()
+await until(async () => (await statusOf(rowTask4.id)) === 'dropped', 'the query row Drop sets dropped')
+if (page.url() !== queryUrl) throw new Error(`the query row moved the page: ${page.url()}`)
+// The query's own checkbox sets it, in the editor.
+await page.goto(`${base}/o/${plainQuery.id}`)
+const queryBox = page.locator('label', { hasText: /^\s*Quick actions\s*$/ }).locator('input[type=checkbox]')
+await queryBox.waitFor()
+if (await queryBox.isChecked()) throw new Error('the checkbox starts checked')
+await queryBox.check()
+await until(async () => (await get(`/api/objects/${plainQuery.id}`)).query?.quickActions === true, 'the query checkbox saved quickActions')
+await until(async () => (await rowActions(rowTask.id).count()) === 1, 'the query shows actions after the checkbox')
+await queryBox.uncheck()
+await until(async () => (await get(`/api/objects/${plainQuery.id}`)).query?.quickActions === undefined, 'unchecking removed quickActions')
+await until(async () => (await rowActions(rowTask.id).count()) === 0, 'the query shows no actions after unchecking')
+
+step('phone width: the row buttons are visible and inside the screen')
+await page.setViewportSize({ width: 390, height: 844 })
+await openTasks()
+await until(async () => (await rowActions(rowTask.id).count()) === 1, 'the phone list shows actions')
+for (const title of ['Done', 'Defer', 'Drop', 'Next step']) {
+  const box = await rowButton(rowTask.id, title).boundingBox()
+  if (!box || box.x < 0 || box.x + box.width > 390 || box.width < 28 || box.height < 28) throw new Error(`${title} not usable at 390px: ${JSON.stringify(box)}`)
+}
+if ((await page.evaluate(() => document.documentElement.scrollWidth)) > 390) throw new Error('the phone list scrolls sideways')
+// In a narrow list the actions wrap onto a line of their own under the title.
+const titleBox = await row(rowTask.id).locator('span.font-medium').first().boundingBox()
+const actionsBox = await rowActions(rowTask.id).boundingBox()
+if (!titleBox || !actionsBox || actionsBox.y < titleBox.y + titleBox.height - 1) throw new Error(`the actions are not below the title: title ${JSON.stringify(titleBox)}, actions ${JSON.stringify(actionsBox)}`)
+if (actionsBox.x < 0 || actionsBox.x + actionsBox.width > 390) throw new Error(`the actions line is outside the screen: ${JSON.stringify(actionsBox)}`)
+await rowButton(rowTask.id, 'Next step').click()
+await page.locator('[data-next-step] input').waitFor()
+const form = await page.locator('[data-next-step]').boundingBox()
+if (form.x < 0 || form.x + form.width > 390) throw new Error(`next step box outside the screen: ${JSON.stringify(form)}`)
+await page.locator('[data-next-step] input').fill('On the phone')
+await sleep(300)
+await page.keyboard.press('Enter')
+await until(async () => (await nextOf(rowTask.id)) === 'On the phone', 'next step typed on the phone')
+const line = await row(rowTask.id).locator('[data-next-step-line]').boundingBox()
+if (!line || line.x < 0 || line.x + line.width > 390) throw new Error(`next step line outside the screen: ${JSON.stringify(line)}`)
+await rowButton(rowTask.id, 'Done').click()
+await until(async () => (await statusOf(rowTask.id)) === 'done', 'Done tapped on the phone')
 
 // ---------------------------------------------------------------------------
 await resetType()

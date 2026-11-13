@@ -2,8 +2,9 @@
 // A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board),
 // optionally grouped. Used by type pages, query pages and queries embedded in documents.
 import { computed, nextTick, provide, ref, watch, type Directive } from 'vue'
-import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { addSelectOption, setProperty } from '../lib/actions.ts'
+import type { BoardSettings, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
+import { resolveQuickActions } from '@vasta/core'
+import { addSelectOption, setProperties, setProperty } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, MIN_COLUMN_WIDTH, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
@@ -19,6 +20,7 @@ import PersonChip from './PersonChip.vue'
 import PropertyDisplay from './PropertyDisplay.vue'
 import PropertyValueEditor from './PropertyValueEditor.vue'
 import ObjectLink from './ObjectLink.vue'
+import TaskQuickActions from './TaskQuickActions.vue'
 import { VIEW_OPENS } from '../lib/open.ts'
 
 const props = defineProps<{
@@ -37,6 +39,8 @@ const props = defineProps<{
   openIn?: ViewOpenIn
   /** Shown where nothing should change (a whiteboard card, a page that cannot be edited): property cells do not edit. */
   readonly?: boolean
+  /** Task rows show their quick actions (list and table layouts), as saved on the view or query. */
+  quickActions?: boolean
 }>()
 const emit = defineEmits<{
   menu: [event: MouseEvent, object: ObjectSummary]
@@ -76,7 +80,29 @@ const resized = ref<Record<string, number>>({})
 watch(() => props.table, () => (resized.value = {}))
 const columns = computed(() => tableColumns(props.table, props.typeIds).filter((c) => !c.hidden))
 const widthOf = (column: Column) => resized.value[column.field] ?? columnWidth(column)
-const tableWidth = computed(() => columns.value.reduce((sum, c) => sum + widthOf(c), 0))
+const tableWidth = computed(() => columns.value.reduce((sum, c) => sum + widthOf(c), quickActionsShown.value ? ACTIONS_WIDTH : 0))
+
+// Quick actions on task rows (TaskQuickActions), for triage: in the table a first column of their
+// own; in the list at the end of the row (on a line of their own in a narrow column), with the
+// task's next step under its title. They save as a table cell does.
+const ACTIONS_WIDTH = 150
+const quickActionsShown = computed(() => !!props.quickActions && !props.readonly)
+const quickType = (object: ObjectSummary): ObjectType | undefined => {
+  const type = quickActionsShown.value ? typeOf(object) : undefined
+  return type?.system === 'task' ? type : undefined
+}
+const nextStepOf = (object: ObjectSummary) => {
+  const field = resolveQuickActions(quickType(object)).nextStepField
+  const value = field ? object.props[field.id] : undefined
+  return value?.kind === 'text' ? value.value : ''
+}
+async function saveQuick(object: ObjectSummary, values: Record<Id, PropertyValue | undefined>) {
+  try {
+    emit('moved', await setProperties(object.id, values))
+  } catch (error) {
+    lastError.value = (error as Error).message
+  }
+}
 
 function startResize(event: PointerEvent, column: Column) {
   const handle = event.currentTarget as HTMLElement
@@ -196,13 +222,35 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
 
       <!-- List -->
       <div v-if="layout === 'list'" class="divide-y divide-line/70">
-        <ObjectLink v-for="object in shown(group)" :key="object.id" :id="object.id" class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover" @contextmenu="emit('menu', $event, object)">
+        <ObjectLink
+          v-for="object in shown(group)"
+          :key="object.id"
+          :id="object.id"
+          class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover"
+          :class="quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : ''"
+          @contextmenu="emit('menu', $event, object)"
+        >
           <TypeIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
-          <span class="min-w-0 flex-1 truncate font-medium">{{ displayTitle(object, typeOf(object)) }}</span>
+          <span v-if="quickType(object)" class="min-w-0 flex-1">
+            <span class="block truncate font-medium">{{ displayTitle(object, typeOf(object)) }}</span>
+            <span v-if="nextStepOf(object)" class="mt-0.5 flex items-center gap-1 text-xs text-ink-soft" data-next-step-line>
+              <AppIcon fallback="ph:arrow-right" :size="11" class="shrink-0 text-ink-faint" /><span class="truncate">{{ nextStepOf(object) }}</span>
+            </span>
+          </span>
+          <span v-else class="min-w-0 flex-1 truncate font-medium">{{ displayTitle(object, typeOf(object)) }}</span>
           <span class="hidden gap-1 md:flex" @click.prevent>
             <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
           </span>
-          <span class="w-24 shrink-0 text-right text-xs text-ink-faint">{{ formatRelative(object.updatedAt) }}</span>
+          <!-- In a narrow column (a phone) the actions take a line of their own under the title. -->
+          <TaskQuickActions
+            v-if="quickType(object)"
+            :type="quickType(object)!"
+            :object="object"
+            variant="row"
+            class="@max-md:order-last @max-md:w-full @max-md:pl-6"
+            @set="saveQuick(object, $event)"
+          />
+          <span v-else class="w-24 shrink-0 text-right text-xs text-ink-faint">{{ formatRelative(object.updatedAt) }}</span>
         </ObjectLink>
       </div>
 
@@ -210,11 +258,13 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
       <div v-else-if="layout === 'table'" class="overflow-x-auto rounded-xl border border-line">
         <table class="table-fixed text-sm" :style="{ width: `max(100%, ${tableWidth}px)` }">
           <colgroup>
+            <col v-if="quickActionsShown" :style="{ width: `${ACTIONS_WIDTH}px` }" />
             <col v-for="column in columns" :key="column.field" :style="{ width: `${widthOf(column)}px` }" />
             <col />
           </colgroup>
           <thead class="bg-raised text-left text-xs text-ink-faint">
             <tr>
+              <th v-if="quickActionsShown" />
               <th v-for="column in columns" :key="column.field" class="relative px-3 py-2 font-medium" :data-column="column.field">
                 <span class="block truncate">{{ column.field === 'title' ? 'Title' : column.label }}</span>
                 <span
@@ -228,6 +278,9 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
           </thead>
           <tbody>
             <tr v-for="object in shown(group)" :key="object.id" class="border-t border-line hover:bg-hover/60" @contextmenu="emit('menu', $event, object)">
+              <td v-if="quickActionsShown" class="px-1.5 py-1 align-top">
+                <TaskQuickActions v-if="quickType(object)" :type="quickType(object)!" :object="object" variant="row" @set="saveQuick(object, $event)" />
+              </td>
               <td
                 v-for="column in columns"
                 :key="column.field"

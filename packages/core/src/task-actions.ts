@@ -3,9 +3,10 @@
 // a property or option that is gone, or of the wrong kind, falls back to the default. Done is the
 // first status option meaning done (the one checkboxes set); Drop another option meaning done (a
 // "Dropped", which ends a task without doing it, as in completeRepeat); Defer a date property, by
-// default the due date, and optionally a status ("Scheduled").
+// default the due date, and optionally a status ("Scheduled"). A list's rows can also set the task's
+// next step, a text property the type names (none by default).
 import { DUE_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
-import type { DatePropertyDef, Id, ObjectRecord, ObjectType, PropertyValue, SelectOption } from './model.ts'
+import type { DatePropertyDef, Id, ObjectRecord, ObjectType, PropertyValue, SelectOption, TextPropertyDef } from './model.ts'
 
 export interface ResolvedQuickActions {
   done?: SelectOption
@@ -13,6 +14,8 @@ export interface ResolvedQuickActions {
   deferField?: DatePropertyDef
   deferStatus?: SelectOption
   drop?: SelectOption
+  /** The text property a row's next step goes in; absent unless the type names one. */
+  nextStepField?: TextPropertyDef
 }
 
 const statusOptions = (type: ObjectType): SelectOption[] => {
@@ -36,11 +39,13 @@ export function resolveQuickActions(type: ObjectType | undefined): ResolvedQuick
   const drop = chosenDrop && chosenDrop.id !== done?.id ? chosenDrop : closing[1]
   const deferField = dateField(settings.deferField) ?? dateField(DUE_PROPERTY_ID)
   const deferStatus = option(settings.deferStatus)
+  const nextStep = settings.nextStepField ? type.properties.find((p) => p.id === settings.nextStepField) : undefined
   return {
     ...(done ? { done } : {}),
     ...(deferField ? { deferField } : {}),
     ...(deferStatus ? { deferStatus } : {}),
     ...(drop ? { drop } : {}),
+    ...(nextStep?.kind === 'text' ? { nextStepField: nextStep } : {}),
   }
 }
 
@@ -52,18 +57,24 @@ export function isClosedTask(type: ObjectType | undefined, object: Pick<ObjectRe
   return statusOptions(type).some((o) => o.status === 'done' && ids.includes(o.id))
 }
 
-export type QuickAction = { kind: 'done' } | { kind: 'drop' } | { kind: 'defer'; day: string }
+export type QuickAction = { kind: 'done' } | { kind: 'drop' } | { kind: 'defer'; day: string } | { kind: 'next-step'; text: string }
 
 /**
  * The property values a quick action writes (key → value), or undefined when the type cannot do it
- * (no option meaning done, no date property, no second option meaning done). Defer sets an all-day
- * date on `day` (YYYY-MM-DD); a date that repeats keeps its rule, moved to start there.
+ * (no option meaning done, no date property, no second option meaning done, no next step field).
+ * Defer sets an all-day date on `day` (YYYY-MM-DD); a date that repeats keeps its rule, moved to
+ * start there. An empty next step clears the field (undefined).
  */
-export function quickActionValues(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>, action: QuickAction): Record<Id, PropertyValue> | undefined {
+export function quickActionValues(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>, action: QuickAction): Record<Id, PropertyValue | undefined> | undefined {
   const resolved = resolveQuickActions(type)
   const status = (option: SelectOption | undefined): Record<Id, PropertyValue> | undefined => (option ? { [STATUS_PROPERTY_ID]: { kind: 'select', value: [option.id] } } : undefined)
   if (action.kind === 'done') return status(resolved.done)
   if (action.kind === 'drop') return status(resolved.drop)
+  if (action.kind === 'next-step') {
+    const field = resolved.nextStepField
+    const text = action.text.trim()
+    return field ? { [field.id]: text ? { kind: 'text', value: text } : undefined } : undefined
+  }
   const field = resolved.deferField
   if (!field) return undefined
   const current = object.props[field.id]
