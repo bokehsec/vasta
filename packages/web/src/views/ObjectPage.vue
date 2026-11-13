@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ARTICLE_PROPERTY_ID, HABIT_REMIND_PROPERTY_ID, afterSave, canonicalJson, formulaFromNames, formulaToNames, habitRemindAt, type ColorName, type DateValue, type Doc, type Icon, type ObjectRecord, type ObjectSummary, type PropertyDef, type PropertyValue, type QueryDef, type SelectOption } from '@vasta/core'
+import { ARTICLE_PROPERTY_ID, HABIT_REMIND_PROPERTY_ID, afterSave, canonicalJson, formulaFromNames, formulaToNames, habitRemindAt, type ColorName, type DateValue, type Doc, type Icon, type Id, type ObjectRecord, type ObjectSummary, type PropertyDef, type PropertyValue, type QueryDef, type SelectOption } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import BacklinksPanel from '../components/BacklinksPanel.vue'
 import ObjectActivity from '../components/ObjectActivity.vue'
 import ObjectComments from '../components/ObjectComments.vue'
 import SprintPanel from '../components/SprintPanel.vue'
+import TaskQuickActions from '../components/TaskQuickActions.vue'
 import DateValueEditor from '../components/DateValueEditor.vue'
 import IconPicker from '../components/IconPicker.vue'
 import MediaView from '../components/MediaView.vue'
@@ -433,9 +434,16 @@ function setRawProp(key: string, value: PropertyValue | undefined) {
 }
 
 function setProp(def: PropertyDef, value: PropertyValue | undefined) {
+  setProps({ [def.id]: value })
+}
+
+/** Several properties at once (a task's quick actions), saved together. */
+function setProps(values: Record<Id, PropertyValue | undefined>) {
   if (!object.value) return
-  if (value) object.value.props[def.id] = value
-  else delete object.value.props[def.id]
+  for (const [id, value] of Object.entries(values)) {
+    if (value) object.value.props[id] = value
+    else delete object.value.props[id]
+  }
   changed()
 }
 
@@ -892,6 +900,8 @@ async function startFrom(template: ObjectRecord) {
       <PopoverMenu v-if="info?.kind !== 'snippet'" v-model:open="tagOpen" :anchor="hideTagsRow ? tagHeaderAnchor : tagAnchor" width="16rem">
         <ObjectPicker :type-ids="tagType ? [tagType.id] : []" :exclude="object.tagIds" create-label="New tag" @pick="addTag" @create="createTag" />
       </PopoverMenu>
+
+      <TaskQuickActions v-if="type?.system === 'task' && !info && !object.deletedAt" :type="type" :object="object" @set="setProps" />
 
       <div v-if="(valueFields.length || type) && info?.kind !== 'snippet'" :class="hideAddProperty ? '' : 'mt-6'">
         <div v-if="showOwnDate" class="vasta-prop-row">

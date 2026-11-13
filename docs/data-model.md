@@ -55,6 +55,14 @@ side, shown on the objects it links to: "Wrote" for a book's Author, on a person
 `formula` (a value computed from the object's other fields, see [Formulas](#formulas)).
 The built-in Task has `status`, `due`, `assignee` (a single person, added to older spaces once,
 after Due) and `priority`.
+A task's page has **quick actions** ([`task-actions.ts`](../packages/core/src/task-actions.ts)):
+Done sets the first status option meaning done; Defer sets a date property on a day (tomorrow,
+next week or one picked) and, if chosen, a status; Drop sets another status option ("Dropped").
+The Task type's `quickActions` (`deferField`, `deferStatus`, `dropStatus`, the column
+`types.quick_actions`, Type settings › Quick actions) chooses them; unset, or naming a property or
+option the type no longer has, Defer sets `due` and leaves the status, and Drop sets the second
+option meaning done (none: no Drop). A repeating date keeps its rule when deferred. Closed tasks
+(any option meaning done) show no quick actions.
 Title, description, icon, cover, color, parent, aliases, tags and collections are fixed fields on
 every object, not property definitions (`color` and `parentId` are only used by tags so far).
 

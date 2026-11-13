@@ -13,6 +13,9 @@ export const articleProperty: PropertyDef = { id: ARTICLE_PROPERTY_ID, kind: 'ri
 /** Property id of a quote's relation to what it was highlighted in. */
 export const SOURCE_PROPERTY_ID = 'source'
 
+/** A task's status (a select whose options have status meanings) and its due date. */
+export const STATUS_PROPERTY_ID = 'status'
+export const DUE_PROPERTY_ID = 'due'
 /** Who a task is for (a person property). */
 export const ASSIGNEE_PROPERTY_ID = 'assignee'
 /** A task that cannot move on (boards show a flag). */
