@@ -37,20 +37,50 @@ export interface NutritionSettings {
 }
 
 /**
- * What a task's quick actions set (Type settings › Quick actions). Done always sets the first status
- * option meaning done. Unset fields, or ones naming a property or option the type no longer has,
- * fall back to the defaults (task-actions.ts).
+ * A task type's quick actions (Type settings › Quick actions; task-actions.ts): buttons on a task's
+ * page and rows that change its fields in one click. Without `actions`, the defaults: Done, Defer,
+ * Drop and, with a next step field, Next step, set up by the other fields (a property or option the
+ * type no longer has falls back to the default).
  */
 export interface QuickActions {
-  /** The date property Defer sets; default `due`. */
+  /** The buttons, in order; unset: the defaults. */
+  actions?: QuickActionDef[]
+  /** The date property the default Defer sets; default `due`. */
   deferField?: Id
-  /** A status option Defer also sets ("Scheduled"); default none. */
+  /** A status option the default Defer also sets ("Scheduled"); default none. */
   deferStatus?: Id
-  /** The status option Drop sets; default the first option meaning done after Done ("Dropped"). */
+  /** The status option the default Drop sets; default the first option meaning done after Done ("Dropped"). */
   dropStatus?: Id
-  /** A text property for the task's next step, typed from a list's row; default none. */
+  /** A text property for the task's next step, shown under its title in lists; default none. */
   nextStepField?: Id
 }
+
+/** One quick action: a button that makes its changes, asking first for the value of one marked `ask`. */
+export interface QuickActionDef {
+  id: Id
+  name: string
+  icon?: Icon
+  changes: QuickActionChange[]
+}
+
+export interface QuickActionChange {
+  /** A property of the type. */
+  field: Id
+  value: QuickActionValue
+}
+
+/**
+ * What a change sets: a fixed value; a day from today (`days`, 0 is today) or the first day of next
+ * week (dates); the user pressing it (people); what the user gives when pressing it (dates, text,
+ * numbers, links); or nothing.
+ */
+export type QuickActionValue =
+  | { kind: 'value'; value: PropertyValue }
+  | { kind: 'day'; days: number }
+  | { kind: 'next-week' }
+  | { kind: 'me' }
+  | { kind: 'ask' }
+  | { kind: 'clear' }
 
 /** A space's sprints: on or off, and the word the space uses for them ("Sprint", "Rodada"…). */
 export interface SprintSettings {

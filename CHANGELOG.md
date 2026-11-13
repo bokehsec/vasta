@@ -12,17 +12,16 @@ GitHub release page.
   type view or query results, and the ⋯ More menu of an object's page and side pane now have a
   "Copy link to page" action. It copies `<server>/o/<id>` in the browser and `vasta://o/<id>`
   in the desktop app, matching existing block-link behaviour.
-- **Done, Defer and Drop on a task's page**: one click marks a task done, drops it, or defers it
-  to tomorrow, next week or a day picked on a small calendar, with Undo. Type settings › Quick
-  actions chooses which date Defer sets (Due by default, or another date such as a "Do date"), a
-  status it also sets (such as "Scheduled") and the status Drop sets (by default a second "done"
-  status such as "Dropped"; without one there is no Drop button). Deferring past the due date is
-  allowed and said.
+- **Quick actions on a task's page**: buttons that change a task in one click, with Undo. By
+  default Done, Defer (tomorrow, next week or a day picked on a small calendar) and Drop (a second
+  "done" status such as "Dropped"; without one there is no Drop). Type settings › Quick actions
+  edits them or adds your own: each sets fields to a value, a day (today, tomorrow, next week, in
+  N days), you (people), nothing, or asks for the value when pressed (a day, a line of text).
+  Deferring past the due date is allowed and said.
 - **Triage task lists with quick actions on each row**: turn on "Quick actions" in a task view's
-  menu or a query's settings, and every open task's row gets Done, Defer and Drop, plus its next
-  step: a text property chosen in Type settings › Quick actions ("Next step in"), typed in a small
-  box and shown under the title. In a table they are a "Quick actions" column, moved, resized and
-  hidden in Columns like any other.
+  menu or a query's settings, and every open task's row gets its quick actions; a text property
+  chosen in Type settings › Quick actions shows under the title as the task's next step. In a
+  table they are a "Quick actions" column, moved, resized and hidden in Columns like any other.
 - **"Next week" in date pickers**, beside Today and Tomorrow.
 
 ### Fixed

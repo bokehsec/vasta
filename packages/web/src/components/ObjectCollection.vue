@@ -3,7 +3,7 @@
 // optionally grouped. Used by type pages, query pages and queries embedded in documents.
 import { computed, nextTick, provide, ref, watch, type Directive } from 'vue'
 import type { BoardSettings, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { resolveQuickActions } from '@vasta/core'
+import { nextStepFieldOf } from '@vasta/core'
 import { addSelectOption, setProperties, setProperty } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, MIN_COLUMN_WIDTH, QUICK_ACTIONS_COLUMN, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
@@ -92,7 +92,7 @@ const taskType = (object: ObjectSummary): ObjectType | undefined => {
 }
 const quickType = (object: ObjectSummary) => (props.quickActions ? taskType(object) : undefined)
 const nextStepOf = (object: ObjectSummary) => {
-  const field = resolveQuickActions(quickType(object)).nextStepField
+  const field = nextStepFieldOf(quickType(object))
   const value = field ? object.props[field.id] : undefined
   return value?.kind === 'text' ? value.value : ''
 }
