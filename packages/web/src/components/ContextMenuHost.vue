@@ -1,13 +1,15 @@
 <script setup lang="ts">
 // Renders the context menu from lib/overlays.ts at the pointer, with keyboard navigation. A
 // submenu row opens a second panel beside its row (one level deep). On a phone it is a sheet from
-// the bottom with rows 44px high, and a submenu replaces the list inside it, with a Back row.
+// the bottom with rows 44px high, and a submenu replaces the list inside it, with a Back row. The
+// sheet is modal: a tap on the dimmed area closes it (on the tap, so it does not reach the page
+// underneath), focus moves in and goes back to where it was.
 import { computePosition, flip, offset, shift, size } from '@floating-ui/dom'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ColorName, Icon } from '@vasta/core'
 import { blockBackgroundClasses, blockTextClasses, colorNames } from '../lib/colors.ts'
 import { closeContextMenu, contextMenu, type MenuItem } from '../lib/overlays.ts'
-import { isPhone, keyboardInset } from '../lib/viewport.ts'
+import { isPhone, keyboardInset, sheetMaxHeight } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 
 const panels: (HTMLElement | null)[] = [null, null]
@@ -40,6 +42,40 @@ const iconProps = (icon: string | Icon) => (typeof icon === 'string' ? { fallbac
 /** A menu taller than the room on either side scrolls instead of leaving the screen. */
 const fit = (element: HTMLElement) => size({ padding: 8, apply: ({ availableHeight }) => void (element.style.maxHeight = `${Math.max(160, availableHeight)}px`) })
 
+/** What had the focus when the sheet opened, to give it back when the sheet closes. */
+let opener: HTMLElement | null = null
+const isTextEntry = (el: HTMLElement) => el.matches('input, textarea, select, [contenteditable]')
+
+/** The dimmed area closes the sheet only when the press began on it too (the long-press that opened the sheet ends there). */
+let pressedBackdrop = false
+function onBackdropClick() {
+  if (pressedBackdrop) closeContextMenu()
+  pressedBackdrop = false
+}
+
+watch(
+  () => contextMenu.open,
+  (open) => {
+    if (open) {
+      pressedBackdrop = false
+      if (sheet.value && !opener) {
+        const focused = document.activeElement
+        opener = focused instanceof HTMLElement && focused !== document.body ? focused : null
+      }
+      return
+    }
+    const target = opener
+    opener = null
+    if (!target) return
+    void nextTick(() => {
+      // A dialog the choice opened may have the focus by now; and no keyboard pops up.
+      if (document.activeElement && document.activeElement !== document.body) return
+      if (target.isConnected && !isTextEntry(target)) target.focus({ preventScroll: true })
+    })
+  },
+  { flush: 'sync' }
+)
+
 watch(
   () => [contextMenu.open, contextMenu.x, contextMenu.y],
   async () => {
@@ -50,7 +86,7 @@ watch(
     await nextTick()
     const element = panels[0]
     if (!element) return
-    if (sheet.value) return element.focus()
+    if (sheet.value) return element.focus({ preventScroll: true })
     const point = { getBoundingClientRect: () => new DOMRect(contextMenu.x, contextMenu.y, 0, 0) }
     const { x, y } = await computePosition(point, element, { placement: 'bottom-start', middleware: [offset(2), flip(), fit(element), shift({ padding: 8 })] })
     Object.assign(element.style, { left: `${x}px`, top: `${y}px` })
@@ -161,7 +197,8 @@ function onKey(event: KeyboardEvent) {
 const inMenu = (target: EventTarget | null) => panels.some((panel) => panel?.contains(target as Node))
 
 function onPointerDown(event: PointerEvent) {
-  if (contextMenu.open && !inMenu(event.target)) closeContextMenu()
+  // A sheet closes from its dimmed backdrop, on the tap.
+  if (contextMenu.open && !sheet.value && !inMenu(event.target)) closeContextMenu()
 }
 
 /** A phone's viewport changes size as its toolbars slide; the sheet stays. */
@@ -194,13 +231,15 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <!-- A phone: one sheet; a submenu takes its place with a Back row. -->
     <template v-if="contextMenu.open && sheet">
-      <div class="fixed inset-0 z-[54] bg-black/30" aria-hidden="true" />
+      <div class="fixed inset-0 z-[54] bg-black/30" aria-hidden="true" data-menu-backdrop @pointerdown="pressedBackdrop = true" @pointercancel="pressedBackdrop = false" @click="onBackdropClick" />
       <div
         :ref="(el) => (panels[0] = el as HTMLElement | null)"
         tabindex="-1"
         role="menu"
-        class="fixed inset-x-0 z-[55] max-h-[80vh] overflow-y-auto rounded-t-2xl border border-b-0 border-line bg-surface px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-6px_24px_rgb(0_0_0/0.14)] outline-none"
-        :style="{ bottom: `${keyboardInset}px` }"
+        aria-modal="true"
+        aria-label="Actions"
+        class="fixed inset-x-0 z-[55] overflow-y-auto rounded-t-2xl border border-b-0 border-line bg-surface px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-6px_24px_rgb(0_0_0/0.14)] outline-none"
+        :style="{ bottom: `${keyboardInset}px`, maxHeight: sheetMaxHeight }"
         data-menu-sheet
         @contextmenu.prevent
       >

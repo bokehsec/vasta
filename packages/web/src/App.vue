@@ -75,9 +75,12 @@ function onTouchEnd(event: TouchEvent) {
     <OfflineBanner v-if="!trafficLights" />
     <div class="relative flex min-h-0 flex-1">
       <Transition name="vasta-fade">
-        <div v-if="isPhone && ui.sidebarOpen" class="fixed inset-0 z-30 bg-black/30" @click="ui.sidebarOpen = false" />
+        <!-- The drawer and its backdrop (z-30) sit above the bottom bar and Capture (z-20, PhoneTabBar), and
+             below dialogs and the bulk bar (z-40), which is not rendered while the drawer is open. -->
+        <div v-if="isPhone && ui.sidebarOpen" class="fixed inset-0 z-30 bg-black/30" data-drawer-backdrop @click="ui.sidebarOpen = false" />
       </Transition>
       <AppSidebar
+        data-drawer
         class="max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-30 max-md:w-[min(18rem,85vw)] max-md:pb-[env(safe-area-inset-bottom)] max-md:pt-[env(safe-area-inset-top)] max-md:shadow-2xl max-md:transition-transform max-md:duration-200"
         :class="[isPhone && !ui.sidebarOpen ? 'max-md:-translate-x-full max-md:shadow-none' : '', ui.sidebarCollapsed ? 'md:hidden' : '']"
         :inert="isPhone && !ui.sidebarOpen"
@@ -92,7 +95,7 @@ function onTouchEnd(event: TouchEvent) {
         <div class="flex min-h-0 flex-1">
           <main
             class="isolate min-h-0 min-w-0 flex-1 overflow-y-auto bg-surface pb-[env(safe-area-inset-bottom)] md:mb-2 md:mr-2 md:rounded-xl md:border md:border-line md:shadow-[0_1px_3px_rgb(0_0_0/0.04)]"
-            :class="[ui.sidebarCollapsed ? 'md:ml-2' : '', selecting ? 'pb-32' : isPhone ? 'pb-[calc(6rem+env(safe-area-inset-bottom))]' : '']"
+            :class="[ui.sidebarCollapsed ? 'md:ml-2' : '', selecting ? (isPhone ? 'pb-[calc(10rem+env(safe-area-inset-bottom))]' : 'pb-32') : isPhone ? 'pb-[calc(6rem+env(safe-area-inset-bottom))]' : '']"
           >
             <RouterView :key="$route.fullPath.split('?')[0]" />
           </main>
@@ -106,7 +109,7 @@ function onTouchEnd(event: TouchEvent) {
     <QuickAskHost />
     <PickObjectHost />
     <PhoneTabBar v-if="isPhone" />
-    <BulkBar />
+    <BulkBar v-if="!(isPhone && ui.sidebarOpen)" />
     <AppToast />
     <PasswordDialog v-if="ui.passwordOpen" />
     <QuickCapture v-if="ui.captureOpen" />

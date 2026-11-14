@@ -3,7 +3,7 @@
 // centred over a dimmed page, or a sheet from the bottom on a phone. Escape or a tap outside closes it.
 import { onBeforeUnmount, onMounted } from 'vue'
 import { pickRequest } from '../lib/pick.ts'
-import { isPhone, keyboardInset } from '../lib/viewport.ts'
+import { isPhone, keyboardInset, sheetMaxHeight } from '../lib/viewport.ts'
 import ObjectPicker from './ObjectPicker.vue'
 
 function onKey(event: KeyboardEvent) {
@@ -21,8 +21,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
     <div class="fixed inset-0 z-50 grid bg-black/30" :class="isPhone ? 'items-end' : 'place-items-center p-4'" data-overlay @click.self="pickRequest.resolve(null)">
       <div
         class="w-full border border-line bg-surface p-2 shadow-xl shadow-black/10"
-        :class="isPhone ? 'max-h-[80vh] overflow-y-auto rounded-t-2xl border-b-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]' : 'max-h-[70vh] max-w-sm overflow-y-auto rounded-xl'"
-        :style="isPhone ? { marginBottom: `${keyboardInset}px` } : undefined"
+        :class="isPhone ? 'overflow-y-auto rounded-t-2xl border-b-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]' : 'max-h-[70vh] max-w-sm overflow-y-auto rounded-xl'"
+        :style="isPhone ? { marginBottom: `${keyboardInset}px`, maxHeight: sheetMaxHeight } : undefined"
         role="dialog"
         :aria-label="pickRequest.title"
         data-pick-object

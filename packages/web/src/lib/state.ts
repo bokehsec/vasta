@@ -184,6 +184,10 @@ export const ui = reactive({
   captureOpen: false,
   /** The sidebar drawer on phones. */
   sidebarOpen: false,
+  /** A full-screen surface (a whiteboard) covers the page: a phone's bottom bar and Capture step aside. */
+  surfaceFull: false,
+  /** How far up from the bottom notices sit (px) while something keeps its buttons there (process mode on a phone); 0: the usual place. */
+  noticeLift: 0,
   /** The sidebar put away on wider screens (⌘\), remembered on this device. */
   sidebarCollapsed: readFlag(SIDEBAR_KEY),
   /** The keyboard shortcuts dialog (⌘/). */

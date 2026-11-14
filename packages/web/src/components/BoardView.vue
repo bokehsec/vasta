@@ -272,7 +272,7 @@ async function addCard(column: Group, lane: Group) {
                 <span v-if="collapsed.has(column.key)" class="text-xs font-medium text-ink-soft [writing-mode:vertical-rl]">{{ column.label || '…' }}</span>
                 <button
                   v-else
-                  class="ml-auto rounded-md p-0.5 text-ink-faint opacity-0 hover:bg-hover hover:text-ink group-hover/col:opacity-100 [@media(hover:none)]:opacity-100"
+                  class="ml-auto rounded-md p-0.5 text-ink-faint opacity-0 hover:bg-hover hover:text-ink group-hover/col:opacity-100 [@media(hover:none)]:opacity-100 max-md:-my-2.5 max-md:-mr-2 max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center"
                   title="Column options"
                   @click.stop="columnMenu($event, column)"
                 >
@@ -305,7 +305,7 @@ async function addCard(column: Group, lane: Group) {
                     v-if="addingIn === cellKey(column, lane)"
                     ref="newInput"
                     v-model="newTitle"
-                    class="w-full rounded-lg border border-line-strong bg-surface px-2.5 py-2 text-sm outline-none"
+                    class="w-full rounded-lg border border-line-strong bg-surface px-2.5 py-2 text-sm outline-none max-md:min-h-11 max-md:text-base"
                     placeholder="Title, then Enter"
                     @keydown.enter.prevent="addCard(column, lane)"
                     @keydown.esc="addingIn = ''"

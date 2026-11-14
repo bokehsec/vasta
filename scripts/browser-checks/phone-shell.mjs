@@ -1,8 +1,10 @@
 // The phone shell (390×844, touch): the bottom bar (Home, Tasks, Inbox, Calendar, Search; the one
-// you are on marked) and the Capture button above it; the top bar without Search, with Back on an
-// object's page; a popover as a sheet along the bottom with rows 44px high; the long-press menu as a
-// sheet whose submenu slides in with a Back row; the view picker's sheet; a task's fields folded into
-// one line that opens; the last row clear of the bar; and on a desktop none of it.
+// you are on marked) and the Capture button above it; the side menu above both, its last row
+// reachable; the top bar without Search, with the menu and, on an object's page, Back beside it; a
+// popover as a sheet along the bottom with rows 44px high; the long-press menu as a sheet whose
+// submenu slides in with a Back row; a tap on a sheet's dimmed area closes it without reaching the
+// page underneath; the view picker's sheet; a task's fields folded into one line that opens; the
+// last row clear of the bar; and on a desktop none of it.
 //   node phone-shell.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -88,14 +90,48 @@ try {
   await until(async () => (await page.locator('[role=dialog]').count()) > 0, 'quick capture open')
   await page.keyboard.press('Escape')
 
-  step('the top bar: no Search on a phone; Back on an object page goes back')
+  step('the side menu opens above the bar and Capture; its last row can be tapped; a tap outside closes it')
+  await page.goto(`${base}/inbox`)
+  await tabBar.waitFor()
+  const barBox = await tabBar.boundingBox()
+  const captureBox = await capture.boundingBox()
+  await page.locator('[data-top-menu]').click()
+  const drawer = page.locator('[data-drawer]')
+  await until(async () => ((await drawer.boundingBox())?.x ?? -999) >= -1, 'the side menu slid in')
+  await sleep(300)
+  // What is on top at a point (document.elementFromPoint): the drawer or its backdrop, never the bar or Capture.
+  const topAt = (x, y) =>
+    page.evaluate(([px, py]) => {
+      const el = document.elementFromPoint(px, py)
+      return el?.closest('[data-tab-bar]') ? 'bar' : el?.closest('[data-capture-button]') ? 'capture' : el?.closest('[data-drawer]') ? 'drawer' : el?.closest('[data-drawer-backdrop]') ? 'backdrop' : 'other'
+    }, [x, y])
+  const barSpot = await topAt(W - 30, barBox.y + barBox.height / 2)
+  if (barSpot !== 'backdrop') throw new Error(`the bar is not under the backdrop: ${barSpot}`)
+  const captureSpot = await topAt(captureBox.x + captureBox.width / 2, captureBox.y + captureBox.height / 2)
+  if (captureSpot !== 'backdrop') throw new Error(`Capture is not under the backdrop: ${captureSpot}`)
+  const overBar = await topAt(100, barBox.y + barBox.height / 2)
+  if (overBar !== 'drawer') throw new Error(`the bar covers the side menu: ${overBar}`)
+  const trash = drawer.locator('a[title="Trash"]')
+  const trashBox = await trash.boundingBox()
+  if (trashBox.y + trashBox.height > H + 1) throw new Error('the side menu footer is off the screen')
+  const trashSpot = await page.evaluate(([px, py]) => document.elementFromPoint(px, py)?.closest('a')?.getAttribute('title'), [trashBox.x + trashBox.width / 2, trashBox.y + trashBox.height / 2])
+  if (trashSpot !== 'Trash') throw new Error(`the footer's Trash link is not hit-testable (got ${trashSpot})`)
+  await page.touchscreen.tap(W - 20, 200)
+  await until(async () => (await page.locator('[data-drawer-backdrop]').count()) === 0, 'a tap outside closes the side menu')
+
+  step('the top bar: no Search on a phone; the menu stays, and Back joins it on an object page')
   await page.goto(`${base}/t/${taskType.id}`)
   await page.locator('main [data-view-picker]').waitFor()
   if ((await page.locator('header button[title^="Search"]').count()) !== 0) throw new Error('Search is still in the top bar')
   if ((await page.locator('[data-top-back]').count()) !== 0) throw new Error('Back on a list page')
+  if ((await page.locator('[data-top-menu]').count()) !== 1) throw new Error('no menu button on a list page')
   await page.getByPlaceholder('Filter…').fill(`Shell ${tag}`)
   await page.locator(`main a[href="/o/${task.id}"]`).first().click()
   await page.waitForURL(new RegExp(`/o/${task.id}`))
+  const menuBox = await page.locator('[data-top-menu]').boundingBox()
+  const backBox = await page.locator('[data-top-back]').boundingBox()
+  if (!menuBox || !backBox || menuBox.x > 8 || backBox.x < menuBox.x + menuBox.width - 1) throw new Error(`menu and Back not side by side, menu first: ${JSON.stringify([menuBox, backBox])}`)
+  if (menuBox.width < 44 || backBox.width < 44) throw new Error('a top-bar button is under 44px')
   await page.locator('[data-top-back]').click()
   await page.waitForURL(new RegExp(`/t/${taskType.id}`))
 
@@ -115,8 +151,15 @@ try {
   if (Math.abs((await bottomOf(sheet)) - H) > 2) throw new Error('the popover is not at the bottom')
   const rowHeight = await sheet.locator('button.w-full').first().evaluate((el) => el.getBoundingClientRect().height)
   if (rowHeight < 44) throw new Error(`sheet rows are ${rowHeight}px`)
-  await page.mouse.click(W / 2, 100)
+  // A tap on the dimmed area closes the sheet and does not reach what is under the finger (the menu
+  // button up top: reached, it would open the side menu).
+  const under = await page.locator('[data-top-menu]').boundingBox()
+  const urlBefore = page.url()
+  await page.touchscreen.tap(under.x + under.width / 2, under.y + under.height / 2)
   await until(async () => (await sheet.count()) === 0, 'a tap above closes the sheet')
+  await sleep(400)
+  if (await page.locator('[data-drawer-backdrop]').count()) throw new Error('the tap that closed the sheet also opened the side menu under it')
+  if (page.url() !== urlBefore) throw new Error(`the tap that closed the sheet also opened what was under it: ${page.url()}`)
 
   step('the long-press menu is a sheet; its submenu slides in with Back')
   const row = page.locator(`main a[href="/o/${task.id}"]`).first()
@@ -128,8 +171,12 @@ try {
   await menu.locator('[data-menu-back]').waitFor()
   await menu.locator('[data-menu-back]').click()
   await menu.locator('button', { hasText: 'Open' }).first().waitFor()
-  await page.mouse.click(W / 2, 80)
+  // The dimmed area closes it; the tap does not reach the menu button under the finger.
+  const menuButton = await page.locator('[data-top-menu]').boundingBox()
+  await page.touchscreen.tap(menuButton.x + menuButton.width / 2, menuButton.y + menuButton.height / 2)
   await until(async () => (await menu.count()) === 0, 'the menu closed')
+  await sleep(400)
+  if ((await page.locator('[data-drawer-backdrop]').count()) !== 0) throw new Error('the tap that closed the menu also opened the side menu')
 
   step('the last row clears the bar when scrolled to the end')
   await page.locator('main').evaluate((el) => el.scrollTo(0, el.scrollHeight))

@@ -53,7 +53,8 @@ import { Y, readContent, writeContent, type JsonDoc } from '@vasta/editor-schema
 import { openText, useReplica } from '../../lib/replica.ts'
 import { openRemoteText } from '../../lib/remote-text.ts'
 import { api } from '../../lib/api.ts'
-import { cachedSummary, lastError, primeSummaries, systemType, typesById, useSummaries } from '../../lib/state.ts'
+import { cachedSummary, lastError, primeSummaries, systemType, typesById, ui, useSummaries } from '../../lib/state.ts'
+import { isPhone } from '../../lib/viewport.ts'
 import { openMenuAt, promptDialog, type MenuItem } from '../../lib/overlays.ts'
 import { openObject } from '../../lib/open.ts'
 import { displayTitle } from '../../lib/format.ts'
@@ -2069,7 +2070,14 @@ const cursor = computed(() => {
     <div v-else-if="!embedded" data-ui class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 rounded-xl border border-line bg-surface px-3 py-2 text-xs text-ink-faint shadow-md">Read only</div>
 
     <!-- Zoom -->
-    <div v-if="!embedded" data-ui class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] right-3 flex items-center gap-0.5 rounded-xl border border-line bg-surface p-1 text-sm shadow-md">
+    <!-- On a phone with the bottom bar showing, the controls sit left of the Capture button (PhoneTabBar), not under it. -->
+    <div
+      v-if="!embedded"
+      data-ui
+      data-board-controls
+      class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-0.5 rounded-xl border border-line bg-surface p-1 text-sm shadow-md"
+      :class="isPhone && !ui.surfaceFull ? 'right-[4.75rem]' : 'right-3'"
+    >
       <!-- Undo and redo (also ⌘Z, ⇧⌘Z, and two- and three-finger taps) -->
       <template v-if="!readonly">
         <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent" title="Undo (⌘Z)" aria-label="Undo" :disabled="!history.undo" @click="undo.undo()">

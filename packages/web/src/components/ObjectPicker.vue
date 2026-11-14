@@ -71,14 +71,14 @@ onMounted(() => {
     <input
       ref="input"
       v-model="query"
-      class="mb-1 w-full rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint"
+      class="mb-1 w-full rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint max-md:min-h-11 max-md:text-base"
       placeholder="Search…"
       @keydown="onKey"
     />
     <button
       v-for="(row, i) in rows"
       :key="i"
-      class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm"
+      class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm max-md:min-h-11"
       :class="i === active ? 'bg-hover' : ''"
       @mouseenter="active = i"
       @click="choose(i)"

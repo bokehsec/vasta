@@ -50,7 +50,7 @@ import { chip, iconTextClasses, swatchClasses } from '../lib/colors.ts'
 import { colorSource, tagAncestors, tagColor } from '../lib/tags.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
 import { PROPERTY_KINDS, formulaValue, kindIcon, newPropertyDef } from '../lib/properties.ts'
-import { lastError, loadWorkspace, primeFromObject, replaceType, systemType, typesById, workspace } from '../lib/state.ts'
+import { lastError, loadWorkspace, primeFromObject, replaceType, systemType, typesById, ui, workspace } from '../lib/state.ts'
 import { personName, sharedSpace } from '../lib/people.ts'
 import { openMenuAt, promptDialog, type MenuItem } from '../lib/overlays.ts'
 import { clearOtherDefaults, deleteTemplate, loadTemplates, previewTemplate, rememberTemplate, saveAsTemplate, templateFill, templatesOf } from '../lib/templates.ts'
@@ -138,6 +138,9 @@ const hideAddProperty = computed(() => isStartPage.value && propertiesEmpty.valu
 const board = shallowRef<TextSession | null>(null)
 const boardFailed = ref(false)
 const boardFull = ref(false)
+// A phone's bottom bar and Capture would sit over a full-screen board and its controls: they step aside.
+watch(boardFull, (full) => (ui.surfaceFull = full))
+onBeforeUnmount(() => boardFull.value && (ui.surfaceFull = false))
 /**
  * The board takes the rest of the window below the title and properties, so it opens whole with
  * no scrolling (on an iPad above all); what follows it (comments, backlinks) is below.

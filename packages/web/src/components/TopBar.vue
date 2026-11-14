@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The bar above the page: back and forward, where you are (an object's type, then the object),
-// and New and Search when the sidebar is put away. On phones: the menu (Back on an object's page),
-// the page and the bell; Search is in the bottom bar (PhoneTabBar).
+// and New and Search when the sidebar is put away. On phones: the menu (and Back beside it on an
+// object's page), the page and the bell; Search is in the bottom bar (PhoneTabBar).
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { ColorName, Icon, ObjectType } from '@vasta/core'
@@ -85,14 +85,15 @@ const button = 'grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-fai
     :class="trafficLights && (isPhone || ui.sidebarCollapsed) ? 'pl-20' : ''"
     data-tauri-drag-region="deep"
   >
-    <!-- A phone: Back on an object's page when there is somewhere to go back to, else the menu. -->
-    <button v-if="isPhone && canBack && route.path.startsWith('/o/')" :class="button" title="Back" data-top-back @click="router.back()">
-      <AppIcon fallback="ph:caret-left" :size="22" />
-    </button>
-    <button v-else-if="isPhone" :class="button" title="Menu" @click="ui.sidebarOpen = true">
+    <!-- A phone: the menu stays at the top left; on an object's page with somewhere to go back to,
+         Back is next to it. -->
+    <button v-if="isPhone" :class="button" title="Menu" aria-label="Menu" data-top-menu @click="ui.sidebarOpen = true">
       <AppIcon fallback="ph:list" :size="22" />
     </button>
-    <button v-else-if="ui.sidebarCollapsed" :class="button" :title="`Show sidebar (${keysOf('sidebar')})`" @click="toggleSidebar">
+    <button v-if="isPhone && canBack && route.path.startsWith('/o/')" :class="button" title="Back" aria-label="Back" data-top-back @click="router.back()">
+      <AppIcon fallback="ph:caret-left" :size="22" />
+    </button>
+    <button v-else-if="!isPhone && ui.sidebarCollapsed" :class="button" :title="`Show sidebar (${keysOf('sidebar')})`" @click="toggleSidebar">
       <AppIcon fallback="ph:sidebar-simple" :size="17" />
     </button>
     <template v-if="!isPhone">
