@@ -29,7 +29,9 @@ import { confirmDialog, openContextMenu, openMenuAt, promptDialog, type MenuItem
 import { groupOptions, queryContext } from '../lib/query.ts'
 import { keysOf } from '../lib/shortcuts.ts'
 import { meId, sharedSpace } from '../lib/people.ts'
-import { primeSummaries, replaceType, typesById, unsavedTypes } from '../lib/state.ts'
+import { primeSummaries, replaceType, typesById, unsavedTypes, workspace } from '../lib/state.ts'
+import { session } from '../lib/session.ts'
+import { readSession, startSession, undoOutcome, writeSession, type ReviewSession } from '../lib/review-session.ts'
 import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
 import { copyObjectLink, openObject } from '../lib/open.ts'
 import { quickActionMenuItems } from '../lib/quick-actions.ts'
@@ -280,19 +282,74 @@ const viewPickerOpen = ref(false)
 const viewPickerAnchor = ref<HTMLElement | null>(null)
 const currentViewLabel = computed(() => (metricsActive.value ? 'Metrics' : fixedActive.value && fixedView.value ? fixedView.value.label : view.value.name))
 
-// Process mode (ProcessMode): the view's open objects one at a time, in its order (a type with quick
-// actions; a closed object is one whose status means done).
+// Review (ProcessMode): the view's open objects one at a time, in its order (a type with quick
+// actions; a closed object is one whose status means done). "Review 12 tasks" counts exactly the
+// objects it will show. The review is kept on this device (lib/review-session.ts): closed, it
+// offers Resume here; opened from it, an object's page leads Back into it at the same place.
 const processOpen = ref(false)
 const hasQuickActions = computed(() => quickActionsOf(type.value).length > 0)
 const processList = computed(() => (hasQuickActions.value ? visible.value.filter((o) => !isClosedTask(type.value, o)) : []))
-const canProcess = computed(() => !fixedActive.value && !agendaActive.value && hasQuickActions.value && processList.value.length > 0)
+const reviewable = computed(() => !fixedActive.value && !agendaActive.value && hasQuickActions.value)
+const canProcess = computed(() => reviewable.value && processList.value.length > 0)
 const processFields = computed(() =>
   view.value.layout === 'table' ? rowFieldsFromTable(tableColumns(view.value.table, [props.id])) : view.value.list?.fields ? listFields(view.value.list, [props.id]) : []
 )
+const reviewNoun = (n: number) => (n === 1 ? type.value?.name : type.value?.pluralName)?.toLowerCase() ?? ''
+const review = ref<ReviewSession | null>(null)
+function setReview(next: ReviewSession | null) {
+  review.value = next
+  writeSession(next)
+}
 function startProcess() {
+  if (!canProcess.value || !session.user || !workspace.space) return
+  clearSelection()
+  const scope = { userId: session.user.id, spaceId: workspace.space.id, typeId: props.id, viewId: view.value.id, viewName: view.value.name }
+  setReview(startSession(scope, processList.value.map((o) => o.id)))
+  processOpen.value = true
+}
+function resumeReview() {
+  if (!review.value) return
   clearSelection()
   processOpen.value = true
 }
+function closeReview() {
+  processOpen.value = false
+  if (review.value && review.value.index >= review.value.ids.length) setReview(null)
+}
+function endReview() {
+  processOpen.value = false
+  setReview(null)
+}
+// Undo of a decision from the notice, also once the review (or this page) has closed: the stored
+// session loses the outcome too, so the end does not count it.
+let mounted = true
+onBeforeUnmount(() => (mounted = false))
+function undoneInReview(id: string, name: string) {
+  if (mounted && review.value) return setReview(undoOutcome(review.value, id, name))
+  const stored = readSession(session.user?.id, workspace.space?.id)
+  if (stored) writeSession(undoOutcome(stored, id, name))
+}
+function openFromReview(id: string) {
+  if (review.value) setReview({ ...review.value, openedId: id })
+  processOpen.value = false
+  void openObject(id)
+}
+// This type's review, if there is one; back from the object opened in it (the history entry this
+// page left for it), the review opens again. Another account's or space's is never shown.
+function loadReview() {
+  const stored = readSession(session.user?.id, workspace.space?.id)
+  review.value = stored?.typeId === props.id ? stored : null
+  const opened = review.value?.openedId
+  if (!opened || !review.value) return
+  const forward = (window.history.state as { forward?: unknown } | null)?.forward
+  setReview({ ...review.value, openedId: undefined })
+  if (typeof forward === 'string' && forward.startsWith(`/o/${opened}`)) processOpen.value = true
+}
+onMounted(loadReview)
+watch(() => [props.id, workspace.space?.id, session.user?.id], () => {
+  processOpen.value = false
+  loadReview()
+})
 
 /** An open task's quick actions, in its menu (a long press on a phone). */
 function quickItems(object: ObjectSummary): MenuItem[] {
@@ -637,9 +694,14 @@ async function newMenu(event: MouseEvent) {
       </template>
 
       <div class="ml-auto flex items-center gap-1 whitespace-nowrap text-sm max-md:-mx-1 max-md:w-full max-md:overflow-x-auto [&>*]:shrink-0">
-        <button v-if="canProcess" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" :title="`One ${type.name.toLowerCase()} at a time: its quick actions or Skip`" data-process @click="startProcess">
-          <AppIcon fallback="ph:play" /> Process
-        </button>
+        <template v-if="!isPhone">
+          <button v-if="review && reviewable" class="flex items-center gap-1 rounded-lg px-2 py-1.5 font-medium text-ink hover:bg-hover" :title="`Back to ${review.index + 1} of ${review.ids.length} in ${review.viewName}`" data-process-resume @click="resumeReview">
+            <AppIcon fallback="ph:play" /> Resume review<template v-if="review.viewId !== view.id"> of {{ review.viewName }}</template>
+          </button>
+          <button v-else-if="canProcess" class="flex items-center gap-1 rounded-lg px-2 py-1.5 font-medium text-ink hover:bg-hover" :title="`One ${type.name.toLowerCase()} at a time: decide or skip each`" data-process @click="startProcess">
+            <AppIcon fallback="ph:play" /> Review {{ processList.length }} {{ reviewNoun(processList.length) }}
+          </button>
+        </template>
         <div v-if="!agendaActive" class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-ink-faint focus-within:bg-hover">
           <AppIcon fallback="ph:magnifying-glass" :size="14" />
           <input v-model="filterText" class="w-28 bg-transparent md:w-36 text-ink outline-none placeholder:text-ink-faint" placeholder="Filter…" />
@@ -798,6 +860,22 @@ async function newMenu(event: MouseEvent) {
         </template>
       </PopoverMenu>
     </div>
+    <!-- A phone: the review in full view under the controls, not one more button in the toolbar's scroll. -->
+    <div v-if="isPhone && reviewable && !loading" class="mt-3" data-review-entry>
+      <div v-if="review" class="flex gap-2">
+        <button class="flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-ink px-3 text-[15px] font-medium text-surface" data-process-resume @click="resumeReview">
+          <AppIcon fallback="ph:play" :size="16" class="shrink-0" /><span class="truncate">Resume review<template v-if="review.viewId !== view.id"> of {{ review.viewName }}</template> · {{ Math.min(review.index + 1, review.ids.length) }} of {{ review.ids.length }}</span>
+        </button>
+        <button class="h-12 shrink-0 rounded-xl border border-line px-3 text-sm text-ink-soft" :aria-label="`End the review of ${review.viewName}`" data-process-end-session @click="endReview">End</button>
+      </div>
+      <button v-else-if="canProcess" class="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-3 text-[15px] font-medium text-surface" data-process @click="startProcess">
+        <AppIcon fallback="ph:play" :size="16" class="shrink-0" />Review {{ processList.length }} {{ reviewNoun(processList.length) }}<span v-if="filterText || mineOnly" class="font-normal opacity-70">· filtered</span>
+      </button>
+      <p v-else class="flex min-h-11 items-center gap-2 text-sm text-ink-faint" data-review-none>
+        No open {{ reviewNoun(2) }} in this view
+        <button v-if="filterText" class="ml-auto h-11 rounded-lg px-2 text-accent" @click="filterText = ''">Clear search</button>
+      </p>
+    </div>
 
     <p v-if="loading" class="py-10 text-sm text-ink-faint">Loading…</p>
     <div v-else-if="!objects.length" class="py-16 text-center text-sm text-ink-faint">
@@ -835,7 +913,19 @@ async function newMenu(event: MouseEvent) {
       @moved="moved"
       @created="created"
     />
-    <ProcessMode v-if="processOpen" :type="type" :objects="processList" :fields="processFields" :title="view.name" @close="processOpen = false" />
+    <ProcessMode
+      v-if="processOpen && review && !loading"
+      v-model:session="review"
+      :type="type"
+      :objects="objects"
+      :fields="processFields"
+      :save="async (id, values) => moved(await setProperties(id, values))"
+      :undone="undoneInReview"
+      @update:session="writeSession"
+      @close="closeReview"
+      @end="endReview"
+      @open="openFromReview"
+    />
   </div>
   <div v-else class="grid h-full place-items-center text-sm text-ink-soft">Type not found.</div>
 </template>

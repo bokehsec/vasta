@@ -26,10 +26,16 @@ GitHub release page.
   Shift-click another to pick everything between; on a phone, long-press a row and choose Select,
   then tap others. A bar at the bottom offers Done, Defer, Drop and Next step for all of them (one
   question, one Undo), Select all, and Move to trash.
-- **Process mode**: the Process button on Tasks walks through the view's open tasks one at a time,
-  with big buttons for Done, Defer, Drop, Break into steps and Skip. On a computer, keys 1–4 run the
-  actions and the arrows skip or go back; on a phone, swipe right to defer, left to skip. It ends
-  with what you did.
+- **Review your tasks one at a time.** "Review 12 tasks" on Tasks (on a phone, a full-width button
+  under the view; the count is exactly the tasks it will show, after search, Mine and filters) walks
+  through the view's open tasks in its order. Three buttons decide: Done, Defer… and Next step…;
+  More holds the rest (Drop, your own actions, Break into steps), and Skip and Back move without
+  changing anything. A next step has a visible "Save & next task". Close the review, open a task's
+  details, or reload, and it waits for you: Back from the task returns to the same one, and Tasks
+  offers "Resume review · 4 of 12" (End forgets it; it stays on this device, for you only). Undo
+  takes a decision off again, and the end counts each task once ("Done 3 · 4 skipped, unchanged")
+  with "Review 4 skipped" to go over those. On a computer, keys 1–9 run the actions and the arrows
+  skip or go back; on a phone, swipe right to defer, left to skip.
 - **Subtasks: split a task into steps.** Turn it on in Type settings › Subtasks (it can add a
   "Part of" field, or use one you have). A task's page lists its steps with how many are done; type
   a step and press Return for the next, or paste several lines at once. New steps take the task's
@@ -91,6 +97,11 @@ GitHub release page.
 
 ### Changed
 
+- **A quick action's question has Cancel and Save.** Every question (a next step, a day to defer
+  to, a number or link) shows both buttons, on a computer as on a phone. Tomorrow, Next week or a
+  day on the calendar now only picks the day: the question shows it, and where the due date ends up,
+  before Save writes it. If saving fails, the question stays open with what you typed and offers
+  Retry; a second tap while saving does nothing.
 - **Defer moves the due date too when you put a task off past it.** When Defer sets another date
   (a "Do date"), the day picker has a box "Move the due date too", ticked: pick a day after the due
   date and the due date goes with it, so the task is not left overdue; Undo puts both back. Untick

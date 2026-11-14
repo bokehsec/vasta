@@ -12,7 +12,7 @@ vi.mock('./state.ts', () => ({ lastError: { value: '' }, notice: { value: null }
 const openStepsNote = vi.fn()
 vi.mock('./subtasks.ts', () => ({ openStepsNote: (...args: unknown[]) => openStepsNote(...args) }))
 
-const { quickAsk, runQuickAction } = await import('./quick-actions.ts')
+const { quickAsk, runQuickAction, textProblem, textAnswer } = await import('./quick-actions.ts')
 const { lastError, notice } = await import('./state.ts')
 
 const AT = '2026-11-13T12:00:00.000Z'
@@ -149,5 +149,148 @@ describe('runQuickAction', () => {
     expect(openStepsNote.mock.calls[1]![1]).toEqual([])
     await runQuickAction(task, [open('d')], done, { save, note: () => 'said by the page' })
     expect(message().message).toBe('Done · said by the page')
+  })
+
+  it('calls onSaved with the saved edits, and onUndo with only the ones Undo restored', async () => {
+    let offline = false
+    const save = vi.fn(async (id: string) => {
+      if (offline && id === 'b') throw new Error('offline')
+    })
+    const onSaved = vi.fn()
+    const onUndo = vi.fn()
+    const saved = await runQuickAction(task, [open('a'), open('b'), open('c')], done, { save, onSaved, onUndo })
+    expect(onSaved).toHaveBeenCalledTimes(1)
+    expect(onSaved).toHaveBeenCalledWith(saved)
+    expect(onUndo).not.toHaveBeenCalled()
+    offline = true
+    await message().action!.run()
+    expect(onUndo).toHaveBeenCalledTimes(1)
+    expect(onUndo.mock.calls[0]![0].map((e: { id: string }) => e.id)).toEqual(['a', 'c'])
+    expect(lastError.value).toBe('offline')
+    // Pressing Undo again tries the one that is left, and says only that one.
+    offline = false
+    await message().action!.run()
+    expect(onUndo.mock.calls[1]![0].map((e: { id: string }) => e.id)).toEqual(['b'])
+    await message().action!.run()
+    expect(onUndo).toHaveBeenCalledTimes(2)
+  })
+
+  it('calls neither callback for a question that is cancelled or saved nothing', async () => {
+    const onSaved = vi.fn()
+    const onUndo = vi.fn()
+    const running = runQuickAction(task, [open('a')], defer, { save: vi.fn(), onSaved, onUndo })
+    await quickAsk.value!.answer(null)
+    expect(await running).toEqual([])
+    expect(onSaved).not.toHaveBeenCalled()
+    expect(onUndo).not.toHaveBeenCalled()
+  })
+
+  it('keeps the question open when nothing saves, to retry or cancel, and saves once on retry', async () => {
+    let offline = true
+    const save = vi.fn(async () => {
+      if (offline) throw new Error('offline')
+    })
+    const running = runQuickAction(task, [open('a')], defer, { save })
+    const question = quickAsk.value!
+    await question.answer(day('2026-11-20'))
+    // Still there, with why, and nothing said as saved.
+    expect(quickAsk.value).toBe(question)
+    expect(question.state).toEqual({ saving: false, error: 'offline' })
+    expect(notice.value).toBeNull()
+    offline = false
+    await question.answer(day('2026-11-21'))
+    const saved = await running
+    expect(quickAsk.value).toBeNull()
+    expect(saved.map((e) => e.values.due)).toEqual([day('2026-11-21')])
+    expect(message().message).toBe('Defer · Due <2026-11-21>')
+    // Cancel after a failure writes nothing more.
+    save.mockClear()
+    offline = true
+    const again = runQuickAction(task, [open('a')], defer, { save })
+    await quickAsk.value!.answer(day('2026-11-20'))
+    await quickAsk.value!.answer(null)
+    expect(await again).toEqual([])
+    expect(quickAsk.value).toBeNull()
+  })
+
+  it('takes one answer at a time: a second while saving is ignored, Cancel too', async () => {
+    const releases: (() => void)[] = []
+    const save = vi.fn(() => new Promise<void>((resolve) => releases.push(resolve)))
+    const running = runQuickAction(task, [open('a'), open('b')], defer, { save })
+    const question = quickAsk.value!
+    const first = question.answer(day('2026-11-20'))
+    expect(question.state.saving).toBe(true)
+    await question.answer(day('2026-11-22'))
+    await question.answer(null)
+    expect(quickAsk.value).toBe(question)
+    expect(save).toHaveBeenCalledTimes(2)
+    releases.forEach((release) => release())
+    await first
+    const saved = await running
+    expect(saved.map((e) => e.values.due)).toEqual([day('2026-11-20'), day('2026-11-20')])
+    expect(save).toHaveBeenCalledTimes(2)
+  })
+
+  it('closes the question when only some objects saved, with the others counted in the notice', async () => {
+    const save = vi.fn(async (id: string) => {
+      if (id === 'b') throw new Error('offline')
+    })
+    const running = runQuickAction(task, [open('a'), open('b')], defer, { save })
+    await quickAsk.value!.answer(day('2026-11-20'))
+    const saved = await running
+    expect(saved.map((e) => e.id)).toEqual(['a'])
+    expect(quickAsk.value).toBeNull()
+    expect(lastError.value).toBe('offline')
+    expect(message().message).toBe('Defer · Due <2026-11-20> · 1 not saved')
+  })
+
+  it('says what it applies to, what the button says, and where the due dates would go', async () => {
+    const triage = { ...task, properties: [...task.properties, { id: 'dodate', kind: 'date' as const, name: 'Do date' }], quickActions: { deferField: 'dodate' } }
+    const deferDo = quickActionsOf(triage).find((a) => a.id === 'defer')!
+    const objects = [open('late', day('2026-11-18')), open('weekly', day('2026-11-18', 'FREQ=WEEKLY')), open('none')]
+    let running = runQuickAction(triage, objects, deferDo, { save: vi.fn(), noun: (n) => `${n} things`, submitLabel: 'Save & next task' })
+    expect(quickAsk.value).toMatchObject({ count: 3, scope: '3 things', submitLabel: 'Save & next task', day: undefined, closes: false })
+    expect(quickAsk.value!.dueMoves('2026-11-20')).toEqual({ count: 1, to: undefined })
+    await quickAsk.value!.answer(null)
+    await running
+    running = runQuickAction(triage, objects[0]!, deferDo, { save: vi.fn(), scope: 'Fix the roof' })
+    expect(quickAsk.value).toMatchObject({ count: 1, scope: 'Fix the roof', submitLabel: 'Save', closes: undefined, due: '2026-11-18' })
+    expect(quickAsk.value!.dueMoves('2026-11-20')).toEqual({ count: 1, to: '2026-11-20' })
+    expect(quickAsk.value!.dueMoves('2026-11-17')).toEqual({ count: 0, to: undefined })
+    await quickAsk.value!.answer(null)
+    await running
+  })
+
+  it('knows a custom action that also closes, so the question does not say the task stays open', async () => {
+    const status_ = task.properties.find((p) => p.id === 'status')
+    const doneId = (status_ as { options: { id: string; status?: string }[] }).options.find((o) => o.status === 'done')!.id
+    const withNext = { ...task, properties: [...task.properties, { id: 'next', kind: 'text' as const, name: 'Next step' }] }
+    const closeAndAsk = { id: 'close-note', name: 'Close with note', changes: [{ field: 'status', value: { kind: 'value' as const, value: status(doneId) } }, { field: 'next', value: { kind: 'ask' as const } }] }
+    const keepAndAsk = { id: 'note', name: 'Next step', changes: [{ field: 'next', value: { kind: 'ask' as const } }] }
+    let running = runQuickAction(withNext, [open('a')], closeAndAsk, { save: vi.fn(), submitLabel: 'Save & next task' })
+    expect(quickAsk.value!.closes).toBe(true)
+    await quickAsk.value!.answer(null)
+    await running
+    running = runQuickAction(withNext, [open('a')], keepAndAsk, { save: vi.fn(), submitLabel: 'Save & next task' })
+    expect(quickAsk.value!.closes).toBe(false)
+    await quickAsk.value!.answer(null)
+    await running
+  })
+})
+
+describe('text answers', () => {
+  const next = { id: 'next', kind: 'text' as const, name: 'Next step' }
+  const amount = { id: 'amount', kind: 'number' as const, name: 'Hours' }
+  it('keeps an invalid number out of the no-op path and says what is wrong', () => {
+    expect(textProblem(amount, '3,5')).toBeUndefined()
+    expect(textProblem(amount, '')).toBeUndefined()
+    expect(textProblem(amount, 'soon')).toBe('Enter a number for Hours, like 3 or 2.5')
+    expect(textProblem(next, 'soon')).toBeUndefined()
+    expect(textAnswer(amount, '3,5', '', true)).toEqual({ kind: 'number', value: 3.5 })
+  })
+  it('an unchanged line is nothing to do, an empty one clears', () => {
+    expect(textAnswer(next, ' Call ', 'Call', true)).toBeNull()
+    expect(textAnswer(next, ' Call ', 'Call', false)).toEqual({ kind: 'text', value: 'Call' })
+    expect(textAnswer(next, '  ', 'Call', true)).toBe('clear')
   })
 })

@@ -233,6 +233,7 @@ try {
   await page.locator('[data-quick-ask-sheet]').waitFor()
   if (page.url().includes('/o/')) throw new Error('the swipe opened the task')
   await tap(page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }))
+  await tap(page.locator('[data-defer-menu] [data-ask-save]'))
   await until(async () => (await dodateOf(a.id)) === days.tomorrow && (await statusOf(a.id)) === 'scheduled', 'the swipe deferred to tomorrow')
   await tap(toast.filter({ hasText: 'Defer' }).locator('button', { hasText: 'Undo' }))
   await until(async () => !(await dodateOf(a.id)) && (await statusOf(a.id)) === todo.value[0], 'Undo put the task back')
@@ -275,6 +276,7 @@ try {
   await tap(deferItem)
   await page.locator('[data-quick-ask-sheet]').waitFor()
   await tap(page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }))
+  await tap(page.locator('[data-defer-menu] [data-ask-save]'))
   await until(async () => (await dodateOf(c.id)) === days.tomorrow, 'Defer from the menu')
 
   step('a plain tap on a row still opens the task')

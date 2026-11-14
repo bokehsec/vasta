@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // The question a quick action asks before it runs (lib/quick-actions.ts, QuickAskForm): under the
 // element pressed; centred over a dimmed page when there is none (a menu); on a phone a sheet from
-// the bottom, where the thumb is.
+// the bottom, where the thumb is. It closes by Cancel, Escape or a tap outside, and only once saved
+// (QuickAskForm shows Saving, and a failed save stays open to retry).
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { quickAsk } from '../lib/quick-actions.ts'
 import { isPhone, keyboardInset, sheetMaxHeight } from '../lib/viewport.ts'
@@ -35,6 +36,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         :style="isPhone ? { marginBottom: `${keyboardInset}px`, maxHeight: sheetMaxHeight } : { maxWidth: isDate ? '19rem' : '22rem' }"
         role="dialog"
         :aria-label="quickAsk.action.name"
+        :aria-busy="quickAsk.state.saving || undefined"
         data-quick-ask-sheet
       >
         <div v-if="isPhone" class="mx-auto mb-2 h-1 w-9 rounded-full bg-line-strong" aria-hidden="true" />
