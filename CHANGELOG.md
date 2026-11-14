@@ -8,6 +8,14 @@ GitHub release page.
 
 ### Added
 
+- **Change many tasks at once.** Tick the box at the start of a row (it shows on hover) and
+  Shift-click another to pick everything between; on a phone, long-press a row and choose Select,
+  then tap others. A bar at the bottom offers Done, Defer, Drop and Next step for all of them (one
+  question, one Undo), Select all, and Move to trash.
+- **Process mode**: the Process button on Tasks walks through the view's open tasks one at a time,
+  with big buttons for Done, Defer, Drop, Break into steps and Skip. On a computer, keys 1–4 run the
+  actions and the arrows skip or go back; on a phone, swipe right to defer, left to skip. It ends
+  with what you did.
 - **Subtasks: split a task into steps.** Turn it on in Type settings › Subtasks (it can add a
   "Part of" field, or use one you have). A task's page lists its steps with how many are done; type
   a step and press Return for the next, or paste several lines at once. New steps take the task's

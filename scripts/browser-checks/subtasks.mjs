@@ -23,7 +23,7 @@ if (process.env.MODE === 'json') await context.addInitScript(() => localStorage.
 await context.grantPermissions?.(['clipboard-read', 'clipboard-write']).catch(() => {})
 const page = context.pages()[0] ?? (await context.newPage())
 const problems = []
-// Known noise, not this check's: WebKit's dev server chunk loads, and linkify's late scheme warning.
+// Known noise, not this check's: WebKit's dev server chunk loads (and the route error they cause), and linkify's late scheme warning.
 page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && !/401|TextSelection endpoint|due to access control checks|async component loader|linkifyjs: already initialized/.test(m.text()) && problems.push(`${m.type()}: ${m.text()}`))
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))

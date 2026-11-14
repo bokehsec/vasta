@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppSidebar from './components/AppSidebar.vue'
+import BulkBar from './components/BulkBar.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import ContextMenuHost from './components/ContextMenuHost.vue'
 import DialogHost from './components/DialogHost.vue'
@@ -18,6 +19,7 @@ import { listenToDesktop, trafficLights } from './lib/platform.ts'
 import { installShortcuts } from './lib/shortcuts.ts'
 import { checkSession, session } from './lib/session.ts'
 import { ui, workspace } from './lib/state.ts'
+import { clearSelection, selecting } from './lib/selection.ts'
 import { isPhone } from './lib/viewport.ts'
 import LoginView from './views/LoginView.vue'
 
@@ -37,6 +39,8 @@ const stopDesktopWatch = watch(
 
 // On a phone the sidebar is a drawer over the page: it closes when a page opens and on Escape.
 watch(() => route.fullPath, () => (ui.sidebarOpen = false))
+// A selection belongs to the page it was made on (the side pane opening keeps it).
+watch(() => route.path, clearSelection)
 watch(isPhone, () => (ui.sidebarOpen = false))
 function onKey(event: KeyboardEvent) {
   if (event.key === 'Escape' && ui.sidebarOpen && isPhone.value) ui.sidebarOpen = false
@@ -87,7 +91,7 @@ function onTouchEnd(event: TouchEvent) {
         <div class="flex min-h-0 flex-1">
           <main
             class="isolate min-h-0 min-w-0 flex-1 overflow-y-auto bg-surface pb-[env(safe-area-inset-bottom)] md:mb-2 md:mr-2 md:rounded-xl md:border md:border-line md:shadow-[0_1px_3px_rgb(0_0_0/0.04)]"
-            :class="ui.sidebarCollapsed ? 'md:ml-2' : ''"
+            :class="[ui.sidebarCollapsed ? 'md:ml-2' : '', selecting ? 'pb-32' : '']"
           >
             <RouterView :key="$route.fullPath.split('?')[0]" />
           </main>
@@ -100,6 +104,7 @@ function onTouchEnd(event: TouchEvent) {
     <DialogHost />
     <QuickAskHost />
     <PickObjectHost />
+    <BulkBar />
     <AppToast />
     <PasswordDialog v-if="ui.passwordOpen" />
     <QuickCapture v-if="ui.captureOpen" />

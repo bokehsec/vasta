@@ -62,6 +62,20 @@ Subtasks section under the quick actions: a quiet header with "1 of 3 done", rul
 title, short due date), and an "Add subtask" line at the end; when every step is closed, a bordered
 line "All subtasks done" with the type's first quick action as a button.
 
+**Many at once**: a list or table row has a square box at its start (on hover with a mouse; always
+while something is selected there); Shift-click picks the range between, and while selecting a
+click on a row picks it (⌘-click still opens). A phone starts selecting from "Select" in a row's
+long-press menu; taps then pick rows and swipes are off. Picked rows are tinted with the accent.
+The bulk bar floats at the bottom (raised surface, strong border, soft shadow): the count, Select
+all, the quick actions when every picked object is an open task of one type, Move to trash, and
+Clear; on a phone a second row of labelled icons. Notices rise above it while it shows.
+
+**Process mode**: a view's open tasks one at a time, in a centred panel (full screen on a phone)
+over the dimmed page: place and a thin progress line, the title large, the next step, the view's
+fields, the start of the notes, Open; then the quick actions as large buttons (the first filled,
+with its number key), Break into steps for types with subtasks, Back and Skip. It ends with what
+was done.
+
 **Swipes** (`SwipeRow`, touch screens): on a task's row, a swipe right past 40% runs the type's
 Defer (else its first quick action); a swipe left uncovers the other actions, Done first, then
 More (the row's long-press menu). One row is open at a time; a tap elsewhere closes it. On phones

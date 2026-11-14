@@ -3,7 +3,7 @@ import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, matchesFilter, parentFieldOf, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
+import { RANK_PROPERTY_ID, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
 import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -12,6 +12,7 @@ import ListFieldsMenu from '../components/ListFieldsMenu.vue'
 import FilterGroupEditor from '../components/FilterGroupEditor.vue'
 import FlowMetrics from '../components/FlowMetrics.vue'
 import ObjectCollection from '../components/ObjectCollection.vue'
+import ProcessMode from '../components/ProcessMode.vue'
 import HabitBoard from '../components/HabitBoard.vue'
 import TagTree from '../components/TagTree.vue'
 import PopoverMenu from '../components/PopoverMenu.vue'
@@ -20,7 +21,8 @@ import { deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu, remov
 import { api } from '../lib/api.ts'
 import { onChange } from '../lib/events.ts'
 import { clone } from '../lib/clone.ts'
-import { quickActionsColumnShown, toggleQuickActionsColumn } from '../lib/columns.ts'
+import { listFields, quickActionsColumnShown, rowFieldsFromTable, tableColumns, toggleQuickActionsColumn } from '../lib/columns.ts'
+import { clearSelection } from '../lib/selection.ts'
 import { chip } from '../lib/colors.ts'
 import { displayTitle } from '../lib/format.ts'
 import { confirmDialog, openContextMenu, openMenuAt, promptDialog, type MenuItem } from '../lib/overlays.ts'
@@ -32,6 +34,7 @@ import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templ
 import { copyObjectLink, openObject } from '../lib/open.ts'
 import { quickActionMenuItems } from '../lib/quick-actions.ts'
 import { subtaskMenuItems } from '../lib/subtasks.ts'
+import { selectMenuItem } from '../lib/selection.ts'
 import { isPhone } from '../lib/viewport.ts'
 
 const props = defineProps<{ id: string }>()
@@ -270,9 +273,21 @@ async function deleteType() {
   if (type.value) await deleteTypeFlow(type.value)
 }
 
+// Process mode (ProcessMode): the view's open tasks one at a time, in its order.
+const processOpen = ref(false)
+const processList = computed(() => (type.value?.system === 'task' ? visible.value.filter((o) => !isClosedTask(type.value, o)) : []))
+const canProcess = computed(() => !fixedActive.value && !agendaActive.value && quickActionsOf(type.value).length > 0 && processList.value.length > 0)
+const processFields = computed(() =>
+  view.value.layout === 'table' ? rowFieldsFromTable(tableColumns(view.value.table, [props.id])) : view.value.list?.fields ? listFields(view.value.list, [props.id]) : []
+)
+function startProcess() {
+  clearSelection()
+  processOpen.value = true
+}
+
 /** An open task's quick actions, in its menu (a long press on a phone). */
 function quickItems(object: ObjectSummary): MenuItem[] {
-  const items = [...quickActionMenuItems(type.value, object, { save: async (id, values) => moved(await setProperties(id, values)) }), ...subtaskMenuItems(type.value, object, moved)]
+  const items = [...selectMenuItem(object.id), ...quickActionMenuItems(type.value, object, { save: async (id, values) => moved(await setProperties(id, values)) }), ...subtaskMenuItems(type.value, object, moved)]
   return items.length ? [{ kind: 'separator' }, ...items] : []
 }
 
@@ -586,6 +601,9 @@ async function newMenu(event: MouseEvent) {
       </button>
 
       <div class="ml-auto flex items-center gap-1 whitespace-nowrap text-sm max-md:-mx-1 max-md:w-full max-md:overflow-x-auto [&>*]:shrink-0">
+        <button v-if="canProcess" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" title="One task at a time: Done, Defer… or Skip" data-process @click="startProcess">
+          <AppIcon fallback="ph:play" /> Process
+        </button>
         <div v-if="!agendaActive" class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-ink-faint focus-within:bg-hover">
           <AppIcon fallback="ph:magnifying-glass" :size="14" />
           <input v-model="filterText" class="w-28 bg-transparent md:w-36 text-ink outline-none placeholder:text-ink-faint" placeholder="Filter…" />
@@ -777,9 +795,11 @@ async function newMenu(event: MouseEvent) {
       @board="updateView({ board: $event })"
       @manual="updateView({ sort: undefined })"
       @menu="objectMenu"
+      @trashed="(ids) => (objects = objects.filter((o) => !ids.includes(o.id)))"
       @moved="moved"
       @created="created"
     />
+    <ProcessMode v-if="processOpen" :type="type" :objects="processList" :fields="processFields" :title="view.name" @close="processOpen = false" />
   </div>
   <div v-else class="grid h-full place-items-center text-sm text-ink-soft">Type not found.</div>
 </template>

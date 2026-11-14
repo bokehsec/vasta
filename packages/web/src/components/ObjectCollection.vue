@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board,
 // agenda), optionally grouped. Used by type pages, query pages and queries embedded in documents.
-import { computed, nextTick, provide, ref, watch, type Directive } from 'vue'
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch, type Directive } from 'vue'
 import type { AgendaSettings, BoardSettings, FilterGroup, Id, ListSettings, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { isClosedTask, nextStepFieldOf, outlineRows, parentFieldOf, parentIdOf, quickActionsOf, subtaskProgress, type OutlineRow, type QuickActionDef } from '@vasta/core'
+import { newId, isClosedTask, nextStepFieldOf, outlineRows, parentFieldOf, parentIdOf, quickActionsOf, subtaskProgress, type OutlineRow, type QuickActionDef } from '@vasta/core'
 import { addSelectOption, setProperties, setProperty } from '../lib/actions.ts'
 import { isDone, setTaskDone } from '../lib/calendar.ts'
 import { chip } from '../lib/colors.ts'
@@ -13,6 +13,7 @@ import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import { runQuickAction } from '../lib/quick-actions.ts'
+import { clearSelection, isSelected, isSelecting, rememberMenuOwner, selection, toggleSelected, type SelectionOwner } from '../lib/selection.ts'
 import { foldedSteps as folded, subtasksOf } from '../lib/subtasks.ts'
 import { hideSwipeTip, swipeTipHidden } from '../lib/tips.ts'
 import { isPhone, isTouch } from '../lib/viewport.ts'
@@ -66,6 +67,8 @@ const emit = defineEmits<{
   table: [table: TableSettings]
   board: [board: BoardSettings]
   manual: []
+  /** Objects moved to the trash from the bulk bar. */
+  trashed: [ids: Id[]]
 }>()
 
 const types = computed(() => typesOf(props.typeIds))
@@ -159,7 +162,7 @@ const nextStepOf = (object: ObjectSummary) => {
 // uncovers the others, Done first, and More (the row's menu). On a phone they replace the row's
 // buttons; a tablet keeps both.
 const swipeType = (object: ObjectSummary) => {
-  const type = isTouch.value ? taskType(object) : undefined
+  const type = isTouch.value && !selectingHere.value ? taskType(object) : undefined
   return type && !isClosedTask(type, object) && quickActionsOf(type).length ? type : undefined
 }
 const rightActionOf = (actions: QuickActionDef[]) => actions.find((a) => a.id === 'defer') ?? actions[0]
@@ -190,6 +193,34 @@ function swipeLeft(object: ObjectSummary): SwipeAction[] {
   }
   return [...rest.slice(0, 3).map((a) => swipeAction(type, object, a)), more]
 }
+// Selection (lib/selection.ts): a box at the start of a row (on hover; always while anything is
+// selected here), Shift-click for a range in the order drawn; while selecting, a click or tap on a
+// row picks it instead of opening it (⌘/Ctrl-click still opens), and swipes are off.
+const selKey = newId()
+const owner: SelectionOwner = {
+  drawn: () => groups.value.flatMap((group) => (asList.value ? rowsOf(group).map((r) => r.object) : shown(group))),
+  all: () => props.objects,
+  moved: (object) => emit('moved', object),
+  trashed: (ids) => emit('trashed', ids),
+}
+const canSelect = computed(() => !props.readonly && (asList.value || props.layout === 'table'))
+const selectingHere = computed(() => isSelecting(selKey))
+const picked = (object: ObjectSummary) => isSelected(selKey, object.id)
+function pick(event: MouseEvent, object: ObjectSummary) {
+  toggleSelected(selKey, object.id, owner, event.shiftKey)
+}
+/** A click on a row while selecting picks it (the row's link does not open). */
+function rowClick(event: MouseEvent, object: ObjectSummary) {
+  if (!selectingHere.value || event.metaKey || event.ctrlKey) return
+  event.preventDefault()
+  pick(event, object)
+}
+function rowMenu(event: MouseEvent, object: ObjectSummary) {
+  if (canSelect.value) rememberMenuOwner(selKey, owner)
+  emit('menu', event, object)
+}
+onBeforeUnmount(() => selection.key === selKey && clearSelection())
+
 /** On a phone the row's own buttons give way to swipes. */
 const rowButtons = (object: ObjectSummary) => !!quickType(object) && !(isPhone.value && swipeType(object))
 /** Shown once per device over the first list with swipeable rows on a phone. */
@@ -354,12 +385,27 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
         <SwipeRow v-for="{ object, depth, hasChildren } in rowsOf(group)" :key="object.id" :enabled="!!swipeType(object)" :right="swipeRight(object)" :left="swipeLeft(object)">
           <ObjectLink
             :id="object.id"
-            class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover max-md:py-2.5"
-            :class="listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : absentParent(object) ? 'flex-wrap gap-y-0.5' : ''"
+            class="group/row flex items-center gap-3 rounded-lg px-2 py-2 max-md:py-2.5"
+            :class="[listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : absentParent(object) ? 'flex-wrap gap-y-0.5' : '', picked(object) ? 'bg-accent/10' : 'hover:bg-hover']"
             :style="depth ? { paddingLeft: `${0.5 + Math.min(depth, 4) * 1.5}rem` } : undefined"
             :data-depth="nests ? depth : undefined"
-            @contextmenu="emit('menu', $event, object)"
+            :data-selected="picked(object) || undefined"
+            @click="rowClick($event, object)"
+            @contextmenu="rowMenu($event, object)"
           >
+            <!-- The selection box: on hover (a mouse), always while selecting here. -->
+            <button
+              v-if="canSelect && (selectingHere || !isTouch)"
+              class="relative -mr-1 grid h-4 w-4 shrink-0 place-items-center rounded border text-white [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3.5 [@media(hover:none)]:after:content-['']"
+              :class="[picked(object) ? 'border-accent bg-accent' : 'border-line-strong bg-surface', selectingHere ? '' : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100']"
+              role="checkbox"
+              :aria-checked="picked(object)"
+              :aria-label="`Select ${displayTitle(object, typeOf(object))}`"
+              data-select-row
+              @click.prevent.stop="pick($event, object)"
+            >
+              <AppIcon v-if="picked(object)" fallback="ph:check-bold" :size="11" />
+            </button>
             <!-- A parent's caret folds its steps; rows of an outline keep its place free. -->
             <button
               v-if="hasChildren"
@@ -454,7 +500,14 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
             </tr>
           </thead>
           <tbody>
-            <tr v-for="object in shown(group)" :key="object.id" class="border-t border-line hover:bg-hover/60" @contextmenu="emit('menu', $event, object)">
+            <tr
+              v-for="object in shown(group)"
+              :key="object.id"
+              class="group/row border-t border-line"
+              :class="picked(object) ? 'bg-accent/10' : 'hover:bg-hover/60'"
+              :data-selected="picked(object) || undefined"
+              @contextmenu="rowMenu($event, object)"
+            >
               <td
                 v-for="column in columns"
                 :key="column.field"
@@ -462,7 +515,19 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                 :class="column.wrap ? 'break-words' : 'whitespace-nowrap text-ellipsis'"
               >
                 <template v-if="column.field === 'title'">
-                  <ObjectLink :id="object.id" class="font-medium hover:underline">
+                  <button
+                    v-if="canSelect && (selectingHere || !isTouch)"
+                    class="relative -ml-1 mr-2 inline-grid h-4 w-4 place-items-center rounded border align-[-3px] text-white"
+                    :class="[picked(object) ? 'border-accent bg-accent' : 'border-line-strong bg-surface', selectingHere ? '' : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100']"
+                    role="checkbox"
+                    :aria-checked="picked(object)"
+                    :aria-label="`Select ${displayTitle(object, typeOf(object))}`"
+                    data-select-row
+                    @click.prevent.stop="pick($event, object)"
+                  >
+                    <AppIcon v-if="picked(object)" fallback="ph:check-bold" :size="11" />
+                  </button>
+                  <ObjectLink :id="object.id" class="font-medium hover:underline" @click="rowClick($event, object)">
                     <AppIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" />{{ displayTitle(object, typeOf(object)) }}
                   </ObjectLink>
                   <span v-if="progressOf(object)" class="ml-2 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>

@@ -13,6 +13,7 @@ import ObjectCollection from './ObjectCollection.vue'
 import { copyObjectLink, openObject } from '../lib/open.ts'
 import { quickActionMenuItems } from '../lib/quick-actions.ts'
 import { subtaskMenuItems } from '../lib/subtasks.ts'
+import { selectMenuItem } from '../lib/selection.ts'
 
 /** `readonly`: property cells of a table do not edit (a whiteboard card, a page that cannot be edited). */
 const props = defineProps<{ query: QueryDef; parentId?: Id; limit?: number; readonly?: boolean }>()
@@ -73,6 +74,7 @@ function quickItems(object: ObjectSummary): MenuItem[] {
   if (props.readonly) return []
   const type = typesById.value.get(object.typeId)
   const items = [
+    ...selectMenuItem(object.id),
     ...quickActionMenuItems(type, object, { save: async (id, values) => moved({ ...(await setProperties(id, values)), preview: '' }) }),
     ...subtaskMenuItems(type, object, (saved) => moved({ ...saved, preview: '' })),
   ]
@@ -121,6 +123,7 @@ defineExpose({ count: computed(() => results.value.length), empty })
         @board="emit('board', $event)"
         @moved="moved({ ...$event, preview: '' })"
         @menu="objectMenu"
+        @trashed="load()"
       />
       <button v-if="limit && results.length > limit && !showAll && !isAgenda" class="mt-2 text-xs text-ink-faint hover:text-ink" @click="showAll = true">
         Show all {{ results.length }}
