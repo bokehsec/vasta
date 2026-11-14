@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The bar for a selection (lib/selection.ts), fixed at the bottom above the safe area: how many are
 // picked, Select all, Clear, and what can be done to all of them at once: the quick actions when
-// every one is an open object of the same task type (one question, one notice, one Undo, through
+// every one is an open object of one type that has them (one question, one notice, one Undo, through
 // lib/quick-actions.ts), and Move to trash (one Undo). On a phone the actions are labelled icons in
 // a row under the count.
 import { computed } from 'vue'
@@ -16,17 +16,17 @@ import AppIcon from './AppIcon.vue'
 
 const count = computed(() => selection.ids.size)
 const objects = computed(() => (selection.ids.size ? selectedObjects() : []))
-/** The one task type every picked object is, and every one is open. */
-const taskType = computed<ObjectType | undefined>(() => {
+/** The one type every picked object is, that has quick actions, and every one is open. */
+const actionType = computed<ObjectType | undefined>(() => {
   const typeIds = new Set(objects.value.map((o) => o.typeId))
   if (typeIds.size !== 1) return undefined
   const type = typesById.value.get([...typeIds][0]!)
-  return type?.system === 'task' && objects.value.every((o) => !isClosedTask(type, o)) ? type : undefined
+  return type && quickActionsOf(type).length > 0 && objects.value.every((o) => !isClosedTask(type, o)) ? type : undefined
 })
-const actions = computed(() => quickActionsOf(taskType.value))
+const actions = computed(() => quickActionsOf(actionType.value))
 
 async function run(action: QuickActionDef, event: MouseEvent) {
-  const type = taskType.value
+  const type = actionType.value
   const owner = selectionOwner()
   if (!type) return
   const saved = await runQuickAction(type, objects.value, action, {

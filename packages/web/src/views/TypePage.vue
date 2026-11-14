@@ -278,10 +278,12 @@ const viewPickerOpen = ref(false)
 const viewPickerAnchor = ref<HTMLElement | null>(null)
 const currentViewLabel = computed(() => (metricsActive.value ? 'Metrics' : fixedActive.value && fixedView.value ? fixedView.value.label : view.value.name))
 
-// Process mode (ProcessMode): the view's open tasks one at a time, in its order.
+// Process mode (ProcessMode): the view's open objects one at a time, in its order (a type with quick
+// actions; a closed object is one whose status means done).
 const processOpen = ref(false)
-const processList = computed(() => (type.value?.system === 'task' ? visible.value.filter((o) => !isClosedTask(type.value, o)) : []))
-const canProcess = computed(() => !fixedActive.value && !agendaActive.value && quickActionsOf(type.value).length > 0 && processList.value.length > 0)
+const hasQuickActions = computed(() => quickActionsOf(type.value).length > 0)
+const processList = computed(() => (hasQuickActions.value ? visible.value.filter((o) => !isClosedTask(type.value, o)) : []))
+const canProcess = computed(() => !fixedActive.value && !agendaActive.value && hasQuickActions.value && processList.value.length > 0)
 const processFields = computed(() =>
   view.value.layout === 'table' ? rowFieldsFromTable(tableColumns(view.value.table, [props.id])) : view.value.list?.fields ? listFields(view.value.list, [props.id]) : []
 )
@@ -633,7 +635,7 @@ async function newMenu(event: MouseEvent) {
       </template>
 
       <div class="ml-auto flex items-center gap-1 whitespace-nowrap text-sm max-md:-mx-1 max-md:w-full max-md:overflow-x-auto [&>*]:shrink-0">
-        <button v-if="canProcess" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" title="One task at a time: Done, Defer… or Skip" data-process @click="startProcess">
+        <button v-if="canProcess" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" :title="`One ${type.name.toLowerCase()} at a time: its quick actions or Skip`" data-process @click="startProcess">
           <AppIcon fallback="ph:play" /> Process
         </button>
         <div v-if="!agendaActive" class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-ink-faint focus-within:bg-hover">
@@ -779,12 +781,12 @@ async function newMenu(event: MouseEvent) {
             <AppIcon v-if="phoneTable" fallback="ph:check" class="ml-auto text-accent" />
           </button>
         </template>
-        <template v-if="type.system === 'task' && (view.layout === 'list' || view.layout === 'table')">
+        <template v-if="hasQuickActions && (view.layout === 'list' || view.layout === 'table')">
           <div class="my-1 border-t border-line" />
           <button
             class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover"
             :aria-pressed="quickActionsOn"
-            :title="view.layout === 'table' ? 'A column with Done, Defer, Drop and the next step (Columns moves it)' : 'Done, Defer, Drop and the next step on each task\'s row'"
+            :title="view.layout === 'table' ? 'A column with the quick actions (Columns moves it)' : 'The quick actions on each row'"
             data-view-quick-actions
             @click="toggleQuickActions"
           >

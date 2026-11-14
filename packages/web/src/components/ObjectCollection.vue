@@ -143,15 +143,16 @@ const columns = computed(() => (actionsUnderTitle.value ? shownColumns.value.fil
 const widthOf = (column: Column) => resized.value[column.field] ?? columnWidth(column)
 const tableWidth = computed(() => columns.value.reduce((sum, c) => sum + widthOf(c), 0))
 
-// Quick actions on task rows (TaskQuickActions), for triage: in the table a column like any other
+// Quick actions on rows (TaskQuickActions), for triage: in the table a column like any other
 // (lib/columns.ts), in the list at the end of the row when the view or query turns them on (on a
-// line of their own in a narrow column), with the task's next step under its title. They save as a
-// table cell does.
-const taskType = (object: ObjectSummary): ObjectType | undefined => {
+// line of their own in a narrow column), with a task's next step under its title. They save as a
+// table cell does. Any type with quick actions gets them; a task's next step line is tasks only.
+const actionableTypes = computed(() => new Set([...typesById.value.values()].filter((t) => quickActionsOf(t).length).map((t) => t.id)))
+const actionType = (object: ObjectSummary): ObjectType | undefined => {
   const type = props.readonly ? undefined : typeOf(object)
-  return type?.system === 'task' ? type : undefined
+  return type && actionableTypes.value.has(type.id) ? type : undefined
 }
-const quickType = (object: ObjectSummary) => (props.quickActions || (phoneRows.value && actionsUnderTitle.value) ? taskType(object) : undefined)
+const quickType = (object: ObjectSummary) => (props.quickActions || (phoneRows.value && actionsUnderTitle.value) ? actionType(object) : undefined)
 const nextStepOf = (object: ObjectSummary) => {
   const field = nextStepFieldOf(quickType(object))
   const value = field ? object.props[field.id] : undefined
@@ -162,8 +163,8 @@ const nextStepOf = (object: ObjectSummary) => {
 // uncovers the others, Done first, and More (the row's menu). On a phone they replace the row's
 // buttons; a tablet keeps both.
 const swipeType = (object: ObjectSummary) => {
-  const type = isTouch.value && !selectingHere.value ? taskType(object) : undefined
-  return type && !isClosedTask(type, object) && quickActionsOf(type).length ? type : undefined
+  const type = isTouch.value && !selectingHere.value ? actionType(object) : undefined
+  return type && !isClosedTask(type, object) ? type : undefined
 }
 const rightActionOf = (actions: QuickActionDef[]) => actions.find((a) => a.id === 'defer') ?? actions[0]
 const saveRow = async (id: Id, values: Record<Id, PropertyValue | undefined>) => emit('moved', await setProperties(id, values))
@@ -533,7 +534,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                   <span v-if="progressOf(object)" class="ml-2 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
                     {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
                   </span>
-                  <TaskQuickActions v-if="actionsUnderTitle && taskType(object)" :type="taskType(object)!" :object="object" variant="row" class="-mb-1 mt-0.5 -ml-1.5" @set="saveQuick(object, $event)" />
+                  <TaskQuickActions v-if="actionsUnderTitle && actionType(object)" :type="actionType(object)!" :object="object" variant="row" class="-mb-1 mt-0.5 -ml-1.5" @set="saveQuick(object, $event)" />
                 </template>
                 <span v-else-if="column.field === 'tags' || column.field === 'collections'" class="flex gap-1" :class="column.wrap ? 'flex-wrap' : 'overflow-hidden'">
                   <ObjectChip v-for="id in column.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="column.field === 'tags'" />
@@ -545,7 +546,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                 <span v-else-if="column.field === 'date'">{{ object.date ? formatDate(object.date) : '' }}</span>
                 <span v-else-if="column.field === 'host'">{{ object.media?.host?.replace(/^www\./, '') }}</span>
                 <template v-else-if="column.field === QUICK_ACTIONS_COLUMN">
-                  <TaskQuickActions v-if="taskType(object)" :type="taskType(object)!" :object="object" variant="row" class="-my-1.5 -ml-1.5" @set="saveQuick(object, $event)" />
+                  <TaskQuickActions v-if="actionType(object)" :type="actionType(object)!" :object="object" variant="row" class="-my-1.5 -ml-1.5" @set="saveQuick(object, $event)" />
                 </template>
                 <PropertyValueEditor
                   v-else-if="column.def && editing === cellKey(object, column)"

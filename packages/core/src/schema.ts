@@ -40,7 +40,7 @@ export const ADDED_COLUMNS: { table: string; column: string; definition: string 
   { table: 'objects', column: 'template', definition: 'TEXT' },
   // Where a type's objects open from views: 'pane' (the side pane) or 'page' (ObjectType.openIn).
   { table: 'types', column: 'open_in', definition: 'TEXT' },
-  // JSON QuickActions: what a task's Done, Defer and Drop buttons set (ObjectType.quickActions).
+  // JSON QuickActions: what a type's quick action buttons set (Done, Defer, Drop on a task; any type's own list).
   { table: 'types', column: 'quick_actions', definition: 'TEXT' },
   // JSON SubtaskSettings: the relation that makes an object a step of another (ObjectType.subtasks).
   { table: 'types', column: 'subtasks', definition: 'TEXT' },

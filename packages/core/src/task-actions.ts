@@ -1,14 +1,16 @@
-// A task's quick actions: buttons on its page and rows that change its fields in one click (Type
-// settings › Quick actions). A type lists its own (`quickActions.actions`), each a set of changes: a
-// fixed value, a day from today or next week, the user pressing it, nothing, or a value asked for
-// when pressed (one per action: a day on a small calendar, a line of text). Without a list, the
-// defaults: Done (the first status option meaning done, the one checkboxes set), Defer (asks for a
-// day for the due date, or the date the type names, and may set a status such as "Scheduled"), Drop
-// (another option meaning done, a "Dropped", which ends a task without doing it, as in
-// completeRepeat) and Next step (asks for the text of the type's next step field). Changes naming a
-// property the type no longer has, or a value that does not fit it, are left out.
+// A type's quick actions: buttons on its page and rows that change its fields in one click (Type
+// settings › Quick actions, any type). A type lists its own (`quickActions.actions`), each a set of
+// changes: a fixed value, a day from today or next week, the user pressing it, nothing, or a value
+// asked for when pressed (one per action: a day on a small calendar, a line of text). Only a task
+// gets defaults without a list of its own: Done (the first status option meaning done, the one
+// checkboxes set), Defer (asks for a day for the due date, or the date the type names, and may set a
+// status such as "Scheduled"), Drop (another option meaning done, a "Dropped", which ends a task
+// without doing it, as in completeRepeat) and Next step (asks for the text of the type's next step
+// field). Changes naming a property the type no longer has, or a value that does not fit it, are
+// left out.
 import { DUE_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
 import type { Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActionValue, SelectOption, TextPropertyDef } from './model.ts'
+import { statusProperty } from './metrics.ts'
 import { addDays } from './time.ts'
 
 /** Kinds of property whose value an action can ask for when pressed. */
@@ -74,13 +76,14 @@ export function defaultQuickActions(type: ObjectType): QuickActionDef[] {
 }
 
 /**
- * A task type's quick actions: its own list, or the defaults; none for other types. Changes that no
- * longer fit are left out, and so is an action left with none; an action asks for one value at most.
+ * A type's quick actions: its own list (any type), or the task defaults; none for other types without
+ * a list. Changes that no longer fit are left out, and so is an action left with none; an action
+ * asks for one value at most.
  */
 export function quickActionsOf(type: ObjectType | undefined): QuickActionDef[] {
-  if (type?.system !== 'task') return []
+  if (!type) return []
   const own = type.quickActions?.actions
-  if (!own) return defaultQuickActions(type)
+  if (!own) return type.system === 'task' ? defaultQuickActions(type) : []
   return own.flatMap((action) => {
     let asked = false
     const changes = action.changes.filter((change) => {
@@ -101,12 +104,17 @@ export function askOf(type: ObjectType, action: QuickActionDef): { change: Quick
   return change && def ? { change, def } : undefined
 }
 
-/** Whether a task's status is one meaning done (done, dropped…): its quick actions are behind it. */
+/**
+ * Whether an object's status is one meaning done (done, dropped…): its quick actions are behind it.
+ * The status is a task's own, or another type's select with status categories (a project's); a type
+ * without one is never closed.
+ */
 export function isClosedTask(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>): boolean {
-  if (type?.system !== 'task') return false
-  const value = object.props[STATUS_PROPERTY_ID]
+  const def = statusProperty(type)
+  if (!def) return false
+  const value = object.props[def.id]
   const ids = value?.kind === 'select' ? value.value : []
-  return statusOptions(type).some((o) => o.status === 'done' && ids.includes(o.id))
+  return def.options.some((o) => o.status === 'done' && ids.includes(o.id))
 }
 
 export interface QuickActionContext {

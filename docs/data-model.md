@@ -56,21 +56,21 @@ side, shown on the objects it links to: "Wrote" for a book's Author, on a person
 The built-in Task has `status`, `due`, `assignee` (a single person, added to older spaces once,
 after Due) and `priority`.
 A task's page has **quick actions** ([`task-actions.ts`](../packages/core/src/task-actions.ts)):
-buttons that change its fields in one click. The Task type's `quickActions.actions` (Type settings ›
-Quick actions, column `types.quick_actions`) lists them, each a name, an icon and changes: a
+buttons that change its fields in one click, and so does any other type with a list of its own. A
+type's `quickActions.actions` (Type settings › Quick actions, column `types.quick_actions`) lists them, each a name, an icon and changes: a
 property set to a fixed value, a day from today (`{ kind: 'day', days }`) or next week, the user
 pressing it (`me`), nothing (`clear`), or a value asked for when pressed (`ask`, one per action: a day
 on a small calendar for dates, a line for text, numbers and links). Changes naming a property the
-type no longer has, or a value that does not fit it, are left out. Without a list, the defaults:
-Done (the first status option meaning done), Defer (asks a day for `due`, or `quickActions.deferField`,
+type no longer has, or a value that does not fit it, are left out. Without a list, a task gets the
+defaults: Done (the first status option meaning done), Defer (asks a day for `due`, or `quickActions.deferField`,
 and sets `deferStatus` if any), Drop (`dropStatus`, else the second option meaning done; none: no
 Drop) and Next step (asks the text of `nextStepField`). A repeating date keeps its rule when set.
-Closed tasks (any option meaning done) show no quick actions. For triage they also go on rows: a
-list view or query with `quickActions: true` ends each task's row with them, and a table of tasks
-has a "Quick actions" column (`quickActions` in `table.columns`, hidden until shown, moved and sized
+An object whose status (a task's, or another type's select with status categories) is an option
+meaning done shows no quick actions. For triage they also go on rows: a list view or query with
+`quickActions: true` ends each row of a type with actions with them, and a table of such a type has a "Quick actions" column (`quickActions` in `table.columns`, hidden until shown, moved and sized
 like the others; the view menu's Quick actions shows it after the title; on a phone the column
 leaves the table and its buttons go under each title). `nextStepField`, a text
-property, shows under the title in the list.
+property of a task type, shows under the title in the list.
 **Subtasks** ([`subtasks.ts`](../packages/core/src/subtasks.ts)): a type's `subtasks.parentField`
 (Type settings › Subtasks, column `types.subtasks`) names a single relation whose targets include the
 type itself (or any type), such as a task's "Part of"; an object pointing to another through it is

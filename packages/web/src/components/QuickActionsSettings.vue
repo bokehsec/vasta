@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// A task type's quick actions (Type settings › Quick actions; @vasta/core task-actions.ts): the
-// buttons on a task's page and, where a view shows them, its row, each with the changes it makes.
-// Until edited, the defaults show (Done, Defer, Drop, Next step); the first edit keeps the list as
-// the type's own, and "Use the defaults" goes back. Also the text field shown under a task's title
-// in lists (the next step). Edits go to the type's draft; Type settings saves them.
+// A type's quick actions (Type settings › Quick actions, any type; @vasta/core task-actions.ts):
+// the buttons on its page and, where a view shows them, its row, each with the changes it makes.
+// A task starts from the defaults (Done, Defer, Drop, Next step); another type starts empty, and
+// the first edit makes the list the type's own ("Use the defaults" on a task goes back). Also the
+// text field shown under a task's title in lists (tasks only).
 import { computed, ref } from 'vue'
 import type { Id, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActions, QuickActionValue } from '@vasta/core'
 import { CHANGEABLE_KINDS, defaultQuickActions, newId, quickActionsOf } from '@vasta/core'
@@ -246,7 +246,7 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
       <p v-if="!actions.length" class="px-3 py-2 text-xs text-ink-faint">No quick actions.</p>
     </div>
     <button class="mt-1.5 flex items-center gap-1 rounded px-1 py-1 text-xs text-ink-faint hover:text-ink" data-quick-add @click="addAction"><AppIcon fallback="ph:plus" :size="12" /> Add action</button>
-    <label class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+    <label v-if="type.system === 'task'" class="mt-2 flex flex-wrap items-center gap-2 text-sm">
       <span class="text-ink-soft">Next step under the title in lists</span>
       <select :value="type.quickActions?.nextStepField ?? ''" :class="control" data-next-step-field @change="emitSettings({ nextStepField: ($event.target as HTMLSelectElement).value })">
         <option value="">None</option>

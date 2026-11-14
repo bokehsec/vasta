@@ -1,9 +1,10 @@
 // Table columns of a view or query: which fields show, in what order, how wide, and whether long
 // values wrap. Saved as `TableSettings` on the view (or the query); missing settings give the
-// default table (title, tags, the types' properties, last edited). Tables of tasks also offer a
-// "Quick actions" column (Done, Defer, Drop and the next step: TaskQuickActions), hidden until
-// shown, placed and sized like any other.
+// default table (title, tags, the types' properties, last edited). Tables of types with quick
+// actions also offer a "Quick actions" column (TaskQuickActions), hidden until shown, placed and
+// sized like any other.
 import type { Id, ListSettings, ObjectSummary, ObjectType, TableColumn, TableSettings } from '@vasta/core'
+import { quickActionsOf } from '@vasta/core'
 import { formulaValue } from './properties.ts'
 import { fieldOptions, typesOf, type FieldOption } from './query.ts'
 
@@ -23,8 +24,8 @@ export const columnWidth = (column: Column) => column.width ?? DEFAULT_WIDTHS[co
 
 /** The columns for these types, in order, the title always first and shown. */
 export function tableColumns(table: TableSettings | undefined, typeIds: Id[]): Column[] {
-  const tasks = typesOf(typeIds).some((t) => t.system === 'task')
-  const byField = new Map([...fieldOptions(typeIds), ...(tasks ? [QUICK_ACTIONS_OPTION] : [])].map((f) => [f.field, f]))
+  const actionable = typesOf(typeIds).some((t) => quickActionsOf(t).length > 0)
+  const byField = new Map([...fieldOptions(typeIds), ...(actionable ? [QUICK_ACTIONS_OPTION] : [])].map((f) => [f.field, f]))
   const columns: Column[] = []
   const add = (option: FieldOption, saved?: TableColumn) => {
     columns.push({

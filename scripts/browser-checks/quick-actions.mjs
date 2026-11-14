@@ -14,6 +14,9 @@
 // Undo, cleared), Done / Drop / Defer from a row without leaving the list, a query with quickActions
 // (list) or its checkbox in a table (the column), the next step action on the page too, a phone
 // (a table drawn as rows there; swipes are phone-rows.mjs).
+// A type that is not a task (Page): Type settings shows the section (empty, no defaults, no
+// next-step select), a configured action shows on its objects' pages and rows (the toggle offered
+// for the type), the table offers the column, process mode and the bulk bar run it.
 //   node quick-actions.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -160,7 +163,7 @@ await sleep(500)
 if ((await actions.count()) !== 0) throw new Error('quick actions shown on a done task')
 
 // ---------------------------------------------------------------------------
-step('Type settings: the Task type lists its default actions; Page has none')
+step('Type settings: the Task type lists its default actions; Page shows the section, empty')
 await page.goto(`${base}/t/${taskType.id}?settings=1`)
 await page.waitForSelector('[data-quick-action-settings]')
 await until(async () => (await page.locator('[data-quick-action]').count()) === 2, 'the built-in task lists two default actions')
@@ -170,7 +173,11 @@ if ((await page.locator('[data-next-step-field]').count()) !== 1) throw new Erro
 if ((await page.locator('[data-quick-action-settings] select').count()) !== 1) throw new Error('the old Defer/Drop selects are still there')
 await page.goto(`${base}/t/${pageType.id}?settings=1`)
 await page.getByText('Properties', { exact: true }).first().waitFor()
-if ((await page.locator('[data-quick-action-settings]').count()) !== 0) throw new Error('Quick actions shown for Page')
+await page.waitForSelector('[data-quick-action-settings]')
+if ((await page.locator('[data-quick-action]').count()) !== 0) throw new Error('Page lists actions before any are set')
+if ((await page.locator('[data-quick-add]').count()) !== 1) throw new Error('Page has no "Add action"')
+if ((await page.locator('[data-quick-defaults]').count()) !== 0) throw new Error('"Use the defaults" shown for a type with no defaults')
+if ((await page.locator('[data-next-step-field]').count()) !== 0) throw new Error('the next-step select shows for a type that is not a task')
 
 // ---------------------------------------------------------------------------
 // A "Dropped" and a "Scheduled" status, a "Do date" field, and Task's quick actions pointing at them.
@@ -434,7 +441,7 @@ await layoutButton().click()
 if (((await page.locator('[data-view-quick-actions]').getAttribute('aria-pressed')) ?? '') !== 'false') throw new Error('Plain says Quick actions are on')
 await page.keyboard.press('Escape')
 
-step('another type never offers the toggle')
+step('a type without quick actions never offers the toggle')
 await page.goto(`${base}/t/${pageType.id}`)
 await page.locator('main button').filter({ hasText: /^\s*(List|Table|Grid|Wall|Gallery|Board)\s*$/ }).first().click()
 await page.locator('button', { hasText: /^\s*Full page\s*$/ }).first().waitFor()
@@ -616,7 +623,7 @@ if (((await savedView()).table?.columns ?? []).find((c) => c.field === 'quickAct
 await setToggle(true)
 await until(async () => (await rowActions(rowTask2.id).count()) === 1, 'the list shows actions again')
 
-step('table: a type without tasks does not offer the column')
+step('table: a type without quick actions does not offer the column')
 const otherTypes = [pageType, bundle.types.find((t) => t.name === 'Book')].filter(Boolean)
 for (const other of otherTypes) {
   const before = await get(`/api/types/${other.id}`)
@@ -639,6 +646,92 @@ for (const other of otherTypes) {
     await sleep(1000)
   }
 }
+
+// ---------------------------------------------------------------------------
+// Quick actions on a type that is not a task (Page with a "Visited" action setting a date a week on).
+const pageBefore = await get(`/api/types/${pageType.id}`)
+step('a non-task type: an action set up on it; Type settings lists it with no defaults and no next-step select')
+await put(`/api/types/${pageType.id}`, {
+  ...pageBefore,
+  properties: [...pageBefore.properties, { id: 'nextvisit', kind: 'date', name: 'Next visit' }],
+  views: pageBefore.views.map((v) => ({ ...v, layout: 'list' })),
+  quickActions: { actions: [{ id: 'visited', name: 'Visited', icon: { kind: 'icon', value: 'ph:check-circle' }, changes: [{ field: 'nextvisit', value: { kind: 'day', days: 7 } }] }] },
+})
+await sleep(1500)
+await page.goto(`${base}/t/${pageType.id}?settings=1`)
+await page.waitForSelector('[data-quick-action-settings]')
+await until(async () => (await page.locator('[data-quick-action]').count()) === 1, 'the action is listed')
+if ((await page.locator('[data-quick-name]').inputValue()) !== 'Visited') throw new Error('the action is not named Visited')
+if (!(await page.locator('[data-quick-action]').innerText()).includes('Next visit → in 7 days')) throw new Error('the action does not say what it does')
+
+step('a page of that type shows the Visited button; it sets Next visit, Undo empties it')
+const visitPage = await post('/api/objects', { typeId: pageType.id, title: `QuickActions Visit ${tag}` })
+const visitPage2 = await post('/api/objects', { typeId: pageType.id, title: `QuickActions Visit 2 ${tag}` })
+await sleep(1000)
+await open(visitPage)
+await actions.waitFor()
+await act('visited').waitFor()
+await act('visited').click()
+await until(async () => dayOf((await propsOf(visitPage.id)).nextvisit) === days.inWeek, `Next visit is ${days.inWeek}`)
+await toast.filter({ hasText: 'Visited · Next visit' }).locator('button', { hasText: 'Undo' }).waitFor()
+await toast.locator('button', { hasText: 'Undo' }).click()
+await until(async () => (await propsOf(visitPage.id)).nextvisit === undefined, 'Undo emptied Next visit')
+
+step('a view of the type offers the Quick actions toggle; a row runs the action without opening the page')
+await page.goto(`${base}/t/${pageType.id}`)
+await page.getByPlaceholder('Filter…').fill('QuickActions Visit')
+await until(async () => (await row(visitPage.id).count()) > 0, 'the list shows the pages')
+if ((await page.locator('main [data-quick-actions]').count()) !== 0) throw new Error('row actions shown before the toggle')
+await layoutButton().click()
+await page.locator('[data-view-quick-actions]').waitFor()
+await page.locator('[data-view-quick-actions]').click()
+await page.keyboard.press('Escape')
+await until(async () => (await rowActions(visitPage.id).count()) === 1, 'the row shows its action')
+const pageListUrl = page.url()
+await rowButton(visitPage.id, 'visited').click()
+await until(async () => dayOf((await propsOf(visitPage.id)).nextvisit) === days.inWeek, 'the row action set Next visit')
+if (page.url() !== pageListUrl) throw new Error(`Visited navigated to ${page.url()}`)
+await toast.filter({ hasText: 'Visited' }).locator('button', { hasText: 'Undo' }).click()
+await until(async () => (await propsOf(visitPage.id)).nextvisit === undefined, 'Undo on the row emptied it')
+
+step('table: the type offers the Quick actions column')
+await pickLayout('Table')
+await until(async () => (await row(visitPage.id).locator('td').count()) > 1, 'the table shows the pages')
+await page.locator('main button', { hasText: 'Columns' }).click()
+await page.locator('div[data-column="quickActions"]').waitFor()
+await page.keyboard.press('Escape')
+await setToggle(true)
+await until(async () => (await headerFields()).includes('quickActions'), 'the column shows')
+await setToggle(false)
+await pickLayout('List')
+
+step('the bulk bar runs the action on both pages, one question, one Undo')
+await until(async () => (await row(visitPage.id).count()) > 0 && (await row(visitPage2.id).count()) > 0, 'the list shows both pages')
+await row(visitPage.id).hover()
+await row(visitPage.id).locator('[data-select-row]').click()
+await until(async () => (await page.locator('[data-bulk-count]').innerText()).includes('1 selected'), '1 selected')
+await row(visitPage2.id).hover()
+await row(visitPage2.id).locator('[data-select-row]').click()
+await until(async () => (await page.locator('[data-bulk-count]').innerText()).includes('2 selected'), '2 selected')
+await page.locator('[data-bulk-action="visited"]').click()
+await until(async () => dayOf((await propsOf(visitPage.id)).nextvisit) === days.inWeek && dayOf((await propsOf(visitPage2.id)).nextvisit) === days.inWeek, 'both pages got Next visit')
+await toast.filter({ hasText: '2 pages' }).waitFor()
+await toast.locator('button', { hasText: 'Undo' }).click()
+await until(async () => (await propsOf(visitPage.id)).nextvisit === undefined && (await propsOf(visitPage2.id)).nextvisit === undefined, 'Undo emptied both')
+
+step('process mode walks the type one object at a time')
+if ((await page.locator('[data-process]').count()) !== 1) throw new Error('the Process button does not show for the type')
+await page.locator('[data-process]').click()
+await page.locator('[data-process-mode]').waitFor()
+await until(async () => (await page.locator('[data-process-position]').innerText()).includes('of 2'), 'two pages to process')
+await page.keyboard.press('1')
+await until(async () => dayOf((await propsOf(visitPage.id)).nextvisit) === days.inWeek || dayOf((await propsOf(visitPage2.id)).nextvisit) === days.inWeek, 'the action ran from process mode')
+await page.keyboard.press('Escape')
+await until(async () => (await page.locator('[data-process-mode]').count()) === 0, 'Escape closed it')
+
+// Put the Page type back.
+await put(`/api/types/${pageType.id}`, pageBefore)
+await sleep(1000)
 
 // ---------------------------------------------------------------------------
 // The type's own quick actions: a "Waiting" action built in Type settings.

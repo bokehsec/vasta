@@ -79,6 +79,45 @@ describe('a type\'s own quick actions', () => {
   })
 })
 
+describe('quick actions on a type that is not a task', () => {
+  const reviewed: QuickActionDef = { id: 'reviewed', name: 'Reviewed', changes: [{ field: 'nextreview', value: { kind: 'day', days: 7 } }] }
+  const project: ObjectType = {
+    ...page,
+    properties: [...page.properties, { id: 'nextreview', kind: 'date', name: 'Next review' }],
+    quickActions: { actions: [reviewed] },
+  }
+
+  it('are the type’s own list, and none without one', () => {
+    expect(names(project)).toEqual(['Reviewed'])
+    expect(quickActionsOf({ ...page, properties: project.properties })).toEqual([])
+  })
+
+  it('run as a task’s do, with Undo values and a message', () => {
+    expect(quickActionChanges(project, { props: {} }, reviewed, context)).toEqual({ nextreview: day('2026-11-20') })
+    const edits = quickActionEdits(project, [{ id: 'p1', props: {} }], reviewed, context)
+    expect(edits).toEqual([{ id: 'p1', values: { nextreview: day('2026-11-20') }, before: { nextreview: undefined } }])
+  })
+
+  it('hide behind a status option meaning done, as a task’s do', () => {
+    const withStatus: ObjectType = {
+      ...project,
+      properties: [...project.properties, { id: 'status', kind: 'select', name: 'Status', multiple: false, options: [{ id: 'active', label: 'Active', status: 'todo' }, { id: 'archived', label: 'Archived', status: 'done' }] }],
+    }
+    expect(isClosedTask(withStatus, { props: { status: status('archived') } })).toBe(true)
+    expect(isClosedTask(withStatus, { props: { status: status('active') } })).toBe(false)
+    expect(isClosedTask(withStatus, { props: {} })).toBe(false)
+  })
+
+  it('read a status of the type’s own (not the built-in id) when its options have categories', () => {
+    const custom: ObjectType = {
+      ...project,
+      properties: [...project.properties, { id: 'phase', kind: 'select', name: 'Phase', multiple: false, options: [{ id: 'on', label: 'On', status: 'doing' }, { id: 'over', label: 'Over', status: 'done' }] }],
+    }
+    expect(isClosedTask(custom, { props: { phase: { kind: 'select', value: ['over'] } } })).toBe(true)
+    expect(isClosedTask(custom, { props: { phase: { kind: 'select', value: ['on'] } } })).toBe(false)
+  })
+})
+
 describe('quickActionChanges', () => {
   const type = triageTask()
   const run = (changes: QuickActionDef['changes'], props: Record<string, PropertyValue> = {}, answer?: PropertyValue) =>

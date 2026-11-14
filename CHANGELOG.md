@@ -8,6 +8,11 @@ GitHub release page.
 
 ### Added
 
+- **Quick actions on any type.** Type settings › Quick actions, until now only on a task, works on
+  every type: set up buttons that change its fields in one click, and they show on its objects'
+  pages, as a view's row buttons, in the Quick actions column, in a bulk selection's bar and in
+  process mode. (A task still gets Done, Defer, Drop and Next step until you edit them; another
+  type starts empty.)
 - **A phone layout that fits the hand.** On a phone a bar at the bottom goes to Home, Tasks, Inbox,
   Calendar and Search, with a round Capture button above it. Pickers and menus (a status, a date, a
   long-press menu) rise from the bottom with larger rows, and stay above the keyboard. A type's views

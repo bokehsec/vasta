@@ -9,7 +9,7 @@ import ObjectComments from '../components/ObjectComments.vue'
 import SprintPanel from '../components/SprintPanel.vue'
 import SubtasksPanel from '../components/SubtasksPanel.vue'
 import TaskQuickActions from '../components/TaskQuickActions.vue'
-import { isClosedTask, parentFieldOf, subtaskProgress } from '@vasta/core'
+import { isClosedTask, parentFieldOf, quickActionsOf, subtaskProgress } from '@vasta/core'
 import { setProperties } from '../lib/actions.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { loadSubtasks, subtasksOf, withDescendants } from '../lib/subtasks.ts'
@@ -470,6 +470,9 @@ const hasParent = computed(() => {
 const foldFields = computed(() => isPhone.value && type.value?.system === 'task' && !info.value)
 const fieldsOpen = ref(false)
 const summaryFields = computed(() => visibleFields.value.filter((def) => hasValue(def)).slice(0, 4))
+
+/** A type with quick actions (its own list, or the task defaults) shows them on its objects' pages. */
+const hasQuickActions = computed(() => !!type.value && quickActionsOf(type.value).length > 0)
 
 /** Closing a task with steps still open says so in the notice. */
 function openStepsNote() {
@@ -951,7 +954,7 @@ async function startFrom(template: ObjectRecord) {
         <ObjectPicker :type-ids="tagType ? [tagType.id] : []" :exclude="object.tagIds" create-label="New tag" @pick="addTag" @create="createTag" />
       </PopoverMenu>
 
-      <TaskQuickActions v-if="type?.system === 'task' && !info && !object.deletedAt" :type="type" :object="object" :note="openStepsNote" @set="setProps" />
+      <TaskQuickActions v-if="type && hasQuickActions && !info && !object.deletedAt" :type="type" :object="object" :note="openStepsNote" @set="setProps" />
       <button
         v-if="foldFields"
         class="mt-4 flex w-full items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-left text-sm"

@@ -264,7 +264,7 @@ async function leave(path: string) {
       </label>
       <p class="mt-0.5 pl-6 text-xs text-ink-faint">A click on a {{ (draft.name || 'object').toLowerCase() }} in a list, table, board or query opens it next to the page. A view can choose otherwise.</p>
     </section>
-    <QuickActionsSettings v-if="draft.system === 'task'" :type="draft" @update="setQuickActions" />
+    <QuickActionsSettings :type="draft" @update="setQuickActions" />
     <section class="mt-4" data-subtask-settings>
       <label class="text-xs text-ink-faint" for="type-subtask-field">Subtasks</label>
       <select

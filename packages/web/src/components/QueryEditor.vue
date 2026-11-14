@@ -3,7 +3,7 @@
 // whole new query. The agenda layout has no sort or grouping (it is by day and time).
 import { computed, ref } from 'vue'
 import type { AgendaSettings, FilterGroup, Id, ListSettings, QueryDef, SortRule, TableSettings, ViewLayout } from '@vasta/core'
-import { parentFieldOf } from '@vasta/core'
+import { parentFieldOf, quickActionsOf } from '@vasta/core'
 import { chip } from '../lib/colors.ts'
 import { quickActionsColumnShown, toggleQuickActionsColumn } from '../lib/columns.ts'
 import { fieldOptions, groupOptions } from '../lib/query.ts'
@@ -64,9 +64,9 @@ const agendaAnchor = ref<HTMLElement | null>(null)
 const agendaOpen = ref(false)
 const setAgenda = (agenda: AgendaSettings | undefined) => update({ agenda })
 const setOpenIn = (value: string) => update({ openIn: value === 'pane' || value === 'page' ? value : undefined })
-// Quick actions for tasks, offered when the query can find tasks: in a table, a column (shown, hidden
-// and moved like the others); in a list, on each row.
-const findsTasks = computed(() => !props.query.typeIds.length || workspace.types.some((t) => t.system === 'task' && props.query.typeIds.includes(t.id)))
+// Quick actions, offered when the query can find a type that has them: in a table, a column (shown,
+// hidden and moved like the others); in a list, on each row.
+const findsActions = computed(() => !props.query.typeIds.length || workspace.types.some((t) => props.query.typeIds.includes(t.id) && quickActionsOf(t).length > 0))
 const rowsLayout = computed(() => (props.query.layout ?? 'list') === 'list' || props.query.layout === 'table')
 const quickActionsOn = computed(() => (props.query.layout === 'table' ? quickActionsColumnShown(props.query.table, props.query.typeIds) : !!props.query.quickActions))
 function toggleQuickActions() {
@@ -173,7 +173,7 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
           <option value="page">Full page</option>
         </select>
       </label>
-      <label v-if="findsTasks && rowsLayout" class="flex items-center gap-1.5 text-ink-soft" title="Done, Defer, Drop and the next step on each task's row">
+      <label v-if="findsActions && rowsLayout" class="flex items-center gap-1.5 text-ink-soft" title="The type's quick actions on each row; in a table, a column of their own">
         <input type="checkbox" class="accent-[var(--color-accent)]" :checked="quickActionsOn" @change="toggleQuickActions" />
         Quick actions
       </label>
