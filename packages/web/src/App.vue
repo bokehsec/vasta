@@ -9,6 +9,7 @@ import DialogHost from './components/DialogHost.vue'
 import AppToast from './components/AppToast.vue'
 import OfflineBanner from './components/OfflineBanner.vue'
 import PasswordDialog from './components/PasswordDialog.vue'
+import PhoneTabBar from './components/PhoneTabBar.vue'
 import PickObjectHost from './components/PickObjectHost.vue'
 import QuickAskHost from './components/QuickAskHost.vue'
 import QuickCapture from './components/QuickCapture.vue'
@@ -91,7 +92,7 @@ function onTouchEnd(event: TouchEvent) {
         <div class="flex min-h-0 flex-1">
           <main
             class="isolate min-h-0 min-w-0 flex-1 overflow-y-auto bg-surface pb-[env(safe-area-inset-bottom)] md:mb-2 md:mr-2 md:rounded-xl md:border md:border-line md:shadow-[0_1px_3px_rgb(0_0_0/0.04)]"
-            :class="[ui.sidebarCollapsed ? 'md:ml-2' : '', selecting ? 'pb-32' : '']"
+            :class="[ui.sidebarCollapsed ? 'md:ml-2' : '', selecting ? 'pb-32' : isPhone ? 'pb-[calc(6rem+env(safe-area-inset-bottom))]' : '']"
           >
             <RouterView :key="$route.fullPath.split('?')[0]" />
           </main>
@@ -104,6 +105,7 @@ function onTouchEnd(event: TouchEvent) {
     <DialogHost />
     <QuickAskHost />
     <PickObjectHost />
+    <PhoneTabBar v-if="isPhone" />
     <BulkBar />
     <AppToast />
     <PasswordDialog v-if="ui.passwordOpen" />

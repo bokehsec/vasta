@@ -4,7 +4,7 @@
 import { ref, watch } from 'vue'
 import { selecting } from '../lib/selection.ts'
 import { lastError, notice } from '../lib/state.ts'
-import { isPhone } from '../lib/viewport.ts'
+import { isPhone, keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 
 let errorTimer: ReturnType<typeof setTimeout> | undefined
@@ -37,10 +37,10 @@ async function runAction() {
 
 <template>
   <Teleport to="body">
-    <!-- Above the bulk bar while a selection is open. -->
+    <!-- Above the bulk bar while a selection is open, and above a phone's bottom bar. -->
     <div
       class="pointer-events-none fixed left-1/2 z-50 flex w-max max-w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 flex-col items-center gap-2"
-      :class="selecting ? (isPhone ? 'bottom-[calc(8.5rem+env(safe-area-inset-bottom))]' : 'bottom-20') : 'bottom-[calc(1rem+env(safe-area-inset-bottom))]'"
+      :class="selecting ? (isPhone ? 'bottom-[calc(8.5rem+env(safe-area-inset-bottom))]' : 'bottom-20') : isPhone && keyboardInset <= 80 ? 'bottom-[calc(4.5rem+env(safe-area-inset-bottom))]' : 'bottom-[calc(1rem+env(safe-area-inset-bottom))]'"
     >
       <div v-if="notice" class="pointer-events-auto flex max-w-full items-center gap-2 rounded-xl border border-line bg-surface py-1.5 pl-3 pr-1.5 text-sm shadow-lg" role="status">
         <span class="min-w-0 flex-1">{{ notice.message }}</span>
