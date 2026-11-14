@@ -279,7 +279,7 @@ if ((await page.locator('button', { hasText: /^Next week$/ }).count()) !== 0) th
 await page.keyboard.press('Escape')
 
 // ---------------------------------------------------------------------------
-step('phone width: the three buttons show and can be tapped')
+step('phone width: the three buttons show and can be tapped; Defer asks in a sheet at the bottom')
 await page.setViewportSize({ width: 390, height: 844 })
 task = await makeTask('Phone')
 await open(task)
@@ -292,6 +292,11 @@ await act('defer').click()
 await page.waitForSelector('[data-defer-menu]')
 const menu = await page.locator('[data-defer-menu]').boundingBox()
 if (menu.x < 0 || menu.x + menu.width > 390) throw new Error(`defer menu outside the screen: ${JSON.stringify(menu)}`)
+// On a phone the question is a sheet along the bottom (where the thumb is), its buttons 44px high.
+const sheet = await page.locator('[data-quick-ask-sheet]').boundingBox()
+if (!sheet || Math.abs(sheet.y + sheet.height - 844) > 2 || sheet.width < 380) throw new Error(`the question is not a sheet at the bottom: ${JSON.stringify(sheet)}`)
+const tomorrowBox = await page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }).boundingBox()
+if (tomorrowBox.height < 44) throw new Error(`Tomorrow is ${tomorrowBox.height}px high on a phone`)
 await page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }).click()
 await until(async () => dayOf((await propsOf(task.id)).dodate) === days.tomorrow, 'Tomorrow tapped on the phone')
 await act('drop').click()

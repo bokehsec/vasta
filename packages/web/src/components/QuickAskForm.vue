@@ -29,8 +29,8 @@ const answerText = () => props.ask.answer(textAnswer(props.ask.def, text.value, 
 <template>
   <div v-if="ask.def.kind === 'date'" class="space-y-3 p-2 text-sm" data-defer-menu>
     <div class="flex gap-2">
-      <button class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 hover:bg-line" @click="answerDay(tomorrow)">Tomorrow</button>
-      <button class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 hover:bg-line" @click="answerDay(nextWeek)">Next week</button>
+      <button class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 hover:bg-line max-md:py-3 max-md:text-base" @click="answerDay(tomorrow)">Tomorrow</button>
+      <button class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 hover:bg-line max-md:py-3 max-md:text-base" @click="answerDay(nextWeek)">Next week</button>
     </div>
     <MiniMonth :selected="ask.day" @pick="answerDay" />
     <p v-if="ask.due" class="flex items-center gap-1.5 text-xs text-ink-faint">
@@ -44,7 +44,7 @@ const answerText = () => props.ask.answer(textAnswer(props.ask.def, text.value, 
       ref="textInput"
       v-model="text"
       :inputmode="ask.def.kind === 'number' ? 'decimal' : ask.def.kind === 'url' ? 'url' : 'text'"
-      class="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-line-strong"
+      class="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-line-strong max-md:py-2.5 max-md:text-base"
       :placeholder="ask.def.kind === 'text' ? 'What happens next' : ''"
       @keydown.escape.stop="ask.answer(null)"
     />
