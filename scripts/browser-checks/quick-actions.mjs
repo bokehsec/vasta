@@ -329,7 +329,12 @@ const rowButton = (id, action) => rowActions(id).locator(`button[data-action="${
 const layoutButton = () => page.locator('main button').filter({ hasText: /^\s*(List|Table)\s*$/ })
 async function openTasks() {
   await page.goto(`${base}/t/${taskType.id}`)
-  await page.locator('main :is(button, [role=button])', { hasText: /^\s*All\s*$/ }).first().click() // the view last used is remembered
+  // The view last used is remembered: pick All (a phone has the views in a sheet).
+  await page.locator('main :is([data-view-picker], [role=button])').first().waitFor()
+  if (await page.locator('[data-view-picker]').count()) {
+    await page.locator('[data-view-picker]').click()
+    await page.locator('[data-view-option]', { hasText: /^\s*All\s*$/ }).click()
+  } else await page.locator('main :is(button, [role=button])', { hasText: /^\s*All\s*$/ }).first().click()
   await page.getByPlaceholder('Filter…').fill('QuickActions')
 }
 async function pickLayout(label) {
