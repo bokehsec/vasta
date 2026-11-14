@@ -70,6 +70,7 @@ import {
   type FoodEntry,
   type FoodPortion,
   type Nutrients,
+  REVIEW_DUE_FIELD,
 } from '@vasta/core'
 import {
   ARROW_HEADS,
@@ -754,7 +755,8 @@ export class AgentTools {
   /**
    * Objects of some types (names or ids; all types when empty), filtered and sorted like a query
    * in the app. Fields are property names (or ids), a relation's field as "Author.Country", or
-   * built-in fields: title, tags, createdAt, updatedAt, createdBy, updatedBy, date, type. Select values
+   * built-in fields: title, tags, createdAt, updatedAt, createdBy, updatedBy, date, type, and "Due for
+   * review" (checked on a task not reviewed in its type's number of days). Select values
    * are option labels; people are usernames or names ("me": the user).
    */
   query(options: { space?: string; types?: string[]; where?: AgentFilter[]; match?: 'all' | 'any'; sort?: { field: string; direction?: 'asc' | 'desc' }[]; limit?: number } = {}) {
@@ -1228,6 +1230,7 @@ function resolveField(name: string, types: ObjectType[], all: ObjectType[]): { p
     among.flatMap((t) => t.properties).find((p) => p.id === wanted) ?? among.flatMap((t) => t.properties).find((p) => fold(p.name) === fold(wanted))
   const builtIn = BUILT_IN_FIELDS.find((f) => fold(f) === fold(name))
   if (builtIn) return { path: builtIn }
+  if (fold(name) === fold('Due for review') || fold(name) === fold(REVIEW_DUE_FIELD)) return { path: REVIEW_DUE_FIELD }
   const direct = find(types, name)
   if (direct) return { path: direct.id, def: direct }
   const dot = name.indexOf('.')

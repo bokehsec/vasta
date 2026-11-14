@@ -77,6 +77,11 @@ describe('MCP endpoint', () => {
     await call('add_comment', { id: forAna.id, text: 'Before Friday, @ana' })
     expect((await call('get_object', { id: forAna.id })).comments).toEqual([{ by: 'arie (arie)', at: expect.any(String), text: 'Before Friday, @ana' }])
     await expect(call('add_comment', { id: forAna.id, text: '  ' })).rejects.toThrow('needs text')
+    // Due for review: never reviewed, so both; one marked reviewed today drops out.
+    const due = async () => (await call('query', { types: ['Task'], where: [{ field: 'Due for review', operator: 'is-checked' }], sort: [{ field: 'title' }] })).objects.map((o: { title: string }) => o.title)
+    expect(await due()).toEqual(['Pay the bills', 'Water the plants'])
+    await call('update_object', { id: forAna.id, properties: { 'Last reviewed': new Date().toISOString().slice(0, 10) } })
+    expect(await due()).toEqual(['Pay the bills'])
   })
 
   it('makes a repeating task set to done due next time', async () => {
