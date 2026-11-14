@@ -93,12 +93,13 @@ const statusOf = async (title) => (await get(`/api/objects/${made[title].id}`)).
 const rankOf = async (title) => (await get(`/api/objects/${made[title].id}`)).props.rank?.value
 await until(() => card('Alpha').count(), 'the board', 20000)
 
-// The middle of what shows of it: a column may stick out of a phone's screen.
+// The middle of what shows of it: a column may stick out of a phone's screen (on a phone the board
+// shows one column at a time, the next one peeking in at its right edge).
 const center = async (locator) => {
   const box = await locator.boundingBox()
-  const width = page.viewportSize().width
-  const left = Math.max(box.x, 0)
-  const right = Math.min(box.x + box.width, width)
+  const board = await page.locator('[data-drag-scroll]').first().boundingBox()
+  const left = Math.max(box.x, board?.x ?? 0, 0)
+  const right = Math.min(box.x + box.width, board ? board.x + board.width : Infinity, page.viewportSize().width)
   return { x: (left + right) / 2, y: box.y + Math.min(box.height, 120) / 2 }
 }
 async function mouseDrag(from, to) {
@@ -134,6 +135,11 @@ await until(async () => (await statusOf('Bravo')) === 'doing', 'Bravo in progres
 await until(async () => (await titlesIn('doing')).includes('Bravo'), 'Bravo in its new column')
 
 step('drag a card above another in its column (manual order)')
+// On a phone the board stays on the column the card went to: back to the first one, by its chip.
+if (phone) {
+  await page.locator('[data-board-chip]').first().click()
+  await sleep(800)
+}
 // Cards without a place yet come newest first: Charlie, then Alpha.
 await until(async () => JSON.stringify(await titlesIn('todo')) === JSON.stringify(['Charlie', 'Alpha']), 'newest first')
 if (phone) {
@@ -158,6 +164,13 @@ await until(async () => (await post(`/api/spaces/${space.id}/query`, { query: { 
 await page.keyboard.press('Escape')
 
 step('a WIP limit turns the count red; a column folds')
+// On a phone, go to a column by its chip first (the board shows one column at a time).
+const toColumn = async (key) => {
+  if (!phone) return
+  await page.locator(`[data-board-chip="${key}"]`).click()
+  await sleep(800)
+}
+await toColumn('doing')
 await cellOf('doing').locator('xpath=..').locator('button[title="Column options"]').click()
 await page.getByText('Set a WIP limit…').click()
 await page.locator('input').last().fill('1')
@@ -165,6 +178,7 @@ await page.keyboard.press('Enter')
 await until(async () => (await cellOf('doing').locator('xpath=..').locator('header').textContent()).includes('2/1'), '2/1 in the header')
 const overClass = await cellOf('doing').locator('xpath=..').locator('header span.tabular-nums').getAttribute('class')
 if (!/red/.test(overClass)) throw new Error('the count is not red')
+await toColumn('done')
 await cellOf('done').locator('xpath=..').locator('button[title="Column options"]').click()
 await page.getByText('Fold column').click()
 await until(async () => !(await cellOf('done').count()), 'Done folded')

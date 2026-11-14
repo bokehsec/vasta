@@ -2,8 +2,10 @@
 // The board layout: a column per group of `groupField`, optionally in rows (swimlanes) by a second
 // field. Cards keep a manual order (core rank.ts) while `manual`, move by dragging (lib/board.ts:
 // a mouse at once, a finger after a long press), and are made with "+" at the bottom of a column.
-// Columns fold and can have a WIP limit; both are the view's settings (`board`).
-import { computed, nextTick, ref } from 'vue'
+// Columns fold and can have a WIP limit; both are the view's settings (`board`). On a phone (without
+// swimlanes) a column is most of the screen wide and the board snaps from one to the next, with a
+// strip of the columns' names and counts above that jumps to one.
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef } from '@vasta/core'
 import { RANK_PROPERTY_ID, byRank, rankOf, rankBetween } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
@@ -12,6 +14,7 @@ import { chip } from '../lib/colors.ts'
 import { openMenuAt, promptDialog } from '../lib/overlays.ts'
 import { groupObjects, movableField, NO_VALUE, placeInGroup, typesOf, type Group } from '../lib/query.ts'
 import { lastError, typesById } from '../lib/state.ts'
+import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectCard from './ObjectCard.vue'
 import ObjectChip from './ObjectChip.vue'
@@ -47,6 +50,36 @@ function cell(column: Group, lane: Group): ObjectSummary[] {
   const items = laneField.value ? column.items.filter((o) => inLane.has(o.id)) : column.items
   return props.manual ? byRank(items) : items
 }
+
+// A phone: one column at a time --------------------------------------------------
+const oneColumn = computed(() => isPhone.value && !laneField.value)
+const scroller = ref<HTMLElement | null>(null)
+const columnEls = new Map<string, HTMLElement>()
+const columnRef = (key: string) => (el: unknown) => (el instanceof HTMLElement ? columnEls.set(key, el) : columnEls.delete(key))
+const current = ref('')
+const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+function showColumn(column: Group) {
+  current.value = column.key
+  columnEls.get(column.key)?.scrollIntoView({ inline: 'start', block: 'nearest', behavior: reduced ? 'auto' : 'smooth' })
+}
+/** The column nearest the board's left edge is the one shown. */
+let frame = 0
+function onScroll() {
+  if (!oneColumn.value || frame) return
+  frame = requestAnimationFrame(() => {
+    frame = 0
+    const left = scroller.value?.getBoundingClientRect().left ?? 0
+    let best = ''
+    let distance = Infinity
+    for (const [key, el] of columnEls) {
+      const d = Math.abs(el.getBoundingClientRect().left - left - 12)
+      if (d < distance) [best, distance] = [key, d]
+    }
+    current.value = best
+  })
+}
+onBeforeUnmount(() => cancelAnimationFrame(frame))
+const shownKey = computed(() => current.value || columns.value[0]?.key)
 
 // Columns: folded ones and WIP limits ------------------------------------------
 const collapsed = computed(() => new Set(props.board?.collapsed ?? []))
@@ -178,90 +211,113 @@ async function addCard(column: Group, lane: Group) {
 </script>
 
 <template>
-  <div class="overflow-x-auto pb-4" data-drag-scroll>
-    <div class="inline-flex min-w-full flex-col gap-4">
-      <div v-for="(lane, laneIndex) in lanes" :key="lane.key">
-        <!-- A lane's header: what its cards share. -->
-        <header v-if="laneField" class="sticky left-0 mb-2 flex w-fit items-center gap-2 text-sm">
-          <ObjectChip v-if="lane.objectId" :id="lane.objectId" :tag="laneField === 'tags'" />
-          <PersonChip v-else-if="lane.personId" :id="lane.personId" />
-          <span v-else class="rounded-md px-2 py-0.5 font-medium" :class="lane.key === NO_VALUE ? 'text-ink-faint' : chip(lane.color as never)">{{ lane.label }}</span>
-          <span class="text-xs text-ink-faint">{{ lane.items.length }}</span>
-        </header>
-        <div class="flex gap-3">
-          <section
-            v-for="column in columns"
-            :key="column.key"
-            class="flex shrink-0 flex-col rounded-xl bg-raised ring-1 ring-line"
-            :class="collapsed.has(column.key) ? 'w-11 p-1.5' : 'w-72 p-2'"
-          >
-            <!-- Column headers on the first lane only; a folded column shows its name upright. -->
-            <header
-              v-if="laneIndex === 0 || collapsed.has(column.key)"
-              class="group/col flex items-center gap-2 text-sm"
-              :class="collapsed.has(column.key) ? 'cursor-pointer flex-col py-1' : 'px-1 py-1'"
-              @click="collapsed.has(column.key) && toggleFold(column)"
-              @contextmenu.prevent="columnMenu($event, column)"
+  <div>
+    <nav v-if="oneColumn && columns.length > 1" class="-mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1" aria-label="Columns" data-board-chips>
+      <button
+        v-for="column in columns"
+        :key="column.key"
+        class="flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13px]"
+        :class="shownKey === column.key ? 'border-ink bg-ink text-surface' : 'border-line text-ink-soft'"
+        :aria-current="shownKey === column.key || undefined"
+        :data-board-chip="column.key"
+        @click="showColumn(column)"
+      >
+        {{ column.label || 'None' }}<span class="tabular-nums opacity-70">{{ column.items.length }}</span>
+      </button>
+    </nav>
+    <div
+      ref="scroller"
+      class="overflow-x-auto pb-4"
+      :class="oneColumn && !boardDrag.active ? 'snap-x snap-mandatory scroll-pl-3' : ''"
+      data-drag-scroll
+      @scroll.passive="onScroll"
+    >
+      <div class="inline-flex min-w-full flex-col gap-4">
+        <div v-for="(lane, laneIndex) in lanes" :key="lane.key">
+          <!-- A lane's header: what its cards share. -->
+          <header v-if="laneField" class="sticky left-0 mb-2 flex w-fit items-center gap-2 text-sm">
+            <ObjectChip v-if="lane.objectId" :id="lane.objectId" :tag="laneField === 'tags'" />
+            <PersonChip v-else-if="lane.personId" :id="lane.personId" />
+            <span v-else class="rounded-md px-2 py-0.5 font-medium" :class="lane.key === NO_VALUE ? 'text-ink-faint' : chip(lane.color as never)">{{ lane.label }}</span>
+            <span class="text-xs text-ink-faint">{{ lane.items.length }}</span>
+          </header>
+          <div class="flex gap-3">
+            <section
+              v-for="column in columns"
+              :key="column.key"
+              :ref="laneIndex === 0 ? columnRef(column.key) : undefined"
+              class="flex shrink-0 flex-col rounded-xl bg-raised ring-1 ring-line"
+              :class="[collapsed.has(column.key) ? 'w-11 p-1.5' : oneColumn ? 'w-[85vw] p-2' : 'w-72 p-2', oneColumn ? 'snap-start' : '']"
+              :data-board-column="column.key"
             >
-              <template v-if="!collapsed.has(column.key)">
-                <span v-if="column.objectId"><ObjectChip :id="column.objectId" :tag="groupField === 'tags'" /></span>
-                <PersonChip v-else-if="column.personId" :id="column.personId" />
-                <span v-else class="truncate rounded-md px-2 py-0.5 font-medium" :class="column.key === NO_VALUE ? 'text-ink-faint' : chip(column.color as never)">{{ column.label }}</span>
-              </template>
-              <span
-                class="text-xs tabular-nums"
-                :class="over(column) ? 'rounded-md bg-red-100 px-1.5 font-semibold text-red-700 dark:bg-red-950 dark:text-red-300' : 'text-ink-faint'"
-                :title="wip(column) ? `WIP limit ${wip(column)}` : undefined"
-                >{{ column.items.length }}<template v-if="wip(column)">/{{ wip(column) }}</template></span
+              <!-- Column headers on the first lane only; a folded column shows its name upright. -->
+              <header
+                v-if="laneIndex === 0 || collapsed.has(column.key)"
+                class="group/col flex items-center gap-2 text-sm"
+                :class="collapsed.has(column.key) ? 'cursor-pointer flex-col py-1' : 'px-1 py-1'"
+                @click="collapsed.has(column.key) && toggleFold(column)"
+                @contextmenu.prevent="columnMenu($event, column)"
               >
-              <span v-if="collapsed.has(column.key)" class="text-xs font-medium text-ink-soft [writing-mode:vertical-rl]">{{ column.label || '…' }}</span>
-              <button
-                v-else
-                class="ml-auto rounded-md p-0.5 text-ink-faint opacity-0 hover:bg-hover hover:text-ink group-hover/col:opacity-100 [@media(hover:none)]:opacity-100"
-                title="Column options"
-                @click.stop="columnMenu($event, column)"
-              >
-                <AppIcon fallback="ph:dots-three" :size="16" />
-              </button>
-            </header>
-            <div
-              v-if="!collapsed.has(column.key)"
-              class="flex min-h-12 flex-1 flex-col gap-2"
-              :class="laneIndex === 0 ? 'mt-2' : ''"
-              :data-board-cell="cellKey(column, lane)"
-            >
-              <!-- The card being dragged stays where it was, faded; a bar shows where it would land. -->
-              <template v-for="{ object, place } in placed(column, lane)" :key="object.id">
-                <div v-if="place >= 0 && landing(column, lane) === place" class="h-1 rounded-full bg-accent" />
-                <div
-                  :data-board-card="object.id"
-                  class="touch-manipulation select-none"
-                  :class="place < 0 ? 'opacity-40' : ''"
-                  @pointerdown="onPress($event, object)"
-                  @contextmenu="onContextMenu($event, object)"
-                  @dragstart.prevent
+                <template v-if="!collapsed.has(column.key)">
+                  <span v-if="column.objectId"><ObjectChip :id="column.objectId" :tag="groupField === 'tags'" /></span>
+                  <PersonChip v-else-if="column.personId" :id="column.personId" />
+                  <span v-else class="truncate rounded-md px-2 py-0.5 font-medium" :class="column.key === NO_VALUE ? 'text-ink-faint' : chip(column.color as never)">{{ column.label }}</span>
+                </template>
+                <span
+                  class="text-xs tabular-nums"
+                  :class="over(column) ? 'rounded-md bg-red-100 px-1.5 font-semibold text-red-700 dark:bg-red-950 dark:text-red-300' : 'text-ink-faint'"
+                  :title="wip(column) ? `WIP limit ${wip(column)}` : undefined"
+                  >{{ column.items.length }}<template v-if="wip(column)">/{{ wip(column) }}</template></span
                 >
-                  <ObjectCard :object="object" :type="typeOf(object)" variant="kanban" :fields="cardFields" :hide="hiddenFields" />
-                </div>
-              </template>
-              <div v-if="landing(column, lane) >= 0 && landing(column, lane) >= placed(column, lane).filter((p) => p.place >= 0).length" class="h-1 rounded-full bg-accent" />
-              <template v-if="canAdd">
-                <input
-                  v-if="addingIn === cellKey(column, lane)"
-                  ref="newInput"
-                  v-model="newTitle"
-                  class="w-full rounded-lg border border-line-strong bg-surface px-2.5 py-2 text-sm outline-none"
-                  placeholder="Title, then Enter"
-                  @keydown.enter.prevent="addCard(column, lane)"
-                  @keydown.esc="addingIn = ''"
-                  @blur="addingIn = ''"
-                />
-                <button v-else class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-sm text-ink-faint hover:bg-hover hover:text-ink" @click="startAdding(column, lane)">
-                  <AppIcon fallback="ph:plus" :size="14" /> New
+                <span v-if="collapsed.has(column.key)" class="text-xs font-medium text-ink-soft [writing-mode:vertical-rl]">{{ column.label || '…' }}</span>
+                <button
+                  v-else
+                  class="ml-auto rounded-md p-0.5 text-ink-faint opacity-0 hover:bg-hover hover:text-ink group-hover/col:opacity-100 [@media(hover:none)]:opacity-100"
+                  title="Column options"
+                  @click.stop="columnMenu($event, column)"
+                >
+                  <AppIcon fallback="ph:dots-three" :size="16" />
                 </button>
-              </template>
-            </div>
-          </section>
+              </header>
+              <div
+                v-if="!collapsed.has(column.key)"
+                class="flex min-h-12 flex-1 flex-col gap-2"
+                :class="laneIndex === 0 ? 'mt-2' : ''"
+                :data-board-cell="cellKey(column, lane)"
+              >
+                <!-- The card being dragged stays where it was, faded; a bar shows where it would land. -->
+                <template v-for="{ object, place } in placed(column, lane)" :key="object.id">
+                  <div v-if="place >= 0 && landing(column, lane) === place" class="h-1 rounded-full bg-accent" />
+                  <div
+                    :data-board-card="object.id"
+                    class="touch-manipulation select-none"
+                    :class="place < 0 ? 'opacity-40' : ''"
+                    @pointerdown="onPress($event, object)"
+                    @contextmenu="onContextMenu($event, object)"
+                    @dragstart.prevent
+                  >
+                    <ObjectCard :object="object" :type="typeOf(object)" variant="kanban" :fields="cardFields" :hide="hiddenFields" />
+                  </div>
+                </template>
+                <div v-if="landing(column, lane) >= 0 && landing(column, lane) >= placed(column, lane).filter((p) => p.place >= 0).length" class="h-1 rounded-full bg-accent" />
+                <template v-if="canAdd">
+                  <input
+                    v-if="addingIn === cellKey(column, lane)"
+                    ref="newInput"
+                    v-model="newTitle"
+                    class="w-full rounded-lg border border-line-strong bg-surface px-2.5 py-2 text-sm outline-none"
+                    placeholder="Title, then Enter"
+                    @keydown.enter.prevent="addCard(column, lane)"
+                    @keydown.esc="addingIn = ''"
+                    @blur="addingIn = ''"
+                  />
+                  <button v-else class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-sm text-ink-faint hover:bg-hover hover:text-ink" @click="startAdding(column, lane)">
+                    <AppIcon fallback="ph:plus" :size="14" /> New
+                  </button>
+                </template>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </div>

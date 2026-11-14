@@ -8,6 +8,8 @@ GitHub release page.
 
 ### Added
 
+- **Boards on a phone show one column at a time**: swipe sideways and it snaps to the next column,
+  or tap a column's name in the strip above (with its count) to jump there.
 - **Apple Mail links work in notes.** A link to an email (`message://…`) stays a link in the editor and in previews, and opens Mail when clicked, also from the desktop app.
 - **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu, a right-click on the
   view's tab, or the tab dragged into a sidebar section puts that one view, such as a "Today" view
