@@ -5,18 +5,20 @@
 // then timed ones in time order, a thin line marking now on today. It reloads when the Calendar
 // page would (changes anywhere) and when the day turns. An entry the page allows moves by dragging
 // (after a long press on touch): dropping it on another day sets the date field the agenda places
-// it by (a task's due, an event's time), as the Calendar page does (lib/calendar-drag.ts).
-import { computed, onBeforeUnmount, provide, ref, watch } from 'vue'
+// it by (a task's due, an event's time), as the Calendar page does (lib/calendar-drag.ts); a notice
+// says where it went, with Undo for a single date. On touch, dragging near the top or bottom of the
+// scrolling page scrolls it, so days off screen can be reached (markDragScroll).
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import type { AgendaSettings, CalendarEntry, CalendarSource, FilterGroup, Id } from '@vasta/core'
 import { addDays } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
 import { agendaDays, isPast, nowIndex, placeEntries, selectEntries, splitAllDay } from '../lib/agenda.ts'
 import { api } from '../lib/api.ts'
 import { changeEntryTimes, formatDayShort, formatWeekday, movedTimes, viewerTimeZone } from '../lib/calendar.ts'
-import { ENTRY_DRAGGING, drag, type DropTarget } from '../lib/calendar-drag.ts'
+import { ENTRY_DRAGGING, drag, markDragScroll, type DropTarget } from '../lib/calendar-drag.ts'
 import { onChange } from '../lib/events.ts'
 import { queryContext } from '../lib/query.ts'
-import { cachedSummary, lastError, primeSummaries, summaryOf, workspace } from '../lib/state.ts'
+import { cachedSummary, lastError, notice, primeSummaries, summaryOf, workspace } from '../lib/state.ts'
 import CalendarEntryItem from './calendar/CalendarEntryItem.vue'
 import EventDetails from './calendar/EventDetails.vue'
 import OccurrenceDetails from './calendar/OccurrenceDetails.vue'
@@ -75,6 +77,9 @@ watch(() => `${days.value[0]}:${days.value.at(-1)}`, () => void load(), { immedi
 watch(() => !!props.agenda?.calendars, () => void loadSources(), { immediate: true })
 
 let reloadTimer: ReturnType<typeof setTimeout> | undefined
+const root = ref<HTMLElement | null>(null)
+let unmarkScroll: (() => void) | undefined
+onMounted(() => (unmarkScroll = root.value ? markDragScroll(root.value) : undefined))
 const stopListening = onChange((event) => {
   if (event.kind === 'calendar') void loadSources()
   // Typing in the page that embeds the query saves it constantly; that alone moves nothing here.
@@ -91,6 +96,7 @@ onBeforeUnmount(() => {
   stopListening()
   clearTimeout(reloadTimer)
   clearInterval(tick)
+  unmarkScroll?.()
 })
 
 // What is shown ---------------------------------------------------------------
@@ -132,10 +138,32 @@ async function drop(entry: CalendarEntry, mode: 'move' | 'resize', target: DropT
   if (times.start === entry.start && (times.end ?? '') === (entry.end ?? '')) return
   try {
     if (!(await changeEntryTimes(entry, times))) return
+    announceMove(entry, target.day)
   } catch (error) {
     lastError.value = (error as Error).message
   }
   await load()
+}
+/**
+ * "Moved to Thu, Nov 19", with Undo putting the previous times back. A repeating date's change was
+ * asked for a scope (this, the following, all) that Undo cannot know, so that one only says it.
+ */
+function announceMove(entry: CalendarEntry, day: string) {
+  const message = `Moved to ${formatWeekday(day)}, ${formatDayShort(day)}`
+  if (entry.recurring) {
+    notice.value = { message }
+    return
+  }
+  const previous = { start: entry.start, ...(entry.end ? { end: entry.end } : {}) }
+  const undo = async () => {
+    try {
+      await changeEntryTimes(entry, previous)
+    } catch (error) {
+      lastError.value = (error as Error).message
+    }
+    await load()
+  }
+  notice.value = { message, action: { label: 'Undo', run: undo } }
 }
 /** The day a dragged entry would land on, tinted as on the Calendar page. */
 const dropDay = computed(() => (drag.active && drag.mode === 'move' && drag.target ? drag.target.day : ''))
@@ -159,7 +187,7 @@ async function detailsDone() {
 </script>
 
 <template>
-  <div data-agenda>
+  <div ref="root" data-agenda>
     <p v-if="!loaded" class="py-3 text-sm text-ink-faint">Loading…</p>
     <p v-else-if="failed && !entries.length" class="py-3 text-sm text-red-600">Could not load the agenda.</p>
     <template v-else>

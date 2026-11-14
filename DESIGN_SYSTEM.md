@@ -19,13 +19,18 @@ footer).
 **The shell**: the sidebar runs the full height with the space switcher on top; the top bar holds
 back/forward and where you are (an object's type, then the object); the page is a rounded panel
 (`bg-surface`, border, faint shadow) sitting on the canvas. On phones the panel is flat and full
-width, the sidebar is a drawer, and the top bar shows the menu (Back on an object's page, when there
-is history), the page and the bell. A bottom bar (`PhoneTabBar`) holds places only, as iPhone apps
+width, the sidebar is a drawer, and the top bar shows the menu (and Back beside it on an object's
+page, when there is history), the page and the bell. A bottom bar (`PhoneTabBar`) holds places only, as iPhone apps
 do: Home, Tasks, Inbox, Calendar, Search; the one you are on is accent-coloured. Capture is a round
 ink button above it on the right (it rises while a notice shows). The bar hides while the keyboard is
-up (`keyboardInset`) and gives way to the bulk bar while rows are selected; pages get bottom padding
-so their last row clears it. Every `PopoverMenu` is a sheet from the bottom on a phone (dimmed page,
-rounded top, safe area, 80% high at most, above the keyboard, full-width rows 44px, 16px text boxes);
+up (`keyboardInset`; a zoom is not a keyboard) or a whiteboard is full screen (`ui.surfaceFull`),
+and gives way to the bulk bar while rows are selected; pages get bottom padding so their last row
+clears it. Layers on a phone: bar and Capture 20, the drawer and its backdrop 30, the bulk bar and
+process mode 40, sheets and notices 50 and up. Notices sit above the bar, above the keyboard when it
+is up, and above process mode's buttons (`ui.noticeLift`). Every `PopoverMenu` is a sheet from the bottom on a phone (dimmed page,
+rounded top, safe area, 80% high at most and never more than the keyboard leaves (`sheetMaxHeight`),
+full-width rows 44px, 16px text boxes; a modal dialog: a tap on the dimmed page closes it without
+reaching what is underneath, focus moves in and goes back);
 `anchored` keeps a panel. The context menu is a sheet too, its submenu replacing the list with a Back
 row. A type page shows one "View ▾" button with the views in a sheet instead of tabs. A task's page
 folds its fields into one outlined line under the quick actions, opened with a tap.
@@ -67,7 +72,7 @@ thumb.
 caret before the parent that folds them for the session; rows of an outline keep the caret's place.
 Any object with steps shows a small outlined count ("2/5"), green with "Ready to close" once all
 are closed. A step listed without its parent says "in <parent>" on a faint line. On its page, a
-Subtasks section under the quick actions: a quiet header with "1 of 3 done", ruled rows (checkbox,
+Subtasks section under the quick actions: a quiet header with a thin progress line and "1 of 3 done", ruled rows (checkbox,
 title, short due date), and an "Add subtask" line at the end; when every step is closed, a bordered
 line "All subtasks done" with the type's first quick action as a button.
 
@@ -78,6 +83,9 @@ long-press menu; taps then pick rows and swipes are off. Picked rows are tinted 
 The bulk bar floats at the bottom (raised surface, strong border, soft shadow): the count, Select
 all, the quick actions when every picked object is an open one of a type that has them, Move to
 trash, and Clear; on a phone a second row of labelled icons. Notices rise above it while it shows.
+What is picked stays what is shown: rows that leave the list (a filter, a sync) leave the selection,
+another view or a layout without boxes ends it, and Select all takes the rows drawn, closed ones
+aside. Rows an action could not save stay picked.
 
 **Process mode**: a view's open objects one at a time, in a centred panel (full screen on a phone)
 over the dimmed page: place and a thin progress line, the title large, the next step, the view's

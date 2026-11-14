@@ -17,7 +17,9 @@ const props = defineProps<{ type: ObjectType }>()
 const emit = defineEmits<{ update: [value: QuickActions | undefined] }>()
 
 const own = computed(() => !!props.type.quickActions?.actions)
-const actions = computed(() => props.type.quickActions?.actions ?? defaultQuickActions(props.type))
+/** Only a task has defaults to start from; another type without a list of its own has none (as quickActionsOf says). */
+const hasDefaults = computed(() => props.type.system === 'task')
+const actions = computed(() => props.type.quickActions?.actions ?? (hasDefaults.value ? defaultQuickActions(props.type) : []))
 const fields = computed(() => props.type.properties.filter((p) => CHANGEABLE_KINDS.includes(p.kind)))
 const textFields = computed(() => props.type.properties.filter((p) => p.kind === 'text'))
 const defOf = (field: Id) => props.type.properties.find((p) => p.id === field)
@@ -171,7 +173,7 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
   <section class="mt-4" data-quick-action-settings>
     <div class="flex items-baseline gap-2">
       <div class="text-sm">Quick actions</div>
-      <button v-if="own" class="ml-auto text-xs text-ink-faint hover:text-ink" data-quick-defaults @click="useDefaults">Use the defaults</button>
+      <button v-if="own && hasDefaults" class="ml-auto text-xs text-ink-faint hover:text-ink" data-quick-defaults @click="useDefaults">Use the defaults</button>
     </div>
     <p class="mt-0.5 text-xs text-ink-faint">Buttons on a {{ (type.name || 'task').toLowerCase() }}'s page and, where a view turns them on, its row. Each makes its changes in one click; one marked “Ask” asks for that value first.</p>
     <div class="mt-2 divide-y divide-line rounded-xl border border-line">

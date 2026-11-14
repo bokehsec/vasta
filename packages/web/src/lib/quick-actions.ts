@@ -12,6 +12,7 @@ import { formatLongDay } from './format.ts'
 import type { MenuItem } from './overlays.ts'
 import { session } from './session.ts'
 import { lastError, notice } from './state.ts'
+import { openStepsNote } from './subtasks.ts'
 
 type Target = Pick<ObjectRecord, 'id' | 'props'>
 type Values = Record<Id, PropertyValue | undefined>
@@ -97,7 +98,7 @@ export interface RunOptions {
   save?: QuickSave
   /** The notice's word for several objects ("5 tasks"). */
   noun?: (count: number) => string
-  /** Said after the message once saved, if anything ("3 subtasks still open"). */
+  /** Said after the message once saved, if anything. Default: how many steps are still open on parents just closed ("3 subtasks still open"). */
   note?: () => string | undefined
 }
 
@@ -143,9 +144,24 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
         lastError.value = (error as Error).message
       }
     })
-  const note = options.note?.()
+  const note = options.note ? options.note() : openStepsNote(type, closedBy(type, targets, saved))
   notice.value = { message: note ? `${message} · ${note}` : message, action: { label: 'Undo', run: undo } }
   return saved
+}
+
+/** The objects these edits closed (open before, closed by the values saved). */
+function closedBy(type: ObjectType, targets: readonly Target[], saved: readonly QuickActionEdit[]): Target[] {
+  const byId = new Map(targets.map((t) => [t.id, t]))
+  return saved.flatMap((edit) => {
+    const object = byId.get(edit.id)
+    if (!object || isClosedTask(type, object)) return []
+    const props = { ...object.props }
+    for (const [field, value] of Object.entries(edit.values)) {
+      if (value) props[field] = value
+      else delete props[field]
+    }
+    return isClosedTask(type, { props }) ? [object] : []
+  })
 }
 
 /** The quick actions of an open task as menu items (a row's menu, long-press on a phone). */

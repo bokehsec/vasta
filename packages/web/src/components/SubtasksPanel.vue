@@ -2,14 +2,15 @@
 // An object's steps on its page (types with a parent field, core subtasks.ts): how many are done,
 // each with its checkbox, title and due date (swipes on touch), and "Add subtask": Return makes it
 // and keeps the cursor for the next; several pasted lines make one each. A new step takes the
-// parent's selects, relations, people and tags (lib/subtasks.ts). Once every step is closed and
+// parent's selects, relations, people and tags (lib/subtasks.ts). The checkbox and "done" follow
+// the type's status select (core statusProperty, as the progress does), so any type with one has
+// them and a type without one shows no checkbox. Once every step is closed and
 // the parent is open, a line says so with a button for the type's first quick action (Done); the
 // parent is never closed by itself.
 import { computed, nextTick, ref } from 'vue'
 import type { ObjectRecord, ObjectSummary, ObjectType, QuickActionDef } from '@vasta/core'
-import { DUE_PROPERTY_ID, isClosedTask, quickActionsOf, subtaskProgress } from '@vasta/core'
+import { DUE_PROPERTY_ID, isClosedTask, quickActionsOf, statusProperty, subtaskProgress } from '@vasta/core'
 import { setProperties } from '../lib/actions.ts'
-import { isDone, setTaskDone } from '../lib/calendar.ts'
 import { displayTitle, formatDateShort } from '../lib/format.ts'
 import { runQuickAction, type QuickSave } from '../lib/quick-actions.ts'
 import { lastError } from '../lib/state.ts'
@@ -23,8 +24,9 @@ const props = defineProps<{ type: ObjectType; object: Pick<ObjectRecord, 'id' | 
 
 const steps = computed(() => subtasksOf(props.type, props.object.id))
 const progress = computed(() => subtaskProgress(props.type, props.object, steps.value))
-const statusOf = (step: ObjectSummary) => (step.props.status?.kind === 'select' ? step.props.status.value : undefined)
-const closed = (step: ObjectSummary) => isDone(props.type, statusOf(step))
+/** The select that says whether a step is open or closed; without one, steps have no checkbox. */
+const statusDef = computed(() => statusProperty(props.type))
+const closed = (step: ObjectSummary) => isClosedTask(props.type, step)
 const dueOf = (step: ObjectSummary) => {
   const value = step.props[DUE_PROPERTY_ID]
   return value?.kind === 'date' ? formatDateShort(value.value) : ''
@@ -32,10 +34,14 @@ const dueOf = (step: ObjectSummary) => {
 
 const saveStep: QuickSave = (id, values) => setProperties(id, values).then(() => loadSubtasks(props.type.id, true))
 
+/** Closes a step with the status option meaning done, or reopens it with the one meaning to do (else the first that is not done). */
 async function toggle(step: ObjectSummary) {
+  const def = statusDef.value
+  const options = def?.options ?? []
+  const option = closed(step) ? (options.find((o) => o.status === 'todo') ?? options.find((o) => o.status !== 'done')) : options.find((o) => o.status === 'done')
+  if (!def || !option) return
   try {
-    await setTaskDone(step.id, props.type, !closed(step))
-    await loadSubtasks(props.type.id, true)
+    await saveStep(step.id, { [def.id]: { kind: 'select', value: [option.id] } })
   } catch (error) {
     lastError.value = (error as Error).message
   }
@@ -90,12 +96,18 @@ function swipes(step: ObjectSummary): { right?: SwipeAction; left: SwipeAction[]
   <section class="mt-5" data-subtasks>
     <header class="flex items-baseline justify-between px-1 pb-1.5 text-xs font-semibold text-ink-soft">
       <span>Subtasks</span>
-      <span v-if="progress.total" class="font-medium tabular-nums text-ink-faint" data-subtask-progress>{{ progress.done }} of {{ progress.total }} done</span>
+      <span v-if="progress.total" class="flex items-center gap-2 font-medium tabular-nums text-ink-faint">
+        <span class="h-[3px] w-16 overflow-hidden rounded-full bg-line" aria-hidden="true" data-subtask-bar>
+          <span class="block h-full rounded-full bg-[var(--color-flow-done)] transition-[width] duration-200" :style="{ width: `${(progress.done / progress.total) * 100}%` }" />
+        </span>
+        <span data-subtask-progress>{{ progress.done }} of {{ progress.total }} done</span>
+      </span>
     </header>
     <div class="divide-y divide-line/70 border-y border-line/70">
       <SwipeRow v-for="step in steps" :key="step.id" :enabled="!!swipes(step).right" :right="swipes(step).right" :left="swipes(step).left">
         <div class="flex items-start gap-2 px-1 py-1.5 max-md:py-2.5" data-subtask>
           <button
+            v-if="statusDef"
             class="relative mt-px shrink-0 rounded-full [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3 [@media(hover:none)]:after:content-['']"
             :class="closed(step) ? 'text-[var(--color-flow-done)]' : 'text-ink-soft hover:text-ink'"
             :title="closed(step) ? 'Mark as to do' : 'Mark as done'"

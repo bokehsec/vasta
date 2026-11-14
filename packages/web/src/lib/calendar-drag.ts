@@ -147,6 +147,21 @@ const shiftDay = (day: string, days: number) => {
   return date.toISOString().slice(0, 10)
 }
 
+/**
+ * Lets a drag scroll the page an element sits in (the agenda: nothing in it carries
+ * `data-drag-scroll`): marks its nearest scrolling ancestor, else the app's `main`, for as long as
+ * the returned function is not called. An area already marked is left as it is.
+ */
+export function markDragScroll(from: HTMLElement): () => void {
+  let scroller: HTMLElement | null = null
+  for (let at = from.parentElement; at && !scroller; at = at.parentElement) if (/(auto|scroll|overlay)/.test(getComputedStyle(at).overflowY)) scroller = at
+  scroller ??= from.closest<HTMLElement>('main')
+  if (!scroller || scroller.dataset.dragScroll !== undefined) return () => {}
+  const marked = scroller
+  marked.dataset.dragScroll = ''
+  return () => delete marked.dataset.dragScroll
+}
+
 /** Near the edge of a scrolling area (the hour grid), scroll it while the pointer stays there. */
 function autoScroll(x: number, y: number) {
   cancelAnimationFrame(scrollFrame)

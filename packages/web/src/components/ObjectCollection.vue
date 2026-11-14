@@ -13,7 +13,7 @@ import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import { runQuickAction } from '../lib/quick-actions.ts'
-import { clearSelection, isSelected, isSelecting, rememberMenuOwner, selection, toggleSelected, type SelectionOwner } from '../lib/selection.ts'
+import { clearSelection, isSelected, isSelecting, pruneSelection, rememberMenuOwner, selection, toggleSelected, type SelectionOwner } from '../lib/selection.ts'
 import { foldedSteps as folded, subtasksOf } from '../lib/subtasks.ts'
 import { hideSwipeTip, swipeTipHidden } from '../lib/tips.ts'
 import { isPhone, isTouch } from '../lib/viewport.ts'
@@ -162,10 +162,13 @@ const nextStepOf = (object: ObjectSummary) => {
 // Swipes on a touch screen (SwipeRow): right runs the type's Defer (else its first action), left
 // uncovers the others, Done first, and More (the row's menu). On a phone they replace the row's
 // buttons; a tablet keeps both.
-const swipeType = (object: ObjectSummary) => {
-  const type = isTouch.value && !selectingHere.value ? actionType(object) : undefined
+/** The type whose swipes this row has on touch, selecting or not. */
+const swipeable = (object: ObjectSummary) => {
+  const type = isTouch.value ? actionType(object) : undefined
   return type && !isClosedTask(type, object) ? type : undefined
 }
+/** Swipes are off while selecting here (a tap picks the row). */
+const swipeType = (object: ObjectSummary) => (selectingHere.value ? undefined : swipeable(object))
 const rightActionOf = (actions: QuickActionDef[]) => actions.find((a) => a.id === 'defer') ?? actions[0]
 const saveRow = async (id: Id, values: Record<Id, PropertyValue | undefined>) => emit('moved', await setProperties(id, values))
 function swipeAction(type: ObjectType, object: ObjectSummary, action: QuickActionDef): SwipeAction {
@@ -189,7 +192,7 @@ function swipeLeft(object: ObjectSummary): SwipeAction[] {
     tone: 'more',
     run: (anchor) => {
       const box = anchor?.getBoundingClientRect()
-      emit('menu', new MouseEvent('contextmenu', { clientX: box?.left ?? 0, clientY: box?.bottom ?? 0 }), object)
+      rowMenu(new MouseEvent('contextmenu', { clientX: box?.left ?? 0, clientY: box?.bottom ?? 0 }), object)
     },
   }
   return [...rest.slice(0, 3).map((a) => swipeAction(type, object, a)), more]
@@ -201,6 +204,10 @@ const selKey = newId()
 const owner: SelectionOwner = {
   drawn: () => groups.value.flatMap((group) => (asList.value ? rowsOf(group).map((r) => r.object) : shown(group))),
   all: () => props.objects,
+  pickable: (object) => {
+    const type = actionType(object)
+    return !type || !isClosedTask(type, object)
+  },
   moved: (object) => emit('moved', object),
   trashed: (ids) => emit('trashed', ids),
 }
@@ -221,9 +228,13 @@ function rowMenu(event: MouseEvent, object: ObjectSummary) {
   emit('menu', event, object)
 }
 onBeforeUnmount(() => selection.key === selKey && clearSelection())
+// What is picked must stay what is shown: ids no longer among the objects (a filter, another view, a
+// sync) are dropped, and a layout without selection (board, agenda, cards) ends it.
+watch([() => props.objects, () => props.objects.length], () => selection.key === selKey && pruneSelection())
+watch(canSelect, (can) => !can && selection.key === selKey && clearSelection())
 
-/** On a phone the row's own buttons give way to swipes. */
-const rowButtons = (object: ObjectSummary) => !!quickType(object) && !(isPhone.value && swipeType(object))
+/** On a phone the row's own buttons give way to swipes, also while selecting (the rows keep their height). */
+const rowButtons = (object: ObjectSummary) => !!quickType(object) && !(isPhone.value && swipeable(object))
 /** Shown once per device over the first list with swipeable rows on a phone. */
 const swipeTip = computed(() => {
   if (!isPhone.value || !asList.value || swipeTipHidden.value) return ''
@@ -232,12 +243,9 @@ const swipeTip = computed(() => {
   return right ? `Swipe right to ${right.label.toLowerCase()}, left for more` : ''
 })
 
+/** A row's own buttons save through here; a failure is left to reach the runner, which says so and skips the success notice. */
 async function saveQuick(object: ObjectSummary, values: Record<Id, PropertyValue | undefined>) {
-  try {
-    emit('moved', await setProperties(object.id, values))
-  } catch (error) {
-    lastError.value = (error as Error).message
-  }
+  emit('moved', await setProperties(object.id, values))
 }
 
 function startResize(event: PointerEvent, column: Column) {

@@ -15,6 +15,8 @@ GitHub release page.
   type starts empty.)
 - **Drag in the agenda.** In an Agenda view or query, drag a task or an event of your own to another
   day (after a long press on a phone) to move its date there; a timed one keeps its time of day.
+  A notice says where it went, with Undo, and dragging near the top or bottom scrolls to days off
+  screen.
 - **A phone layout that fits the hand.** On a phone a bar at the bottom goes to Home, Tasks, Inbox,
   Calendar and Search, with a round Capture button above it. Pickers and menus (a status, a date, a
   long-press menu) rise from the bottom with larger rows, and stay above the keyboard. A type's views
@@ -107,6 +109,11 @@ GitHub release page.
 
 ### Fixed
 
+- **Undo after Done on a repeating task** puts its date back on the occurrence it had; it stayed
+  on the next one.
+- **On a phone, a notice no longer hides behind the keyboard**, a picker's search box stays on
+  screen while you type, and the "Make subtask of…" search and a board's new card no longer zoom the
+  page.
 - **The ⋮⋮ handle of a block in a second or third column** sits in the gap before that column
   and holds still while the pointer goes to it. It sat at the page's left edge, so on the way the
   pointer crossed the first column and the handle jumped to a block there.

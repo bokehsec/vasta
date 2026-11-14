@@ -1,7 +1,7 @@
 // Many tasks at once in the test env. Desktop: a row's box and Shift-click pick a range, the bulk
 // bar's Defer asks once and defers all three with one Undo that restores all, Select all and
-// Escape, a click on a row picks it while selecting (it does not open), Move to trash with one
-// Undo; process mode through the view with keys (1 Done, → skip, ← back, 2 Defer, the end's counts,
+// Escape, the count following a task that stops matching the view, a click on a row picks it while
+// selecting (it does not open), Move to trash with one Undo; process mode through the view with keys (1 Done, → skip, ← back, 2 Defer, the end's counts,
 // Escape). Phone (390×844, touch): "Select" in a row's long-press menu, a tap picking another row,
 // no swipes while selecting, Done from the bar; process mode full screen, a swipe left skipping.
 // Chromium sends real touches (CDP); WebKit gets touch-shaped events in the page and a faked
@@ -19,9 +19,12 @@ if (!/^http:\/\/127\.0\.0\.1:518[34]$/.test(base)) throw new Error(`not the test
 const desktop = { viewport: { width: 1300, height: 900 }, locale: 'en-US', timezoneId: 'America/Toronto' }
 const phone = { viewport: { width: 390, height: 844 }, hasTouch: true, ...(engine === 'webkit' ? {} : { isMobile: true }), locale: 'en-US', timezoneId: 'America/Toronto' }
 const browser = engine === 'webkit' ? await webkit.launch() : await chromium.launch()
+// A persistent WebKit context is not the browser's: it keeps the process alive until it is closed itself.
+const opened = []
 async function newContext(options, touch) {
   // WebKit keeps the replica (OPFS) only in a persistent profile.
   const context = engine === 'webkit' ? await webkit.launchPersistentContext(mkdtempSync(path.join(tmpdir(), 'vasta-bulk-')), options) : await browser.newContext(options)
+  opened.push(context)
   if (process.env.MODE === 'json') await context.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))
   if (touch && engine === 'webkit') {
     await context.addInitScript(() => {
@@ -155,6 +158,20 @@ try {
   await page.keyboard.press('Escape')
   await until(async () => (await bar().count()) === 0, 'Escape cleared it')
 
+  step('the count follows the view: a task that stops matching its filter leaves the selection')
+  await row(second).hover()
+  await row(second).locator('[data-select-row]').click()
+  await page.locator('[data-bulk-all]').click()
+  await until(async () => (await count()) === '5 selected', 'all 5 selected')
+  const leaving = await get(`/api/objects/${fifth.id}`)
+  await put(`/api/objects/${fifth.id}`, { ...leaving, title: `Gone ${tag}` })
+  await until(async () => (await row(fifth).count()) === 0, 'the renamed task left the view')
+  await until(async () => (await count()) === '4 selected', 'the count dropped to 4 selected')
+  await page.keyboard.press('Escape')
+  await until(async () => (await bar().count()) === 0, 'Escape cleared it')
+  await put(`/api/objects/${fifth.id}`, { ...(await get(`/api/objects/${fifth.id}`)), title: fifth.title })
+  await until(async () => (await row(fifth).count()) === 1, 'the task is back in the view')
+
   step('while selecting, a click on a row picks it instead of opening it; Move to trash with one Undo')
   await row(second).hover()
   await row(second).locator('[data-select-row]').click()
@@ -282,12 +299,22 @@ try {
   await page.screenshot({ path: shot }).catch(() => {})
   console.log('screenshot:', shot)
   if (problems.length) console.log(problems.join('\n'))
-  throw error
+  console.error(error)
+  process.exitCode = 1
 } finally {
-  const cleanup = await newContext(desktop)
-  page = await login(cleanup)
-  for (const t of tasks) await page.request.delete(`${base}/api/objects/${t.id}`, { headers })
-  const now = await get(`/api/types/${taskType.id}`)
-  await put(`/api/types/${taskType.id}`, { ...now, views: original.views, properties: original.properties, quickActions: undefined }).catch(() => {})
-  await browser.close()
+  try {
+    const cleanup = await newContext(desktop)
+    page = await login(cleanup)
+    for (const t of tasks) await page.request.delete(`${base}/api/objects/${t.id}`, { headers })
+    const now = await get(`/api/types/${taskType.id}`)
+    await put(`/api/types/${taskType.id}`, { ...now, views: original.views, properties: original.properties, quickActions: undefined }).catch(() => {})
+  } catch (error) {
+    console.error('cleanup failed:', error)
+    process.exitCode = 1
+  }
+  // Every context, the cleanup's too (WebKit's persistent ones are not closed with the browser), then
+  // leave: a script that passed must not hang.
+  for (const context of opened) await context.close().catch(() => {})
+  await browser.close().catch(() => {})
+  process.exit(process.exitCode ?? 0)
 }

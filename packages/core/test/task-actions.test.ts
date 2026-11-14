@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes } from '../src/builtin-types.ts'
 import type { ObjectType, PropertyDef, PropertyValue, QuickActionDef } from '../src/model.ts'
+import { completeRepeat } from '../src/calendar.ts'
+import type { ObjectRecord } from '../src/model.ts'
 import { askOf, defaultQuickActions, isClosedTask, nextStepFieldOf, quickActionChanges, quickActionEdits, quickActionMessage, quickActionsOf, withAskCleared } from '../src/task-actions.ts'
 
 const AT = '2026-11-13T12:00:00.000Z'
@@ -186,6 +188,28 @@ describe('an action on many objects', () => {
     const nextStep = quickActionsOf(triageTask({ nextStepField: 'next' })).find((a) => a.id === 'next-step')!
     const edits = quickActionEdits(type, [{ id: 'a', props: { next: { kind: 'text', value: 'Call' } } }], withAskCleared(type, nextStep), context)
     expect(edits).toEqual([{ id: 'a', values: { next: undefined }, before: { next: { kind: 'text', value: 'Call' } } }])
+  })
+
+  it('keeps the due date of a repeating task in Undo when Done closes it, as completeRepeat moves it', () => {
+    const done = quickActionsOf(type).find((a) => a.id === 'done')!
+    const weekly = day('2026-11-13', 'FREQ=WEEKLY')
+    const objects: { id: string; props: Record<string, PropertyValue> }[] = [
+      { id: 'r', props: { status: status('todo'), due: weekly } },
+      { id: 'p', props: { status: status('todo'), due: day('2026-11-13') } },
+      { id: 'n', props: { status: status('todo') } },
+    ]
+    const edits = quickActionEdits(type, objects, done, context)
+    expect(edits[0]!.before).toEqual({ status: status('todo'), due: weekly })
+    expect(edits[1]!.before).toEqual({ status: status('todo') })
+    expect(edits[2]!.before).toEqual({ status: status('todo') })
+    // Saving Done really moves the date; the edit's `before` puts both fields back.
+    const stored = { id: 'r', typeId: task.id, title: 'T', props: objects[0]!.props } as unknown as ObjectRecord
+    const saved = completeRepeat({ ...stored, props: { ...stored.props, ...edits[0]!.values } } as ObjectRecord, stored, task, 'UTC')
+    expect(saved.props.due).not.toEqual(weekly)
+    expect({ ...saved.props, ...edits[0]!.before }).toEqual(stored.props)
+    // Not for an action that leaves the task open, nor for a type that is not a task.
+    const reopen: QuickActionDef = { id: 'r', name: 'R', changes: [{ field: 'status', value: { kind: 'value', value: status('scheduled') } }] }
+    expect(quickActionEdits(type, objects.slice(0, 1), reopen, context)[0]!.before).toEqual({ status: status('todo') })
   })
 
   it('says the days set, the count, a day past the due date and failures', () => {

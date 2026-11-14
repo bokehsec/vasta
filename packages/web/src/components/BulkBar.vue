@@ -2,14 +2,14 @@
 // The bar for a selection (lib/selection.ts), fixed at the bottom above the safe area: how many are
 // picked, Select all, Clear, and what can be done to all of them at once: the quick actions when
 // every one is an open object of one type that has them (one question, one notice, one Undo, through
-// lib/quick-actions.ts), and Move to trash (one Undo). On a phone the actions are labelled icons in
+// lib/quick-actions.ts; rows that fail to save stay picked), and Move to trash (one Undo). On a phone the actions are labelled icons in
 // a row under the count.
 import { computed } from 'vue'
 import type { ObjectType, QuickActionDef } from '@vasta/core'
 import { isClosedTask, quickActionsOf } from '@vasta/core'
 import { setProperties } from '../lib/actions.ts'
 import { runQuickAction } from '../lib/quick-actions.ts'
-import { clearSelection, selectAll, selectedObjects, selecting, selection, selectionOwner, trashSelected } from '../lib/selection.ts'
+import { clearSelection, dropSelected, selectAll, selectedObjects, selecting, selection, selectionOwner, trashSelected } from '../lib/selection.ts'
 import { typesById } from '../lib/state.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
@@ -29,12 +29,15 @@ async function run(action: QuickActionDef, event: MouseEvent) {
   const type = actionType.value
   const owner = selectionOwner()
   if (!type) return
+  const asked = objects.value.length
   const saved = await runQuickAction(type, objects.value, action, {
     anchor: isPhone.value ? null : (event.currentTarget as HTMLElement),
     save: async (id, values) => owner?.moved(await setProperties(id, values)),
     noun: (n) => `${n} ${n === 1 ? type.name.toLowerCase() : type.pluralName.toLowerCase()}`,
   })
-  if (saved.length) clearSelection()
+  // Everything saved ends the selection; after a partial failure the rows that failed stay picked.
+  if (saved.length && saved.length >= asked) clearSelection()
+  else if (saved.length) dropSelected(saved.map((e) => e.id))
 }
 
 const button = 'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-ink-soft hover:bg-hover hover:text-ink'

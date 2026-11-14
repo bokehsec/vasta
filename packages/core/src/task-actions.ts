@@ -197,8 +197,19 @@ export function quickActionEdits(
     const values = quickActionChanges(type, object, action, context, answer)
     if (!values) return []
     const before = Object.fromEntries(Object.keys(values).map((key) => [key, object.props[key]]))
+    // Done on a repeating task is saved as its next occurrence (completeRepeat moves the due date and
+    // puts the status back), so Undo has to put the due date back too, not only the status.
+    if (!(DUE_PROPERTY_ID in before) && endsRepeat(type, object, values)) before[DUE_PROPERTY_ID] = object.props[DUE_PROPERTY_ID]
     return [{ id: object.id, values, before }]
   })
+}
+
+/** Whether `values` close a task whose due date repeats: what completeRepeat rewrites when saved. */
+function endsRepeat(type: ObjectType, object: Pick<ObjectRecord, 'props'>, values: Record<Id, PropertyValue | undefined>): boolean {
+  const due = object.props[DUE_PROPERTY_ID]
+  const next = values[STATUS_PROPERTY_ID]
+  if (type.system !== 'task' || due?.kind !== 'date' || !due.value.rrule || next?.kind !== 'select') return false
+  return statusOptions(type).some((o) => o.status === 'done' && next.value.includes(o.id))
 }
 
 /** The day a date value falls on ("YYYY-MM-DD"); a timed one in the zone `dayOfTime` gives. */

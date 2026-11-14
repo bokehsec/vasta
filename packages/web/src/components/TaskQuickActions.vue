@@ -12,9 +12,18 @@ import { setProperties } from '../lib/actions.ts'
 import { quickAsk, runQuickAction } from '../lib/quick-actions.ts'
 import AppIcon from './AppIcon.vue'
 
-/** `note`: said in the notice after an action (the page: subtasks still open). */
-const props = defineProps<{ type: ObjectType; object: Pick<ObjectRecord, 'id' | 'props'>; variant?: 'page' | 'row'; note?: () => string | undefined }>()
-const emit = defineEmits<{ set: [values: Record<Id, PropertyValue | undefined>] }>()
+/** `note`: said in the notice after an action instead of the runner's own (subtasks still open). */
+const props = defineProps<{
+  type: ObjectType
+  object: Pick<ObjectRecord, 'id' | 'props'>
+  variant?: 'page' | 'row'
+  note?: () => string | undefined
+  /**
+   * Applies this task's values (`@set`). A prop rather than an emit so a save that fails reaches the
+   * runner, which counts it and says so instead of showing a success notice.
+   */
+  onSet?: (values: Record<Id, PropertyValue | undefined>) => unknown
+}>()
 
 const row = computed(() => props.variant === 'row')
 const actions = computed(() => quickActionsOf(props.type))
@@ -24,7 +33,7 @@ let mounted = true
 onBeforeUnmount(() => (mounted = false))
 
 /** This task's values go to the page or list while it shows this task, else straight to the server. */
-const save = (id: Id, values: Record<Id, PropertyValue | undefined>) => (mounted && props.object.id === id ? emit('set', values) : setProperties(id, values))
+const save = (id: Id, values: Record<Id, PropertyValue | undefined>) => (mounted && props.onSet && props.object.id === id ? props.onSet(values) : setProperties(id, values))
 
 function press(event: MouseEvent, action: QuickActionDef) {
   void runQuickAction(props.type, props.object, action, { anchor: event.currentTarget as HTMLElement, save, note: props.note })

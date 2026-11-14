@@ -1,7 +1,8 @@
 // The Agenda layout in the test env: a query shown as an agenda in a page (day sections from today,
 // all-day rows, timed rows with their time, the line for now, a task's checkbox, a day with nothing)
 // and its settings (days), then a type view as an agenda with its date field. Dragging an entry to
-// another day moves its date (a task's due, an event's own field), keeping the time of day.
+// another day moves its date (a task's due, an event's own field), keeping the time of day, and
+// the notice's Undo puts it back.
 // Subscribed calendars need a feed URL the test env does not have, so they are not covered here
 // (lib/agenda.test.ts is).
 //   node agenda.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
@@ -191,6 +192,13 @@ try {
   await until(async () => (await get(`/api/objects/${concert.id}`)).props.when?.value?.start === `${today}T20:00:00.000Z`, 'When moved to today, still at 20:00')
   await until(async () => (await entry(today, `Concert ${tag}`).count()) === 1, 'the concert moved to today')
   if ((await entry(tomorrow, `Concert ${tag}`).count()) !== 0) throw new Error('the concert is still under tomorrow')
+
+  step('the drop says where it went, and Undo puts the time back')
+  const moved = page.locator('[role=status]', { hasText: /Moved to \w{3}, \w{3} \d+/ })
+  await moved.waitFor()
+  await moved.locator('button', { hasText: 'Undo' }).click()
+  await until(async () => (await get(`/api/objects/${concert.id}`)).props.when?.value?.start === `${tomorrow}T20:00:00.000Z`, 'When back on tomorrow at 20:00')
+  await until(async () => (await entry(tomorrow, `Concert ${tag}`).count()) === 1 && (await entry(today, `Concert ${tag}`).count()) === 0, 'the concert is back under tomorrow')
 } finally {
   for (const id of [host.id, query.id, early.id, late.id, allDay.id, nextDay.id, other.id]) await page.request.delete(`${base}/api/objects/${id}`, { headers })
   if (eventType) {

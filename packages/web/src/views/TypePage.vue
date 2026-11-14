@@ -119,6 +119,8 @@ function togglePhoneTable() {
 }
 
 watch(activeViewId, (id) => {
+  // Another view shows other rows: what was picked in the last one goes.
+  clearSelection()
   // Opened from a view pinned in the sidebar (?view=), then another view picked: the link goes.
   if (route.query.view && route.query.view !== id) void router.replace({ query: { ...route.query, view: undefined } })
 })

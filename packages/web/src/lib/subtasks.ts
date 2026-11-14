@@ -5,7 +5,7 @@
 // parent (taking its selects, relations, people and tags), moving one under another, taking one out.
 import { reactive } from 'vue'
 import type { Id, ObjectRecord, ObjectSummary, ObjectType, PropertyValue } from '@vasta/core'
-import { parentFieldOf, parentIdOf, wouldCycle } from '@vasta/core'
+import { STATUS_PROPERTY_ID, parentFieldOf, parentIdOf, statusProperty, subtaskProgress, wouldCycle } from '@vasta/core'
 import { createObject, setProperties } from './actions.ts'
 import { api } from './api.ts'
 import { onChange } from './events.ts'
@@ -73,6 +73,16 @@ export function subtasksOf(type: ObjectType | undefined, id: Id): ObjectSummary[
   return indexes.get(type.id)?.children.get(id) ?? []
 }
 
+/** "3 subtasks still open" for parents just closed, from the steps loaded; undefined when none are (or the type has no steps). */
+export function openStepsNote(type: ObjectType | undefined, closed: readonly Pick<ObjectRecord, 'id' | 'props'>[]): string | undefined {
+  if (!type || !parentFieldOf(type)) return undefined
+  const open = closed.reduce((sum, parent) => {
+    const progress = subtaskProgress(type, parent, subtasksOf(type, parent.id))
+    return sum + progress.total - progress.done
+  }, 0)
+  return open ? `${open} subtask${open === 1 ? '' : 's'} still open` : undefined
+}
+
 /** The parent of an object, as the index knows it. */
 export function parentOf(type: ObjectType | undefined, id: Id): Id | undefined {
   return type ? indexes.get(type.id)?.parents.get(id) : undefined
@@ -85,15 +95,16 @@ export function canBeParent(type: ObjectType | undefined, childId: Id, parentId:
 
 /**
  * What a new step takes from its parent, so views filtered by Area or Project still show it beside
- * it: select values (not the status), relations (not the parent field), people and tags; not dates
+ * it: select values (not the status: the type's status select, whatever its id), relations (not the parent field), people and tags; not dates
  * or text.
  */
 export function inheritedValues(type: ObjectType, parent: Pick<ObjectRecord, 'props' | 'tagIds'>): { props: Record<Id, PropertyValue>; tagIds: Id[] } {
   const field = parentFieldOf(type)
+  const status = statusProperty(type)
   const props: Record<Id, PropertyValue> = {}
   for (const def of type.properties) {
     const value = parent.props[def.id]
-    if (!value || def.id === field?.id || def.id === 'status') continue
+    if (!value || def.id === field?.id || def.id === status?.id || def.id === STATUS_PROPERTY_ID) continue
     if ((def.kind === 'select' && value.kind === 'select') || (def.kind === 'relation' && value.kind === 'relation') || (def.kind === 'person' && value.kind === 'person')) props[def.id] = value
   }
   return { props, tagIds: [...parent.tagIds] }

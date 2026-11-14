@@ -6,14 +6,16 @@
 // for a type with subtasks "Break into steps" adds steps in place. Keys: 1–9 the actions, → or
 // Space skip, ← back, Return open, Escape close. On a phone it fills the screen with the buttons at
 // the bottom; a swipe right runs Defer (as on rows), a swipe left skips. The end says what was done.
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+// One action at a time: while one saves (or its question is open) further keys, taps and swipes,
+// Skip and Back do nothing, and the move on is from the task the action was run on.
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ObjectSummary, ObjectType, QuickActionDef } from '@vasta/core'
 import { nextStepFieldOf, parentFieldOf, quickActionsOf } from '@vasta/core'
 import { rowFields, type ListField } from '../lib/columns.ts'
 import { displayTitle } from '../lib/format.ts'
 import { openObject } from '../lib/open.ts'
 import { quickAsk, runQuickAction } from '../lib/quick-actions.ts'
-import { lastError } from '../lib/state.ts'
+import { lastError, ui } from '../lib/state.ts'
 import { addSubtask, subtasksOf } from '../lib/subtasks.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
@@ -42,21 +44,30 @@ const notes = computed(() => {
   return text.length > 280 ? `${text.slice(0, 280).trimEnd()}…` : text
 })
 
+const busy = ref(false)
 async function act(action: QuickActionDef, anchor: HTMLElement | null) {
   const object = current.value
-  if (!object) return
-  const saved = await runQuickAction(props.type, object, action, { anchor: isPhone.value ? null : anchor })
-  if (!saved.length) return
-  list.value[index.value] = { ...object, props: { ...object.props, ...Object.fromEntries(Object.entries(saved[0]!.values).filter(([, v]) => v)) } } as ObjectSummary
-  counts.value = { ...counts.value, [action.name]: (counts.value[action.name] ?? 0) + 1 }
-  move(1)
+  if (!object || busy.value) return
+  const at = index.value
+  busy.value = true
+  try {
+    const saved = await runQuickAction(props.type, object, action, { anchor: isPhone.value ? null : anchor })
+    if (!saved.length) return
+    list.value[at] = { ...object, props: { ...object.props, ...Object.fromEntries(Object.entries(saved[0]!.values).filter(([, v]) => v)) } } as ObjectSummary
+    counts.value = { ...counts.value, [action.name]: (counts.value[action.name] ?? 0) + 1 }
+    breakingDown.value = false
+    index.value = Math.min(list.value.length, at + 1)
+  } finally {
+    busy.value = false
+  }
 }
 function move(delta: number) {
+  if (busy.value) return
   breakingDown.value = false
   index.value = Math.max(0, Math.min(list.value.length, index.value + delta))
 }
 function skip() {
-  if (done.value) return
+  if (done.value || busy.value) return
   skipped.value++
   move(1)
 }
@@ -119,28 +130,57 @@ function onKey(event: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
-// A phone: swipe the card (right: Defer, left: skip); a mostly vertical move scrolls.
-let touch: { x: number; y: number } | undefined
+// A phone: swipe the card (right: Defer, left: skip). As in SwipeRow the direction is decided after
+// 10px and kept: a mostly vertical move scrolls, and a scroll that drifts sideways does not swipe.
+const DECIDE = 10
+let touch: { x: number; y: number; direction?: 'x' | 'y' } | undefined
 const shift = ref(0)
 function onTouchStart(event: TouchEvent) {
   const t = event.touches[0]
+  shift.value = 0
   touch = t && event.touches.length === 1 && t.clientX > 24 ? { x: t.clientX, y: t.clientY } : undefined
 }
 function onTouchMove(event: TouchEvent) {
   const t = event.touches[0]
   if (!touch || !t) return
   const dx = t.clientX - touch.x
-  if (Math.abs(t.clientY - touch.y) > Math.abs(dx)) return
-  shift.value = dx
+  const dy = t.clientY - touch.y
+  if (!touch.direction) {
+    if (Math.abs(dy) > DECIDE && Math.abs(dy) >= Math.abs(dx)) touch.direction = 'y'
+    else if (Math.abs(dx) > DECIDE) touch.direction = 'x'
+    else return
+  }
+  if (touch.direction === 'x') shift.value = dx
+}
+/** The browser took the touch (a scroll, a system gesture): no swipe. */
+function onTouchCancel() {
+  shift.value = 0
+  touch = undefined
 }
 function onTouchEnd() {
-  const dx = shift.value
+  const dx = touch?.direction === 'x' ? shift.value : 0
   shift.value = 0
   touch = undefined
   const width = window.innerWidth
   if (dx > width * 0.35 && rightAction.value) void act(rightAction.value, null)
   else if (dx < -width * 0.35) skip()
 }
+
+// On a phone the buttons are where notices show: the notice (Undo) sits just above them instead.
+const buttonBlock = ref<HTMLElement | null>(null)
+let blockSize: ResizeObserver | undefined
+function liftNotices() {
+  ui.noticeLift = isPhone.value && buttonBlock.value ? Math.max(0, Math.round(window.innerHeight - buttonBlock.value.getBoundingClientRect().top)) : 0
+}
+watch([buttonBlock, isPhone], ([block]) => {
+  blockSize?.disconnect()
+  if (block && typeof ResizeObserver !== 'undefined') (blockSize = new ResizeObserver(liftNotices)).observe(block)
+  liftNotices()
+})
+onBeforeUnmount(() => {
+  blockSize?.disconnect()
+  ui.noticeLift = 0
+})
 
 const summary = computed(() => [...Object.entries(counts.value).map(([name, n]) => `${name} ${n}`), ...(skipped.value ? [`Skipped ${skipped.value}`] : [])])
 </script>
@@ -184,6 +224,7 @@ const summary = computed(() => [...Object.entries(counts.value).map(([name, n]) 
             @touchstart.passive="onTouchStart"
             @touchmove.passive="onTouchMove"
             @touchend="onTouchEnd"
+            @touchcancel="onTouchCancel"
           >
             <h2 class="text-[1.35rem] font-semibold leading-tight tracking-[-0.01em]" data-process-title>{{ displayTitle(current, type) }}</h2>
             <p v-if="nextStep" class="mt-2 flex items-center gap-1.5 text-sm text-ink-soft"><AppIcon fallback="ph:arrow-right" :size="13" class="shrink-0 text-ink-faint" />{{ nextStep }}</p>
@@ -200,7 +241,7 @@ const summary = computed(() => [...Object.entries(counts.value).map(([name, n]) 
           </div>
 
           <!-- The buttons, where the thumb is on a phone. -->
-          <div class="grid gap-2 border-t border-line px-4 pb-3 pt-3" :class="actions.length > 2 ? 'grid-cols-2' : 'grid-cols-1'">
+          <div ref="buttonBlock" class="grid gap-2 border-t border-line px-4 pb-3 pt-3" :class="actions.length > 2 ? 'grid-cols-2' : 'grid-cols-1'">
             <button
               v-for="(action, i) in actions"
               :key="action.id"
