@@ -11,6 +11,9 @@ import { daysBetween } from './time.ts'
 
 export const DEFAULT_REVIEW_EVERY = 7
 
+/** The built-in filter field "Due for review" (query.ts): checked on a task dueForReview says is due. */
+export const REVIEW_DUE_FIELD = 'reviewDue'
+
 /** The type's Last reviewed date (tasks), unless it was deleted or changed kind. */
 export function reviewFieldOf(type: ObjectType | undefined): DatePropertyDef | undefined {
   if (type?.system !== 'task') return undefined

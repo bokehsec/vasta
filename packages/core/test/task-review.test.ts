@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes } from '../src/builtin-types.ts'
 import type { ObjectType, PropertyValue } from '../src/model.ts'
+import type { ObjectSummary } from '../src/model.ts'
+import { fieldKind, matchesFilter } from '../src/query.ts'
 import { quickActionEdits, quickActionMessage } from '../src/task-actions.ts'
 import { dueForReview, holdAction, holdOptionOf, reviewEveryOf, reviewFieldOf, reviewedAction, withReviewed } from '../src/task-review.ts'
 
@@ -62,5 +64,22 @@ describe('Hold', () => {
     expect(holdOptionOf(withHold('On hold', { holdStatus: 'none' }))).toBeUndefined()
     // Never an option meaning done.
     expect(holdOptionOf(withHold('On hold', { holdStatus: 'done' }))).toBeUndefined()
+  })
+})
+
+describe('the Due for review filter', () => {
+  const summary = (type: ObjectType, reviewed?: string) => ({ id: 'a', typeId: type.id, title: 'A', tagIds: [], collectionIds: [], props: reviewed ? { reviewed: day(reviewed) } : {} }) as unknown as ObjectSummary
+  const due = { kind: 'filter' as const, field: 'reviewDue', operator: 'is-checked' as const }
+  const matches = (type: ObjectType, reviewed?: string) => matchesFilter(summary(type, reviewed), due, { types: new Map([[type.id, type]]), today: '2026-11-14', timeZone: 'UTC' })
+
+  it('follows the type\'s number of days', () => {
+    expect(fieldKind('reviewDue')).toBe('checkbox')
+    expect(matches(task)).toBe(true)
+    expect(matches(task, '2026-11-10')).toBe(false)
+    expect(matches(task, '2026-11-07')).toBe(true)
+    const fortnight = { ...task, quickActions: { reviewEvery: 14 } }
+    expect(matches(fortnight, '2026-11-07')).toBe(false)
+    expect(matches({ ...task, quickActions: { reviewEvery: 3 } }, '2026-11-10')).toBe(true)
+    expect(matches(page)).toBe(false)
   })
 })

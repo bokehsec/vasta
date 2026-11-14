@@ -1,7 +1,7 @@
 // Query helpers for the UI: field menus, operator labels, grouping, and moving an object between
 // groups (kanban drops). Filtering and sorting themselves live in @vasta/core (query.ts).
 import type { FilterOperator, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, QueryDef } from '@vasta/core'
-import { DAY_BUCKETS, dayBucket, dayIn, fieldKind, type DayBucket, type FieldKind, type QueryContext } from '@vasta/core'
+import { DAY_BUCKETS, REVIEW_DUE_FIELD, dayBucket, dayIn, fieldKind, reviewFieldOf, type DayBucket, type FieldKind, type QueryContext } from '@vasta/core'
 import { api } from './api.ts'
 import { dayKey } from './actions.ts'
 import { startOfWeek } from './calendar.ts'
@@ -72,7 +72,9 @@ export function filterFieldOptions(typeIds: Id[]): FieldOption[] {
     const fields = targets.length ? fieldOptions(targets) : fieldOptions([]).filter((f) => !f.def && f.field !== 'host')
     return fields.map((f) => ({ ...f, field: `${option.field}.${f.field}`, label: `${option.label} › ${f.label}`, through: option.label }))
   })
-  return [...own, ...related]
+  // Due for review (a task not reviewed in its type's number of days): filters only, for types with review dates.
+  const reviewDue: FieldOption[] = typesOf(typeIds).some((t) => reviewFieldOf(t)) ? [{ field: REVIEW_DUE_FIELD, label: 'Due for review', kind: 'checkbox', icon: 'ph:clock-countdown' }] : []
+  return [...own, ...reviewDue, ...related]
 }
 
 export const OPERATOR_LABELS: Record<FilterOperator, string> = {

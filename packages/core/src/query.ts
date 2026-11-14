@@ -14,10 +14,11 @@ import type {
 } from './model.ts'
 import { evaluateFormula, formulaKind, formulaReferences, type FormulaValue } from './formula.ts'
 import type { Bounds } from './store.ts'
+import { REVIEW_DUE_FIELD, dueForReview, reviewFieldOf } from './task-review.ts'
 import { addDays, dayIn } from './time.ts'
 
 /** Fields every object has, usable in filters, sorting and grouping next to property ids. */
-export const BUILTIN_FIELDS = ['title', 'tags', 'collections', 'type', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'date', 'host'] as const
+export const BUILTIN_FIELDS = ['title', 'tags', 'collections', 'type', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'date', 'host', REVIEW_DUE_FIELD] as const
 export type BuiltinField = (typeof BUILTIN_FIELDS)[number]
 
 /** How a field compares: the filter operators and value editor depend on it. */
@@ -134,6 +135,8 @@ export function fieldKind(field: string, def?: PropertyDef, types: Iterable<Obje
     case 'updatedAt':
     case 'date':
       return 'date'
+    case REVIEW_DUE_FIELD:
+      return 'checkbox'
   }
   switch (def?.kind) {
     case 'number':
@@ -207,6 +210,11 @@ function readField(object: ObjectSummary, field: string, context: QueryContext):
     case 'host':
       // The site a weblink points to, without "www.".
       return object.media?.host ? { kind: 'text', value: object.media.host.replace(/^www\./, '') } : EMPTY
+    case REVIEW_DUE_FIELD: {
+      // A task not reviewed in its type's number of days (task-review.ts); a type without review dates has none.
+      const type = context.types.get(object.typeId)
+      return reviewFieldOf(type) ? { kind: 'checkbox', value: dueForReview(type, object, context.today) } : EMPTY
+    }
   }
   const own = context.types.get(object.typeId)?.properties.find((p) => p.id === field)
   if (own?.kind === 'formula') return formulaField(evaluateFormula(object, own, context), context.timeZone)

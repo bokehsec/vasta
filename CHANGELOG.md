@@ -49,8 +49,10 @@ GitHub release page.
   on this device, for you only). Undo takes a decision off again, and the end counts each task once
   ("Reviewed 6 · Done 3 · 4 skipped, unchanged") with "Review 4 skipped" to go over those. How often
   a task comes up again (7 days unless changed; 0 for every time) and the status Hold sets are in
-  Type settings › Quick actions. On a computer, R marks reviewed, keys 1–9 run the actions and the
-  arrows skip or go back; on a phone, swipe right to defer, left to skip.
+  Type settings › Quick actions. A view's filters can use **Due for review**, which follows that
+  setting, to show tasks only when they need a look (say, tasks on hold). On a computer, R marks
+  reviewed, keys 1–9 run the actions and the arrows skip or go back; on a phone, swipe right to
+  defer, left to skip.
 - **Subtasks: split a task into steps.** Turn it on in Type settings › Subtasks (it can add a
   "Part of" field, or use one you have). A task's page lists its steps with how many are done; type
   a step and press Return for the next, or paste several lines at once. New steps take the task's
