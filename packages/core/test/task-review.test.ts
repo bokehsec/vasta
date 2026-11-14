@@ -10,7 +10,7 @@ const task = types.find((t) => t.system === 'task')!
 const page = types.find((t) => t.system === 'page')!
 const context = { today: '2026-11-14', nextWeek: '2026-11-16' }
 const day = (value: string): PropertyValue => ({ kind: 'date', value: { start: `${value}T00:00:00.000Z`, resolution: 'day' } })
-const reviewedOn = (value?: string) => ({ props: value ? { reviewed: day(value) } : {} })
+const reviewedOn = (value?: string): { props: Record<string, PropertyValue> } => ({ props: value ? { reviewed: day(value) } : {} })
 const withHold = (label: string, quickActions?: ObjectType['quickActions']): ObjectType => ({
   ...task,
   properties: task.properties.map((p) => (p.id === 'status' && p.kind === 'select' ? { ...p, options: [...p.options, { id: 'hold', label }] } : p)),
