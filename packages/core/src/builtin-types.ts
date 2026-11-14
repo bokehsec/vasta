@@ -20,6 +20,8 @@ export const DUE_PROPERTY_ID = 'due'
 export const ASSIGNEE_PROPERTY_ID = 'assignee'
 /** A task that cannot move on (boards show a flag). */
 export const BLOCKED_PROPERTY_ID = 'blocked'
+/** The day a task was last looked at in Review (task-review.ts). */
+export const REVIEWED_PROPERTY_ID = 'reviewed'
 
 /** A sprint's first and last day (a date range) and what it is for. */
 export const SPRINT_DATES_PROPERTY_ID = 'dates'
@@ -130,6 +132,7 @@ const specs: Record<SystemTypeKey, BuiltinSpec> = {
         ],
       },
       { id: BLOCKED_PROPERTY_ID, kind: 'checkbox', name: 'Blocked', hideWhenEmpty: true },
+      { id: REVIEWED_PROPERTY_ID, kind: 'date', name: 'Last reviewed', hideWhenEmpty: true },
     ],
   },
   weblink: { name: 'Weblink', pluralName: 'Weblinks', icon: 'ph:globe-hemisphere-west', properties: [body, articleProperty] },
@@ -257,6 +260,7 @@ export const ADDED_BUILTIN_PROPERTIES: { key: string; system: SystemTypeKey; ids
   { key: 'habit-goal-remind-2026-10-20', system: 'habit', ids: [HABIT_TARGET_PROPERTY_ID, HABIT_UNIT_PROPERTY_ID, HABIT_REMIND_PROPERTY_ID] },
   { key: 'task-assignee-2026-10-21', system: 'task', ids: [ASSIGNEE_PROPERTY_ID], after: 'due' },
   { key: 'task-blocked-2026-10-21', system: 'task', ids: [BLOCKED_PROPERTY_ID], after: 'priority' },
+  { key: 'task-reviewed-2026-11-14', system: 'task', ids: [REVIEWED_PROPERTY_ID], after: BLOCKED_PROPERTY_ID },
 ]
 
 /** A built-in type's property as it is made today, to add to an older copy of the type. */

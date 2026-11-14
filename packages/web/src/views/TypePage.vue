@@ -3,7 +3,7 @@ import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
+import { RANK_PROPERTY_ID, dueForReview, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, reviewEveryOf, reviewFieldOf, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
 import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -17,7 +17,7 @@ import HabitBoard from '../components/HabitBoard.vue'
 import TagTree from '../components/TagTree.vue'
 import PopoverMenu from '../components/PopoverMenu.vue'
 import TypeSettings from '../components/TypeSettings.vue'
-import { deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu, removeFromSidebar, setProperties, viewItem } from '../lib/actions.ts'
+import { dayKey, deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu, removeFromSidebar, setProperties, viewItem } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { onChange } from '../lib/events.ts'
 import { clone } from '../lib/clone.ts'
@@ -282,15 +282,28 @@ const viewPickerOpen = ref(false)
 const viewPickerAnchor = ref<HTMLElement | null>(null)
 const currentViewLabel = computed(() => (metricsActive.value ? 'Metrics' : fixedActive.value && fixedView.value ? fixedView.value.label : view.value.name))
 
-// Review (ProcessMode): the view's open objects one at a time, in its order (a type with quick
-// actions; a closed object is one whose status means done). "Review 12 tasks" counts exactly the
-// objects it will show. The review is kept on this device (lib/review-session.ts): closed, it
-// offers Resume here; opened from it, an object's page leads Back into it at the same place.
+// Review (ProcessMode): the view's open objects due for review one at a time, in its order (a type
+// with quick actions; a closed object is one whose status means done; due: not reviewed in the
+// type's number of days, @vasta/core task-review.ts). "Review 12 tasks" counts exactly the objects
+// it will show; "Review all" also takes the ones reviewed lately. The review is kept on this device
+// (lib/review-session.ts): closed, it offers Resume here; opened from it, an object's page leads
+// Back into it at the same place.
 const processOpen = ref(false)
 const hasQuickActions = computed(() => quickActionsOf(type.value).length > 0)
-const processList = computed(() => (hasQuickActions.value ? visible.value.filter((o) => !isClosedTask(type.value, o)) : []))
+const openList = computed(() => (hasQuickActions.value ? visible.value.filter((o) => !isClosedTask(type.value, o)) : []))
+const processList = computed(() => {
+  const today = dayKey()
+  return openList.value.filter((o) => dueForReview(type.value, o, today))
+})
+/** Open ones reviewed lately, left out of the review unless it is of all of them. */
+const reviewedLately = computed(() => openList.value.length - processList.value.length)
+const reviewSpan = computed(() => {
+  const every = reviewEveryOf(type.value)
+  return every === 1 ? 'today' : `in the last ${every} days`
+})
 const reviewable = computed(() => !fixedActive.value && !agendaActive.value && hasQuickActions.value)
 const canProcess = computed(() => reviewable.value && processList.value.length > 0)
+const canReviewAll = computed(() => reviewable.value && !!reviewFieldOf(type.value) && reviewedLately.value > 0)
 const processFields = computed(() =>
   view.value.layout === 'table' ? rowFieldsFromTable(tableColumns(view.value.table, [props.id])) : view.value.list?.fields ? listFields(view.value.list, [props.id]) : []
 )
@@ -300,11 +313,12 @@ function setReview(next: ReviewSession | null) {
   review.value = next
   writeSession(next)
 }
-function startProcess() {
-  if (!canProcess.value || !session.user || !workspace.space) return
+function startProcess(all = false) {
+  const list = all ? openList.value : processList.value
+  if (!reviewable.value || !list.length || !session.user || !workspace.space) return
   clearSelection()
   const scope = { userId: session.user.id, spaceId: workspace.space.id, typeId: props.id, viewId: view.value.id, viewName: view.value.name }
-  setReview(startSession(scope, processList.value.map((o) => o.id)))
+  setReview(startSession(scope, list.map((o) => o.id)))
   processOpen.value = true
 }
 function resumeReview() {
@@ -698,9 +712,14 @@ async function newMenu(event: MouseEvent) {
           <button v-if="review && reviewable" class="flex items-center gap-1 rounded-lg px-2 py-1.5 font-medium text-ink hover:bg-hover" :title="`Back to ${review.index + 1} of ${review.ids.length} in ${review.viewName}`" data-process-resume @click="resumeReview">
             <AppIcon fallback="ph:play" /> Resume review<template v-if="review.viewId !== view.id"> of {{ review.viewName }}</template>
           </button>
-          <button v-else-if="canProcess" class="flex items-center gap-1 rounded-lg px-2 py-1.5 font-medium text-ink hover:bg-hover" :title="`One ${type.name.toLowerCase()} at a time: decide or skip each`" data-process @click="startProcess">
-            <AppIcon fallback="ph:play" /> Review {{ processList.length }} {{ reviewNoun(processList.length) }}
-          </button>
+          <template v-else>
+            <button v-if="canProcess" class="flex items-center gap-1 rounded-lg px-2 py-1.5 font-medium text-ink hover:bg-hover" :title="`One ${type.name.toLowerCase()} at a time: mark it reviewed, decide or skip each`" data-process @click="startProcess()">
+              <AppIcon fallback="ph:play" /> Review {{ processList.length }} {{ reviewNoun(processList.length) }}
+            </button>
+            <button v-if="canReviewAll" class="rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover hover:text-ink" :title="`Also the ${reviewedLately} reviewed ${reviewSpan}`" data-process-all @click="startProcess(true)">
+              {{ canProcess ? 'All' : 'Review all' }} {{ openList.length }}
+            </button>
+          </template>
         </template>
         <div v-if="!agendaActive" class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-ink-faint focus-within:bg-hover">
           <AppIcon fallback="ph:magnifying-glass" :size="14" />
@@ -868,12 +887,17 @@ async function newMenu(event: MouseEvent) {
         </button>
         <button class="h-12 shrink-0 rounded-xl border border-line px-3 text-sm text-ink-soft" :aria-label="`End the review of ${review.viewName}`" data-process-end-session @click="endReview">End</button>
       </div>
-      <button v-else-if="canProcess" class="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-3 text-[15px] font-medium text-surface" data-process @click="startProcess">
+      <button v-else-if="canProcess" class="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-3 text-[15px] font-medium text-surface" data-process @click="startProcess()">
         <AppIcon fallback="ph:play" :size="16" class="shrink-0" />Review {{ processList.length }} {{ reviewNoun(processList.length) }}<span v-if="filterText || mineOnly" class="font-normal opacity-70">· filtered</span>
       </button>
       <p v-else class="flex min-h-11 items-center gap-2 text-sm text-ink-faint" data-review-none>
-        No open {{ reviewNoun(2) }} in this view
-        <button v-if="filterText" class="ml-auto h-11 rounded-lg px-2 text-accent" @click="filterText = ''">Clear search</button>
+        <template v-if="openList.length">All {{ openList.length }} reviewed {{ reviewSpan }}</template>
+        <template v-else>No open {{ reviewNoun(2) }} in this view</template>
+        <button v-if="filterText && !openList.length" class="ml-auto h-11 rounded-lg px-2 text-accent" @click="filterText = ''">Clear search</button>
+      </p>
+      <p v-if="!review && canReviewAll" class="flex min-h-11 items-center gap-2 text-sm text-ink-faint">
+        <template v-if="canProcess">{{ reviewedLately }} more reviewed {{ reviewSpan }}</template>
+        <button class="ml-auto h-11 rounded-lg px-2 text-accent" data-process-all @click="startProcess(true)">Review all {{ openList.length }}</button>
       </p>
     </div>
 

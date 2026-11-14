@@ -2,11 +2,12 @@
 // A type's quick actions (Type settings › Quick actions, any type; @vasta/core task-actions.ts):
 // the buttons on its page and, where a view shows them, its row, each with the changes it makes.
 // A task starts from the defaults (Done, Defer, Drop, Next step); another type starts empty, and
-// the first edit makes the list the type's own ("Use the defaults" on a task goes back). Also the
-// text field shown under a task's title in lists (tasks only).
+// the first edit makes the list the type's own ("Use the defaults" on a task goes back). Also, for
+// tasks: the text field shown under a task's title in lists, how often a task comes up in Review
+// again (task-review.ts; a week unless set) and the status Hold sets there.
 import { computed, ref } from 'vue'
 import type { Id, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActions, QuickActionValue } from '@vasta/core'
-import { CHANGEABLE_KINDS, defaultQuickActions, newId, quickActionsOf } from '@vasta/core'
+import { CHANGEABLE_KINDS, DEFAULT_REVIEW_EVERY, STATUS_PROPERTY_ID, defaultQuickActions, holdOptionOf, newId, quickActionsOf, reviewEveryOf, reviewFieldOf } from '@vasta/core'
 import { clone } from '../lib/clone.ts'
 import AppIcon from './AppIcon.vue'
 import IconPicker from './IconPicker.vue'
@@ -23,6 +24,15 @@ const actions = computed(() => props.type.quickActions?.actions ?? (hasDefaults.
 const fields = computed(() => props.type.properties.filter((p) => CHANGEABLE_KINDS.includes(p.kind)))
 const textFields = computed(() => props.type.properties.filter((p) => p.kind === 'text'))
 const defOf = (field: Id) => props.type.properties.find((p) => p.id === field)
+const openStatuses = computed(() => {
+  const def = defOf(STATUS_PROPERTY_ID)
+  return def?.kind === 'select' ? def.options.filter((o) => o.status !== 'done') : []
+})
+/** Days between reviews: a whole number from 0 (every review); empty goes back to a week. */
+function setReviewEvery(text: string) {
+  const days = Number(text)
+  emitSettings({ reviewEvery: text.trim() === '' || !Number.isInteger(days) || days < 0 || days === DEFAULT_REVIEW_EVERY ? undefined : days })
+}
 /** Actions that would do nothing as they are (every change left out): said under them. */
 const working = computed(() => new Set(quickActionsOf(props.type).map((a) => a.id)))
 
@@ -253,6 +263,19 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
       <select :value="type.quickActions?.nextStepField ?? ''" :class="control" data-next-step-field @change="emitSettings({ nextStepField: ($event.target as HTMLSelectElement).value })">
         <option value="">None</option>
         <option v-for="p in textFields" :key="p.id" :value="p.id">{{ p.name }}</option>
+      </select>
+    </label>
+    <label v-if="reviewFieldOf(type)" class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+      <span class="text-ink-soft">Review each {{ type.name.toLowerCase() }} every</span>
+      <input :value="reviewEveryOf(type)" type="number" min="0" step="1" inputmode="numeric" :class="[control, 'w-16']" data-review-every @change="setReviewEvery(($event.target as HTMLInputElement).value)" />
+      <span class="text-ink-soft">days</span>
+      <span class="w-full text-xs text-ink-faint">Review shows the open ones not marked reviewed in that time (0: all of them every time).</span>
+    </label>
+    <label v-if="type.system === 'task' && openStatuses.length" class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+      <span class="text-ink-soft">Hold in Review sets the status</span>
+      <select :value="holdOptionOf(type)?.id ?? 'none'" :class="control" data-hold-status @change="emitSettings({ holdStatus: ($event.target as HTMLSelectElement).value })">
+        <option value="none">None (no Hold)</option>
+        <option v-for="o in openStatuses" :key="o.id" :value="o.id">{{ o.label }}</option>
       </select>
     </label>
     <PopoverMenu v-model:open="iconOpen" :anchor="iconAnchor" width="auto">

@@ -8,7 +8,7 @@
 // without doing it, as in completeRepeat) and Next step (asks for the text of the type's next step
 // field). Changes naming a property the type no longer has, or a value that does not fit it, are
 // left out.
-import { DUE_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
+import { DUE_PROPERTY_ID, REVIEWED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
 import type { Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActionValue, SelectOption, TextPropertyDef } from './model.ts'
 import { statusProperty } from './metrics.ts'
 import { addDays } from './time.ts'
@@ -266,7 +266,8 @@ export function quickActionMessage(
   const movedDue = takesDue ? edits.filter((e) => e.values[DUE_PROPERTY_ID]).length : 0
   const days = first
     ? Object.entries(first.values).flatMap(([field, value]) => {
-        if (takesDue && field === DUE_PROPERTY_ID) return []
+        // The Last reviewed day a review adds to every action goes without saying.
+        if ((takesDue && field === DUE_PROPERTY_ID) || field === REVIEWED_PROPERTY_ID) return []
         const day = dayOfValue(value, options.dayOfTime)
         const def = type.properties.find((p) => p.id === field)
         return day && def ? [{ field, day, name: def.name }] : []

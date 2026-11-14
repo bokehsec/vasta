@@ -1,20 +1,26 @@
 <script setup lang="ts">
-// Review: a view's open objects one at a time, in the order fixed when the review started
+// Review: a view's objects due for review one at a time, in the order fixed when the review started
 // (lib/review-session.ts, kept on this device). Each shows its place ("3 of 48"), title, next step,
-// the view's row fields, the start of its notes and Open details; three buttons run the type's main
-// quick actions (Done, Defer, the next step: lib/quick-actions.ts, a question first if the action
-// asks, then the next object) and More holds the rest (Drop, other actions, Break into steps). Skip
-// and Back move without changing anything. The object is always shown as it is now (`objects`, the
-// type's live list), so Undo or a change on its page shows here. Keys: 1–9 the actions, → or Space
-// skip, ← back, Return open, Escape close. On a phone it fills the screen with the buttons at the
-// bottom; a swipe right runs Defer (as on rows), a swipe left skips. The end counts each object
-// once, by its last decision (Undo takes it off), and the skipped ones apart.
+// the view's row fields, all of its text (it scrolls; the buttons stay) and Open details. Reviewed
+// (a task's Last reviewed day, @vasta/core task-review.ts) says it is fine as it is and moves on;
+// three buttons run the type's main quick actions (Done, Defer, the next step: lib/quick-actions.ts,
+// a question first if the action asks) and More holds the rest (Drop, Hold, other actions, Break
+// into steps). An action made here marks the object reviewed too. One that removes the object from
+// the way (Done, Defer…) moves on; one that asks for a line of text (the next step) keeps it on
+// screen, and Skip becomes Next. Skip and Back move without changing anything. The object is always
+// shown as it is now (`objects`, the type's live list), so Undo or a change on its page shows here.
+// Keys: R reviewed, 1–9 the actions, → or Space skip, ← back, Return open, Escape close. On a phone
+// it fills the screen with the buttons at the bottom; a swipe right runs Defer (as on rows), a swipe
+// left skips. The end counts each object once, by its last decision (Undo takes it off), and the
+// skipped ones apart.
 // One action at a time: while one saves (or its question is open) further keys, taps and swipes,
 // Skip and Back do nothing, and the move on is from the object the action was run on.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { ObjectSummary, ObjectType, QuickActionDef } from '@vasta/core'
-import { askOf, nextStepFieldOf, parentFieldOf, quickActionsOf } from '@vasta/core'
+import type { Doc, ObjectSummary, ObjectType, QuickActionDef } from '@vasta/core'
+import { askOf, docToPlainText, holdAction, nextStepFieldOf, parentFieldOf, quickActionsOf, reviewedAction, withReviewed } from '@vasta/core'
+import { api } from '../lib/api.ts'
 import { rowFields, type ListField } from '../lib/columns.ts'
+import { onChange } from '../lib/events.ts'
 import { displayTitle } from '../lib/format.ts'
 import { openMenuAt, type MenuItem } from '../lib/overlays.ts'
 import { quickAsk, runQuickAction, type QuickSave } from '../lib/quick-actions.ts'
@@ -23,6 +29,7 @@ import { lastError, ui } from '../lib/state.ts'
 import { addSubtask, subtasksOf } from '../lib/subtasks.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
+import DocPreview from './DocPreview.ts'
 import PropertyDisplay from './PropertyDisplay.vue'
 
 /** `undone`: Undo of a decision, which may come from the notice after the review has closed. */
@@ -61,8 +68,10 @@ const outcome = computed(() => (currentObjectId.value ? props.session.outcomes[c
 
 const actions = computed(() => quickActionsOf(props.type))
 const split = computed(() => reviewActions(actions.value))
+const reviewed = computed(() => reviewedAction(props.type))
+const hold = computed(() => holdAction(props.type))
 /** Keys 1–9: the buttons first, then More's actions. */
-const keyed = computed(() => [...split.value.featured, ...split.value.more])
+const keyed = computed(() => [...split.value.featured, ...split.value.more, ...(hold.value ? [hold.value] : [])])
 const rightAction = computed(() => actions.value.find((a) => a.id === 'defer') ?? actions.value[0])
 const noun = computed(() => props.type.name.toLowerCase())
 const label = (action: QuickActionDef) => (askOf(props.type, action) ? `${action.name}…` : action.name)
@@ -73,27 +82,50 @@ const nextStep = computed(() => {
   return value?.kind === 'text' ? value.value : ''
 })
 const fieldsShown = computed(() => (current.value ? rowFields(current.value, props.type, props.fields).filter((f) => f.def).slice(0, 6) : []))
-const notes = computed(() => {
-  const text = (current.value as (ObjectSummary & { preview?: string }) | undefined)?.preview ?? ''
-  return text.length > 280 ? `${text.slice(0, 280).trimEnd()}…` : text
+const notes = computed(() => (current.value as (ObjectSummary & { preview?: string }) | undefined)?.preview ?? '')
+
+// All of the object's text (its notes and other rich-text fields, each named but the first): the
+// list holds only the start of the notes, so it is loaded, again when the object changes elsewhere.
+const texts = ref<{ id: string; field: string; name?: string; doc: Doc }[]>([])
+async function loadText() {
+  const id = currentObjectId.value
+  if (!id) return (texts.value = [])
+  const full = await api.object(id).catch(() => undefined)
+  if (!alive || currentObjectId.value !== id) return
+  const named = new Map(props.type.properties.filter((p) => p.kind === 'rich-text').map((p) => [p.id, p.name]))
+  const filled = full ? Object.entries(full.content).filter(([field, doc]) => named.has(field) && docToPlainText(doc).trim()) : []
+  filled.sort(([a], [b]) => [...named.keys()].indexOf(a) - [...named.keys()].indexOf(b))
+  texts.value = filled.map(([field, doc], i) => ({ id, field, name: i || field !== 'body' ? named.get(field) : undefined, doc }))
+}
+watch(currentObjectId, () => void loadText(), { immediate: true })
+const stopChanges = onChange((event) => {
+  if (event.kind === 'object' && event.id === currentObjectId.value) void loadText()
 })
+onBeforeUnmount(stopChanges)
+const shownTexts = computed(() => texts.value.filter((t) => t.id === currentObjectId.value))
+
+/** An action that asks for a line of text (the next step) adds to the object rather than settling it: the review stays on it. */
+const stays = (action: QuickActionDef) => askOf(props.type, action)?.def.kind === 'text'
 
 const busy = ref(false)
 async function act(action: QuickActionDef, anchor: HTMLElement | null) {
   const object = current.value
   if (!object || busy.value) return
+  // Reviewed on one already decided here (a next step set): nothing more to save, on to the next.
+  if (action.id === 'reviewed' && outcome.value) return move(1)
   const at = index.value
+  const stay = stays(action)
   busy.value = true
   try {
-    const saved = await runQuickAction(props.type, object, action, {
+    const saved = await runQuickAction(props.type, object, withReviewed(props.type, action), {
       anchor: isPhone.value ? null : anchor,
       save: props.save,
-      submitLabel: `Save & next ${noun.value}`,
+      submitLabel: stay ? 'Save' : `Save & next ${noun.value}`,
       onUndo: () => (alive ? update((s) => undoOutcome(s, object.id, action.name)) : props.undone(object.id, action.name)),
     })
     if (!saved.length || !alive) return
     breakingDown.value = false
-    update((s) => recordOutcome(s, object.id, action.name, at))
+    update((s) => recordOutcome(s, object.id, action.name, at, !stay))
   } finally {
     busy.value = false
   }
@@ -118,7 +150,7 @@ function reviewSkipped() {
 // More: the other actions, and Break into steps.
 const moreButton = ref<HTMLElement | null>(null)
 const moreItems = computed<MenuItem[]>(() => [
-  ...split.value.more.map((action) => ({ label: label(action), icon: action.icon ?? 'ph:lightning', run: () => act(action, moreButton.value) })),
+  ...[...split.value.more, ...(hold.value ? [hold.value] : [])].map((action) => ({ label: label(action), icon: action.icon ?? 'ph:lightning', run: () => act(action, moreButton.value) })),
   ...(canBreakDown.value ? [{ label: 'Break into steps', icon: 'ph:tree-structure', run: () => void startBreakDown() }] : []),
 ])
 function openMore() {
@@ -156,6 +188,7 @@ async function addStep() {
 
 // Keys, while no question or text box has them.
 const buttons = ref<HTMLButtonElement[]>([])
+const reviewedButton = ref<HTMLButtonElement | null>(null)
 function onKey(event: KeyboardEvent) {
   if (event.defaultPrevented || quickAsk.value || event.metaKey || event.ctrlKey || event.altKey) return
   const typing = (event.target as Element | null)?.closest('input, textarea, [contenteditable="true"]')
@@ -166,6 +199,11 @@ function onKey(event: KeyboardEvent) {
     return
   }
   if (typing) return
+  if ((event.key === 'r' || event.key === 'R') && reviewed.value && !done.value) {
+    event.preventDefault()
+    void act(reviewed.value, reviewedButton.value)
+    return
+  }
   const number = Number(event.key)
   if (number >= 1 && number <= 9 && keyed.value[number - 1] && !done.value) {
     event.preventDefault()
@@ -302,7 +340,13 @@ const actionButton = 'flex h-12 min-w-0 items-center justify-center gap-2 rounde
               <div v-if="fieldsShown.length" class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 <PropertyDisplay v-for="field in fieldsShown" :key="field.field" :def="field.def!" :value="current.props[field.field]" :object="current" :wrap="false" short />
               </div>
-              <p v-if="notes" class="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink-soft">{{ notes }}</p>
+              <div v-if="shownTexts.length" class="mt-3 space-y-3 text-sm leading-relaxed text-ink-soft" data-process-text>
+                <div v-for="text in shownTexts" :key="text.field" class="space-y-1">
+                  <p v-if="text.name" class="text-xs font-medium text-ink-faint">{{ text.name }}</p>
+                  <DocPreview :content="text.doc.content" />
+                </div>
+              </div>
+              <p v-else-if="notes" class="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink-soft">{{ notes }}</p>
               <button class="mt-2 flex min-h-11 items-center gap-1 text-sm text-accent hover:underline" data-process-open @click="open">Open details<AppIcon fallback="ph:caret-right" :size="13" /></button>
               <p v-if="steps.length" class="mt-1 text-xs text-ink-faint">{{ steps.length }} {{ steps.length === 1 ? 'step' : 'steps' }}</p>
               <form v-if="breakingDown" class="mt-3 space-y-2" @submit.prevent="addStep">
@@ -321,6 +365,18 @@ const actionButton = 'flex h-12 min-w-0 items-center justify-center gap-2 rounde
           <!-- The buttons, where the thumb is on a phone: the main decisions, then More. -->
           <div ref="buttonBlock" class="grid grid-cols-2 gap-2 border-t border-line px-4 pb-3 pt-3">
             <template v-if="current">
+              <button
+                v-if="reviewed"
+                ref="reviewedButton"
+                class="col-span-full flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl bg-ink px-2 text-[15px] font-medium text-surface hover:opacity-90 disabled:opacity-50"
+                :disabled="busy"
+                title="Fine as it is: mark it reviewed today and go on"
+                data-process-reviewed
+                @click="act(reviewed, $event.currentTarget as HTMLElement)"
+              >
+                <AppIcon fallback="ph:check" :size="18" class="shrink-0" /><span class="truncate">Reviewed</span>
+                <kbd v-if="!isPhone" class="ml-1 rounded border border-surface/40 px-1 font-sans text-[11px] opacity-70">R</kbd>
+              </button>
               <button
                 v-for="(action, i) in split.featured"
                 :key="action.id"
@@ -342,7 +398,7 @@ const actionButton = 'flex h-12 min-w-0 items-center justify-center gap-2 rounde
                 <AppIcon fallback="ph:caret-left" :size="14" />Back<kbd v-if="!isPhone" class="ml-1 rounded border border-line px-1 font-sans text-[11px] opacity-60">←</kbd>
               </button>
               <button class="flex h-11 items-center gap-1 rounded-lg px-3 text-sm text-ink-soft hover:bg-hover disabled:opacity-40" :disabled="busy" data-process-skip @click="skip">
-                <kbd v-if="!isPhone" class="mr-1 rounded border border-line px-1 font-sans text-[11px] opacity-60">→</kbd>Skip<AppIcon fallback="ph:caret-right" :size="14" />
+                <kbd v-if="!isPhone" class="mr-1 rounded border border-line px-1 font-sans text-[11px] opacity-60">→</kbd>{{ outcome ? 'Next' : 'Skip' }}<AppIcon fallback="ph:caret-right" :size="14" />
               </button>
             </div>
           </div>

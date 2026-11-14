@@ -26,16 +26,23 @@ GitHub release page.
   Shift-click another to pick everything between; on a phone, long-press a row and choose Select,
   then tap others. A bar at the bottom offers Done, Defer, Drop and Next step for all of them (one
   question, one Undo), Select all, and Move to trash.
-- **Review your tasks one at a time.** "Review 12 tasks" on Tasks (on a phone, a full-width button
-  under the view; the count is exactly the tasks it will show, after search, Mine and filters) walks
-  through the view's open tasks in its order. Three buttons decide: Done, Defer… and Next step…;
-  More holds the rest (Drop, your own actions, Break into steps), and Skip and Back move without
-  changing anything. A next step has a visible "Save & next task". Close the review, open a task's
-  details, or reload, and it waits for you: Back from the task returns to the same one, and Tasks
-  offers "Resume review · 4 of 12" (End forgets it; it stays on this device, for you only). Undo
-  takes a decision off again, and the end counts each task once ("Done 3 · 4 skipped, unchanged")
-  with "Review 4 skipped" to go over those. On a computer, keys 1–9 run the actions and the arrows
-  skip or go back; on a phone, swipe right to defer, left to skip.
+- **Review your tasks one at a time, as in OmniFocus.** "Review 12 tasks" on Tasks (on a phone, a
+  full-width button under the view; the count is exactly the tasks it will show, after search, Mine
+  and filters) walks through the view's open tasks that are due for review, in its order: ones never
+  reviewed, or not in the last 7 days. "Review all" takes the others too. **Reviewed** says a task is
+  fine as it is: it records today in the task's new Last reviewed field and moves on, so a task kept
+  for later without a date no longer has to be deferred or skipped. Three buttons decide: Done,
+  Defer… and Next step…; More holds the rest (Drop, On hold when the status has it, your own actions,
+  Break into steps). Any decision counts as reviewed too. A next step is saved with Save and keeps
+  the task on screen (Next goes on); Done, Defer and the others move on. The task's whole notes show
+  (and its other text fields), scrolling under the buttons. Skip and Back move without changing
+  anything. Close the review, open a task's details, or reload, and it waits for you: Back from the
+  task returns to the same one, and Tasks offers "Resume review · 4 of 12" (End forgets it; it stays
+  on this device, for you only). Undo takes a decision off again, and the end counts each task once
+  ("Reviewed 6 · Done 3 · 4 skipped, unchanged") with "Review 4 skipped" to go over those. How often
+  a task comes up again (7 days unless changed; 0 for every time) and the status Hold sets are in
+  Type settings › Quick actions. On a computer, R marks reviewed, keys 1–9 run the actions and the
+  arrows skip or go back; on a phone, swipe right to defer, left to skip.
 - **Subtasks: split a task into steps.** Turn it on in Type settings › Subtasks (it can add a
   "Part of" field, or use one you have). A task's page lists its steps with how many are done; type
   a step and press Return for the next, or paste several lines at once. New steps take the task's

@@ -48,10 +48,13 @@ export function skipCurrent(session: ReviewSession): ReviewSession {
   return moveBy({ ...session, skipped }, 1)
 }
 
-/** An action saved on `id` (the place it was run from, `at`): its outcome replaces any earlier one, and the review moves past it. */
-export function recordOutcome(session: ReviewSession, id: Id, name: string, at = session.ids.indexOf(id)): ReviewSession {
+/**
+ * An action saved on `id` (the place it was run from, `at`): its outcome replaces any earlier one,
+ * and the review moves past it unless `advance` is false (a next step: still the object at hand).
+ */
+export function recordOutcome(session: ReviewSession, id: Id, name: string, at = session.ids.indexOf(id), advance = true): ReviewSession {
   const next = { ...session, outcomes: { ...session.outcomes, [id]: name }, skipped: session.skipped.filter((s) => s !== id) }
-  return at >= 0 && session.index === at ? moveBy(next, 1) : next
+  return advance && at >= 0 && session.index === at ? moveBy(next, 1) : next
 }
 
 /**

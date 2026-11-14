@@ -2,10 +2,13 @@
 // bar's Defer asks once and defers all three with one Undo that restores all, Select all and
 // Escape, the count following a task that stops matching the view, a click on a row picks it while
 // selecting (it does not open), Move to trash with one Undo; the review of the view with keys (1 Done, → skip, ← back, 2 Defer, the end's counts,
-// Escape). Phone (390×844, touch): "Select" in a row's long-press menu, a tap picking another row,
-// no swipes while selecting, Done from the bar; the review: its button in full, full screen, a swipe left
-// skipping, Done and Undo, Save & next task and Cancel for the next step, Close and Resume (also
-// after a reload), Open details and Back to the same task, the end's counts, Review skipped, End.
+// Escape); then the review counts only tasks not reviewed this week, "All 5" takes them all, R marks
+// one reviewed, and a task's whole notes show (not the list's first 280 characters). Phone (390×844,
+// touch): "Select" in a row's long-press menu, a tap picking another row, no swipes while selecting,
+// Done from the bar; the review: its button in full, full screen, a swipe left skipping, Done and
+// Undo, the next step saved with Save (the review stays on the task; Next goes on) and Cancel,
+// Close and Resume (also after a reload), Open details and Back to the same task, the end's counts,
+// Review skipped, End.
 // Chromium sends real touches (CDP); WebKit gets touch-shaped events in the page and a faked
 // `hover: none` (see phone-rows.mjs).
 //   node bulk.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
@@ -95,15 +98,18 @@ await put(`/api/types/${taskType.id}`, {
 const todo = status.options.find((o) => o.status === 'todo').id
 const doneId = status.options.find((o) => o.status === 'done').id
 const tasks = []
-for (const name of ['A', 'B', 'C', 'D', 'E']) tasks.push(await post('/api/objects', { typeId: taskType.id, title: `Bulk ${tag} ${name}`, props: { status: { kind: 'select', value: [todo] } } }))
+// Notes longer than the list's preview: the review shows them to the end.
+const longNotes = { body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: `${'Long notes. '.repeat(40)}The end of the notes ${tag}.` }] }] } }
+for (const name of ['A', 'B', 'C', 'D', 'E']) tasks.push(await post('/api/objects', { typeId: taskType.id, title: `Bulk ${tag} ${name}`, props: { status: { kind: 'select', value: [todo] } }, content: longNotes }))
 await sleep(1500)
 const days = await page.evaluate(() => {
   const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   const today = key(new Date())
-  return { tomorrow: key(new Date(new Date(`${today}T12:00:00`).getTime() + 86400000)) }
+  return { today, tomorrow: key(new Date(new Date(`${today}T12:00:00`).getTime() + 86400000)) }
 })
 const propsOf = async (id) => (await get(`/api/objects/${id}`)).props
 const statusOf = async (id) => (await propsOf(id)).status?.value?.[0]
+const dayOf = (value) => value?.value?.start?.slice(0, 10)
 const dodateOf = async (id) => (await propsOf(id)).dodate?.value?.start?.slice(0, 10)
 const deleted = async (id) => {
   const response = await page.request.get(`${base}/api/objects/${id}`)
@@ -218,6 +224,25 @@ try {
   await until(async () => (await page.locator('[data-process-mode]').count()) === 0, 'Escape closed it')
   // Closed at the end, the review is over: no Resume, a new review offered.
   await until(async () => (await page.locator('[data-process]').count()) === 1 && (await page.locator('[data-process-resume]').count()) === 0, 'a finished review is not offered to resume')
+
+  step('review dates: the deferred task was reviewed today, so the review is of 3; All 4 (open); R marks one reviewed; whole notes')
+  const deferred = tasks.find((t) => t.title === deferTitle)
+  if (dayOf((await propsOf(deferred.id)).reviewed) !== days.today) throw new Error('Defer in a review did not mark the task reviewed')
+  await until(async () => /Review 3 tasks/.test(await page.locator('[data-process]').innerText()), 'Review 3 tasks (one reviewed today, one done)')
+  if (!/All 4/.test(await page.locator('[data-process-all]').innerText())) throw new Error(`review all: ${await page.locator('[data-process-all]').innerText()}`)
+  await page.locator('[data-process-all]').click()
+  await until(async () => (await position.innerText()).startsWith('1 of 4'), 'Review all: 1 of 4')
+  const reviewedTitle = await titleNow()
+  const reviewedId = tasks.find((t) => t.title === reviewedTitle).id
+  const statusBefore = await statusOf(reviewedId)
+  await page.keyboard.press('r')
+  await until(async () => (await position.innerText()).startsWith('2 of 4'), 'R moved on')
+  await until(async () => dayOf((await propsOf(reviewedId)).reviewed) === days.today, 'R set Last reviewed to today')
+  if ((await statusOf(reviewedId)) !== statusBefore) throw new Error('Reviewed changed the status')
+  if (!/^Reviewed/.test(await toast().innerText())) throw new Error(`notice: ${await toast().innerText()}`)
+  await until(async () => (await page.locator('[data-process-text]').count()) === 1 && (await page.locator('[data-process-text]').innerText()).includes(`The end of the notes ${tag}.`), 'the whole notes in the review')
+  await page.keyboard.press('Escape')
+  await until(async () => (await page.locator('[data-process-mode]').count()) === 0, 'Escape closed it')
   // Back to "to do" for the phone's turn.
   for (const t of tasks) {
     const object = await get(`/api/objects/${t.id}`)
@@ -313,15 +338,20 @@ try {
   await until(async () => (await statusOf(phoneDone.id)) === todo, 'Done undone')
   if (!(await pos.innerText()).startsWith('3 of')) throw new Error('Undo moved the review')
 
-  step('phone: the next step has a visible "Save & next task"; it saves the text and moves on')
+  step('phone: the next step has a visible Save; it saves the text and stays on the task; Next goes on')
   const stepTitle = (await page.locator('[data-process-title]').innerText()).trim()
   await tap(page.locator('[data-process-action="next-step"]'))
   const save = page.locator('[data-next-step] [data-ask-save]')
   await save.waitFor()
-  if ((await save.innerText()).trim() !== 'Save & next task') throw new Error(`save button: ${await save.innerText()}`)
+  if ((await save.innerText()).trim() !== 'Save') throw new Error(`save button: ${await save.innerText()}`)
   await page.locator('[data-next-step] input').fill('Call the plumber')
   await tap(save)
-  await until(async () => (await pos.innerText()).startsWith('4 of'), 'Save & next task moved on')
+  await until(async () => (await page.locator('[data-process-outcome]').count()) === 1, 'the next step shown as decided')
+  if (!(await pos.innerText()).startsWith('3 of')) throw new Error(`the next step moved the review: ${await pos.innerText()}`)
+  if ((await titleNow()) !== stepTitle) throw new Error('the next step left the task')
+  if (!/Next/.test(await page.locator('[data-process-skip]').innerText())) throw new Error(`skip on a decided task: ${await page.locator('[data-process-skip]').innerText()}`)
+  await tap(page.locator('[data-process-skip]'))
+  await until(async () => (await pos.innerText()).startsWith('4 of'), 'Next moved on')
   const stepTask = tasks.find((t) => t.title === stepTitle)
   await until(async () => (await propsOf(stepTask.id)).bulknext?.value === 'Call the plumber', 'the next step saved')
   // Cancel writes nothing and stays.

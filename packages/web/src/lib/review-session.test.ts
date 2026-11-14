@@ -76,6 +76,13 @@ describe('review session', () => {
       expect(session.index).toBe(1)
     })
 
+    it('stays on the object when told not to advance (a next step), the outcome recorded', () => {
+      const session = recordOutcome(begin(), 'a', 'Next step', 0, false)
+      expect(session.outcomes).toEqual({ a: 'Next step' })
+      expect(session.index).toBe(0)
+      expect(skipCurrent(session).skipped).toEqual([])
+    })
+
     it('stays where it is when run from another place', () => {
       const session = recordOutcome(moveBy(begin(), 2), 'a', 'Done')
       expect(session.outcomes).toEqual({ a: 'Done' })

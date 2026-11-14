@@ -115,6 +115,20 @@ describe('people', () => {
     expect(arie.id).not.toBe(ana.id)
   })
 
+  it('gives older spaces Last reviewed once, after Blocked', () => {
+    const store = new NodeStore(':memory:')
+    store.putSpace({ id: 'old', name: 'Old', sidebar: [], createdAt: start })
+    const types = createBuiltinTypes('old', start).map((t) => (t.system === 'task' ? { ...t, properties: t.properties.filter((p) => p.id !== 'reviewed') } : t))
+    for (const type of types) store.putType(type)
+    ensureBuiltinTypes(store, start)
+    const task = () => store.getType(builtinTypeId('old', 'task'))!
+    expect(task().properties.find((p) => p.id === 'reviewed')).toEqual({ id: 'reviewed', kind: 'date', name: 'Last reviewed', hideWhenEmpty: true })
+    expect(task().properties.map((p) => p.id).slice(-2)).toEqual(['blocked', 'reviewed'])
+    store.putType({ ...task(), properties: task().properties.filter((p) => p.id !== 'reviewed') })
+    ensureBuiltinTypes(store, start)
+    expect(task().properties.some((p) => p.id === 'reviewed')).toBe(false)
+  })
+
   it('gives older spaces the Assignee property once, after Due', () => {
     const store = new NodeStore(':memory:')
     store.putSpace({ id: 'old', name: 'Old', sidebar: [], createdAt: start })
@@ -122,7 +136,7 @@ describe('people', () => {
     for (const type of types) store.putType(type)
     ensureBuiltinTypes(store, start)
     const task = () => store.getType(builtinTypeId('old', 'task'))!
-    expect(task().properties.map((p) => p.id)).toEqual(['body', 'status', 'due', 'assignee', 'priority', 'blocked'])
+    expect(task().properties.map((p) => p.id)).toEqual(['body', 'status', 'due', 'assignee', 'priority', 'blocked', 'reviewed'])
     // Deleted by the user: it stays deleted.
     store.putType({ ...task(), properties: task().properties.filter((p) => p.id !== 'assignee') })
     ensureBuiltinTypes(store, start)

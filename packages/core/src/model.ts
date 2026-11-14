@@ -58,6 +58,10 @@ export interface QuickActions {
   dropStatus?: Id
   /** A text property for the task's next step, shown under its title in lists; default none. */
   nextStepField?: Id
+  /** How many days after its Last reviewed date a task comes up in Review again; default 7, 0 every time. */
+  reviewEvery?: number
+  /** The status option Hold sets in a review (a task kept for later without a date); default one called "On hold"; "none": no Hold. */
+  holdStatus?: Id
 }
 
 /** One quick action: a button that makes its changes, asking first for the value of one marked `ask`. */
