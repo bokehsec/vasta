@@ -12,7 +12,8 @@ import { setProperties } from '../lib/actions.ts'
 import { quickAsk, runQuickAction } from '../lib/quick-actions.ts'
 import AppIcon from './AppIcon.vue'
 
-const props = defineProps<{ type: ObjectType; object: Pick<ObjectRecord, 'id' | 'props'>; variant?: 'page' | 'row' }>()
+/** `note`: said in the notice after an action (the page: subtasks still open). */
+const props = defineProps<{ type: ObjectType; object: Pick<ObjectRecord, 'id' | 'props'>; variant?: 'page' | 'row'; note?: () => string | undefined }>()
 const emit = defineEmits<{ set: [values: Record<Id, PropertyValue | undefined>] }>()
 
 const row = computed(() => props.variant === 'row')
@@ -26,7 +27,7 @@ onBeforeUnmount(() => (mounted = false))
 const save = (id: Id, values: Record<Id, PropertyValue | undefined>) => (mounted && props.object.id === id ? emit('set', values) : setProperties(id, values))
 
 function press(event: MouseEvent, action: QuickActionDef) {
-  void runQuickAction(props.type, props.object, action, { anchor: event.currentTarget as HTMLElement, save })
+  void runQuickAction(props.type, props.object, action, { anchor: event.currentTarget as HTMLElement, save, note: props.note })
 }
 /** The action whose question is open under one of these buttons. */
 const root = ref<HTMLElement | null>(null)

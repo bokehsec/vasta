@@ -295,6 +295,14 @@ describe('sync', () => {
     a.edit('types', 'type-book', { quickActions: null }, 's')
     await a.push()
     expect(store.getType('type-book')).not.toHaveProperty('quickActions')
+    // The relation that makes a book a step of another: a property id, or (null) none.
+    a.edit('types', 'type-book', { subtasks: { parentField: 'part-of' } }, 's')
+    a.edit('types', 'type-book', { subtasks: { parentField: '' } }, 's')
+    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for subtasks'])
+    expect(store.getType('type-book')?.subtasks).toEqual({ parentField: 'part-of' })
+    a.edit('types', 'type-book', { subtasks: null }, 's')
+    await a.push()
+    expect(store.getType('type-book')).not.toHaveProperty('subtasks')
     const dune = (await (await user.request('/api/objects/obj-dune')).json()) as ObjectRecord
     expect(dune).toMatchObject({ title: 'Dune', typeId: 'type-book', spaceId: 's', aliases: [] })
     expect(((await (await user.request('/api/spaces/s/search?q=spice')).json()) as ObjectRecord[]).map((o) => o.id)).toEqual(['obj-dune'])

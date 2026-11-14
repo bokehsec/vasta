@@ -12,7 +12,8 @@ import ObjectChip from './ObjectChip.vue'
 import ObjectPicker from './ObjectPicker.vue'
 import PopoverMenu from './PopoverMenu.vue'
 
-const props = defineProps<{ objectId: Id; typeId: Id; showEmpty?: boolean }>()
+/** `hide`: a row ("<type id>/<property id>") shown elsewhere on the page (the Subtasks panel). */
+const props = defineProps<{ objectId: Id; typeId: Id; showEmpty?: boolean; hide?: string }>()
 /** How many rows show, for a page that hides its properties' footer when nothing is there. */
 const emit = defineEmits<{ count: [number] }>()
 
@@ -53,7 +54,7 @@ const rows = computed<Row[]>(() => {
     if (!row.objects.some((o) => o.id === link.object.id)) row.objects.push(link.object)
     byKey.set(key, row)
   }
-  return [...byKey.values()].filter((row) => row.objects.length || props.showEmpty)
+  return [...byKey.values()].filter((row) => row.key !== props.hide && (row.objects.length || props.showEmpty))
 })
 
 watch(() => rows.value.length, (n) => emit('count', n), { immediate: true })

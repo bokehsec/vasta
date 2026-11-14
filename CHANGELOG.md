@@ -8,6 +8,14 @@ GitHub release page.
 
 ### Added
 
+- **Subtasks: split a task into steps.** Turn it on in Type settings › Subtasks (it can add a
+  "Part of" field, or use one you have). A task's page lists its steps with how many are done; type
+  a step and press Return for the next, or paste several lines at once. New steps take the task's
+  Area, Project, people and tags. Lists show the steps under their task, folded with its caret, with
+  a "2/5" count, and "Ready to close" once all are done (the task is never closed for you; closing it
+  early says how many steps are still open). "Nest subtasks" in a view's layout menu or a query's
+  settings lists them flat instead. A row's menu has Add subtask…, Make subtask of… and Remove from
+  parent.
 - **Tasks on a phone: swipe a row.** Swipe right to defer a task (pick the day in the sheet that
   rises from the bottom); swipe left for Done, Drop, Next step and More. Long-press a row for the
   same actions in its menu. On a tablet the buttons stay and the swipes work too.

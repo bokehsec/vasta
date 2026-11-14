@@ -71,6 +71,14 @@ has a "Quick actions" column (`quickActions` in `table.columns`, hidden until sh
 like the others; the view menu's Quick actions shows it after the title; on a phone the column
 leaves the table and its buttons go under each title). `nextStepField`, a text
 property, shows under the title in the list.
+**Subtasks** ([`subtasks.ts`](../packages/core/src/subtasks.ts)): a type's `subtasks.parentField`
+(Type settings › Subtasks, column `types.subtasks`) names a single relation whose targets include the
+type itself (or any type), such as a task's "Part of"; an object pointing to another through it is
+one of that object's steps. Its page lists the steps (Add subtask: a new step takes the parent's
+select values except the status, its relations except the parent field, its people and tags), and
+list layouts draw them nested under their parent unless the view or query says `flat: true`. A
+parent whose steps all have a status meaning done is "ready to close"; nothing closes it by itself.
+Unset, or naming a property that no longer fits, the type has no subtasks.
 Title, description, icon, cover, color, parent, aliases, tags and collections are fixed fields on
 every object, not property definitions (`color` and `parentId` are only used by tags so far).
 

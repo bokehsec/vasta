@@ -3,7 +3,7 @@ import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, matchesFilter, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
+import { RANK_PROPERTY_ID, matchesFilter, parentFieldOf, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
 import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -31,6 +31,7 @@ import { primeSummaries, replaceType, typesById, unsavedTypes } from '../lib/sta
 import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
 import { copyObjectLink, openObject } from '../lib/open.ts'
 import { quickActionMenuItems } from '../lib/quick-actions.ts'
+import { subtaskMenuItems } from '../lib/subtasks.ts'
 import { isPhone } from '../lib/viewport.ts'
 
 const props = defineProps<{ id: string }>()
@@ -271,7 +272,7 @@ async function deleteType() {
 
 /** An open task's quick actions, in its menu (a long press on a phone). */
 function quickItems(object: ObjectSummary): MenuItem[] {
-  const items = quickActionMenuItems(type.value, object, { save: async (id, values) => moved(await setProperties(id, values)) })
+  const items = [...quickActionMenuItems(type.value, object, { save: async (id, values) => moved(await setProperties(id, values)) }), ...subtaskMenuItems(type.value, object, moved)]
   return items.length ? [{ kind: 'separator' }, ...items] : []
 }
 
@@ -714,6 +715,13 @@ async function newMenu(event: MouseEvent) {
           {{ o.label }}
           <AppIcon v-if="view.openIn === o.openIn" fallback="ph:check" class="ml-auto text-accent" />
         </button>
+        <template v-if="parentFieldOf(type) && (view.layout === 'list' || (isPhone && view.layout === 'table' && !phoneTable))">
+          <div class="my-1 border-t border-line" />
+          <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover max-md:py-2.5" :aria-pressed="!view.flat" data-nest-subtasks @click="updateView({ flat: view.flat ? undefined : true }), (layoutOpen = false)">
+            <AppIcon fallback="ph:tree-structure" class="text-ink-soft" /> Nest subtasks
+            <AppIcon v-if="!view.flat" fallback="ph:check" class="ml-auto text-accent" />
+          </button>
+        </template>
         <template v-if="isPhone && view.layout === 'table'">
           <div class="my-1 border-t border-line" />
           <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-2.5 text-left text-sm hover:bg-hover" :aria-pressed="phoneTable" data-phone-table @click="togglePhoneTable(), (layoutOpen = false)">
@@ -764,6 +772,7 @@ async function newMenu(event: MouseEvent) {
       :open-in="view.openIn"
       :quick-actions="view.quickActions"
       :phone-table="phoneTable"
+      :flat="view.flat"
       @table="updateView({ table: $event })"
       @board="updateView({ board: $event })"
       @manual="updateView({ sort: undefined })"

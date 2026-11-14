@@ -42,6 +42,8 @@ export const ADDED_COLUMNS: { table: string; column: string; definition: string 
   { table: 'types', column: 'open_in', definition: 'TEXT' },
   // JSON QuickActions: what a task's Done, Defer and Drop buttons set (ObjectType.quickActions).
   { table: 'types', column: 'quick_actions', definition: 'TEXT' },
+  // JSON SubtaskSettings: the relation that makes an object a step of another (ObjectType.subtasks).
+  { table: 'types', column: 'subtasks', definition: 'TEXT' },
 ]
 
 /** Indexes on added columns; run after ADDED_COLUMNS, since an older table may lack them before. */

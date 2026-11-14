@@ -54,6 +54,14 @@ with a strip of the columns' names and counts that jumps to one. Questions that 
 a small button (a quick action's day or text) rise as a sheet from the bottom, within reach of the
 thumb.
 
+**Subtasks**: a parent's steps sit under it in lists, indented 1.5rem a level (four at most), with a
+caret before the parent that folds them for the session; rows of an outline keep the caret's place.
+Any object with steps shows a small outlined count ("2/5"), green with "Ready to close" once all
+are closed. A step listed without its parent says "in <parent>" on a faint line. On its page, a
+Subtasks section under the quick actions: a quiet header with "1 of 3 done", ruled rows (checkbox,
+title, short due date), and an "Add subtask" line at the end; when every step is closed, a bordered
+line "All subtasks done" with the type's first quick action as a button.
+
 **Swipes** (`SwipeRow`, touch screens): on a task's row, a swipe right past 40% runs the type's
 Defer (else its first quick action); a swipe left uncovers the other actions, Done first, then
 More (the row's long-press menu). One row is open at a time; a tap elsewhere closes it. On phones

@@ -7,7 +7,13 @@ import BacklinksPanel from '../components/BacklinksPanel.vue'
 import ObjectActivity from '../components/ObjectActivity.vue'
 import ObjectComments from '../components/ObjectComments.vue'
 import SprintPanel from '../components/SprintPanel.vue'
+import SubtasksPanel from '../components/SubtasksPanel.vue'
 import TaskQuickActions from '../components/TaskQuickActions.vue'
+import { isClosedTask, parentFieldOf, subtaskProgress } from '@vasta/core'
+import { setProperties } from '../lib/actions.ts'
+import { loadSubtasks, subtasksOf, withDescendants } from '../lib/subtasks.ts'
+import { pickObject } from '../lib/pick.ts'
+import type { QuickSave } from '../lib/quick-actions.ts'
 import DateValueEditor from '../components/DateValueEditor.vue'
 import IconPicker from '../components/IconPicker.vue'
 import MediaView from '../components/MediaView.vue'
@@ -437,6 +443,35 @@ function setProp(def: PropertyDef, value: PropertyValue | undefined) {
   setProps({ [def.id]: value })
 }
 
+// Subtasks (types with a parent field): the panel under the quick actions takes the place of the
+// parent field's row among what links here.
+const parentField = computed(() => parentFieldOf(type.value))
+const hiddenReverse = computed(() => (type.value && parentField.value ? `${type.value.id}/${parentField.value.id}` : undefined))
+/** This page's object saves through the page (its editor holds the copy); others straight away. */
+const pageSave: QuickSave = (id, values) => (object.value?.id === id ? setProps(values) : setProperties(id, values))
+/** Makes this object a step of another (picked among its type, not itself or its own steps), or a top-level one. */
+async function moveUnder(pick: boolean) {
+  menuOpen.value = false
+  const field = parentField.value
+  if (!field || !type.value || !object.value) return
+  const parent = pick ? await pickObject({ title: 'Make a subtask of…', typeIds: [type.value.id], exclude: withDescendants(type.value, object.value.id) }) : null
+  if (pick && !parent) return
+  setProps({ [field.id]: parent ? { kind: 'relation', value: [parent.id] } : undefined })
+  setTimeout(() => type.value && void loadSubtasks(type.value.id, true), 800)
+}
+const hasParent = computed(() => {
+  const value = parentField.value && object.value?.props[parentField.value.id]
+  return value?.kind === 'relation' && value.value.length > 0
+})
+
+/** Closing a task with steps still open says so in the notice. */
+function openStepsNote() {
+  if (!type.value || !object.value || !parentField.value || !isClosedTask(type.value, object.value)) return undefined
+  const progress = subtaskProgress(type.value, object.value, subtasksOf(type.value, object.value.id))
+  const open = progress.total - progress.done
+  return open ? `${open} subtask${open === 1 ? '' : 's'} still open` : undefined
+}
+
 /** Several properties at once (a task's quick actions), saved together. */
 function setProps(values: Record<Id, PropertyValue | undefined>) {
   if (!object.value) return
@@ -830,6 +865,14 @@ async function startFrom(template: ObjectRecord) {
             <button v-if="!object.deletedAt" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="copyObjectLink(object.id), (menuOpen = false)">
               <AppIcon fallback="ph:link" /> Copy link to page
             </button>
+            <template v-if="parentField && !object.deletedAt && !info">
+              <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" data-make-subtask @click="moveUnder(true)">
+                <AppIcon fallback="ph:tree-structure" /> Make subtask of…
+              </button>
+              <button v-if="hasParent" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="moveUnder(false)">
+                <AppIcon fallback="ph:arrow-elbow-up-left" /> Remove from parent
+              </button>
+            </template>
             <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="saveTemplateFrom">
               <AppIcon fallback="ph:copy-simple" /> Save as template…
             </button>
@@ -901,7 +944,8 @@ async function startFrom(template: ObjectRecord) {
         <ObjectPicker :type-ids="tagType ? [tagType.id] : []" :exclude="object.tagIds" create-label="New tag" @pick="addTag" @create="createTag" />
       </PopoverMenu>
 
-      <TaskQuickActions v-if="type?.system === 'task' && !info && !object.deletedAt" :type="type" :object="object" @set="setProps" />
+      <TaskQuickActions v-if="type?.system === 'task' && !info && !object.deletedAt" :type="type" :object="object" :note="openStepsNote" @set="setProps" />
+      <SubtasksPanel v-if="type && parentField && !info && !object.deletedAt" :type="type" :object="object" :save="pageSave" />
 
       <div v-if="(valueFields.length || type) && info?.kind !== 'snippet'" :class="hideAddProperty ? '' : 'mt-6'">
         <div v-if="showOwnDate" class="vasta-prop-row">
@@ -976,7 +1020,7 @@ async function startFrom(template: ObjectRecord) {
           </div>
           <PropertyValueEditor v-else :def="def" :value="object.props[def.id]" @update="setProp(def, $event)" @add-option="addOption(def, $event)" />
         </div>
-        <ReverseRelations v-if="!info" :object-id="object.id" :type-id="object.typeId" :show-empty="showAllFields" @count="reverseCount = $event" />
+        <ReverseRelations v-if="!info" :object-id="object.id" :type-id="object.typeId" :show-empty="showAllFields" :hide="hiddenReverse" @count="reverseCount = $event" />
         <div v-if="!hideAddProperty" class="mt-1 flex gap-3 text-xs text-ink-faint">
           <button v-if="hiddenCount" class="rounded px-1 py-1 hover:text-ink" @click="showAllFields = true">Show {{ hiddenCount }} empty properties</button>
           <button ref="addAnchor" class="flex items-center gap-1 rounded px-1 py-1 hover:text-ink" @click="addOpen = !addOpen">

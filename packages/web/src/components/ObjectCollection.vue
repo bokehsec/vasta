@@ -3,7 +3,7 @@
 // agenda), optionally grouped. Used by type pages, query pages and queries embedded in documents.
 import { computed, nextTick, provide, ref, watch, type Directive } from 'vue'
 import type { AgendaSettings, BoardSettings, FilterGroup, Id, ListSettings, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { isClosedTask, nextStepFieldOf, quickActionsOf, type QuickActionDef } from '@vasta/core'
+import { isClosedTask, nextStepFieldOf, outlineRows, parentFieldOf, parentIdOf, quickActionsOf, subtaskProgress, type OutlineRow, type QuickActionDef } from '@vasta/core'
 import { addSelectOption, setProperties, setProperty } from '../lib/actions.ts'
 import { isDone, setTaskDone } from '../lib/calendar.ts'
 import { chip } from '../lib/colors.ts'
@@ -13,6 +13,7 @@ import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import { runQuickAction } from '../lib/quick-actions.ts'
+import { foldedSteps as folded, subtasksOf } from '../lib/subtasks.ts'
 import { hideSwipeTip, swipeTipHidden } from '../lib/tips.ts'
 import { isPhone, isTouch } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
@@ -55,6 +56,8 @@ const props = defineProps<{
   quickActions?: boolean
   /** On a phone a table is drawn as rows, unless this is set ("Show as table on this phone"). */
   phoneTable?: boolean
+  /** Steps listed flat, not nested under their parent (types with subtasks). */
+  flat?: boolean
 }>()
 const emit = defineEmits<{
   menu: [event: MouseEvent, object: ObjectSummary]
@@ -78,6 +81,39 @@ const STEP = 200
 const drawn = ref<Record<string, number>>({})
 watch([() => props.typeIds.join(), () => props.groupField], () => (drawn.value = {}))
 const shown = (group: Group) => group.items.slice(0, drawn.value[group.key] ?? STEP)
+
+// Subtasks (core subtasks.ts): in a list, a step follows its parent, indented (four levels at most),
+// and a parent's caret folds its steps (for the session). Any object with steps shows how many are
+// done ("2/5", counting every step, also those the filter leaves out) and "Ready to close" once all
+// are; a step whose parent is not listed stays at the top with the parent's name under it.
+const nests = computed(() => asList.value && !props.flat && types.value.some((t) => !!parentFieldOf(t)))
+const parentIdFor = (object: ObjectSummary) => parentIdOf(typeOf(object), object)
+function rowsOf(group: Group): OutlineRow<ObjectSummary>[] {
+  if (!nests.value) return shown(group).map((object) => ({ object, depth: 0, hasChildren: false }))
+  const rows: OutlineRow<ObjectSummary>[] = []
+  let foldedAt = Infinity
+  for (const row of outlineRows(group.items, parentIdFor)) {
+    if (row.depth > foldedAt) continue
+    foldedAt = row.hasChildren && folded.has(row.object.id) ? row.depth : Infinity
+    rows.push(row)
+  }
+  return rows.slice(0, drawn.value[group.key] ?? STEP)
+}
+const outlined = (group: Group) => nests.value && group.items.some((o) => parentIdFor(o) && group.items.some((p) => p.id === parentIdFor(o)))
+/** How far an object's steps are, when it has any. */
+function progressOf(object: ObjectSummary) {
+  const type = typeOf(object)
+  if (!parentFieldOf(type)) return undefined
+  const steps = subtasksOf(type, object.id)
+  return steps.length ? subtaskProgress(type, object, steps) : undefined
+}
+/** The name of a listed step's parent when the parent itself is not in the list. */
+function absentParent(object: ObjectSummary): string {
+  const id = nests.value ? parentIdFor(object) : undefined
+  if (!id || props.objects.some((o) => o.id === id)) return ''
+  const parent = summaryOf(id)
+  return parent ? displayTitle(parent, typeOf(parent)) : ''
+}
 const drawMore = (group: Group) => (drawn.value = { ...drawn.value, [group.key]: (drawn.value[group.key] ?? STEP) + STEP })
 /** Calls its value when the element comes near the viewport (it is keyed, so it asks again after each step). */
 const vNear: Directive<HTMLElement & { near?: IntersectionObserver }, () => void> = {
@@ -315,13 +351,27 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
 
       <!-- List; on a phone a table too. -->
       <div v-if="asList" class="divide-y divide-line/70" :data-phone-rows="phoneRows || undefined">
-        <SwipeRow v-for="object in shown(group)" :key="object.id" :enabled="!!swipeType(object)" :right="swipeRight(object)" :left="swipeLeft(object)">
+        <SwipeRow v-for="{ object, depth, hasChildren } in rowsOf(group)" :key="object.id" :enabled="!!swipeType(object)" :right="swipeRight(object)" :left="swipeLeft(object)">
           <ObjectLink
             :id="object.id"
             class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover max-md:py-2.5"
-            :class="listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : ''"
+            :class="listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : absentParent(object) ? 'flex-wrap gap-y-0.5' : ''"
+            :style="depth ? { paddingLeft: `${0.5 + Math.min(depth, 4) * 1.5}rem` } : undefined"
+            :data-depth="nests ? depth : undefined"
             @contextmenu="emit('menu', $event, object)"
           >
+            <!-- A parent's caret folds its steps; rows of an outline keep its place free. -->
+            <button
+              v-if="hasChildren"
+              class="relative -mx-1 grid h-5 w-5 shrink-0 place-items-center rounded text-ink-faint hover:bg-line hover:text-ink [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3 [@media(hover:none)]:after:content-['']"
+              :aria-expanded="!folded.has(object.id)"
+              :title="folded.has(object.id) ? 'Show subtasks' : 'Hide subtasks'"
+              data-fold-steps
+              @click.prevent.stop="folded.has(object.id) ? folded.delete(object.id) : folded.add(object.id)"
+            >
+              <AppIcon :fallback="folded.has(object.id) ? 'ph:caret-right' : 'ph:caret-down'" :size="13" />
+            </button>
+            <span v-else-if="outlined(group)" class="-mx-1 w-5 shrink-0" aria-hidden="true" />
             <!-- On touch the checkbox's tap area reaches 44px around it. -->
             <button
               v-if="listColumns && typeOf(object)?.system === 'task'"
@@ -346,6 +396,10 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
               class="min-w-0 flex-1 font-medium max-md:text-base max-md:leading-snug"
               :class="[list?.wrap || phoneRows ? 'break-words' : 'truncate', listColumns && typeOf(object)?.system === 'task' && isDoneTask(object) ? 'text-ink-faint line-through' : '']"
             >{{ displayTitle(object, typeOf(object)) }}</span>
+            <span v-if="progressOf(object)" class="shrink-0 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
+              {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
+            </span>
+            <span v-if="absentParent(object)" class="order-last w-full truncate pl-[30px] text-xs text-ink-faint max-md:text-[13px]" data-absent-parent>in {{ absentParent(object) }}</span>
             <span v-if="listColumns" class="flex min-w-0 shrink-0 items-center gap-2 text-xs max-md:text-[13px] @max-2xl:order-last @max-2xl:w-full @max-2xl:flex-wrap @max-2xl:pl-[30px]" data-row-fields @click.prevent>
               <template v-for="field in fieldsOf(object)" :key="field.field">
                 <span v-if="field.field === 'tags' || field.field === 'collections'" class="flex gap-1">
@@ -411,6 +465,9 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                   <ObjectLink :id="object.id" class="font-medium hover:underline">
                     <AppIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" />{{ displayTitle(object, typeOf(object)) }}
                   </ObjectLink>
+                  <span v-if="progressOf(object)" class="ml-2 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
+                    {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
+                  </span>
                   <TaskQuickActions v-if="actionsUnderTitle && taskType(object)" :type="taskType(object)!" :object="object" variant="row" class="-mb-1 mt-0.5 -ml-1.5" @set="saveQuick(object, $event)" />
                 </template>
                 <span v-else-if="column.field === 'tags' || column.field === 'collections'" class="flex gap-1" :class="column.wrap ? 'flex-wrap' : 'overflow-hidden'">

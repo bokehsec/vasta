@@ -4,7 +4,7 @@ import { newId } from '@vasta/core'
 // Changes are made on a draft and saved together.
 import { computed, reactive, ref } from 'vue'
 import type { ColorName, FormulaPropertyDef, Icon, ObjectType, PropertyDef, QuickActions, SelectOption } from '@vasta/core'
-import { FORMULA_BUILTIN_FIELDS, FORMULA_FUNCTIONS, checkFormula, formulaFromNames, formulaKind, formulaToNames, formulaUses } from '@vasta/core'
+import { FORMULA_BUILTIN_FIELDS, FORMULA_FUNCTIONS, checkFormula, eligibleParentFields, formulaFromNames, formulaKind, formulaToNames, formulaUses } from '@vasta/core'
 import { api } from '../lib/api.ts'
 import { clone } from '../lib/clone.ts'
 import { chip, colorNames, iconTextClasses, swatchClasses } from '../lib/colors.ts'
@@ -53,6 +53,20 @@ function setOpenIn(pane: boolean) {
 function setQuickActions(value: QuickActions | undefined) {
   if (value) draft.value.quickActions = value
   else delete draft.value.quickActions
+}
+
+// Subtasks: the single relation to the type itself that makes an object a step of another, or a
+// new "Part of" relation (its other side reads "Subtasks").
+const NEW_PARENT_FIELD = '__new'
+const parentFields = computed(() => eligibleParentFields(draft.value))
+function setSubtaskField(value: string) {
+  if (value === NEW_PARENT_FIELD) {
+    const id = newId()
+    draft.value.properties.push({ id, kind: 'relation', name: 'Part of', targetTypeIds: [draft.value.id], multiple: false, reverseName: 'Subtasks' })
+    value = id
+  }
+  if (value) draft.value.subtasks = { parentField: value }
+  else delete draft.value.subtasks
 }
 
 const richTextCount = computed(() => draft.value.properties.filter((p) => p.kind === 'rich-text').length)
@@ -251,6 +265,21 @@ async function leave(path: string) {
       <p class="mt-0.5 pl-6 text-xs text-ink-faint">A click on a {{ (draft.name || 'object').toLowerCase() }} in a list, table, board or query opens it next to the page. A view can choose otherwise.</p>
     </section>
     <QuickActionsSettings v-if="draft.system === 'task'" :type="draft" @update="setQuickActions" />
+    <section class="mt-4" data-subtask-settings>
+      <label class="text-xs text-ink-faint" for="type-subtask-field">Subtasks</label>
+      <select
+        id="type-subtask-field"
+        class="mt-1 block w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-line-strong max-md:py-2.5 max-md:text-base"
+        :value="draft.subtasks?.parentField ?? ''"
+        data-subtask-field
+        @change="setSubtaskField(($event.target as HTMLSelectElement).value)"
+      >
+        <option value="">None</option>
+        <option v-for="def in parentFields" :key="def.id" :value="def.id">{{ def.name }}</option>
+        <option :value="NEW_PARENT_FIELD">Add a “Part of” field</option>
+      </select>
+      <p class="mt-0.5 text-xs text-ink-faint">A {{ (draft.name || 'object').toLowerCase() }} can be split into steps: they nest under it in lists, and its page lists them with Add subtask.</p>
+    </section>
 
     <TypeTemplates :type="type" @leave="leave" />
 

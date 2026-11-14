@@ -12,6 +12,7 @@ import { primeSummaries, typesById } from '../lib/state.ts'
 import ObjectCollection from './ObjectCollection.vue'
 import { copyObjectLink, openObject } from '../lib/open.ts'
 import { quickActionMenuItems } from '../lib/quick-actions.ts'
+import { subtaskMenuItems } from '../lib/subtasks.ts'
 
 /** `readonly`: property cells of a table do not edit (a whiteboard card, a page that cannot be edited). */
 const props = defineProps<{ query: QueryDef; parentId?: Id; limit?: number; readonly?: boolean }>()
@@ -70,7 +71,11 @@ function moved(saved: ObjectSummary) {
 /** An open task's quick actions, in its menu (a long press on a phone); none where nothing changes. */
 function quickItems(object: ObjectSummary): MenuItem[] {
   if (props.readonly) return []
-  const items = quickActionMenuItems(typesById.value.get(object.typeId), object, { save: async (id, values) => moved({ ...(await setProperties(id, values)), preview: '' }) })
+  const type = typesById.value.get(object.typeId)
+  const items = [
+    ...quickActionMenuItems(type, object, { save: async (id, values) => moved({ ...(await setProperties(id, values)), preview: '' }) }),
+    ...subtaskMenuItems(type, object, (saved) => moved({ ...saved, preview: '' })),
+  ]
   return items.length ? [{ kind: 'separator' }, ...items] : []
 }
 
@@ -110,6 +115,7 @@ defineExpose({ count: computed(() => results.value.length), empty })
         :parent-id="parentId"
         :open-in="query.openIn"
         :quick-actions="query.quickActions"
+        :flat="query.flat"
         :readonly="readonly"
         @table="emit('table', $event)"
         @board="emit('board', $event)"

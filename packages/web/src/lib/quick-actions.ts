@@ -97,6 +97,8 @@ export interface RunOptions {
   save?: QuickSave
   /** The notice's word for several objects ("5 tasks"). */
   noun?: (count: number) => string
+  /** Said after the message once saved, if anything ("3 subtasks still open"). */
+  note?: () => string | undefined
 }
 
 /**
@@ -141,7 +143,8 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
         lastError.value = (error as Error).message
       }
     })
-  notice.value = { message, action: { label: 'Undo', run: undo } }
+  const note = options.note?.()
+  notice.value = { message: note ? `${message} · ${note}` : message, action: { label: 'Undo', run: undo } }
   return saved
 }
 

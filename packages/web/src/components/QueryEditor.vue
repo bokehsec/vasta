@@ -3,6 +3,7 @@
 // whole new query. The agenda layout has no sort or grouping (it is by day and time).
 import { computed, ref } from 'vue'
 import type { AgendaSettings, FilterGroup, Id, ListSettings, QueryDef, SortRule, TableSettings, ViewLayout } from '@vasta/core'
+import { parentFieldOf } from '@vasta/core'
 import { chip } from '../lib/colors.ts'
 import { quickActionsColumnShown, toggleQuickActionsColumn } from '../lib/columns.ts'
 import { fieldOptions, groupOptions } from '../lib/query.ts'
@@ -72,6 +73,10 @@ function toggleQuickActions() {
   if (props.query.layout === 'table') update({ table: toggleQuickActionsColumn(props.query.table, props.query.typeIds) })
   else update({ quickActions: props.query.quickActions ? undefined : true })
 }
+// Steps nested under their parent (a type with subtasks among the results, list layout); on by default.
+const findsSteps = computed(() => workspace.types.some((t) => (!props.query.typeIds.length || props.query.typeIds.includes(t.id)) && parentFieldOf(t)))
+const listLayout = computed(() => (props.query.layout ?? 'list') === 'list')
+const toggleNested = () => update({ flat: props.query.flat ? undefined : true })
 
 const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
 </script>
@@ -171,6 +176,10 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
       <label v-if="findsTasks && rowsLayout" class="flex items-center gap-1.5 text-ink-soft" title="Done, Defer, Drop and the next step on each task's row">
         <input type="checkbox" class="accent-[var(--color-accent)]" :checked="quickActionsOn" @change="toggleQuickActions" />
         Quick actions
+      </label>
+      <label v-if="findsSteps && listLayout" class="flex items-center gap-1.5 text-ink-soft" title="Subtasks under their parent, folded with its caret">
+        <input type="checkbox" class="accent-[var(--color-accent)]" :checked="!query.flat" data-nest-subtasks @change="toggleNested" />
+        Nest subtasks
       </label>
     </section>
   </div>

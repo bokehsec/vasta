@@ -87,6 +87,15 @@ export type QuickActionValue =
   | { kind: 'ask' }
   | { kind: 'clear' }
 
+/**
+ * Subtasks of a type (Type settings › Subtasks): the single relation from an object to the one it
+ * is a step of, its parent. Lists nest the steps under their parent, and its page lists them.
+ */
+export interface SubtaskSettings {
+  /** A single relation property of the type whose targets include the type itself. */
+  parentField: Id
+}
+
 /** A space's sprints: on or off, and the word the space uses for them ("Sprint", "Rodada"…). */
 export interface SprintSettings {
   enabled: boolean
@@ -206,6 +215,8 @@ export interface ObjectType {
   openIn?: ViewOpenIn
   /** What a task's Done, Defer and Drop buttons set (task-actions.ts); unset: the defaults. */
   quickActions?: QuickActions
+  /** Splitting its objects into steps (subtasks.ts); unset: none. */
+  subtasks?: SubtaskSettings
   createdAt: IsoDateTime
   updatedAt: IsoDateTime
   /** Set when the type is in the trash; its objects are trashed with it. */
@@ -556,6 +567,8 @@ export interface QueryDef {
   openIn?: ViewOpenIn
   /** Tasks among the results show their quick actions on their rows (list layout; a table has a column for them). */
   quickActions?: boolean
+  /** Steps are listed flat instead of nested under their parent (types with subtasks, list layout). */
+  flat?: boolean
 }
 
 export interface FilterGroup {
@@ -607,6 +620,8 @@ export interface ViewDef {
   openIn?: ViewOpenIn
   /** Tasks show their quick actions on their rows (list layout; a table has a column for them), for triage. */
   quickActions?: boolean
+  /** Steps are listed flat instead of nested under their parent (types with subtasks, list layout). */
+  flat?: boolean
 }
 
 /**

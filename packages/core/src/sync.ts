@@ -147,7 +147,7 @@ export type FieldClock = Record<string, Hlc>
  */
 export const PLAIN_FIELDS: Record<SyncTable, readonly string[]> = {
   spaces: ['name', 'icon', 'sidebar', 'nutrition', 'sprints', 'opensOn', 'deletedAt'],
-  types: ['name', 'pluralName', 'description', 'icon', 'color', 'properties', 'views', 'openIn', 'quickActions', 'deletedAt'],
+  types: ['name', 'pluralName', 'description', 'icon', 'color', 'properties', 'views', 'openIn', 'quickActions', 'subtasks', 'deletedAt'],
   objects: ['typeId', 'title', 'description', 'icon', 'coverUrl', 'color', 'parentId', 'aliases', 'tagIds', 'collectionIds', 'date', 'query', 'media', 'template', 'deletedAt'],
   calendar_sources: ['name', 'url', 'color', 'username', 'enabled'],
 }
