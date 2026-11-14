@@ -7,17 +7,22 @@
 // and a relation's or a select's `name:` lists its objects or options. "/food …" logs what was
 // eaten on today's note instead, offering the foods at the cursor. With Settings › Desktop app ›
 // "Ask a template's questions", a "/Type …" line whose template asks something shows its
-// questions before it saves (Esc goes back to the text).
+// questions before it saves (Esc goes back to the text). On a phone it also shows where the text
+// goes, a Note / type picker (it writes the "/Type " prefix), a Save capture button above the
+// keyboard, and keeps an unsaved text on this device as a draft for the next capture.
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { foodCommand, type ObjectSummary, type ObjectType, type TemplateAsk } from '@vasta/core'
 import { captureAsks, captureSpace, captureText, completionSource, dayKey, openCapture, typesOf } from '../lib/actions.ts'
 import { foodSourcesOf, previewFoodLine } from '../lib/nutrition.ts'
+import { clearDraft, readDraft, withType, writeDraft, writtenText } from '../lib/capture-draft.ts'
 import { isDesktop } from '../lib/platform.ts'
 import { meId, people } from '../lib/people.ts'
+import { session } from '../lib/session.ts'
 import { notice, ui } from '../lib/state.ts'
-import { previewLine, typedLine, type Completion } from '../lib/typed-line.ts'
+import { offered, previewLine, typedLine, type Completion } from '../lib/typed-line.ts'
 import { templates } from '../lib/templates.ts'
 import { useCompletions } from '../lib/use-completions.ts'
+import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import ModalDialog from './ModalDialog.vue'
 
@@ -32,6 +37,40 @@ const close = () => (ui.captureOpen = false)
 
 const space = computed(captureSpace)
 
+// A phone keeps what was not saved: put back here, kept again by `leave`, dropped once saved.
+const draftRestored = ref(false)
+const draftOwner = () => (session.user && space.value ? ([session.user.id, space.value.id] as const) : undefined)
+if (isPhone.value) {
+  const owner = draftOwner()
+  const draft = owner ? readDraft(...owner) : ''
+  if (draft) {
+    text.value = draft
+    draftRestored.value = true
+  }
+}
+
+function discardDraft() {
+  const owner = draftOwner()
+  if (owner) clearDraft(...owner)
+  draftRestored.value = false
+  text.value = ''
+  field.value?.focus()
+}
+
+/** Cancel, X, Esc: a phone keeps the text as the draft (a picked type alone is not one). */
+function leave() {
+  const owner = draftOwner()
+  if (isPhone.value && owner) writeDraft(...owner, writtenText(types.value, text.value) ? text.value : '')
+  close()
+}
+
+/** After a save: no draft is left behind. */
+function done() {
+  const owner = draftOwner()
+  if (owner) clearDraft(...owner)
+  close()
+}
+
 onMounted(async () => {
   await nextTick()
   field.value?.focus()
@@ -44,6 +83,23 @@ const readCursor = () => (cursor.value = field.value?.selectionStart ?? text.val
 watch(text, () => nextTick(readCursor))
 
 const typed = computed(() => typedLine(types.value, text.value))
+
+// The phone's picker: the types a line can make, "Note" when the text names none.
+const pickable = computed(() => types.value.filter(offered))
+const destination = computed(() => {
+  const name = space.value?.name ?? ''
+  if (eaten.value !== undefined) return `Food log · ${name}`
+  return typed.value ? `${typed.value.type.name} in ${name}` : `Today’s note · ${name}`
+})
+const hasText = computed(() => !!writtenText(types.value, text.value) || (eaten.value !== undefined && !!text.value.trim()))
+
+async function pickType(type?: ObjectType) {
+  text.value = withType(types.value, text.value, type)
+  await nextTick()
+  field.value?.focus()
+  field.value?.setSelectionRange(text.value.length, text.value.length)
+  cursor.value = text.value.length
+}
 const preview = computed(() => (typed.value ? previewLine(typed.value.type, typed.value.rest, dayKey(), people.list, meId(), space.value?.id === templates.spaceId ? templates.list : []) : undefined))
 
 // A line of food: what it will log, against the space's foods (loaded once one is typed).
@@ -94,19 +150,19 @@ async function save(open = false) {
     }
     const { space: saved, answer, food, made } = await captureText(text.value, isDesktop ? 'desktop' : 'app', asks.value ? { ...answers } : undefined)
     if (open) {
-      close()
+      done()
       await openCapture(saved, answer, made)
       return
     }
     if (food) {
       notice.value = { message: food.summary.replace(/\n/g, ' ') }
-      close()
+      done()
       return
     }
     const unread = answer.unreadable?.length ? ` Could not read ${answer.unreadable.join('; ')}.` : ''
     const destination = answer.dailyNoteId ? `today’s note in ${saved.name}` : saved.name
     notice.value = { message: `${answer.summary || 'Capture saved'} in ${destination}.${unread}` }
-    close()
+    done()
   } catch (failure) {
     error.value = failure instanceof Error ? failure.message : String(failure)
   } finally {
@@ -155,8 +211,9 @@ function onKey(event: KeyboardEvent) {
       return
     }
   }
-  // Enter saves; Ctrl+Enter saves and opens; Shift+Enter starts a new line.
-  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+  // Enter saves; Ctrl+Enter saves and opens; Shift+Enter starts a new line (on a phone, Enter does,
+  // and the Save capture button saves).
+  if (!isPhone.value && event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     void save()
   }
@@ -164,8 +221,38 @@ function onKey(event: KeyboardEvent) {
 </script>
 
 <template>
-  <ModalDialog title="Quick capture" width="34rem" @close="close">
+  <ModalDialog title="Quick capture" width="34rem" keep-above-keyboard @close="leave">
     <template #icon><AppIcon fallback="ph:lightning" class="text-ink-soft" /></template>
+    <template v-if="isPhone && !asks">
+      <p class="text-sm text-ink-soft" data-testid="capture-destination">{{ destination }}</p>
+      <div class="-mx-4 mt-2 flex gap-1.5 overflow-x-auto px-4 pb-1" role="radiogroup" aria-label="Save as" data-testid="capture-types">
+        <button
+          class="min-h-11 shrink-0 rounded-lg border px-3 text-sm"
+          role="radio"
+          :aria-checked="!typed"
+          :class="!typed ? 'border-line-strong bg-hover text-ink' : 'border-line text-ink-soft'"
+          @click="pickType()"
+        >
+          Note
+        </button>
+        <button
+          v-for="type in pickable"
+          :key="type.id"
+          class="min-h-11 shrink-0 rounded-lg border px-3 text-sm"
+          role="radio"
+          :aria-checked="typed?.type.id === type.id"
+          :class="typed?.type.id === type.id ? 'border-line-strong bg-hover text-ink' : 'border-line text-ink-soft'"
+          @click="pickType(type)"
+        >
+          {{ type.name }}
+        </button>
+      </div>
+      <p v-if="draftRestored" class="mt-1 text-xs text-ink-faint" data-testid="capture-draft">
+        Draft restored ·
+        <button class="inline-flex min-h-11 items-center px-1 text-ink-soft underline" @click="discardDraft">Discard</button>
+      </p>
+      <div class="mt-2" />
+    </template>
     <div v-if="asks" ref="questions" class="space-y-3" data-testid="capture-questions" @keydown="onQuestionKey">
       <p class="truncate text-sm text-ink-soft">{{ text.split('\n')[0] }}</p>
       <div v-for="item in asks" :key="item.label">
@@ -192,7 +279,7 @@ function onKey(event: KeyboardEvent) {
       v-else
       ref="field"
       v-model="text"
-      rows="4"
+      :rows="isPhone ? 6 : 4"
       class="w-full resize-none rounded-xl border border-line bg-raised px-3 py-2.5 outline-none focus:border-line-strong"
       placeholder="A thought, a link, a task… or / for an object of a type"
       @keydown="onKey"
@@ -215,7 +302,7 @@ function onKey(event: KeyboardEvent) {
         <span v-if="item.detail" class="shrink-0 text-xs text-ink-faint">{{ item.detail }}</span>
       </button>
     </div>
-    <p v-if="error" class="mt-2 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+    <p v-if="error && !isPhone" class="mt-2 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
     <template v-if="asks" />
     <div v-else-if="foodPreview" class="mt-2 space-y-0.5 text-xs text-ink-faint" data-testid="capture-preview">
       <p class="text-ink-soft">{{ foodPreview.text }}</p>
@@ -228,15 +315,27 @@ function onKey(event: KeyboardEvent) {
         <template v-if="preview.template"> · from {{ preview.template }}</template>
         <template v-if="preview.parts.length"> · {{ preview.parts.join(', ') }}</template>
         <span>, in today’s note in {{ space?.name }}.</span>
-        <span> Ctrl+Enter saves and opens it.</span>
+        <span v-if="!isPhone"> Ctrl+Enter saves and opens it.</span>
       </p>
       <p v-if="preview.errors.length" class="text-amber-700 dark:text-amber-400">Cannot read {{ preview.errors.join('; ') }}; it stays in the title.</p>
       <p v-else-if="!preview.parts.length && preview.properties.length">name:value sets {{ preview.properties.join(', ') }}.</p>
     </div>
-    <p v-else class="mt-2 text-xs text-ink-faint">Goes to today’s note in {{ space?.name }}. Enter saves, Ctrl+Enter saves and opens it, Shift+Enter adds a line.</p>
-    <template #footer>
+    <p v-else-if="!isPhone" class="mt-2 text-xs text-ink-faint">Goes to today’s note in {{ space?.name }}. Enter saves, Ctrl+Enter saves and opens it, Shift+Enter adds a line.</p>
+    <template v-if="isPhone" #footer>
+      <div class="flex w-full flex-col gap-1">
+        <p v-if="error" class="text-sm text-red-600 dark:text-red-400" role="alert">{{ error }}</p>
+        <button class="min-h-11 w-full rounded-lg bg-ink px-3 text-sm font-medium text-surface disabled:opacity-50" :disabled="!hasText || saving" @click="save()">
+          {{ saving ? 'Saving…' : 'Save capture' }}
+        </button>
+        <div class="flex gap-2">
+          <button v-if="asks" class="min-h-11 flex-1 rounded-lg px-3 text-sm hover:bg-hover" @click="backToText">Back</button>
+          <button class="min-h-11 flex-1 rounded-lg px-3 text-sm hover:bg-hover" @click="leave">Cancel</button>
+        </div>
+      </div>
+    </template>
+    <template v-else #footer>
       <button v-if="asks" class="rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="backToText">Back</button>
-      <button class="ml-auto rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="close">Cancel</button>
+      <button class="ml-auto rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="leave">Cancel</button>
       <button class="rounded-lg bg-ink px-3 py-1.5 text-sm text-surface disabled:opacity-50" :disabled="!text.trim() || saving" @click="save()">Capture</button>
     </template>
   </ModalDialog>

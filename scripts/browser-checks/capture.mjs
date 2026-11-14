@@ -4,7 +4,8 @@
 // questions (vasta:capture-suggest) get the same list; Ctrl+Enter, in the dialog or from the panel,
 // opens what it made; with Settings › Desktop app › "Ask a template's questions", a line whose
 // template asks something shows the questions first (in the dialog, and through the panel's
-// capture_questions). As the desktop app (its globals faked),
+// capture_questions); on a phone (390px wide): Save capture above the keyboard, the Note / type
+// picker, and a draft kept after Cancel until Discard or a save. As the desktop app (its globals faked),
 // since only it opens quick capture.
 //   node capture.mjs [base]      MODE=json: with the replica turned off (HTTP mode)
 import { chromium } from 'playwright'
@@ -191,4 +192,66 @@ await page.evaluate((text) => window.dispatchEvent(Object.assign(new CustomEvent
 const hope = await madeBy('Esperança')
 console.log('panel answered:', bookText(hope).includes('By bell hooks'), bookText(hope).includes('Quoted'))
 if (!bookText(hope).includes('By bell hooks') || bookText(hope).includes('Quoted')) throw new Error('the panel’s answers did not reach the template')
+// On a phone: where it goes, the type picker, a Save capture button, drafts.
+const phone = await browser.newContext({ viewport: { width: 390, height: 700 }, hasTouch: true })
+await phone.addInitScript((json) => json && localStorage.setItem('vasta.replica', 'off'), process.env.MODE === 'json')
+const mobile = await phone.newPage()
+await mobile.goto(base)
+await mobile.fill('#login-username', 'tester')
+await mobile.fill('#login-password', 'test-password')
+await mobile.click('button[type=submit]')
+await mobile.waitForSelector('nav', { state: 'attached', timeout: 30000 })
+await mobile.waitForTimeout(1500)
+const openPhoneCapture = async () => {
+  await mobile.getByRole('button', { name: 'Capture', exact: true }).click()
+  await mobile.getByTestId('capture-destination').waitFor()
+  await mobile.waitForTimeout(500)
+}
+const mobileField = mobile.locator('textarea[placeholder*="/ for an object"]')
+await openPhoneCapture()
+const saveButton = mobile.getByRole('button', { name: 'Save capture' })
+console.log('phone destination:', clean(await mobile.getByTestId('capture-destination').textContent()))
+if (!(await saveButton.isVisible()) || !(await saveButton.isDisabled())) throw new Error('Save capture should show, disabled while empty')
+if ((await saveButton.boundingBox()).height < 44) throw new Error('Save capture is under 44px high')
+// The picker writes the /Type prefix; typing it by hand keeps the picker in sync.
+await mobile.getByRole('radio', { name }).click()
+console.log('phone picked:', JSON.stringify(await mobileField.inputValue()), clean(await mobile.getByTestId('capture-destination').textContent()))
+if (!(await mobileField.inputValue()).startsWith(`/${name} `)) throw new Error('the picker did not write the type')
+await mobileField.pressSequentially('Solaris')
+await saveButton.click()
+// If the books' template asks (the setting is per device), the same button saves after the answers.
+if (await mobile.getByTestId('capture-questions').waitFor({ timeout: 3000 }).then(() => true, () => false)) {
+  await mobile.getByTestId('capture-questions').locator('input').fill('Stanislaw Lem')
+  await saveButton.click()
+}
+await mobileField.waitFor({ state: 'detached' })
+await mobile.waitForTimeout(1500)
+const bookTypes = []
+for (const space of await get('/api/spaces')) bookTypes.push(...(await get(`/api/spaces/${space.id}`)).types.filter((t) => t.name === name))
+const solaris = (await Promise.all(bookTypes.map((t) => get(`/api/types/${t.id}/objects`).catch(() => [])))).flat().find((o) => o.title === 'Solaris')
+console.log('phone made:', solaris?.title, solaris?.typeId)
+if (!solaris || !bookTypes.some((t) => t.id === solaris.typeId)) throw new Error('the picked type did not make a book')
+await openPhoneCapture()
+await mobileField.pressSequentially(`/${name.toLowerCase()} by hand`)
+const checked = await mobile.getByRole('radio', { name, checked: true }).count()
+if (checked !== 1) throw new Error('the picker did not follow the typed /Type')
+await mobile.getByRole('radio', { name: 'Note' }).click()
+if ((await mobileField.inputValue()) !== 'by hand') throw new Error('Note did not take the prefix off')
+// Cancel keeps a draft; the next capture restores it; Discard clears it; a save clears it.
+await mobile.getByRole('button', { name: 'Cancel' }).click()
+await mobileField.waitFor({ state: 'detached' })
+await openPhoneCapture()
+console.log('phone draft:', JSON.stringify(await mobileField.inputValue()), clean(await mobile.getByTestId('capture-draft').textContent()))
+if ((await mobileField.inputValue()) !== 'by hand') throw new Error('the draft was not restored')
+await mobile.getByRole('button', { name: 'Discard' }).click()
+if ((await mobileField.inputValue()) !== '' || (await mobile.getByTestId('capture-draft').count())) throw new Error('Discard did not clear the draft')
+await mobile.getByRole('button', { name: 'Cancel' }).click()
+await openPhoneCapture()
+if ((await mobileField.inputValue()) !== '') throw new Error('a discarded draft came back')
+await mobileField.fill('Saved note from the phone')
+await saveButton.click()
+await mobileField.waitFor({ state: 'detached' })
+await openPhoneCapture()
+if ((await mobileField.inputValue()) !== '') throw new Error('a saved text came back as a draft')
+await phone.close()
 await browser.close()

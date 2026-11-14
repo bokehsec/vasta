@@ -18,7 +18,7 @@ export function typedLine(types: ObjectType[], text: string): { type: ObjectType
 }
 
 /** "/Food …" logs food, so the Food type is not one to make objects of from a line. */
-const offered = (type: ObjectType) => isCapturable(type) && type.system !== 'food'
+export const offered = (type: ObjectType) => isCapturable(type) && type.system !== 'food'
 const tracksFood = (types: ObjectType[]) => types.some((t) => t.system === 'food' && !t.deletedAt)
 const FOOD_COMMANDS = ['food']
 const FOOD_ICON: Icon = { kind: 'icon', value: 'ph:bowl-food' }

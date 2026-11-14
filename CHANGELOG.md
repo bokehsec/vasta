@@ -8,6 +8,14 @@ GitHub release page.
 
 ### Added
 
+- **Search and filters in one place on a phone.** A type's page (Tasks and the rest) shows the view
+  and a Filters button on one row, with a count of what is on, instead of a toolbar that scrolled
+  sideways. Filters opens a sheet with Search this view, Mine, the view's filters and Arrange (sort,
+  group, layout, fields), and Clear. The page's ⋯ menu has Select tasks, and each task row has a ⋯
+  button with its actions, so nothing needs a long press to be found.
+- **Quick capture made for a phone.** It says where the text will go, lets you pick Note or a type
+  (no need to type "/Book"), and has a Save capture button above the keyboard (Return adds a line).
+  Text you cancel is kept on this device and comes back next time, with Discard.
 - **Quick actions on any type.** Type settings › Quick actions, until now only on a task, works on
   every type: set up buttons that change its fields in one click, and they show on its objects'
   pages, as a view's row buttons, in the Quick actions column, in a bulk selection's bar and in

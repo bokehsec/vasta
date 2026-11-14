@@ -1,7 +1,8 @@
 // Many objects at once: one selection in the app at a time, held by the list or table that made it
 // (its key). Desktop: a box at the start of a row (on hover, always while anything is selected),
 // Shift-click for the range between, in the order drawn. Phone: "Select" in a row's long-press menu
-// starts selection mode, where a tap picks a row. The bulk bar (BulkBar, App.vue) acts on it.
+// starts selection mode, where a tap picks a row (so does "Select …" in a type page's More menu, with
+// none picked yet). The bulk bar (BulkBar, App.vue) acts on it.
 // Escape, leaving the page, the collection going away, or a layout without selection clears it; when
 // the collection's objects change (a filter, a sync) the ids no longer among them are dropped.
 import { computed, reactive } from 'vue'
@@ -76,6 +77,12 @@ export function startSelecting(key: string, id: Id, by: SelectionOwner) {
   selection.mode = true
   selection.ids = new Set([id])
   selection.anchor = id
+}
+
+/** Phone: selection mode from a page's menu, with nothing picked yet (the bar offers Cancel). */
+export function startSelectMode(key: string, by: SelectionOwner) {
+  own(key, by)
+  selection.mode = true
 }
 
 // The collection whose row menu opened last, so the menu's "Select" knows where it belongs.

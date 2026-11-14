@@ -13,7 +13,7 @@ import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import { runQuickAction } from '../lib/quick-actions.ts'
-import { clearSelection, isSelected, isSelecting, pruneSelection, rememberMenuOwner, selection, toggleSelected, type SelectionOwner } from '../lib/selection.ts'
+import { clearSelection, isSelected, isSelecting, pruneSelection, rememberMenuOwner, selection, startSelectMode, toggleSelected, type SelectionOwner } from '../lib/selection.ts'
 import { foldedSteps as folded, subtasksOf } from '../lib/subtasks.ts'
 import { hideSwipeTip, swipeTipHidden } from '../lib/tips.ts'
 import { isPhone, isTouch } from '../lib/viewport.ts'
@@ -213,6 +213,8 @@ const owner: SelectionOwner = {
 }
 const canSelect = computed(() => !props.readonly && (asList.value || props.layout === 'table'))
 const selectingHere = computed(() => isSelecting(selKey))
+// The page's own "Select …" (a phone's More menu) starts selection with nothing picked.
+defineExpose({ canSelect, startSelecting: () => startSelectMode(selKey, owner) })
 const picked = (object: ObjectSummary) => isSelected(selKey, object.id)
 function pick(event: MouseEvent, object: ObjectSummary) {
   toggleSelected(selKey, object.id, owner, event.shiftKey)
@@ -226,6 +228,11 @@ function rowClick(event: MouseEvent, object: ObjectSummary) {
 function rowMenu(event: MouseEvent, object: ObjectSummary) {
   if (canSelect.value) rememberMenuOwner(selKey, owner)
   emit('menu', event, object)
+}
+/** A phone's ⋯ at a row's end: the long-press menu, from the button's corner. */
+function rowMore(event: MouseEvent, object: ObjectSummary) {
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  rowMenu(new MouseEvent('contextmenu', { clientX: box.left, clientY: box.bottom }), object)
 }
 onBeforeUnmount(() => selection.key === selKey && clearSelection())
 // What is picked must stay what is shown: ids no longer among the objects (a filter, another view, a
@@ -484,6 +491,16 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
               class="@max-md:order-last @max-md:w-full @max-md:pl-6"
               @set="saveQuick(object, $event)"
             />
+            <!-- A phone: a visible way to the row's menu, 44px to touch (a long press is not found by looking). -->
+            <button
+              v-if="isPhone && !readonly && !selectingHere && actionType(object)"
+              class="-my-2.5 -mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ink-soft active:bg-hover"
+              :aria-label="`More actions for ${displayTitle(object, typeOf(object))}`"
+              data-row-more
+              @click.prevent.stop="rowMore($event, object)"
+            >
+              <AppIcon fallback="ph:dots-three" :size="20" />
+            </button>
           </ObjectLink>
         </SwipeRow>
       </div>

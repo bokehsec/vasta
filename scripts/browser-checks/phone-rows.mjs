@@ -3,7 +3,8 @@
 // swipe left uncovering Done (and not opening the task), a vertical move that scrolls instead, a
 // plain tap still opening the task, the quick actions in a row's long-press menu, "Show as table on
 // this phone", a board one column at a time (chips, snapping, a chip jumping to its column), a swipe
-// on a task listed by a query embedded in a page, and the desktop table unchanged.
+// on a task listed by a query embedded in a page, a visible ⋯ at each row's end (44px, the long-press
+// menu, not opening the task), and the desktop table unchanged.
 // Swipes: Chromium gets real touches through CDP (Input.dispatchTouchEvent); WebKit gets TouchEvents
 // dispatched in the page (plain events carrying touch points: it has no Touch constructor). Headless WebKit has no `hover: none`, so touch is faked in matchMedia there.
 //   node phone-rows.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
@@ -195,6 +196,12 @@ const openView = async (name) => {
     await page.locator('[data-view-option]', { hasText: new RegExp(`^\\s*${name}\\s*$`) }).click()
   } else await page.locator('main :is(button, [role=button])', { hasText: new RegExp(`^\\s*${name}\\s*$`) }).first().click()
 }
+/** A phone's Layout menu: the Filters sheet's Arrange row, then the layout sheet above it. */
+const openLayoutMenu = async () => {
+  await tap(page.locator('[data-filters-button]'))
+  await tap(page.locator('[data-arrange="layout"]'))
+  await page.locator('[data-phone-table], [data-view-quick-actions], [data-nest-subtasks]').first().waitFor()
+}
 const centre = async (locator) => {
   const box = await locator.boundingBox()
   return { x: box.x + box.width / 2, y: box.y + box.height / 2, width: box.width, box }
@@ -279,6 +286,20 @@ try {
   await tap(page.locator('[data-defer-menu] [data-ask-save]'))
   await until(async () => (await dodateOf(c.id)) === days.tomorrow, 'Defer from the menu')
 
+  step("a ⋯ at the row's end: 44px, labelled, opens the row's menu, does not open the task or swipe")
+  const more = row(b).locator('[data-row-more]')
+  await more.waitFor()
+  if ((await more.getAttribute('aria-label')) !== `More actions for PhoneRows Bravo ${tag}`) throw new Error(`label: ${await more.getAttribute('aria-label')}`)
+  const moreBox = await more.boundingBox()
+  if (moreBox.width < 44 || moreBox.height < 44 || moreBox.x + moreBox.width > W + 1) throw new Error(`the ⋯ is ${moreBox.width}×${moreBox.height} at ${moreBox.x}`)
+  await tap(more)
+  const rowMenu = page.locator('[data-menu-sheet]')
+  await rowMenu.waitFor()
+  for (const name of [/^\s*Open\s*$/, /^\s*Select\s*$/, /^\s*Defer…\s*$/]) await rowMenu.locator('button', { hasText: name }).waitFor()
+  if (page.url().includes('/o/') || (await page.locator('[data-swipe-open]').count())) throw new Error('the ⋯ opened the task or swiped the row')
+  await page.keyboard.press('Escape')
+  await until(async () => (await rowMenu.count()) === 0, 'the row menu closed')
+
   step('a plain tap on a row still opens the task')
   await tap(row(b).locator('span.font-medium').first())
   await page.waitForURL(/\/o\//)
@@ -286,12 +307,12 @@ try {
   step('"Show as table on this phone" brings the table back for this view, and off again')
   await openView('PhoneTable')
   await page.locator('[data-phone-rows]').waitFor()
-  await tap(page.locator('main button').filter({ hasText: /^\s*Table\s*$/ }))
+  await openLayoutMenu()
   await tap(page.locator('[data-phone-table]'))
   await page.locator('main table').waitFor()
   await page.reload()
   await page.locator('main table').waitFor()
-  await tap(page.locator('main button').filter({ hasText: /^\s*Table\s*$/ }))
+  await openLayoutMenu()
   await tap(page.locator('[data-phone-table]'))
   await page.locator('[data-phone-rows]').waitFor()
 

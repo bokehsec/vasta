@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // Centered dialog with a header and scrollable body. Closes on Escape or backdrop click.
 import { onBeforeUnmount, onMounted } from 'vue'
-import { isPhone } from '../lib/viewport.ts'
+import { isPhone, keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 
-defineProps<{ title: string; width?: string }>()
+// `keepAboveKeyboard`: on a phone, the dialog shrinks to what the on-screen keyboard leaves, so its footer stays in sight.
+defineProps<{ title: string; width?: string; keepAboveKeyboard?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 function onKey(event: KeyboardEvent) {
@@ -18,7 +19,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 <template>
   <Teleport to="body">
     <!-- Full screen on phones. -->
-    <div class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/25 md:px-4 md:py-[8vh]" @mousedown.self="emit('close')">
+    <div
+      class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/25 md:px-4 md:py-[8vh]"
+      :style="keepAboveKeyboard && isPhone && keyboardInset ? { bottom: `${keyboardInset}px` } : undefined"
+      @mousedown.self="emit('close')"
+    >
       <div
         role="dialog"
         aria-modal="true"
@@ -29,7 +34,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <header class="flex items-center gap-2 border-b border-line px-4 py-3.5 md:px-5">
           <slot name="icon" />
           <h2 class="font-semibold">{{ title }}</h2>
-          <button class="ml-auto rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" title="Close" @click="emit('close')">
+          <button class="ml-auto rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink max-md:p-3" title="Close" aria-label="Close" @click="emit('close')">
             <AppIcon fallback="ph:x" />
           </button>
         </header>

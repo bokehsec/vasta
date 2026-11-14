@@ -553,6 +553,46 @@ function setGroup(field: string) {
 
 const currentLayout = computed(() => layouts.find((l) => l.layout === view.value.layout) ?? layouts[0]!)
 
+// A phone's Filters sheet: search, Mine and the view's conditions, then Arrange (the menus the
+// toolbar's buttons open on a desktop, each a sheet over this one). The button counts what is on.
+const filtersOpen = ref(false)
+const filtersAnchor = ref<HTMLElement | null>(null)
+const searching = computed(() => !agendaActive.value && !!filterText.value.trim())
+const mineOn = computed(() => showMine.value && mineOnly.value && !agendaActive.value && !fixedActive.value)
+const activeFilterCount = computed(() => Number(searching.value) + Number(mineOn.value) + (fixedActive.value ? 0 : filterCount.value))
+/** Clears search, Mine and the conditions; sort, grouping and layout stay. */
+function clearFilters() {
+  filterText.value = ''
+  if (mineOnly.value) toggleMine()
+  if (!fixedActive.value && filterCount.value) setFilter({ ...filterGroup.value, items: [] })
+}
+const arrangeRows = computed(() => {
+  const layout = view.value.layout
+  const more =
+    layout === 'table' ? { id: 'columns', label: 'Columns', icon: 'ph:columns', open: columnsOpen }
+    : layout === 'list' ? { id: 'fields', label: 'Fields', icon: 'ph:list-checks', open: columnsOpen }
+    : layout === 'kanban' ? { id: 'cards', label: 'Cards', icon: 'ph:cards', open: boardOpen }
+    : layout === 'agenda' ? { id: 'options', label: 'Options', icon: 'ph:sliders-horizontal', open: agendaOpen }
+    : undefined
+  return [
+    ...(agendaActive.value
+      ? []
+      : [
+          { id: 'sort', label: 'Sort', icon: sort.value.direction === 'asc' ? 'ph:sort-ascending' : 'ph:sort-descending', value: sortFields.value.find((f) => f.field === sort.value.field)?.label ?? '', open: sortOpen },
+          { id: 'group', label: 'Group', icon: 'ph:rows', value: groupField.value ? (groupFields.value.find((f) => f.field === groupField.value)?.label ?? 'Group') : 'None', open: groupOpen },
+        ]),
+    { id: 'layout', label: 'Layout', icon: currentLayout.value.icon, value: currentLayout.value.label, open: layoutOpen },
+    ...(more ? [{ ...more, value: '' }] : []),
+  ]
+})
+
+// "Select tasks" in a phone's More menu: selection mode with nothing picked, from the collection.
+const collection = ref<InstanceType<typeof ObjectCollection> | null>(null)
+function selectFromMenu() {
+  menuOpen.value = false
+  collection.value?.startSelecting()
+}
+
 // New: from the type's default template (lib/templates.ts); the chevron picks another, or none.
 const typeTemplates = computed(() => (type.value ? templatesOf(type.value.id) : []))
 const defaultTemplate = computed(() => typeTemplates.value.find((t) => t.template?.kind === 'template' && t.template.default))
@@ -587,15 +627,15 @@ async function newMenu(event: MouseEvent) {
 <template>
   <div v-if="type" class="px-4 pb-24 pt-6 md:px-10 md:pt-10">
     <header class="flex items-center gap-3">
-      <button class="grid h-10 w-10 place-items-center rounded-xl hover:ring-2 hover:ring-line" :class="chip(type.color)" title="Type settings" @click="settingsOpen = true">
+      <button class="grid h-10 w-10 place-items-center rounded-xl hover:ring-2 hover:ring-line max-md:h-11 max-md:w-11" :class="chip(type.color)" title="Type settings" @click="settingsOpen = true">
         <AppIcon :icon="type.icon" fallback="ph:cube" :size="22" />
       </button>
-      <h1 class="min-w-0 truncate text-2xl font-bold tracking-tight">{{ type.pluralName }}</h1>
-      <span class="text-sm text-ink-faint">{{ objects.length }}</span>
-      <button ref="menuAnchor" class="ml-auto rounded-lg p-2 text-ink-soft hover:bg-hover hover:text-ink" title="More" @click="menuOpen = !menuOpen">
+      <h1 class="min-w-0 text-2xl font-bold tracking-tight max-md:break-words md:truncate">{{ type.pluralName }}</h1>
+      <span class="text-sm text-ink-faint max-md:hidden">{{ objects.length }}</span>
+      <button ref="menuAnchor" class="ml-auto rounded-lg p-2 text-ink-soft hover:bg-hover hover:text-ink max-md:p-3.5" title="More" @click="menuOpen = !menuOpen">
         <AppIcon fallback="ph:dots-three" :size="18" />
       </button>
-      <div class="flex shrink-0 items-stretch rounded-lg bg-ink text-sm font-medium text-surface" data-new-split>
+      <div class="flex shrink-0 items-stretch rounded-lg bg-ink text-sm font-medium text-surface max-md:min-h-11" data-new-split>
         <button class="flex items-center gap-1.5 rounded-l-lg px-3 py-1.5 hover:opacity-90" :title="defaultTemplate ? `New ${type.name} from “${defaultTemplate.template!.name}”` : `New ${type.name}`" @click="createNew">
           <AppIcon fallback="ph:plus" /> <span class="max-sm:hidden">New {{ type.name }}</span>
         </button>
@@ -611,6 +651,9 @@ async function newMenu(event: MouseEvent) {
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="pinFrom">
         <AppIcon fallback="ph:push-pin" class="text-ink-soft" /> {{ pinned ? 'Pinned in sidebar' : 'Pin to sidebar' }}
         <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
+      </button>
+      <button v-if="isPhone && collection?.canSelect" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" data-select-mode @click="selectFromMenu">
+        <AppIcon fallback="ph:check-square" class="text-ink-soft" /> Select {{ type.pluralName.toLowerCase() }}
       </button>
       <div class="my-1 border-t border-line" />
       <template v-if="!fixedActive">
@@ -668,6 +711,43 @@ async function newMenu(event: MouseEvent) {
             <AppIcon fallback="ph:plus" :size="16" /> New view
           </button>
         </PopoverMenu>
+        <button
+          v-if="!metricsActive"
+          ref="filtersAnchor"
+          class="flex h-10 items-center gap-1.5 rounded-lg border border-line px-3 text-[15px] font-medium"
+          :class="activeFilterCount ? 'text-accent' : ''"
+          data-filters-button
+          @click="filtersOpen = true"
+        >
+          <AppIcon fallback="ph:funnel" :size="16" /> Filters
+          <span v-if="activeFilterCount" class="grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-semibold text-white" data-filters-count>{{ activeFilterCount }}</span>
+        </button>
+        <PopoverMenu v-model:open="filtersOpen" :anchor="filtersAnchor" label="Search and filter">
+          <div class="flex items-center px-2.5 pb-1">
+            <p class="text-base font-semibold">Search and filter</p>
+            <button v-if="activeFilterCount" class="-mr-1 ml-auto h-11 rounded-lg px-2.5 text-[15px] text-accent" data-filters-clear @click="clearFilters">Clear</button>
+          </div>
+          <div v-if="!agendaActive" class="mx-1.5 mb-2 flex items-center gap-2 rounded-lg bg-hover px-3 text-ink-faint focus-within:ring-1 focus-within:ring-accent/50">
+            <AppIcon fallback="ph:magnifying-glass" :size="16" />
+            <input v-model="filterText" class="h-11 min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-faint" placeholder="Search this view" aria-label="Search this view" enterkeyhint="search" data-filters-search />
+          </div>
+          <button v-if="showMine && !agendaActive && !fixedActive" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" :aria-pressed="mineOnly" data-filters-mine @click="toggleMine">
+            <AppIcon fallback="ph:user-circle" :size="16" class="text-ink-soft" /> Mine
+            <AppIcon :fallback="mineOnly ? 'ph:check-square-fill' : 'ph:square'" :class="mineOnly ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
+          </button>
+          <template v-if="!fixedActive">
+            <div class="px-2.5 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Filters</div>
+            <div class="p-1.5">
+              <FilterGroupEditor :group="filterGroup" :type-ids="[id]" @update="setFilter" />
+            </div>
+            <div class="px-2.5 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Arrange</div>
+            <button v-for="row in arrangeRows" :key="row.id" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" :data-arrange="row.id" @click="row.open.value = true">
+              <AppIcon :fallback="row.icon" :size="16" class="text-ink-soft" /> {{ row.label }}
+              <span class="ml-auto truncate text-ink-faint">{{ row.value }}</span>
+              <AppIcon fallback="ph:caret-right" :size="12" class="shrink-0 text-ink-faint" />
+            </button>
+          </template>
+        </PopoverMenu>
       </template>
       <template v-else>
       <button
@@ -707,7 +787,7 @@ async function newMenu(event: MouseEvent) {
       </button>
       </template>
 
-      <div class="ml-auto flex items-center gap-1 whitespace-nowrap text-sm max-md:-mx-1 max-md:w-full max-md:overflow-x-auto [&>*]:shrink-0">
+      <div v-if="!isPhone" class="ml-auto flex items-center gap-1 whitespace-nowrap text-sm [&>*]:shrink-0">
         <template v-if="!isPhone">
           <button v-if="review && reviewable" class="flex items-center gap-1 rounded-lg px-2 py-1.5 font-medium text-ink hover:bg-hover" :title="`Back to ${review.index + 1} of ${review.ids.length} in ${review.viewName}`" data-process-resume @click="resumeReview">
             <AppIcon fallback="ph:play" /> Resume review<template v-if="review.viewId !== view.id"> of {{ review.viewName }}</template>
@@ -914,6 +994,7 @@ async function newMenu(event: MouseEvent) {
     <p v-else-if="!visible.length && !agendaActive" class="py-16 text-center text-sm text-ink-faint">No {{ type.pluralName.toLowerCase() }} match the filter.</p>
     <ObjectCollection
       v-else
+      ref="collection"
       class="mt-6"
       :objects="visible"
       :layout="view.layout"

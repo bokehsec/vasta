@@ -57,7 +57,9 @@ const phoneButton = 'flex min-h-12 flex-1 flex-col items-center justify-center g
       <div class="flex items-center gap-1" :class="isPhone ? 'px-2 pb-1' : 'pr-2'">
         <span class="text-sm font-semibold tabular-nums" data-bulk-count>{{ count }} selected</span>
         <button class="ml-auto rounded-lg px-2.5 py-1.5 text-sm text-accent hover:bg-hover max-md:py-2.5" data-bulk-all @click="selectAll">Select all</button>
-        <button v-if="isPhone" class="grid h-11 w-11 place-items-center rounded-lg text-ink-soft" aria-label="Clear the selection" data-bulk-clear @click="clearSelection">
+        <!-- Selection started from the page's menu has nothing picked yet: Cancel, in words. -->
+        <button v-if="isPhone && !count" class="h-11 rounded-lg px-2.5 text-sm text-ink-soft" data-bulk-clear @click="clearSelection">Cancel</button>
+        <button v-else-if="isPhone" class="grid h-11 w-11 place-items-center rounded-lg text-ink-soft" aria-label="Clear the selection" data-bulk-clear @click="clearSelection">
           <AppIcon fallback="ph:x" :size="18" />
         </button>
       </div>

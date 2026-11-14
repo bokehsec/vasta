@@ -363,7 +363,12 @@ async function openTasks() {
     await page.locator('[data-view-picker]').click()
     await page.locator('[data-view-option]', { hasText: /^\s*All\s*$/ }).click()
   } else await page.locator('main :is(button, [role=button])', { hasText: /^\s*All\s*$/ }).first().click()
-  await page.getByPlaceholder('Filter…').fill('QuickActions')
+  // A phone searches in the Filters sheet.
+  if (await page.locator('[data-filters-button]').count()) {
+    await page.locator('[data-filters-button]').click()
+    await page.locator('[data-filters-search]').fill('QuickActions')
+    await page.keyboard.press('Escape')
+  } else await page.getByPlaceholder('Filter…').fill('QuickActions')
 }
 async function pickLayout(label) {
   await layoutButton().click()
