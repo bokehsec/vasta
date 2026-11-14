@@ -2,10 +2,11 @@
 // or row (TaskQuickActions), a row's menu, a swipe, many selected rows at once. An action that asks
 // for a value asks once (QuickAskHost, mounted in App.vue: under the element pressed, or centred
 // without one or on a phone), then each object gets its own values; one notice with one Undo puts
-// every object's previous values back.
+// every object's previous values back. A day asked for another date than the due date (Defer's Do
+// date) offers to move the due date too when the day is after it, so the task is not left overdue.
 import { shallowRef } from 'vue'
 import type { Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionDef } from '@vasta/core'
-import { DUE_PROPERTY_ID, askOf, isClosedTask, quickActionEdits, quickActionMessage, quickActionsOf, withAskCleared, type QuickActionEdit } from '@vasta/core'
+import { DUE_PROPERTY_ID, askOf, dueMovedTo, isClosedTask, quickActionEdits, quickActionMessage, quickActionsOf, withAskCleared, type QuickActionEdit } from '@vasta/core'
 import { dayKey, setProperties } from './actions.ts'
 import { nextWeekStart } from './calendar.ts'
 import { formatLongDay } from './format.ts'
@@ -42,14 +43,20 @@ export interface QuickAsk {
   due?: string
   /** The text in the box at first (one object's current value). */
   text: string
-  answer: (answer: PropertyValue | 'clear' | null) => void
+  /**
+   * How many of the objects have a due date a later day could take along (a day asked for another
+   * date, such as Defer's Do date; not a due date that repeats): the question offers "Move the due
+   * date too", on at first.
+   */
+  dueMovable: number
+  answer: (answer: PropertyValue | 'clear' | null, moveDue?: boolean) => void
 }
 
 export const quickAsk = shallowRef<QuickAsk | null>(null)
 let asks = 0
 
 /** The answer to an action's question: a value, 'clear' (an empty line), or null (nothing to do). */
-function ask(type: ObjectType, action: QuickActionDef, objects: readonly Target[], anchor: HTMLElement | null): Promise<PropertyValue | 'clear' | null> {
+function ask(type: ObjectType, action: QuickActionDef, objects: readonly Target[], anchor: HTMLElement | null): Promise<{ value: PropertyValue | 'clear' | null; moveDue: boolean }> {
   const asked = askOf(type, action)!
   const one = objects.length === 1 ? objects[0] : undefined
   quickAsk.value?.answer(null)
@@ -62,9 +69,11 @@ function ask(type: ObjectType, action: QuickActionDef, objects: readonly Target[
       day: (one && dayOf(one.props[asked.def.id])) ?? dayKey(),
       due: one && asked.def.id !== DUE_PROPERTY_ID ? dayOf(one.props[DUE_PROPERTY_ID]) : undefined,
       text: one ? textOf(one.props[asked.def.id]) : '',
-      answer: (answer) => {
+      // Any later day would move it: a due date there is, that does not repeat.
+      dueMovable: asked.def.kind === 'date' && asked.def.id !== DUE_PROPERTY_ID ? objects.filter((o) => dueMovedTo(type, o, '9999-12-31', dayOfTime)).length : 0,
+      answer: (answer, moveDue) => {
         quickAsk.value = null
-        resolve(answer)
+        resolve({ value: answer, moveDue: !!moveDue })
       },
     }
   })
@@ -111,13 +120,15 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
   if (!targets.length) return []
   let run = action
   let answer: PropertyValue | undefined
+  let moveDue = false
   if (askOf(type, action)) {
     const answered = await ask(type, action, targets, options.anchor ?? null)
-    if (answered === null) return []
-    if (answered === 'clear') run = withAskCleared(type, action)
-    else answer = answered
+    if (answered.value === null) return []
+    if (answered.value === 'clear') run = withAskCleared(type, action)
+    else answer = answered.value
+    moveDue = answered.moveDue
   }
-  const edits = quickActionEdits(type, targets, run, { today: dayKey(), nextWeek: nextWeekStart(), me: session.user?.id }, answer)
+  const edits = quickActionEdits(type, targets, run, { today: dayKey(), nextWeek: nextWeekStart(), me: session.user?.id, moveDue, dayOfTime }, answer)
   if (!edits.length) return []
   const save = options.save ?? ((id: Id, values: Values) => setProperties(id, values))
   const saved: QuickActionEdit[] = []

@@ -123,6 +123,13 @@ export interface QuickActionContext {
   nextWeek: string
   /** The user pressing it. */
   me?: Id
+  /**
+   * A day asked for another date (Defer's "Do date") that lands after the due date takes the due
+   * date along (the question's "Move the due date too"), so a task put off is not left overdue.
+   */
+  moveDue?: boolean
+  /** The day a timed date falls on for the user (default: its UTC day). */
+  dayOfTime?: (iso: string) => string
 }
 
 /**
@@ -142,6 +149,7 @@ export function quickActionChanges(
     const rrule = current?.kind === 'date' ? current.value.rrule : undefined
     return { kind: 'date', value: { start: `${day}T00:00:00.000Z`, resolution: 'day', ...(rrule ? { rrule } : {}) } }
   }
+  let asked: { field: Id; day: string } | undefined
   for (const { field, value } of action.changes) {
     switch (value.kind) {
       case 'value':
@@ -159,13 +167,36 @@ export function quickActionChanges(
       case 'ask':
         if (!answer) return undefined
         values[field] = answer.kind === 'date' ? onDay(field, answer.value.start.slice(0, 10)) : answer
+        if (answer.kind === 'date' && context.moveDue) asked = { field, day: answer.value.start.slice(0, 10) }
         break
       case 'clear':
         values[field] = undefined
         break
     }
   }
+  if (asked && asked.field !== DUE_PROPERTY_ID && !(DUE_PROPERTY_ID in values)) {
+    const due = dueMovedTo(type, object, asked.day, context.dayOfTime)
+    if (due) values[DUE_PROPERTY_ID] = due
+  }
   return values
+}
+
+const DAY_MS = 86_400_000
+
+/**
+ * The due date moved to `day` when it falls before it, keeping a time of day (and the length of a
+ * span); undefined when there is nothing to move: no due date, one on or after the day, or one that
+ * repeats (moving it would move the whole series, which putting one task off does not mean).
+ */
+export function dueMovedTo(type: ObjectType, object: Pick<ObjectRecord, 'props'>, day: string, dayOfTime: (iso: string) => string = (iso) => iso.slice(0, 10)): PropertyValue | undefined {
+  const def = type.properties.find((p) => p.id === DUE_PROPERTY_ID)
+  const due = object.props[DUE_PROPERTY_ID]
+  if (def?.kind !== 'date' || due?.kind !== 'date' || due.value.rrule) return undefined
+  const from = dayOfValue(due, dayOfTime)
+  if (!from || from >= day) return undefined
+  const shift = Date.parse(`${day}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`)
+  const moved = (iso: string) => new Date(Date.parse(iso) + Math.round(shift / DAY_MS) * DAY_MS).toISOString()
+  return { kind: 'date', value: { ...due.value, start: moved(due.value.start), ...(due.value.end ? { end: moved(due.value.end) } : {}) } }
 }
 
 /** The action with the value it asks for cleared instead: an empty answer to a line of text. */
@@ -230,8 +261,12 @@ export function quickActionMessage(
   options: { longDay: (day: string) => string; dayOfTime: (iso: string) => string; due?: PropertyValue; failed?: number; noun?: (count: number) => string }
 ): string {
   const first = edits[0]
+  // A due date the action does not name was taken along by the day asked for (moveDue): said in words, not as a day of its own.
+  const takesDue = !action.changes.some((c) => c.field === DUE_PROPERTY_ID)
+  const movedDue = takesDue ? edits.filter((e) => e.values[DUE_PROPERTY_ID]).length : 0
   const days = first
     ? Object.entries(first.values).flatMap(([field, value]) => {
+        if (takesDue && field === DUE_PROPERTY_ID) return []
         const day = dayOfValue(value, options.dayOfTime)
         const def = type.properties.find((p) => p.id === field)
         return day && def ? [{ field, day, name: def.name }] : []
@@ -240,9 +275,10 @@ export function quickActionMessage(
   const parts = [action.name, ...days.map((d) => `${d.name} ${options.longDay(d.day)}`)]
   if (edits.length > 1) parts.push(options.noun ? options.noun(edits.length) : `${edits.length} tasks`)
   let message = parts.join(' · ')
-  const due = edits.length === 1 ? dayOfValue(options.due, options.dayOfTime) : undefined
+  const due = edits.length === 1 && !movedDue ? dayOfValue(options.due, options.dayOfTime) : undefined
   const late = due && days.find((d) => d.field !== DUE_PROPERTY_ID && d.day > due)
   if (late && due) message += ` (after its due date, ${options.longDay(due)})`
+  if (movedDue) message += edits.length === 1 ? ' · due date moved too' : ` · ${movedDue} due ${movedDue === 1 ? 'date' : 'dates'} moved too`
   if (options.failed) message += ` · ${options.failed} not saved`
   return message
 }

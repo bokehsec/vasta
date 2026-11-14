@@ -104,6 +104,37 @@ describe('runQuickAction', () => {
     for (const [id, props] of original) expect(store.get(id)!.props).toEqual(props)
   })
 
+  it('offers to move the due date with a day asked for another date, and Undo puts both back', async () => {
+    // A task whose Defer sets a "Do date" (as a triage setup has it).
+    const triage = { ...task, properties: [...task.properties, { id: 'dodate', kind: 'date' as const, name: 'Do date' }], quickActions: { deferField: 'dodate' } }
+    const deferDo = quickActionsOf(triage).find((a) => a.id === 'defer')!
+    const saved = new Map<string, Record<string, PropertyValue | undefined>>()
+    const save = vi.fn(async (id: string, values: Record<string, PropertyValue | undefined>) => void saved.set(id, values))
+    const objects = [open('late', day('2026-11-18')), open('fine', day('2026-11-30')), open('weekly', day('2026-11-18', 'FREQ=WEEKLY')), open('none')]
+    let running = runQuickAction(triage, objects, deferDo, { save })
+    // Two due dates a later day could move: the one that repeats and the task without one do not count.
+    expect(quickAsk.value!.dueMovable).toBe(2)
+    quickAsk.value!.answer(day('2026-11-20'), true)
+    await running
+    expect(saved.get('late')).toEqual({ dodate: day('2026-11-20'), due: day('2026-11-20') })
+    expect(saved.get('fine')).toEqual({ dodate: day('2026-11-20') })
+    expect(saved.get('weekly')).toEqual({ dodate: day('2026-11-20') })
+    expect(message().message).toBe('Defer · Do date <2026-11-20> · 4 tasks · 1 due date moved too')
+    await message().action!.run()
+    expect(saved.get('late')).toEqual({ dodate: undefined, due: day('2026-11-18') })
+    // The box off: the due date stays, and the notice says the day is after it.
+    running = runQuickAction(triage, objects[0]!, deferDo, { save })
+    quickAsk.value!.answer(day('2026-11-20'), false)
+    await running
+    expect(saved.get('late')).toEqual({ dodate: day('2026-11-20') })
+    expect(message().message).toBe('Defer · Do date <2026-11-20> (after its due date, <2026-11-18>)')
+    // Defer that sets the due date itself has nothing to offer.
+    running = runQuickAction(task, objects[0]!, defer, { save })
+    expect(quickAsk.value!.dueMovable).toBe(0)
+    quickAsk.value!.answer(null)
+    await running
+  })
+
   it('adds the runner’s own "subtasks still open" for the parents it closed, unless the caller words it', async () => {
     openStepsNote.mockReturnValue('2 subtasks still open')
     const save = vi.fn(async () => {})

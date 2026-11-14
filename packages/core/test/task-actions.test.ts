@@ -212,6 +212,34 @@ describe('an action on many objects', () => {
     expect(quickActionEdits(type, objects.slice(0, 1), reopen, context)[0]!.before).toEqual({ status: status('todo') })
   })
 
+  it('takes the due date along when the day asked for another date is after it (moveDue)', () => {
+    const moving = { ...context, moveDue: true }
+    const late = { id: 'l', props: { due: day('2026-11-18') } }
+    // After the due date: both move; Undo has both.
+    const [edit] = quickActionEdits(type, [late], defer, moving, day('2026-11-20'))
+    expect(edit!.values.dodate).toEqual(day('2026-11-20'))
+    expect(edit!.values.due).toEqual(day('2026-11-20'))
+    expect(edit!.before).toMatchObject({ dodate: undefined, due: day('2026-11-18') })
+    expect(quickActionMessage(type, defer, [edit!], { ...format, due: day('2026-11-18') })).toBe('Defer · Do date <2026-11-20> · due date moved too')
+    // On or before the due date, without a due date, or with the box off: the due date stays.
+    expect('due' in quickActionChanges(type, late, defer, moving, day('2026-11-18'))!).toBe(false)
+    expect('due' in quickActionChanges(type, late, defer, moving, day('2026-11-15'))!).toBe(false)
+    expect('due' in quickActionChanges(type, { props: {} }, defer, moving, day('2026-11-20'))!).toBe(false)
+    expect('due' in quickActionChanges(type, late, defer, context, day('2026-11-20'))!).toBe(false)
+    // A due date that repeats is a series, not a deadline to push: left alone.
+    expect('due' in quickActionChanges(type, { props: { due: day('2026-11-18', 'FREQ=WEEKLY') } }, defer, moving, day('2026-11-20'))!).toBe(false)
+    // A timed due date keeps its time of day, and a span its length.
+    const timed: PropertyValue = { kind: 'date', value: { start: '2026-11-18T15:30:00.000Z', end: '2026-11-18T16:30:00.000Z', resolution: 'time' } }
+    expect(quickActionChanges(type, { props: { due: timed } }, defer, moving, day('2026-11-20'))!.due).toEqual({ kind: 'date', value: { start: '2026-11-20T15:30:00.000Z', end: '2026-11-20T16:30:00.000Z', resolution: 'time' } })
+    // Many: only the ones it is late for, and the notice counts them.
+    const many = quickActionEdits(type, [late, { id: 'm', props: { due: day('2026-11-25') } }, { id: 'n', props: {} }], defer, moving, day('2026-11-20'))
+    expect(many.map((e) => 'due' in e.values)).toEqual([true, false, false])
+    expect(quickActionMessage(type, defer, many, format)).toBe('Defer · Do date <2026-11-20> · 3 tasks · 1 due date moved too')
+    // Defer that sets the due date itself has nothing to take along.
+    const dueDefer = quickActionsOf(task)[1]!
+    expect(quickActionChanges(task, late, dueDefer, moving, day('2026-11-20'))).toEqual({ due: day('2026-11-20') })
+  })
+
   it('says the days set, the count, a day past the due date and failures', () => {
     const one = quickActionEdits(type, objects.slice(0, 1), defer, context, day('2026-11-20'))
     expect(quickActionMessage(type, defer, one, { ...format, due: day('2026-11-18') })).toBe('Defer · Do date <2026-11-20> (after its due date, <2026-11-18>)')

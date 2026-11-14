@@ -91,6 +91,11 @@ GitHub release page.
 
 ### Changed
 
+- **Defer moves the due date too when you put a task off past it.** When Defer sets another date
+  (a "Do date"), the day picker has a box "Move the due date too", ticked: pick a day after the due
+  date and the due date goes with it, so the task is not left overdue; Undo puts both back. Untick
+  it to keep a real deadline where it is. A due date that repeats is never moved. The same goes for
+  several tasks at once and in process mode.
 - **On a phone, a quick action that asks (a day to defer to, a next step) asks in a sheet along the bottom of the screen**, within reach of the thumb, with larger buttons, instead of under the small button.
 - **The page a space opens on is calmer**: its icon is a small tile beside the title, and the tags
   row and the "Add property" line show only once there is something in them. Tags and Property

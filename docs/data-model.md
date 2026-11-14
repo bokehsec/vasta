@@ -65,6 +65,9 @@ type no longer has, or a value that does not fit it, are left out. Without a lis
 defaults: Done (the first status option meaning done), Defer (asks a day for `due`, or `quickActions.deferField`,
 and sets `deferStatus` if any), Drop (`dropStatus`, else the second option meaning done; none: no
 Drop) and Next step (asks the text of `nextStepField`). A repeating date keeps its rule when set.
+A day asked for a date other than `due` (Defer's "Do date") that falls after the object's due date
+takes the due date along when the question's "Move the due date too" is ticked (it is at first):
+`due` moves to that day, keeping a time of day; a due date that repeats is left alone.
 An object whose status (a task's, or another type's select with status categories) is an option
 meaning done shows no quick actions. For triage they also go on rows: a list view or query with
 `quickActions: true` ends each row of a type with actions with them, and a table of such a type has a "Quick actions" column (`quickActions` in `table.columns`, hidden until shown, moved and sized
