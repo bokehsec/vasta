@@ -323,7 +323,7 @@ const rowButton = (id, action) => rowActions(id).locator(`button[data-action="${
 const layoutButton = () => page.locator('main button').filter({ hasText: /^\s*(List|Table)\s*$/ })
 async function openTasks() {
   await page.goto(`${base}/t/${taskType.id}`)
-  await page.locator('main button', { hasText: /^\s*All\s*$/ }).first().click() // the view last used is remembered
+  await page.locator('main :is(button, [role=button])', { hasText: /^\s*All\s*$/ }).first().click() // the view last used is remembered
   await page.getByPlaceholder('Filter…').fill('QuickActions')
 }
 async function pickLayout(label) {
@@ -414,7 +414,7 @@ for (const [id, name] of [['done', 'Done'], ['defer', 'Defer'], ['drop', 'Drop']
 if ((await rowActions(closedRow.id).count()) !== 0) throw new Error('a done task shows row actions')
 if ((await page.locator('main [data-next-step-line]').count()) !== 0) throw new Error('a next step line shown with no next step')
 // The other view of the type keeps its own setting.
-await page.locator('main button', { hasText: /^\s*Plain\s*$/ }).click()
+await page.locator('main :is(button, [role=button])', { hasText: /^\s*Plain\s*$/ }).click()
 await sleep(400)
 await page.getByPlaceholder('Filter…').fill('QuickActions')
 await until(async () => (await row(rowTask.id).count()) > 0, 'Plain lists the tasks')

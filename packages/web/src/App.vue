@@ -8,6 +8,7 @@ import DialogHost from './components/DialogHost.vue'
 import AppToast from './components/AppToast.vue'
 import OfflineBanner from './components/OfflineBanner.vue'
 import PasswordDialog from './components/PasswordDialog.vue'
+import QuickAskHost from './components/QuickAskHost.vue'
 import QuickCapture from './components/QuickCapture.vue'
 import ShortcutsDialog from './components/ShortcutsDialog.vue'
 import SidePane from './components/SidePane.vue'
@@ -96,6 +97,7 @@ function onTouchEnd(event: TouchEvent) {
     <CommandPalette />
     <ContextMenuHost />
     <DialogHost />
+    <QuickAskHost />
     <AppToast />
     <PasswordDialog v-if="ui.passwordOpen" />
     <QuickCapture v-if="ui.captureOpen" />

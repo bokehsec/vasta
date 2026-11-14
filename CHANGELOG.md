@@ -53,6 +53,7 @@ GitHub release page.
 
 ### Changed
 
+- **On a phone, a quick action that asks (a day to defer to, a next step) asks in the middle of the screen**, where it is easy to reach, instead of under the small button.
 - **The page a space opens on is calmer**: its icon is a small tile beside the title, and the tags
   row and the "Add property" line show only once there is something in them. Tags and Property
   join Icon and Cover in the buttons that appear when you hover the page's top, so they stay

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes } from '../src/builtin-types.ts'
 import type { ObjectType, PropertyDef, PropertyValue, QuickActionDef } from '../src/model.ts'
-import { askOf, defaultQuickActions, isClosedTask, nextStepFieldOf, quickActionChanges, quickActionsOf } from '../src/task-actions.ts'
+import { askOf, defaultQuickActions, isClosedTask, nextStepFieldOf, quickActionChanges, quickActionEdits, quickActionMessage, quickActionsOf, withAskCleared } from '../src/task-actions.ts'
 
 const AT = '2026-11-13T12:00:00.000Z'
 const types = createBuiltinTypes('s', AT)
@@ -117,5 +117,42 @@ describe('isClosedTask', () => {
     expect(isClosedTask(type, { props: { status: status('scheduled') } })).toBe(false)
     expect(isClosedTask(type, { props: {} })).toBe(false)
     expect(isClosedTask(page, { props: { status: status('done') } })).toBe(false)
+  })
+})
+
+describe('an action on many objects', () => {
+  const type = triageTask({ deferField: 'dodate', deferStatus: 'scheduled' })
+  const defer = quickActionsOf(type).find((a) => a.id === 'defer')!
+  const objects: { id: string; props: Record<string, PropertyValue> }[] = [
+    { id: 'a', props: { status: status('todo'), dodate: day('2026-11-01') } },
+    { id: 'b', props: { dodate: day('2026-11-02', 'FREQ=WEEKLY') } },
+    { id: 'c', props: {} },
+  ]
+  const format = { longDay: (d: string) => `<${d}>`, dayOfTime: (iso: string) => iso.slice(0, 10) }
+
+  it('uses one answer for all, each keeping its own repeat rule, with the values before', () => {
+    const edits = quickActionEdits(type, objects, defer, context, day('2026-11-20'))
+    expect(edits.map((e) => e.id)).toEqual(['a', 'b', 'c'])
+    expect(edits[0]!.values).toEqual({ dodate: day('2026-11-20'), status: status('scheduled') })
+    expect(edits[1]!.values.dodate).toEqual(day('2026-11-20', 'FREQ=WEEKLY'))
+    expect(edits[0]!.before).toEqual({ dodate: day('2026-11-01'), status: status('todo') })
+    expect(edits[2]!.before).toEqual({ dodate: undefined, status: undefined })
+  })
+
+  it('writes nothing without the answer it asks for', () => {
+    expect(quickActionEdits(type, objects, defer, context)).toEqual([])
+  })
+
+  it('clears the asked field for an empty answer', () => {
+    const nextStep = quickActionsOf(triageTask({ nextStepField: 'next' })).find((a) => a.id === 'next-step')!
+    const edits = quickActionEdits(type, [{ id: 'a', props: { next: { kind: 'text', value: 'Call' } } }], withAskCleared(type, nextStep), context)
+    expect(edits).toEqual([{ id: 'a', values: { next: undefined }, before: { next: { kind: 'text', value: 'Call' } } }])
+  })
+
+  it('says the days set, the count, a day past the due date and failures', () => {
+    const one = quickActionEdits(type, objects.slice(0, 1), defer, context, day('2026-11-20'))
+    expect(quickActionMessage(type, defer, one, { ...format, due: day('2026-11-18') })).toBe('Defer · Do date <2026-11-20> (after its due date, <2026-11-18>)')
+    const all = quickActionEdits(type, objects, defer, context, day('2026-11-20'))
+    expect(quickActionMessage(type, defer, all, { ...format, due: day('2026-11-18'), failed: 1 })).toBe('Defer · Do date <2026-11-20> · 3 tasks · 1 not saved')
   })
 })

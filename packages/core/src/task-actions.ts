@@ -159,3 +159,71 @@ export function quickActionChanges(
   }
   return values
 }
+
+/** The action with the value it asks for cleared instead: an empty answer to a line of text. */
+export function withAskCleared(type: ObjectType, action: QuickActionDef): QuickActionDef {
+  const ask = askOf(type, action)
+  return ask ? { ...action, changes: action.changes.map((c) => (c === ask.change ? { ...c, value: { kind: 'clear' as const } } : c)) } : action
+}
+
+/** What an action writes on one object, and the values it had before (for Undo). */
+export interface QuickActionEdit {
+  id: Id
+  values: Record<Id, PropertyValue | undefined>
+  before: Record<Id, PropertyValue | undefined>
+}
+
+/**
+ * An action run on one or many objects, with one answer for all: each object's own values (a date
+ * that repeats keeps its own rule) and what they were before. Objects it writes nothing on (an
+ * unanswered ask) are left out.
+ */
+export function quickActionEdits(
+  type: ObjectType,
+  objects: readonly Pick<ObjectRecord, 'id' | 'props'>[],
+  action: QuickActionDef,
+  context: QuickActionContext,
+  answer?: PropertyValue
+): QuickActionEdit[] {
+  return objects.flatMap((object) => {
+    const values = quickActionChanges(type, object, action, context, answer)
+    if (!values) return []
+    const before = Object.fromEntries(Object.keys(values).map((key) => [key, object.props[key]]))
+    return [{ id: object.id, values, before }]
+  })
+}
+
+/** The day a date value falls on ("YYYY-MM-DD"); a timed one in the zone `dayOfTime` gives. */
+function dayOfValue(value: PropertyValue | undefined, dayOfTime: (iso: string) => string): string | undefined {
+  if (value?.kind !== 'date') return undefined
+  return value.value.resolution === 'day' ? value.value.start.slice(0, 10) : dayOfTime(value.value.start)
+}
+
+/**
+ * The notice after an action: its name and the days it set ("Defer · Do date Fri Nov 20"), the
+ * number of objects when there are several, a day set past one object's due date, and how many
+ * failed to save.
+ */
+export function quickActionMessage(
+  type: ObjectType,
+  action: QuickActionDef,
+  edits: readonly QuickActionEdit[],
+  options: { longDay: (day: string) => string; dayOfTime: (iso: string) => string; due?: PropertyValue; failed?: number; noun?: (count: number) => string }
+): string {
+  const first = edits[0]
+  const days = first
+    ? Object.entries(first.values).flatMap(([field, value]) => {
+        const day = dayOfValue(value, options.dayOfTime)
+        const def = type.properties.find((p) => p.id === field)
+        return day && def ? [{ field, day, name: def.name }] : []
+      })
+    : []
+  const parts = [action.name, ...days.map((d) => `${d.name} ${options.longDay(d.day)}`)]
+  if (edits.length > 1) parts.push(options.noun ? options.noun(edits.length) : `${edits.length} tasks`)
+  let message = parts.join(' · ')
+  const due = edits.length === 1 ? dayOfValue(options.due, options.dayOfTime) : undefined
+  const late = due && days.find((d) => d.field !== DUE_PROPERTY_ID && d.day > due)
+  if (late && due) message += ` (after its due date, ${options.longDay(due)})`
+  if (options.failed) message += ` · ${options.failed} not saved`
+  return message
+}
