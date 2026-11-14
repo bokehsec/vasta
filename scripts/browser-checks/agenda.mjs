@@ -1,7 +1,9 @@
 // The Agenda layout in the test env: a query shown as an agenda in a page (day sections from today,
 // all-day rows, timed rows with their time, the line for now, a task's checkbox, a day with nothing)
-// and its settings (days), then a type view as an agenda with its date field. Subscribed calendars
-// need a feed URL the test env does not have, so they are not covered here (lib/agenda.test.ts is).
+// and its settings (days), then a type view as an agenda with its date field. Dragging an entry to
+// another day moves its date (a task's due, an event's own field), keeping the time of day.
+// Subscribed calendars need a feed URL the test env does not have, so they are not covered here
+// (lib/agenda.test.ts is).
 //   node agenda.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -50,6 +52,15 @@ const tomorrow = dayAt(1)
 const day = (key) => page.locator(`section[data-agenda-day="${key}"]`)
 const days = () => page.locator('section[data-agenda-day]').count()
 const entry = (key, title) => day(key).locator('[data-calendar-entry]', { hasText: title })
+/** Drag an entry onto another day's section, as a mouse would (lib/calendar-drag.ts). */
+async function dragTo(from, toSection) {
+  const a = await from.boundingBox()
+  const b = await toSection.boundingBox()
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
+  await page.mouse.down()
+  for (let i = 1; i <= 8; i++) await page.mouse.move(a.x + a.width / 2 + ((b.x + b.width / 2 - a.x - a.width / 2) * i) / 8, a.y + a.height / 2 + ((b.y + b.height / 2 - a.y - a.height / 2) * i) / 8)
+  await page.mouse.up()
+}
 
 await page.goto(base)
 await page.fill('#login-username', 'tester')
@@ -135,6 +146,12 @@ try {
   await until(async () => (await entry(tomorrow, `Tomorrow ${tag}`).locator('button[title="Mark as to do"]').count()) === 1, 'the checkbox shows it done')
   if (!(await entry(tomorrow, `Tomorrow ${tag}`).locator('.line-through').count())) throw new Error('the title is not struck through')
 
+  step('drag an all-day task to another day: its due date moves with it')
+  await dragTo(entry(today, `All day ${tag}`), day(tomorrow))
+  await until(async () => (await get(`/api/objects/${allDay.id}`)).props.due?.value?.start === `${tomorrow}T00:00:00.000Z`, 'the due date moved to tomorrow, still all-day')
+  await until(async () => (await entry(tomorrow, `All day ${tag}`).count()) === 1, 'the row moved to tomorrow')
+  if ((await entry(today, `All day ${tag}`).count()) !== 0) throw new Error('the row is still under today')
+
   step('the query’s settings: Agenda is a layout; sort and group are gone; Days set to one')
   await page.locator('button', { hasText: 'Edit query' }).click()
   await page.waitForSelector('button[title="Agenda"]')
@@ -155,8 +172,8 @@ try {
     properties: [{ id: 'when', kind: 'date', name: 'When' }, { id: 'until', kind: 'date', name: 'Until' }],
     views: [{ id: `${eventNew.id}:all`, name: 'All', layout: 'agenda', agenda: { days: 2 } }],
   })
-  await post('/api/objects', { typeId: eventType.id, title: `Concert ${tag}`, props: { when: { kind: 'date', value: { start: `${tomorrow}T20:00:00.000Z`, resolution: 'time' } } } })
   await post('/api/objects', { typeId: eventType.id, title: `Deadline ${tag}`, props: { until: { kind: 'date', value: { start: `${tomorrow}T00:00:00.000Z`, resolution: 'day' } } } })
+  const concert = await post('/api/objects', { typeId: eventType.id, title: `Concert ${tag}`, props: { when: { kind: 'date', value: { start: `${tomorrow}T20:00:00.000Z`, resolution: 'time' } } } })
   await sleep(1500)
   await page.goto(`${base}/t/${eventType.id}`)
   await until(async () => (await days()) === 2, 'two day sections on the type page')
@@ -168,6 +185,12 @@ try {
   await page.locator('select[aria-label="Date field"]').selectOption('when')
   await until(async () => (await get(`/api/types/${eventType.id}`)).views[0].agenda?.field === 'when', 'the date field saved on the view')
   await until(async () => (await entry(tomorrow, `Deadline ${tag}`).count()) === 0 && (await entry(tomorrow, `Concert ${tag}`).count()) === 1, 'only the chosen field’s entries')
+
+  step('drag a timed entry to another day: its own field moves, keeping its time of day')
+  await dragTo(entry(tomorrow, `Concert ${tag}`), day(today))
+  await until(async () => (await get(`/api/objects/${concert.id}`)).props.when?.value?.start === `${today}T20:00:00.000Z`, 'When moved to today, still at 20:00')
+  await until(async () => (await entry(today, `Concert ${tag}`).count()) === 1, 'the concert moved to today')
+  if ((await entry(tomorrow, `Concert ${tag}`).count()) !== 0) throw new Error('the concert is still under tomorrow')
 } finally {
   for (const id of [host.id, query.id, early.id, late.id, allDay.id, nextDay.id, other.id]) await page.request.delete(`${base}/api/objects/${id}`, { headers })
   if (eventType) {

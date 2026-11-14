@@ -13,6 +13,8 @@ GitHub release page.
   pages, as a view's row buttons, in the Quick actions column, in a bulk selection's bar and in
   process mode. (A task still gets Done, Defer, Drop and Next step until you edit them; another
   type starts empty.)
+- **Drag in the agenda.** In an Agenda view or query, drag a task or an event of your own to another
+  day (after a long press on a phone) to move its date there; a timed one keeps its time of day.
 - **A phone layout that fits the hand.** On a phone a bar at the bottom goes to Home, Tasks, Inbox,
   Calendar and Search, with a round Capture button above it. Pickers and menus (a status, a date, a
   long-press menu) rise from the bottom with larger rows, and stay above the keyboard. A type's views

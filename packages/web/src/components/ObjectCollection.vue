@@ -365,7 +365,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
   />
 
   <!-- Agenda: reads the calendar feed itself; grouping and sort do not apply. -->
-  <AgendaView v-else-if="layout === 'agenda'" :type-ids="typeIds" :filter="filter" :agenda="agenda" :parent-id="parentId" />
+  <AgendaView v-else-if="layout === 'agenda'" :type-ids="typeIds" :filter="filter" :agenda="agenda" :parent-id="parentId" :readonly="readonly" />
 
   <!-- Container queries: the same view sits in a full page or in a narrow document column. -->
   <div v-else ref="container" class="@container">

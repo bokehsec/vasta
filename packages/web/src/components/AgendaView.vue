@@ -3,17 +3,20 @@
 // query or view (types and filter, read from the calendar feed rather than the result list, which
 // may be limited) and, if asked, the events of subscribed calendars. All-day items come first,
 // then timed ones in time order, a thin line marking now on today. It reloads when the Calendar
-// page would (changes anywhere) and when the day turns.
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+// page would (changes anywhere) and when the day turns. An entry the page allows moves by dragging
+// (after a long press on touch): dropping it on another day sets the date field the agenda places
+// it by (a task's due, an event's time), as the Calendar page does (lib/calendar-drag.ts).
+import { computed, onBeforeUnmount, provide, ref, watch } from 'vue'
 import type { AgendaSettings, CalendarEntry, CalendarSource, FilterGroup, Id } from '@vasta/core'
 import { addDays } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
 import { agendaDays, isPast, nowIndex, placeEntries, selectEntries, splitAllDay } from '../lib/agenda.ts'
 import { api } from '../lib/api.ts'
-import { formatDayShort, formatWeekday, viewerTimeZone } from '../lib/calendar.ts'
+import { changeEntryTimes, formatDayShort, formatWeekday, movedTimes, viewerTimeZone } from '../lib/calendar.ts'
+import { ENTRY_DRAGGING, drag, type DropTarget } from '../lib/calendar-drag.ts'
 import { onChange } from '../lib/events.ts'
 import { queryContext } from '../lib/query.ts'
-import { cachedSummary, primeSummaries, summaryOf, workspace } from '../lib/state.ts'
+import { cachedSummary, lastError, primeSummaries, summaryOf, workspace } from '../lib/state.ts'
 import CalendarEntryItem from './calendar/CalendarEntryItem.vue'
 import EventDetails from './calendar/EventDetails.vue'
 import OccurrenceDetails from './calendar/OccurrenceDetails.vue'
@@ -26,6 +29,8 @@ const props = defineProps<{
   agenda?: AgendaSettings | undefined
   /** The object a query is embedded in, for filters on `parent`. */
   parentId?: Id | undefined
+  /** A readonly embed (a whiteboard card, a page that cannot be edited) offers no dragging. */
+  readonly?: boolean
 }>()
 
 const today = ref(dayKey())
@@ -116,6 +121,26 @@ function rowsOf(day: string, timed: CalendarEntry[]) {
   return rows
 }
 
+// Dragging --------------------------------------------------------------------
+// A day's section is a drop target (data-day); objects move to the day they land on, keeping their
+// time of day. Events of subscribed calendars never move, and neither does anything in a readonly
+// embed.
+const movable = (entry: CalendarEntry) => !props.readonly && (entry.kind === 'property' || entry.kind === 'object')
+async function drop(entry: CalendarEntry, mode: 'move' | 'resize', target: DropTarget) {
+  if (mode !== 'move') return
+  const times = movedTimes(entry, target)
+  if (times.start === entry.start && (times.end ?? '') === (entry.end ?? '')) return
+  try {
+    if (!(await changeEntryTimes(entry, times))) return
+  } catch (error) {
+    lastError.value = (error as Error).message
+  }
+  await load()
+}
+/** The day a dragged entry would land on, tinted as on the Calendar page. */
+const dropDay = computed(() => (drag.active && drag.mode === 'move' && drag.target ? drag.target.day : ''))
+provide(ENTRY_DRAGGING, { movable, resizable: () => false, drop: (entry, mode, target) => void drop(entry, mode, target) })
+
 // Details of external events and occurrences of repeating dates, as on the Calendar page.
 const popover = ref<{ entry: CalendarEntry; anchor: HTMLElement } | null>(null)
 const popoverOpen = computed({
@@ -138,7 +163,7 @@ async function detailsDone() {
     <p v-if="!loaded" class="py-3 text-sm text-ink-faint">Loading…</p>
     <p v-else-if="failed && !entries.length" class="py-3 text-sm text-red-600">Could not load the agenda.</p>
     <template v-else>
-      <section v-for="{ day, allDay, timed } in placed" :key="day" class="mt-4 first:mt-0" :data-agenda-day="day">
+      <section v-for="{ day, allDay, timed } in placed" :key="day" class="mt-4 rounded-lg first:mt-0" :class="dropDay === day ? 'bg-accent/10' : ''" :data-agenda-day="day" :data-day="day">
         <h3 class="mb-1 px-1.5 text-sm">
           <template v-if="heading(day).lead">
             <span class="font-semibold" :class="day === today ? 'text-accent' : 'text-ink'">{{ heading(day).lead }}</span>

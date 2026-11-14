@@ -26,7 +26,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node columnhandle.mjs [chromium|webkit] [base]   # the ⋮⋮ handle of a block in a second column: in the gap, holds still, opens its menu
     node quotes.mjs [chromium|webkit] [base]   # save a passage as a quote, open it from the highlight, delete it (MODE=json too)
     node compactembed.mjs [chromium|webkit] [base]   # a query embedded in a page shown Compact (block menu): no header, Edit query + Done, kept on reload, back to Full (MODE=json too)
-    node agenda.mjs [chromium|webkit] [base]   # the Agenda layout: a query in a page as day sections (chips, timed rows, the line for now, a checkbox, an empty day), Days in its settings, a type view and its date field (MODE=json too)
+    node agenda.mjs [chromium|webkit] [base]   # the Agenda layout: a query in a page as day sections (chips, timed rows, the line for now, a checkbox, an empty day), Days in its settings, a type view and its date field, dragging an entry to another day moves its date (MODE=json too)
     node compactblock.mjs [chromium|webkit] [base]   # an embedded block shown compact: no frame or group panel, Open block in the block menu, hidden while empty
     node calmhome.mjs [chromium|webkit] [base]   # a calm home page: a space's start page has its icon beside the title and no empty tags row or "Add property" line (Tags/Property on hover; another page unchanged), an Agenda's all-day events as chips beside timed rows, an empty compact query and its heading hidden, this year's dates on list rows without the year (replica off: the agenda's calendar is faked in the browser; SHOTS=<dir>)
     node handover.mjs [base]     # a second tab takes the replica over when the first closes
