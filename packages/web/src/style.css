@@ -105,6 +105,10 @@ body {
 }
 
 /* An object's properties: a table of name | value rows (ObjectPage, ReverseRelations). */
+/* A popover drawn as a sheet on a phone (PopoverMenu): full-width rows reach the 44px a finger needs,
+   and text boxes are 16px so iOS does not zoom in on them. */
+.vasta-sheet :where(button, a, label).w-full { min-height: 44px; font-size: 0.9375rem; }
+.vasta-sheet :where(input:not([type='checkbox'], [type='radio']), select, textarea) { font-size: 16px; }
 .vasta-prop-row { display: flex; align-items: flex-start; border-bottom: 1px solid color-mix(in oklab, var(--color-line) 70%, transparent); font-size: 0.875rem; }
 .vasta-prop-row:first-child { border-top: 1px solid color-mix(in oklab, var(--color-line) 70%, transparent); }
 .vasta-prop-row > :last-child { padding-left: 0.375rem; padding-block: 0.125rem; }

@@ -4,7 +4,7 @@
 // the bottom, where the thumb is.
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { quickAsk } from '../lib/quick-actions.ts'
-import { isPhone } from '../lib/viewport.ts'
+import { isPhone, keyboardInset } from '../lib/viewport.ts'
 import PopoverMenu from './PopoverMenu.vue'
 import QuickAskForm from './QuickAskForm.vue'
 
@@ -32,7 +32,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
       <div
         class="w-full border border-line bg-surface p-1 shadow-xl shadow-black/10"
         :class="isPhone ? 'rounded-t-2xl border-b-0 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2' : 'rounded-xl'"
-        :style="isPhone ? undefined : { maxWidth: isDate ? '19rem' : '22rem' }"
+        :style="isPhone ? { marginBottom: `${keyboardInset}px` } : { maxWidth: isDate ? '19rem' : '22rem' }"
         role="dialog"
         :aria-label="quickAsk.action.name"
         data-quick-ask-sheet

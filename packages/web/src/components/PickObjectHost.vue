@@ -3,7 +3,7 @@
 // centred over a dimmed page, or a sheet from the bottom on a phone. Escape or a tap outside closes it.
 import { onBeforeUnmount, onMounted } from 'vue'
 import { pickRequest } from '../lib/pick.ts'
-import { isPhone } from '../lib/viewport.ts'
+import { isPhone, keyboardInset } from '../lib/viewport.ts'
 import ObjectPicker from './ObjectPicker.vue'
 
 function onKey(event: KeyboardEvent) {
@@ -22,6 +22,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
       <div
         class="w-full border border-line bg-surface p-2 shadow-xl shadow-black/10"
         :class="isPhone ? 'max-h-[80vh] overflow-y-auto rounded-t-2xl border-b-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]' : 'max-h-[70vh] max-w-sm overflow-y-auto rounded-xl'"
+        :style="isPhone ? { marginBottom: `${keyboardInset}px` } : undefined"
         role="dialog"
         :aria-label="pickRequest.title"
         data-pick-object

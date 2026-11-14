@@ -224,7 +224,7 @@ const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
           <input
             ref="input"
             v-model="query"
-            class="w-full bg-transparent py-3.5 text-[15px] outline-none placeholder:text-ink-faint"
+            class="w-full bg-transparent py-3.5 text-[15px] outline-none placeholder:text-ink-faint max-md:text-base"
             placeholder="Search or create…"
             @keydown="onKey"
             @keyup="readCursor"

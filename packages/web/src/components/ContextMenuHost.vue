@@ -1,11 +1,13 @@
 <script setup lang="ts">
 // Renders the context menu from lib/overlays.ts at the pointer, with keyboard navigation. A
-// submenu row opens a second panel beside its row (one level deep).
+// submenu row opens a second panel beside its row (one level deep). On a phone it is a sheet from
+// the bottom with rows 44px high, and a submenu replaces the list inside it, with a Back row.
 import { computePosition, flip, offset, shift, size } from '@floating-ui/dom'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ColorName, Icon } from '@vasta/core'
 import { blockBackgroundClasses, blockTextClasses, colorNames } from '../lib/colors.ts'
 import { closeContextMenu, contextMenu, type MenuItem } from '../lib/overlays.ts'
+import { isPhone, keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 
 const panels: (HTMLElement | null)[] = [null, null]
@@ -29,6 +31,10 @@ const levels = computed(() => (sub.value === null ? [0] : [0, 1]))
 const itemsOf = (at: number) => (at ? subItems.value : contextMenu.items)
 const reachable = (at: number) => itemsOf(at).flatMap((item, i) => ((isAction(item) && !item.disabled) || isSubmenu(item) ? [i] : []))
 
+const sheet = computed(() => isPhone.value)
+/** The list the sheet shows: the submenu once one is open. */
+const sheetLevel = computed(() => (sub.value === null ? 0 : 1))
+
 const iconProps = (icon: string | Icon) => (typeof icon === 'string' ? { fallback: icon } : { icon })
 
 /** A menu taller than the room on either side scrolls instead of leaving the screen. */
@@ -44,6 +50,7 @@ watch(
     await nextTick()
     const element = panels[0]
     if (!element) return
+    if (sheet.value) return element.focus()
     const point = { getBoundingClientRect: () => new DOMRect(contextMenu.x, contextMenu.y, 0, 0) }
     const { x, y } = await computePosition(point, element, { placement: 'bottom-start', middleware: [offset(2), flip(), fit(element), shift({ padding: 8 })] })
     Object.assign(element.style, { left: `${x}px`, top: `${y}px` })
@@ -59,13 +66,14 @@ async function openSub(index: number, focus = false) {
     sub.value = index
     active.value = [active.value[0], -1]
     await nextTick()
+    if (sheet.value) return
     const row = panels[0]?.querySelector<HTMLElement>(`[data-row="${index}"]`)
     const element = panels[1]
     if (!row || !element) return
     const { x, y } = await computePosition(row, element, { placement: 'right-start', middleware: [offset({ mainAxis: 6, crossAxis: -5 }), flip(), fit(element), shift({ padding: 8 })] })
     Object.assign(element.style, { left: `${x}px`, top: `${y}px` })
   }
-  if (focus) {
+  if (focus || sheet.value) {
     level.value = 1
     active.value = [index, reachable(1)[0] ?? -1]
   }
@@ -156,6 +164,11 @@ function onPointerDown(event: PointerEvent) {
   if (contextMenu.open && !inMenu(event.target)) closeContextMenu()
 }
 
+/** A phone's viewport changes size as its toolbars slide; the sheet stays. */
+function onResize() {
+  if (!sheet.value) closeContextMenu()
+}
+
 function onScroll(event: Event) {
   if (!inMenu(event.target)) closeContextMenu()
 }
@@ -164,7 +177,7 @@ onMounted(() => {
   window.addEventListener('keydown', onKey, true)
   window.addEventListener('pointerdown', onPointerDown, true)
   window.addEventListener('blur', closeContextMenu)
-  window.addEventListener('resize', closeContextMenu)
+  window.addEventListener('resize', onResize)
   window.addEventListener('scroll', onScroll, true)
 })
 onBeforeUnmount(() => {
@@ -172,14 +185,78 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey, true)
   window.removeEventListener('pointerdown', onPointerDown, true)
   window.removeEventListener('blur', closeContextMenu)
-  window.removeEventListener('resize', closeContextMenu)
+  window.removeEventListener('resize', onResize)
   window.removeEventListener('scroll', onScroll, true)
 })
 </script>
 
 <template>
   <Teleport to="body">
-    <template v-if="contextMenu.open">
+    <!-- A phone: one sheet; a submenu takes its place with a Back row. -->
+    <template v-if="contextMenu.open && sheet">
+      <div class="fixed inset-0 z-[54] bg-black/30" aria-hidden="true" />
+      <div
+        :ref="(el) => (panels[0] = el as HTMLElement | null)"
+        tabindex="-1"
+        role="menu"
+        class="fixed inset-x-0 z-[55] max-h-[80vh] overflow-y-auto rounded-t-2xl border border-b-0 border-line bg-surface px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-6px_24px_rgb(0_0_0/0.14)] outline-none"
+        :style="{ bottom: `${keyboardInset}px` }"
+        data-menu-sheet
+        @contextmenu.prevent
+      >
+        <div class="mx-auto mb-1.5 h-1 w-9 rounded-full bg-line-strong" aria-hidden="true" />
+        <button v-if="sheetLevel" class="flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[15px] font-medium text-ink-soft" data-menu-back @click="closeSub">
+          <AppIcon fallback="ph:caret-left" :size="16" /> {{ sub !== null && isSubmenu(contextMenu.items[sub]) ? (contextMenu.items[sub] as Submenu).label : 'Back' }}
+        </button>
+        <template v-for="(item, i) in itemsOf(sheetLevel)" :key="`${sheetLevel}-${i}`">
+          <div v-if="item.kind === 'separator'" class="my-1 border-t border-line" />
+          <div v-else-if="item.kind === 'heading'" class="truncate px-2.5 pb-1 pt-1.5 text-[13px] text-ink-faint">{{ item.label }}</div>
+          <div v-else-if="item.kind === 'colors'" class="px-1.5 pb-1" :data-colors="item.sample">
+            <div class="px-1 pb-1 pt-1.5 text-[13px] text-ink-faint">{{ item.label }}</div>
+            <div class="grid grid-cols-[repeat(10,1fr)] gap-1">
+              <button
+                v-for="color in swatches"
+                :key="color ?? 'none'"
+                class="grid h-9 place-items-center rounded-md text-sm font-medium"
+                :class="[
+                  item.sample === 'text' ? (color ? blockTextClasses[color] : '') : color ? blockBackgroundClasses[color] : 'text-ink-faint',
+                  item.current === color ? 'ring-2 ring-accent' : 'ring-1 ring-line',
+                ]"
+                :title="color ?? 'Default'"
+                @click="pick(item, color)"
+              >
+                <AppIcon v-if="item.sample === 'background' && !color" fallback="ph:prohibit" :size="13" />
+                <span v-else-if="item.sample === 'text'">A</span>
+              </button>
+            </div>
+          </div>
+          <button
+            v-else
+            :role="item.kind !== 'submenu' && typeof item.checked === 'boolean' ? 'menuitemcheckbox' : 'menuitem'"
+            :aria-checked="item.kind !== 'submenu' && typeof item.checked === 'boolean' ? item.checked : undefined"
+            :aria-haspopup="item.kind === 'submenu' ? 'menu' : undefined"
+            :data-row="i"
+            class="flex min-h-11 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[15px] active:bg-hover disabled:opacity-40"
+            :class="item.kind !== 'submenu' && item.danger ? 'text-red-600' : ''"
+            :disabled="item.kind !== 'submenu' && item.disabled"
+            @click="choose(sheetLevel, i)"
+          >
+            <AppIcon v-if="item.icon" v-bind="iconProps(item.icon)" :size="18" :class="item.kind !== 'submenu' && item.danger ? '' : 'text-ink-soft'" />
+            <span v-else class="w-[18px]" />
+            <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
+            <AppIcon v-if="item.kind === 'submenu'" fallback="ph:caret-right" :size="14" class="text-ink-faint" />
+            <span
+              v-else-if="typeof item.checked === 'boolean'"
+              class="ml-3 grid h-5 w-5 shrink-0 place-items-center rounded border"
+              :class="item.checked ? 'border-ink bg-ink text-surface' : 'border-line-strong'"
+            >
+              <AppIcon v-if="item.checked" fallback="ph:check-bold" :size="12" />
+            </span>
+          </button>
+        </template>
+      </div>
+    </template>
+    <template v-else-if="contextMenu.open">
       <div
         v-for="at in levels"
         :key="at"
