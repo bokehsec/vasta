@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { builtinTypeId, createBuiltinTypes, type ObjectSummary, type ObjectType } from '@vasta/core'
-import { listFields, listSettings, rowFields } from './columns.ts'
+import { listFields, listSettings, QUICK_ACTIONS_COLUMN, rowFields, rowFieldsFromTable, type Column } from './columns.ts'
 
 // The field menus read the workspace's types, which need the app's state: stand in for them.
 const types: ObjectType[] = []
@@ -58,5 +58,18 @@ describe('fields on list rows', () => {
   it('skips properties the object’s own type does not have', () => {
     const fields = listFields({ fields: ['pages'] }, ['book', task.id])
     expect(rowFields(summary({ typeId: task.id, props: { pages: { kind: 'number', value: 3 } } }), task, fields)).toEqual([])
+  })
+})
+
+describe('a table drawn as rows', () => {
+  it('takes the shown columns in order, without the title, hidden ones or the quick actions', () => {
+    const column = (field: string, hidden = false): Column => ({ field, label: field, kind: 'text', icon: '', hidden, wrap: false, width: 120, def: book.properties.find((p) => p.id === field) })
+    const columns = [column('title'), column(QUICK_ACTIONS_COLUMN), column('pages'), column('notes', true), column('tags')]
+    const fields = rowFieldsFromTable(columns)
+    expect(fields.map((f) => f.field)).toEqual(['pages', 'tags'])
+    expect('width' in fields[0]!).toBe(false)
+    expect(fields.every((f) => f.on)).toBe(true)
+    expect(fields.some((f) => f.field === 'title' || f.field === 'notes' || f.field === QUICK_ACTIONS_COLUMN)).toBe(false)
+    expect(rowFields(summary({ props: { pages: { kind: 'number', value: 3 } } }), book, fields).map((f) => f.field)).toEqual(['pages'])
   })
 })

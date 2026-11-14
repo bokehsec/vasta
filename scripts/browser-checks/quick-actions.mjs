@@ -12,7 +12,8 @@
 // "Quick actions" column, hidden by default, second after Title when first shown, then shown, hidden
 // and dragged in the Columns menu like any other; Task only), the next step typed on a row (saved,
 // Undo, cleared), Done / Drop / Defer from a row without leaving the list, a query with quickActions
-// (list) or its checkbox in a table (the column), the next step action on the page too, a phone.
+// (list) or its checkbox in a table (the column), the next step action on the page too, a phone
+// (a table drawn as rows there; swipes are phone-rows.mjs).
 //   node quick-actions.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -876,20 +877,21 @@ if (!line || line.x < 0 || line.x + line.width > 390) throw new Error(`next step
 await rowButton(rowTask.id, 'done').click()
 await until(async () => (await statusOf(rowTask.id)) === 'done', 'Done tapped on the phone')
 
-step('phone width: a table puts its Quick actions under each title instead of a column')
+step('phone width: a table is drawn as rows, its Quick actions under each title (no touch: buttons, not swipes)')
 await page.setViewportSize({ width: 1400, height: 900 })
 await page.goto(`${base}/o/${tableQuery.id}`)
 await tableBox.waitFor()
 await tableBox.check()
 await until(async () => (await headerFields()).includes('quickActions'), 'the desktop table shows the column')
 await page.setViewportSize({ width: 390, height: 844 })
-await until(async () => !(await headerFields()).includes('quickActions'), 'the phone table has no Quick actions column')
-const underTitle = page.locator('main tbody td:first-child [data-quick-actions]').first()
+await page.locator('main [data-phone-rows]').first().waitFor()
+if ((await page.locator('main table').count()) !== 0) throw new Error('the phone still draws a table')
+const underTitle = page.locator('main [data-phone-rows] [data-quick-actions]').first()
 await underTitle.waitFor()
 const underBox = await underTitle.boundingBox()
 if (!underBox || underBox.x < 0 || underBox.x + underBox.width > 390) throw new Error(`the actions under the title are outside the screen: ${JSON.stringify(underBox)}`)
 await page.setViewportSize({ width: 1400, height: 900 })
-await until(async () => (await headerFields()).includes('quickActions') && (await page.locator('main tbody td:first-child [data-quick-actions]').count()) === 0, 'back on a wide screen the column returns')
+await until(async () => (await headerFields()).includes('quickActions') && (await page.locator('main [data-phone-rows]').count()) === 0, 'back on a wide screen the table and its column return')
 await tableBox.uncheck()
 
 // ---------------------------------------------------------------------------

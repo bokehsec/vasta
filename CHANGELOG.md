@@ -8,6 +8,12 @@ GitHub release page.
 
 ### Added
 
+- **Tasks on a phone: swipe a row.** Swipe right to defer a task (pick the day in the sheet that
+  rises from the bottom); swipe left for Done, Drop, Next step and More. Long-press a row for the
+  same actions in its menu. On a tablet the buttons stay and the swipes work too.
+- **Tables fit a phone.** A table view is drawn as rows on a phone, with its columns as a short
+  line under each title, so nothing scrolls sideways. "Show as table on this phone" in the layout
+  menu keeps the table for that view on that phone.
 - **Boards on a phone show one column at a time**: swipe sideways and it snaps to the next column,
   or tap a column's name in the strip above (with its count) to jump there.
 - **Apple Mail links work in notes.** A link to an email (`message://…`) stays a link in the editor and in previews, and opens Mail when clicked, also from the desktop app.

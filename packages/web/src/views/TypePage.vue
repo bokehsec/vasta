@@ -16,20 +16,22 @@ import HabitBoard from '../components/HabitBoard.vue'
 import TagTree from '../components/TagTree.vue'
 import PopoverMenu from '../components/PopoverMenu.vue'
 import TypeSettings from '../components/TypeSettings.vue'
-import { deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu, removeFromSidebar, viewItem } from '../lib/actions.ts'
+import { deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu, removeFromSidebar, setProperties, viewItem } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { onChange } from '../lib/events.ts'
 import { clone } from '../lib/clone.ts'
 import { quickActionsColumnShown, toggleQuickActionsColumn } from '../lib/columns.ts'
 import { chip } from '../lib/colors.ts'
 import { displayTitle } from '../lib/format.ts'
-import { confirmDialog, openContextMenu, openMenuAt, promptDialog } from '../lib/overlays.ts'
+import { confirmDialog, openContextMenu, openMenuAt, promptDialog, type MenuItem } from '../lib/overlays.ts'
 import { groupOptions, queryContext } from '../lib/query.ts'
 import { keysOf } from '../lib/shortcuts.ts'
 import { meId, sharedSpace } from '../lib/people.ts'
 import { primeSummaries, replaceType, typesById, unsavedTypes } from '../lib/state.ts'
 import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
 import { copyObjectLink, openObject } from '../lib/open.ts'
+import { quickActionMenuItems } from '../lib/quick-actions.ts'
+import { isPhone } from '../lib/viewport.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -91,6 +93,27 @@ function pickView(id: string) {
     localStorage.setItem(viewKey, id)
   } catch {}
 }
+// On a phone a table view is drawn as rows, unless "Show as table on this phone" is ticked (per
+// view, on this device).
+const phoneTableKey = computed(() => `vasta.phoneTable.${props.id}.${activeViewId.value}`)
+const phoneTables = ref<Record<string, boolean>>({})
+function readPhoneTable(key: string) {
+  try {
+    return localStorage.getItem(key) === '1'
+  } catch {
+    return false
+  }
+}
+const phoneTable = computed(() => phoneTables.value[phoneTableKey.value] ?? readPhoneTable(phoneTableKey.value))
+function togglePhoneTable() {
+  const on = !phoneTable.value
+  phoneTables.value = { ...phoneTables.value, [phoneTableKey.value]: on }
+  try {
+    if (on) localStorage.setItem(phoneTableKey.value, '1')
+    else localStorage.removeItem(phoneTableKey.value)
+  } catch {}
+}
+
 watch(activeViewId, (id) => {
   // Opened from a view pinned in the sidebar (?view=), then another view picked: the link goes.
   if (route.query.view && route.query.view !== id) void router.replace({ query: { ...route.query, view: undefined } })
@@ -246,6 +269,12 @@ async function deleteType() {
   if (type.value) await deleteTypeFlow(type.value)
 }
 
+/** An open task's quick actions, in its menu (a long press on a phone). */
+function quickItems(object: ObjectSummary): MenuItem[] {
+  const items = quickActionMenuItems(type.value, object, { save: async (id, values) => moved(await setProperties(id, values)) })
+  return items.length ? [{ kind: 'separator' }, ...items] : []
+}
+
 /** Right-click on an object in any layout. */
 function objectMenu(event: MouseEvent, object: ObjectSummary) {
   openContextMenu(event, [
@@ -253,6 +282,7 @@ function objectMenu(event: MouseEvent, object: ObjectSummary) {
     { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(object.id) },
     { label: 'Copy link to page', icon: 'ph:link', run: () => copyObjectLink(object.id) },
     pinMenu(object.id),
+    ...quickItems(object),
     { kind: 'separator' },
     {
       label: 'Move to trash',
@@ -684,6 +714,13 @@ async function newMenu(event: MouseEvent) {
           {{ o.label }}
           <AppIcon v-if="view.openIn === o.openIn" fallback="ph:check" class="ml-auto text-accent" />
         </button>
+        <template v-if="isPhone && view.layout === 'table'">
+          <div class="my-1 border-t border-line" />
+          <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-2.5 text-left text-sm hover:bg-hover" :aria-pressed="phoneTable" data-phone-table @click="togglePhoneTable(), (layoutOpen = false)">
+            <AppIcon fallback="ph:table" class="text-ink-soft" /> Show as table on this phone
+            <AppIcon v-if="phoneTable" fallback="ph:check" class="ml-auto text-accent" />
+          </button>
+        </template>
         <template v-if="type.system === 'task' && (view.layout === 'list' || view.layout === 'table')">
           <div class="my-1 border-t border-line" />
           <button
@@ -726,6 +763,7 @@ async function newMenu(event: MouseEvent) {
       :filter="view.filter"
       :open-in="view.openIn"
       :quick-actions="view.quickActions"
+      :phone-table="phoneTable"
       @table="updateView({ table: $event })"
       @board="updateView({ board: $event })"
       @manual="updateView({ sort: undefined })"

@@ -22,6 +22,23 @@ export function hideTips() {
   } catch {}
 }
 
+// The tip over swipeable rows on a phone, until hidden (per device).
+const SWIPE_KEY = 'vasta.tips.swipe'
+function readSwipeHidden(): boolean {
+  try {
+    return localStorage.getItem(SWIPE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+export const swipeTipHidden = ref(readSwipeHidden())
+export function hideSwipeTip() {
+  swipeTipHidden.value = true
+  try {
+    localStorage.setItem(SWIPE_KEY, '1')
+  } catch {}
+}
+
 /** Whether the user is the server's first account, who invites people; asked once. */
 export const serverAdmin = ref(false)
 let asked = false

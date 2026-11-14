@@ -45,6 +45,22 @@ the open view. In the sidebar, rows drag within and between sections (⌥ copies
 All types, links to objects or types (cards, list rows) and a type page's view tabs drag in from the
 page, and section headers drag to reorder.
 
+**Phones** (below 768px; touch is `hover: none`): nothing scrolls sideways. A table view is drawn
+as list rows: its shown columns become the row's fields, on a quiet line under the title (the
+first four with a value), its Quick actions column the next step line; "Show as table on this
+phone" in the layout menu keeps the table for that view on that device. Row titles are 16px, every
+control has a 44px tap area. A board shows one column at a time (85% of the width, snapping),
+with a strip of the columns' names and counts that jumps to one. Questions that would open under
+a small button (a quick action's day or text) rise as a sheet from the bottom, within reach of the
+thumb.
+
+**Swipes** (`SwipeRow`, touch screens): on a task's row, a swipe right past 40% runs the type's
+Defer (else its first quick action); a swipe left uncovers the other actions, Done first, then
+More (the row's long-press menu). One row is open at a time; a tap elsewhere closes it. On phones
+swipes replace the row's buttons; tablets keep both. Swipes start 24px in from the left edge (the
+drawer's). Done is a deep green, Defer the (light theme's) accent blue, the rest warm greys: fixed
+shades, so the white labels stay readable in both themes. A tip says it once per device.
+
 **Hover-only affordances**: secondary actions that would clutter an empty page (an object's Icon
 and Cover buttons, section carets) appear on hover or focus, and are always visible on touch
 screens (`[@media(hover:none)]:opacity-100`), which have no hover.

@@ -3,16 +3,18 @@
 // agenda), optionally grouped. Used by type pages, query pages and queries embedded in documents.
 import { computed, nextTick, provide, ref, watch, type Directive } from 'vue'
 import type { AgendaSettings, BoardSettings, FilterGroup, Id, ListSettings, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { nextStepFieldOf } from '@vasta/core'
+import { isClosedTask, nextStepFieldOf, quickActionsOf, type QuickActionDef } from '@vasta/core'
 import { addSelectOption, setProperties, setProperty } from '../lib/actions.ts'
 import { isDone, setTaskDone } from '../lib/calendar.ts'
 import { chip } from '../lib/colors.ts'
-import { columnWidth, listFields, MIN_COLUMN_WIDTH, QUICK_ACTIONS_COLUMN, rowFields, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
+import { columnWidth, listFields, MIN_COLUMN_WIDTH, QUICK_ACTIONS_COLUMN, rowFields, rowFieldsFromTable, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatDateShort, formatRelative } from '../lib/format.ts'
 import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
-import { isPhone } from '../lib/viewport.ts'
+import { runQuickAction } from '../lib/quick-actions.ts'
+import { hideSwipeTip, swipeTipHidden } from '../lib/tips.ts'
+import { isPhone, isTouch } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import AgendaView from './AgendaView.vue'
 import BoardView from './BoardView.vue'
@@ -23,6 +25,7 @@ import PersonChip from './PersonChip.vue'
 import PropertyDisplay from './PropertyDisplay.vue'
 import PropertyValueEditor from './PropertyValueEditor.vue'
 import ObjectLink from './ObjectLink.vue'
+import SwipeRow, { type SwipeAction } from './SwipeRow.vue'
 import TaskQuickActions from './TaskQuickActions.vue'
 import { VIEW_OPENS } from '../lib/open.ts'
 
@@ -50,6 +53,8 @@ const props = defineProps<{
   readonly?: boolean
   /** Task rows show their quick actions (list and table layouts), as saved on the view or query. */
   quickActions?: boolean
+  /** On a phone a table is drawn as rows, unless this is set ("Show as table on this phone"). */
+  phoneTable?: boolean
 }>()
 const emit = defineEmits<{
   menu: [event: MouseEvent, object: ObjectSummary]
@@ -91,6 +96,10 @@ watch(() => props.table, () => (resized.value = {}))
 // they can be reached without scrolling sideways.
 const shownColumns = computed(() => tableColumns(props.table, props.typeIds).filter((c) => !c.hidden))
 const actionsUnderTitle = computed(() => isPhone.value && shownColumns.value.some((c) => c.field === QUICK_ACTIONS_COLUMN))
+// On a phone a table is drawn as list rows (no sideways scrolling): its shown columns become the
+// row's fields, its Quick actions column the row's actions and next step line.
+const phoneRows = computed(() => isPhone.value && props.layout === 'table' && !props.phoneTable)
+const asList = computed(() => props.layout === 'list' || phoneRows.value)
 const columns = computed(() => (actionsUnderTitle.value ? shownColumns.value.filter((c) => c.field !== QUICK_ACTIONS_COLUMN) : shownColumns.value))
 const widthOf = (column: Column) => resized.value[column.field] ?? columnWidth(column)
 const tableWidth = computed(() => columns.value.reduce((sum, c) => sum + widthOf(c), 0))
@@ -103,12 +112,58 @@ const taskType = (object: ObjectSummary): ObjectType | undefined => {
   const type = props.readonly ? undefined : typeOf(object)
   return type?.system === 'task' ? type : undefined
 }
-const quickType = (object: ObjectSummary) => (props.quickActions ? taskType(object) : undefined)
+const quickType = (object: ObjectSummary) => (props.quickActions || (phoneRows.value && actionsUnderTitle.value) ? taskType(object) : undefined)
 const nextStepOf = (object: ObjectSummary) => {
   const field = nextStepFieldOf(quickType(object))
   const value = field ? object.props[field.id] : undefined
   return value?.kind === 'text' ? value.value : ''
 }
+
+// Swipes on a touch screen (SwipeRow): right runs the type's Defer (else its first action), left
+// uncovers the others, Done first, and More (the row's menu). On a phone they replace the row's
+// buttons; a tablet keeps both.
+const swipeType = (object: ObjectSummary) => {
+  const type = isTouch.value ? taskType(object) : undefined
+  return type && !isClosedTask(type, object) && quickActionsOf(type).length ? type : undefined
+}
+const rightActionOf = (actions: QuickActionDef[]) => actions.find((a) => a.id === 'defer') ?? actions[0]
+const saveRow = async (id: Id, values: Record<Id, PropertyValue | undefined>) => emit('moved', await setProperties(id, values))
+function swipeAction(type: ObjectType, object: ObjectSummary, action: QuickActionDef): SwipeAction {
+  return { id: action.id, label: action.name, icon: action.icon, tone: action.id === 'done' ? 'done' : action.id === 'defer' ? 'accent' : 'neutral', run: () => runQuickAction(type, object, action, { save: saveRow }) }
+}
+function swipeRight(object: ObjectSummary): SwipeAction | undefined {
+  const type = swipeType(object)
+  const action = type && rightActionOf(quickActionsOf(type))
+  return type && action ? swipeAction(type, object, action) : undefined
+}
+function swipeLeft(object: ObjectSummary): SwipeAction[] {
+  const type = swipeType(object)
+  if (!type) return []
+  const actions = quickActionsOf(type)
+  const right = rightActionOf(actions)
+  const rest = actions.filter((a) => a !== right).sort((a, b) => Number(b.id === 'done') - Number(a.id === 'done'))
+  const more: SwipeAction = {
+    id: 'more',
+    label: 'More',
+    icon: { kind: 'icon', value: 'ph:dots-three' },
+    tone: 'more',
+    run: (anchor) => {
+      const box = anchor?.getBoundingClientRect()
+      emit('menu', new MouseEvent('contextmenu', { clientX: box?.left ?? 0, clientY: box?.bottom ?? 0 }), object)
+    },
+  }
+  return [...rest.slice(0, 3).map((a) => swipeAction(type, object, a)), more]
+}
+/** On a phone the row's own buttons give way to swipes. */
+const rowButtons = (object: ObjectSummary) => !!quickType(object) && !(isPhone.value && swipeType(object))
+/** Shown once per device over the first list with swipeable rows on a phone. */
+const swipeTip = computed(() => {
+  if (!isPhone.value || !asList.value || swipeTipHidden.value) return ''
+  const object = props.objects.find((o) => swipeType(o))
+  const right = object && swipeRight(object)
+  return right ? `Swipe right to ${right.label.toLowerCase()}, left for more` : ''
+})
+
 async function saveQuick(object: ObjectSummary, values: Record<Id, PropertyValue | undefined>) {
   try {
     emit('moved', await setProperties(object.id, values))
@@ -204,7 +259,12 @@ function addOption(object: ObjectSummary, column: Column, option: SelectOption) 
 }
 
 // List rows: with fields chosen, each row shows those after its title, and a task gets a checkbox.
-const listColumns = computed(() => (props.list?.fields ? listFields(props.list, props.typeIds) : undefined))
+const listColumns = computed(() => (phoneRows.value ? rowFieldsFromTable(shownColumns.value) : props.list?.fields ? listFields(props.list, props.typeIds) : undefined))
+/** A table drawn as rows shows the first four of its fields that have a value. */
+const fieldsOf = (object: ObjectSummary) => {
+  const fields = rowFields(object, typeOf(object), listColumns.value ?? [])
+  return phoneRows.value ? fields.slice(0, 4) : fields
+}
 const isDoneTask = (object: ObjectSummary) => isDone(typeOf(object), object.props.status?.kind === 'select' ? object.props.status.value : undefined)
 
 async function toggleDone(object: ObjectSummary) {
@@ -241,6 +301,10 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
 
   <!-- Container queries: the same view sits in a full page or in a narrow document column. -->
   <div v-else ref="container" class="@container">
+    <p v-if="swipeTip" class="mb-3 flex items-center gap-2 rounded-lg border border-line bg-raised py-1 pl-3 text-[13px] text-ink-soft" data-swipe-tip>
+      <AppIcon fallback="ph:hand-swipe-right" :size="16" class="shrink-0" /><span class="flex-1">{{ swipeTip }}</span>
+      <button class="grid h-11 w-11 shrink-0 place-items-center text-ink-faint hover:text-ink" aria-label="Hide this tip" @click="hideSwipeTip"><AppIcon fallback="ph:x" :size="14" /></button>
+    </p>
     <section v-for="group in groups" :key="group.key" class="mt-4 first:mt-0">
       <header v-if="groupField" class="mb-3 flex items-center gap-2 text-sm">
         <span v-if="group.objectId"><ObjectChip :id="group.objectId" :tag="groupField === 'tags'" /></span>
@@ -249,69 +313,70 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
         <span class="text-xs text-ink-faint">{{ group.items.length }}</span>
       </header>
 
-      <!-- List -->
-      <div v-if="layout === 'list'" class="divide-y divide-line/70">
-        <ObjectLink
-          v-for="object in shown(group)"
-          :key="object.id"
-          :id="object.id"
-          class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover"
-          :class="listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : ''"
-          @contextmenu="emit('menu', $event, object)"
-        >
-          <button
-            v-if="listColumns && typeOf(object)?.system === 'task'"
-            class="shrink-0 rounded-full text-ink-soft enabled:hover:text-ink"
-            :class="isDoneTask(object) ? 'text-accent' : ''"
-            :disabled="readonly"
-            :title="isDoneTask(object) ? 'Mark as to do' : 'Mark as done'"
-            data-task-check
-            @click.prevent.stop="toggleDone(object)"
+      <!-- List; on a phone a table too. -->
+      <div v-if="asList" class="divide-y divide-line/70" :data-phone-rows="phoneRows || undefined">
+        <SwipeRow v-for="object in shown(group)" :key="object.id" :enabled="!!swipeType(object)" :right="swipeRight(object)" :left="swipeLeft(object)">
+          <ObjectLink
+            :id="object.id"
+            class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover max-md:py-2.5"
+            :class="listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : ''"
+            @contextmenu="emit('menu', $event, object)"
           >
-            <AppIcon :fallback="isDoneTask(object) ? 'ph:check-circle-fill' : 'ph:circle'" :size="18" />
-          </button>
-          <TypeIcon v-else :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
-          <span v-if="quickType(object)" class="min-w-0 flex-1">
-            <span class="block font-medium" :class="list?.wrap ? 'break-words' : 'truncate'">{{ displayTitle(object, typeOf(object)) }}</span>
-            <span v-if="nextStepOf(object)" class="mt-0.5 flex items-center gap-1 text-xs text-ink-soft" data-next-step-line>
-              <AppIcon fallback="ph:arrow-right" :size="11" class="shrink-0 text-ink-faint" /><span class="truncate">{{ nextStepOf(object) }}</span>
+            <!-- On touch the checkbox's tap area reaches 44px around it. -->
+            <button
+              v-if="listColumns && typeOf(object)?.system === 'task'"
+              class="relative shrink-0 rounded-full text-ink-soft enabled:hover:text-ink [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3 [@media(hover:none)]:after:content-['']"
+              :class="isDoneTask(object) ? 'text-accent' : ''"
+              :disabled="readonly"
+              :title="isDoneTask(object) ? 'Mark as to do' : 'Mark as done'"
+              data-task-check
+              @click.prevent.stop="toggleDone(object)"
+            >
+              <AppIcon :fallback="isDoneTask(object) ? 'ph:check-circle-fill' : 'ph:circle'" :size="18" />
+            </button>
+            <TypeIcon v-else :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
+            <span v-if="quickType(object)" class="min-w-0 flex-1">
+              <span class="block font-medium max-md:text-base max-md:leading-snug" :class="list?.wrap || phoneRows ? 'break-words' : 'truncate'">{{ displayTitle(object, typeOf(object)) }}</span>
+              <span v-if="nextStepOf(object)" class="mt-0.5 flex items-center gap-1 text-xs text-ink-soft max-md:text-[13px]" data-next-step-line>
+                <AppIcon fallback="ph:arrow-right" :size="11" class="shrink-0 text-ink-faint" /><span class="truncate">{{ nextStepOf(object) }}</span>
+              </span>
             </span>
-          </span>
-          <span
-            v-else
-            class="min-w-0 flex-1 font-medium"
-            :class="[list?.wrap ? 'break-words' : 'truncate', listColumns && typeOf(object)?.system === 'task' && isDoneTask(object) ? 'text-ink-faint line-through' : '']"
-          >{{ displayTitle(object, typeOf(object)) }}</span>
-          <span v-if="listColumns" class="flex min-w-0 shrink-0 items-center gap-2 text-xs @max-2xl:order-last @max-2xl:w-full @max-2xl:flex-wrap @max-2xl:pl-[28px]" @click.prevent>
-            <template v-for="field in rowFields(object, typeOf(object), listColumns)" :key="field.field">
-              <span v-if="field.field === 'tags' || field.field === 'collections'" class="flex gap-1">
-                <ObjectChip v-for="id in field.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="field.field === 'tags'" />
+            <span
+              v-else
+              class="min-w-0 flex-1 font-medium max-md:text-base max-md:leading-snug"
+              :class="[list?.wrap || phoneRows ? 'break-words' : 'truncate', listColumns && typeOf(object)?.system === 'task' && isDoneTask(object) ? 'text-ink-faint line-through' : '']"
+            >{{ displayTitle(object, typeOf(object)) }}</span>
+            <span v-if="listColumns" class="flex min-w-0 shrink-0 items-center gap-2 text-xs max-md:text-[13px] @max-2xl:order-last @max-2xl:w-full @max-2xl:flex-wrap @max-2xl:pl-[30px]" data-row-fields @click.prevent>
+              <template v-for="field in fieldsOf(object)" :key="field.field">
+                <span v-if="field.field === 'tags' || field.field === 'collections'" class="flex gap-1">
+                  <ObjectChip v-for="id in field.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="field.field === 'tags'" />
+                </span>
+                <span v-else-if="field.field === 'type'" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5" :class="chip(typeOf(object)?.color)">
+                  <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object)?.name }}
+                </span>
+                <span v-else-if="field.field === 'createdAt' || field.field === 'updatedAt'" class="whitespace-nowrap text-ink-faint">{{ formatRelative(object[field.field]) }}</span>
+                <span v-else-if="field.field === 'date'" class="whitespace-nowrap">{{ object.date ? formatDateShort(object.date) : '' }}</span>
+                <span v-else-if="field.field === 'host'" class="whitespace-nowrap">{{ object.media?.host?.replace(/^www\./, '') }}</span>
+                <PropertyDisplay v-else-if="field.def" :def="field.def" :value="object.props[field.field]" :object="object" :wrap="false" short />
+              </template>
+            </span>
+            <template v-else>
+              <span class="hidden gap-1 md:flex" @click.prevent>
+                <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
               </span>
-              <span v-else-if="field.field === 'type'" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5" :class="chip(typeOf(object)?.color)">
-                <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object)?.name }}
-              </span>
-              <span v-else-if="field.field === 'createdAt' || field.field === 'updatedAt'" class="whitespace-nowrap text-ink-faint">{{ formatRelative(object[field.field]) }}</span>
-              <span v-else-if="field.field === 'date'" class="whitespace-nowrap">{{ object.date ? formatDateShort(object.date) : '' }}</span>
-              <span v-else-if="field.field === 'host'" class="whitespace-nowrap">{{ object.media?.host?.replace(/^www\./, '') }}</span>
-              <PropertyDisplay v-else-if="field.def" :def="field.def" :value="object.props[field.field]" :object="object" :wrap="false" short />
+              <span v-if="!quickType(object)" class="w-24 shrink-0 text-right text-xs text-ink-faint">{{ formatRelative(object.updatedAt) }}</span>
             </template>
-          </span>
-          <template v-else>
-            <span class="hidden gap-1 md:flex" @click.prevent>
-              <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
-            </span>
-            <span v-if="!quickType(object)" class="w-24 shrink-0 text-right text-xs text-ink-faint">{{ formatRelative(object.updatedAt) }}</span>
-          </template>
-          <!-- In a narrow column (a phone) the actions take a line of their own under the title. -->
-          <TaskQuickActions
-            v-if="quickType(object)"
-            :type="quickType(object)!"
-            :object="object"
-            variant="row"
-            class="@max-md:order-last @max-md:w-full @max-md:pl-6"
-            @set="saveQuick(object, $event)"
-          />
-        </ObjectLink>
+            <!-- In a narrow column the actions take a line of their own under the title; on a phone swipes replace them. -->
+            <TaskQuickActions
+              v-if="rowButtons(object)"
+              :type="quickType(object)!"
+              :object="object"
+              variant="row"
+              class="@max-md:order-last @max-md:w-full @max-md:pl-6"
+              @set="saveQuick(object, $event)"
+            />
+          </ObjectLink>
+        </SwipeRow>
       </div>
 
       <!-- Table: fixed column widths; the last, empty column takes the space left. -->

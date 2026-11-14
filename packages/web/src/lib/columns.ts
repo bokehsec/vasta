@@ -94,6 +94,14 @@ export function listSettings(fields: ListField[], wrap: boolean | undefined): Li
   return { fields: fields.filter((f) => f.on).map((f) => f.field), ...(wrap ? { wrap: true } : {}) }
 }
 
+/**
+ * A table drawn as rows (on a phone): the fields its shown columns hold, in their order, as row
+ * fields; the title and the quick actions have places of their own on a row.
+ */
+export function rowFieldsFromTable(columns: Column[]): ListField[] {
+  return columns.filter((c) => !c.hidden && !NOT_IN_ROWS.has(c.field) && c.field !== QUICK_ACTIONS_COLUMN).map(({ width: _width, hidden: _hidden, wrap: _wrap, ...field }) => ({ ...field, on: true }))
+}
+
 /** The fields a row shows for this object, in order: those its type has (properties) and that have a value. */
 export function rowFields(object: ObjectSummary, type: ObjectType | undefined, fields: ListField[]): ListField[] {
   return fields.flatMap((field) => {
