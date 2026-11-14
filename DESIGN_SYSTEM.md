@@ -19,7 +19,16 @@ footer).
 **The shell**: the sidebar runs the full height with the space switcher on top; the top bar holds
 back/forward and where you are (an object's type, then the object); the page is a rounded panel
 (`bg-surface`, border, faint shadow) sitting on the canvas. On phones the panel is flat and full
-width, the sidebar is a drawer, and the top bar shows the menu, the page and Search.
+width, the sidebar is a drawer, and the top bar shows the menu (Back on an object's page, when there
+is history), the page and the bell. A bottom bar (`PhoneTabBar`) holds places only, as iPhone apps
+do: Home, Tasks, Inbox, Calendar, Search; the one you are on is accent-coloured. Capture is a round
+ink button above it on the right (it rises while a notice shows). The bar hides while the keyboard is
+up (`keyboardInset`) and gives way to the bulk bar while rows are selected; pages get bottom padding
+so their last row clears it. Every `PopoverMenu` is a sheet from the bottom on a phone (dimmed page,
+rounded top, safe area, 80% high at most, above the keyboard, full-width rows 44px, 16px text boxes);
+`anchored` keeps a panel. The context menu is a sheet too, its submenu replacing the list with a Back
+row. A type page shows one "View ▾" button with the views in a sheet instead of tabs. A task's page
+folds its fields into one outlined line under the quick actions, opened with a tap.
 
 **Side pane**: objects in views and queries can open in a second panel to the right of the page
 (`SidePane`, same surface and border), keeping the list in view: when the view or query says

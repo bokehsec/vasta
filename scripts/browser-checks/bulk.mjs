@@ -104,9 +104,14 @@ const deleted = async (id) => {
   const response = await page.request.get(`${base}/api/objects/${id}`)
   return !response.ok() || !!(await response.json()).deletedAt
 }
+// A phone picks a view in the views sheet; a wider screen has tabs.
 const openView = async () => {
   await page.goto(`${base}/t/${taskType.id}`)
-  await page.locator('main :is(button, [role=button])', { hasText: /^\s*Bulk\s*$/ }).first().click()
+  await page.locator('main :is([data-view-picker], [role=button])').first().waitFor()
+  if (await page.locator('[data-view-picker]').count()) {
+    await page.locator('[data-view-picker]').click()
+    await page.locator('[data-view-option]', { hasText: /^\s*Bulk\s*$/ }).click()
+  } else await page.locator('main :is(button, [role=button])', { hasText: /^\s*Bulk\s*$/ }).first().click()
   await page.locator(`main a[href="/o/${tasks[0].id}"]`).waitFor()
 }
 const row = (task) => page.locator(`main a[href="/o/${task.id}"]`).first()

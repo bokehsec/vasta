@@ -8,6 +8,11 @@ GitHub release page.
 
 ### Added
 
+- **A phone layout that fits the hand.** On a phone a bar at the bottom goes to Home, Tasks, Inbox,
+  Calendar and Search, with a round Capture button above it. Pickers and menus (a status, a date, a
+  long-press menu) rise from the bottom with larger rows, and stay above the keyboard. A type's views
+  are one button with the list in a sheet, a task's fields fold into one line under its buttons, and
+  a task's page has Back at the top.
 - **Change many tasks at once.** Tick the box at the start of a row (it shows on hover) and
   Shift-click another to pick everything between; on a phone, long-press a row and choose Select,
   then tap others. A bar at the bottom offers Done, Defer, Drop and Next step for all of them (one

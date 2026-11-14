@@ -11,6 +11,7 @@ import SubtasksPanel from '../components/SubtasksPanel.vue'
 import TaskQuickActions from '../components/TaskQuickActions.vue'
 import { isClosedTask, parentFieldOf, subtaskProgress } from '@vasta/core'
 import { setProperties } from '../lib/actions.ts'
+import { isPhone } from '../lib/viewport.ts'
 import { loadSubtasks, subtasksOf, withDescendants } from '../lib/subtasks.ts'
 import { pickObject } from '../lib/pick.ts'
 import type { QuickSave } from '../lib/quick-actions.ts'
@@ -463,6 +464,12 @@ const hasParent = computed(() => {
   const value = parentField.value && object.value?.props[parentField.value.id]
   return value?.kind === 'relation' && value.value.length > 0
 })
+
+// A task's fields on a phone fold into one line under its quick actions ("Waiting · Tue Nov 17 ·
+// Work"); a tap opens the full list. The page starts with what is acted on.
+const foldFields = computed(() => isPhone.value && type.value?.system === 'task' && !info.value)
+const fieldsOpen = ref(false)
+const summaryFields = computed(() => visibleFields.value.filter((def) => hasValue(def)).slice(0, 4))
 
 /** Closing a task with steps still open says so in the notice. */
 function openStepsNote() {
@@ -945,9 +952,24 @@ async function startFrom(template: ObjectRecord) {
       </PopoverMenu>
 
       <TaskQuickActions v-if="type?.system === 'task' && !info && !object.deletedAt" :type="type" :object="object" :note="openStepsNote" @set="setProps" />
-      <SubtasksPanel v-if="type && parentField && !info && !object.deletedAt" :type="type" :object="object" :save="pageSave" />
+      <button
+        v-if="foldFields"
+        class="mt-4 flex w-full items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-left text-sm"
+        :aria-expanded="fieldsOpen"
+        data-fields-summary
+        @click="fieldsOpen = !fieldsOpen"
+      >
+        <AppIcon fallback="ph:sliders-horizontal" class="shrink-0 text-ink-faint" />
+        <span v-if="fieldsOpen" class="flex-1 text-ink-soft">Fields</span>
+        <span v-else class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1" @click.capture.prevent>
+          <PropertyDisplay v-for="def in summaryFields" :key="def.id" :def="def" :value="object.props[def.id]" :object="object" :wrap="false" short />
+          <span v-if="!summaryFields.length" class="text-ink-faint">No fields set</span>
+        </span>
+        <AppIcon :fallback="fieldsOpen ? 'ph:caret-up' : 'ph:caret-down'" class="shrink-0 text-ink-faint" />
+      </button>
+      <SubtasksPanel v-if="type && parentField && !info && !object.deletedAt && !foldFields" :type="type" :object="object" :save="pageSave" />
 
-      <div v-if="(valueFields.length || type) && info?.kind !== 'snippet'" :class="hideAddProperty ? '' : 'mt-6'">
+      <div v-if="(valueFields.length || type) && info?.kind !== 'snippet' && (!foldFields || fieldsOpen)" :class="hideAddProperty || foldFields ? 'mt-2' : 'mt-6'" data-fields>
         <div v-if="showOwnDate" class="vasta-prop-row">
           <div class="vasta-prop-name">
             <AppIcon fallback="ph:calendar-blank" class="text-ink-faint" />
@@ -1056,6 +1078,7 @@ async function startFrom(template: ObjectRecord) {
           </button>
         </PopoverMenu>
       </div>
+      <SubtasksPanel v-if="type && parentField && !info && !object.deletedAt && foldFields" :type="type" :object="object" :save="pageSave" />
 
       </template>
 

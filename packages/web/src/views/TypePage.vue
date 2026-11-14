@@ -273,6 +273,11 @@ async function deleteType() {
   if (type.value) await deleteTypeFlow(type.value)
 }
 
+// A phone's view picker: the views in a sheet behind one button.
+const viewPickerOpen = ref(false)
+const viewPickerAnchor = ref<HTMLElement | null>(null)
+const currentViewLabel = computed(() => (metricsActive.value ? 'Metrics' : fixedActive.value && fixedView.value ? fixedView.value.label : view.value.name))
+
 // Process mode (ProcessMode): the view's open tasks one at a time, in its order.
 const processOpen = ref(false)
 const processList = computed(() => (type.value?.system === 'task' ? visible.value.filter((o) => !isClosedTask(type.value, o)) : []))
@@ -564,6 +569,32 @@ async function newMenu(event: MouseEvent) {
     <p v-if="type.description" class="mt-2 max-w-2xl text-sm text-ink-soft">{{ type.description }}</p>
 
     <div class="mt-6 flex flex-wrap items-center gap-1 border-b border-line pb-2">
+      <!-- A phone: one button for the view, its list in a sheet (the tabs would take rows of the screen). -->
+      <template v-if="isPhone">
+        <button ref="viewPickerAnchor" class="flex h-10 items-center gap-1.5 rounded-lg border border-line px-3 text-[15px] font-medium" data-view-picker @click="viewPickerOpen = true">
+          {{ currentViewLabel }} <AppIcon fallback="ph:caret-down" :size="14" class="text-ink-faint" />
+        </button>
+        <PopoverMenu v-model:open="viewPickerOpen" :anchor="viewPickerAnchor">
+          <p class="px-2.5 pb-1 text-base font-semibold">Views</p>
+          <button v-if="fixedView" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" data-view-option @click="pickView(fixedView.id), (viewPickerOpen = false)">
+            <AppIcon :fallback="fixedView.icon" :size="16" class="text-ink-soft" /> {{ fixedView.label }}
+            <AppIcon v-if="fixedActive" fallback="ph:check" class="ml-auto text-accent" />
+          </button>
+          <button v-for="v in type.views" :key="v.id" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" data-view-option @click="pickView(v.id), (viewPickerOpen = false)">
+            {{ v.name }}
+            <AppIcon v-if="v.id === view.id && !fixedActive && !metricsActive" fallback="ph:check" class="ml-auto text-accent" />
+          </button>
+          <button v-if="hasMetrics" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-ink-soft" data-view-option @click="pickView(METRICS_VIEW), (viewPickerOpen = false)">
+            <AppIcon fallback="ph:chart-line-up" :size="16" /> Metrics
+            <AppIcon v-if="metricsActive" fallback="ph:check" class="ml-auto text-accent" />
+          </button>
+          <div class="my-1 border-t border-line" />
+          <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-ink-soft" @click="(viewPickerOpen = false), addView()">
+            <AppIcon fallback="ph:plus" :size="16" /> New view
+          </button>
+        </PopoverMenu>
+      </template>
+      <template v-else>
       <button
         v-if="fixedView"
         class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm"
@@ -599,6 +630,7 @@ async function newMenu(event: MouseEvent) {
       >
         <AppIcon fallback="ph:chart-line-up" :size="14" /> Metrics
       </button>
+      </template>
 
       <div class="ml-auto flex items-center gap-1 whitespace-nowrap text-sm max-md:-mx-1 max-md:w-full max-md:overflow-x-auto [&>*]:shrink-0">
         <button v-if="canProcess" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" title="One task at a time: Done, Defer… or Skip" data-process @click="startProcess">

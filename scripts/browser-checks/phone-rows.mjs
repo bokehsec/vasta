@@ -185,9 +185,15 @@ await sleep(1500)
 
 const row = (task) => page.locator(`main a[href="/o/${task.id}"]`).first()
 const toast = page.locator('[role=status]')
+// A phone picks a view in the views sheet; a wider screen has tabs.
 const openView = async (name) => {
   await page.goto(`${base}/t/${taskType.id}`)
-  await page.locator('main :is(button, [role=button])', { hasText: new RegExp(`^\\s*${name}\\s*$`) }).first().click()
+  const picker = page.locator('[data-view-picker]')
+  await page.locator('main :is([data-view-picker], [role=button])').first().waitFor()
+  if (await picker.count()) {
+    await picker.click()
+    await page.locator('[data-view-option]', { hasText: new RegExp(`^\\s*${name}\\s*$`) }).click()
+  } else await page.locator('main :is(button, [role=button])', { hasText: new RegExp(`^\\s*${name}\\s*$`) }).first().click()
 }
 const centre = async (locator) => {
   const box = await locator.boundingBox()
