@@ -114,6 +114,10 @@ GitHub release page.
 
 ### Fixed
 
+- **A quick action that asks for a line of text (a next step) can be answered on a phone**: the
+  question's sheet has a Save button. Before there was no way to submit it: the keyboard's Enter
+  key only put the keyboard away, so the text was never saved. On a computer Enter still saves,
+  beside the button.
 - **Undo after Done on a repeating task** puts its date back on the occurrence it had; it stayed
   on the next one.
 - **On a phone, a notice no longer hides behind the keyboard**, a picker's search box stays on

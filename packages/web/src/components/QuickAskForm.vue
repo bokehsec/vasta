@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // The inside of a quick action's question (QuickAskHost): a day (tomorrow, next week or one picked
 // on a calendar, with the due date shown when it sets another date, and a box to move the due date
-// along when the day is after it) or a line of text; an empty line clears the field.
+// along when the day is after it) or a line of text; an empty line clears the field. The line has a
+// Save button: a phone's keyboard has no Enter that submits (its key only puts the keyboard away),
+// and every other way out of the sheet cancels the question.
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { addDays } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
@@ -55,5 +57,12 @@ const answerText = () => props.ask.answer(textAnswer(props.ask.def, text.value, 
       :placeholder="ask.def.kind === 'text' ? 'What happens next' : ''"
       @keydown.escape.stop="ask.answer(null)"
     />
+    <button
+      type="submit"
+      class="mt-2 w-full rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface max-md:mt-3 max-md:h-12 max-md:rounded-xl max-md:text-[15px]"
+      data-ask-save
+    >
+      Save
+    </button>
   </form>
 </template>
