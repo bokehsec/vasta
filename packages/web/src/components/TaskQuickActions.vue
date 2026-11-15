@@ -5,12 +5,13 @@
 // under the button first. Closed tasks show none. The page or list applies the values; Undo in the
 // notice puts the previous ones back, saving them itself once this is gone (the next task opened in
 // the side pane, a row the list no longer shows).
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, inject, onBeforeUnmount, ref } from 'vue'
 import type { Id, ObjectRecord, ObjectType, PropertyValue, QuickActionDef } from '@vasta/core'
 import { STATUS_PROPERTY_ID, askOf, isClosedTask, quickActionsOf } from '@vasta/core'
 import { setProperties } from '../lib/actions.ts'
 import { quickAsk, runQuickAction } from '../lib/quick-actions.ts'
 import AppIcon from './AppIcon.vue'
+import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
 
 /** `note`: said in the notice after an action instead of the runner's own (subtasks still open). */
 const props = defineProps<{
@@ -27,7 +28,9 @@ const props = defineProps<{
 
 const row = computed(() => props.variant === 'row')
 const actions = computed(() => quickActionsOf(props.type))
-const shown = computed(() => actions.value.length > 0 && !isClosedTask(props.type, props.object))
+const completion = inject(COMPLETION_FEEDBACK, undefined)
+const retained = computed(() => completion?.entries.has(props.object.id) ?? false)
+const shown = computed(() => actions.value.length > 0 && (!isClosedTask(props.type, props.object) || retained.value))
 /**
  * On the page, the action that marks the task done (the first status that closes it as done) is the
  * main one: tinted, not filled, so it never reads as the task's current status.
@@ -50,6 +53,7 @@ onBeforeUnmount(() => (mounted = false))
 const save = (id: Id, values: Record<Id, PropertyValue | undefined>) => (mounted && props.onSet && props.object.id === id ? props.onSet(values) : setProperties(id, values))
 
 function press(event: MouseEvent, action: QuickActionDef) {
+  if (retained.value) return
   // On its page the task's title is right there; a row's question names the task.
   void runQuickAction(props.type, props.object, action, { anchor: event.currentTarget as HTMLElement, save, note: props.note, ...(row.value ? {} : { scope: '' }) })
 }
@@ -74,9 +78,10 @@ const rowButton = 'grid h-7 w-7 place-items-center rounded-md text-ink-faint hov
     <button
       v-for="action in actions"
       :key="action.id"
-      :class="row ? rowButton : [pageButton, action.id === mainId ? pageMain : pageQuiet]"
+      :class="[row ? rowButton : [pageButton, action.id === mainId ? pageMain : pageQuiet], retained ? 'opacity-40' : '']"
       :title="row ? action.name : undefined"
       :aria-expanded="askingId === action.id || undefined"
+      :aria-disabled="retained || undefined"
       :data-action="action.id"
       @click="press($event, action)"
     >

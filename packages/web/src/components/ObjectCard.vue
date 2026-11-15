@@ -1,19 +1,28 @@
 <script setup lang="ts">
 // Card used by grid, wall, gallery and kanban views. A board chooses the fields its cards show
 // (`fields`), or leaves out the ones its columns and lanes already say (`hide`).
-import { computed, ref } from 'vue'
-import type { ObjectSummary, ObjectType, PropertyDef } from '@vasta/core'
+import { computed, inject, ref } from 'vue'
+import type { ObjectRecord, ObjectSummary, ObjectType, PropertyDef } from '@vasta/core'
 import { BLOCKED_PROPERTY_ID } from '@vasta/core'
 import { imageOf } from '../lib/media.ts'
 import { chip, iconTextClasses } from '../lib/colors.ts'
+import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
+import { isDone } from '../lib/calendar.ts'
 import { displayTitle } from '../lib/format.ts'
 import { formulaValue } from '../lib/properties.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectChip from './ObjectChip.vue'
 import PropertyDisplay from './PropertyDisplay.vue'
 import ObjectLink from './ObjectLink.vue'
+import TaskCompletionCheck from './TaskCompletionCheck.vue'
+import TaskCompletionNote from './TaskCompletionNote.vue'
 
 const props = defineProps<{ object: ObjectSummary; type: ObjectType | undefined; variant: 'grid' | 'wall' | 'gallery' | 'kanban'; fields?: PropertyDef[]; hide?: string[] }>()
+const emit = defineEmits<{ moved: [object: ObjectRecord] }>()
+
+const feedback = inject(COMPLETION_FEEDBACK, undefined)
+const isTask = computed(() => props.type?.system === 'task')
+const completed = computed(() => isTask.value && (feedback?.done(props.object) ?? isDone(props.type, props.object.props.status?.kind === 'select' ? props.object.props.status.value : undefined)))
 
 const broken = ref(false)
 const image = computed(() => (broken.value ? undefined : imageOf(props.object)))
@@ -33,7 +42,7 @@ const shownProps = computed(() =>
   <ObjectLink
     :id="object.id"
     class="group flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-sm transition hover:border-line-strong hover:shadow-md"
-    :class="variant === 'wall' ? 'mb-3 break-inside-avoid' : ''"
+    :class="[variant === 'wall' ? 'mb-3 break-inside-avoid' : '', completed ? 'text-ink-soft' : '']"
   >
     <img
       v-if="image && variant !== 'kanban'"
@@ -52,12 +61,17 @@ const shownProps = computed(() =>
         <AppIcon :icon="type?.icon" fallback="ph:cube" :size="12" />{{ type?.name }}
       </span>
       <div class="flex items-start gap-1.5 font-semibold leading-snug">
+        <TaskCompletionCheck v-if="isTask && feedback" :object="object" :type="type" class="mt-px" @moved="emit('moved', $event)" />
         <AppIcon v-if="object.icon" :icon="object.icon" :class="type?.color ? iconTextClasses[type.color] : ''" class="mt-0.5" />
-        <span class="line-clamp-3">{{ displayTitle(object, type) }}</span>
+        <span
+          class="line-clamp-3 transition-colors duration-150 motion-reduce:transition-none"
+          :class="isTask ? ['task-title', completed ? 'task-title-done text-ink-faint line-through' : ''] : ''"
+          >{{ displayTitle(object, type) }}</span>
         <span v-if="blocked" class="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-md bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300" title="Blocked">
           <AppIcon fallback="ph:flag-fill" :size="11" /> Blocked
         </span>
       </div>
+      <TaskCompletionNote v-if="isTask" :object="object" />
       <p
         v-if="object.preview && variant !== 'gallery'"
         class="text-sm text-ink-soft"

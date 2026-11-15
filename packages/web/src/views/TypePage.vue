@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { newId } from '@vasta/core'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { RANK_PROPERTY_ID, closedFilterOf, dueForReview, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
@@ -39,6 +39,9 @@ import { quickActionMenuItems } from '../lib/quick-actions.ts'
 import { subtaskMenuItems } from '../lib/subtasks.ts'
 import { selectMenuItem } from '../lib/selection.ts'
 import { isPhone } from '../lib/viewport.ts'
+import { COMPLETION_FEEDBACK, createCompletionFeedback } from '../lib/completion-feedback.ts'
+import { onObjectSave } from '../lib/object-saves.ts'
+import { notice } from '../lib/state.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -52,6 +55,7 @@ const activeViewId = ref<string>('')
 
 async function loadObjects() {
   objects.value = await api.objectsOfType(props.id)
+  completion.prune(new Set(objects.value.map((object) => object.id)))
   primeSummaries(objects.value)
   loading.value = false
 }
@@ -289,7 +293,7 @@ const processOpen = ref(false)
 const hasQuickActions = computed(() => quickActionsOf(type.value).length > 0)
 const taskWorkflows = computed(() => type.value?.system === 'task')
 const reviewable = computed(() => !fixedActive.value && !agendaActive.value && (hasQuickActions.value || !!reviewFieldOf(type.value)))
-const openList = computed(() => visible.value.filter((o) => !isClosedTask(type.value, o)))
+const openList = computed(() => visible.value.filter((o) => !completion.entries.has(o.id) && !isClosedTask(type.value, o)))
 const processList = computed(() => openList.value.filter((o) => dueForReview(type.value, o, dayKey())))
 const queues = computed(() => taskWorkflowQueues(type.value, [...objects.value].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)), dayKey()))
 const viewScope = computed(() => `${view.value.name}${showMine.value && mineOnly.value ? ' · Mine' : ''}${filterText.value.trim() ? ` · Search: “${filterText.value.trim()}”` : ''}`)
@@ -380,7 +384,7 @@ watch(() => [props.id, workspace.space?.id, session.user?.id], () => {
 
 /** An open task's quick actions, in its menu (a long press on a phone). */
 function quickItems(object: ObjectSummary): MenuItem[] {
-  const items = [...selectMenuItem(object.id), ...quickActionMenuItems(type.value, object, { save: async (id, values) => moved(await setProperties(id, values)) }), ...subtaskMenuItems(type.value, object, moved)]
+  const items = [...selectMenuItem(object.id), ...(completion.entries.has(object.id) ? [] : quickActionMenuItems(type.value, object, { save: async (id, values) => moved(await setProperties(id, values)) })), ...subtaskMenuItems(type.value, object, moved)]
   return items.length ? [{ kind: 'separator' }, ...items] : []
 }
 
@@ -466,41 +470,49 @@ const closedLabel = computed(() => {
   return `Show ${new Intl.ListFormat('en', { type: 'conjunction' }).format(names)}`
 })
 const toggleClosed = () => updateView({ showClosed: view.value.showClosed ? undefined : true })
-// A task closed while the view is open stays on it (struck through, its Undo at hand) until the
-// view is left: whatever was open here is kept.
-const keptOpen = new Set<string>()
-let keptFor = ''
-watch(
-  [() => [...objects.value], () => `${props.id}/${activeViewId.value}`, type],
-  ([list, key, t]) => {
-    if (key !== keptFor) (keptOpen.clear(), (keptFor = key))
-    if (t) for (const o of list) if (!isClosedTask(t, o)) keptOpen.add(o.id)
+const completion = createCompletionFeedback({
+  type: () => type.value,
+  rows: () => visible.value,
+  replace: moved,
+  save: setProperties,
+  failed: (retry) => {
+    notice.value = { message: 'The task was not saved. Try again.', action: { label: 'Retry', run: () => retry().catch(() => {}) } }
   },
-  { immediate: true, flush: 'sync' }
+})
+provide(COMPLETION_FEEDBACK, completion)
+const stopSaves = onObjectSave((object) => agendaActive.value ? undefined : completion.observe(object))
+onBeforeUnmount(stopSaves)
+watch(
+  () => JSON.stringify([props.id, activeViewId.value, view.value.filter, view.value.showClosed, sort.value, groupField.value, view.value.layout, view.value.agenda, view.value.flat, view.value.list, view.value.table, view.value.board?.swimlanes, mineOnly.value]),
+  () => completion.clear(),
+  { flush: 'sync' }
 )
 
 const visible = computed(() => {
-  const q = filterText.value.trim().toLowerCase()
   const context = queryContext()
   const list = objects.value.filter(
-    (o) => matchesFilter(o, keptOpen.has(o.id) ? view.value.filter : viewFilter.value, context) && (!showMine.value || !mineOnly.value || isMine(o)) && (!q || displayTitle(o, type.value).toLowerCase().includes(q) || o.preview.toLowerCase().includes(q))
+    (o) => completion.entries.has(o.id) || (matchesFilter(o, viewFilter.value, context) && (!showMine.value || !mineOnly.value || isMine(o)))
   )
   const { field, direction } = sort.value
   const factor = direction === 'asc' ? 1 : -1
   // Keys are read once per object (a formula would otherwise run at every comparison); titles
   // sort as shown, so daily notes and untitled objects take their place.
   // The board puts ranked cards in order itself; the others come by when they changed.
-  if (field === RANK_PROPERTY_ID) return [...list].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+  const searched = (rows: ObjectSummary[]) => {
+    const q = filterText.value.trim().toLowerCase()
+    return completion.pin(rows).filter((object) => !q || displayTitle(object, type.value).toLowerCase().includes(q) || object.preview.toLowerCase().includes(q))
+  }
+  if (field === RANK_PROPERTY_ID) return searched([...list].sort((a, b) => (completion.placement(a).updatedAt < completion.placement(b).updatedAt ? 1 : -1)))
   const keyOf = (o: ObjectSummary) => (field === 'title' ? displayTitle(o, type.value).toLowerCase() : fieldSortKey(o, field, context))
-  return list
-    .map((object) => ({ object, key: keyOf(object) }))
+  return searched(list
+    .map((object) => ({ object, key: keyOf(completion.placement(object)) }))
     .sort((a, b) => {
       if (a.key === b.key) return 0
       if (a.key === '') return 1
       if (b.key === '') return -1
       return a.key < b.key ? -factor : factor
     })
-    .map((k) => k.object)
+    .map((k) => k.object))
 })
 
 function created(object: ObjectRecord) {
@@ -527,9 +539,13 @@ function setSwimlanes(field: string) {
   updateView({ board: Object.keys(next).length ? next : undefined })
 }
 
-function moved(saved: ObjectRecord) {
+function moved(saved: ObjectRecord | ObjectSummary) {
   const index = objects.value.findIndex((o) => o.id === saved.id)
-  if (index >= 0) objects.value[index] = { ...saved, preview: objects.value[index]!.preview } as ObjectSummary
+  if (index >= 0) {
+    const summary = { ...saved, preview: objects.value[index]!.preview } as ObjectSummary
+    objects.value[index] = summary
+    primeSummaries([summary])
+  }
 }
 
 // Filter: saved on the view, applied with the same engine as queries.

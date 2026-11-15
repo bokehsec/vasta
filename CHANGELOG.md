@@ -8,6 +8,16 @@ GitHub release page.
 
 ### Added
 
+- **A task you mark Done stays where it was until you leave.** On a type's page (Tasks views, in
+  every layout: list, table, phone rows, cards and board, plus the Done button, swipe, menu and
+  bulk Done), a completed task keeps its place, shows a checked circle and a muted, struck-through
+  title, and counts as done. It only leaves when you reload, leave the page, switch views or change
+  the filters, sort or layout; searching keeps matching rows. Uncheck it, or press Undo, to put back
+  exactly the status it had (a Next task returns to Next). A repeating task says "Done this time ·
+  Next: <date>". A failed save puts the task back with a Retry. On a board, the card stays in its
+  column; dragging it to Done still moves it. On a phone, opening a task, marking it Done and going
+  Back shows the list fresh, without it.
+
 - **Choose your page width.** Settings › Appearance has Standard, Wide and Full width, remembered
   on this device for all object pages and daily notes. Standard keeps the reading width and gives
   pages with columns more room; daily notes with columns now get that same room. Full width uses
