@@ -26,11 +26,13 @@ const phone = { viewport: { width: 390, height: 844 }, hasTouch: true, ...(engin
 const browser = engine === 'webkit' ? await webkit.launch() : await chromium.launch()
 // A persistent WebKit context is not the browser's: it keeps the process alive until it is closed itself.
 const opened = []
-async function newContext(options, touch) {
+// Playwright's WebKit shares OPFS between contexts (navigator.locks does not span them): two open at
+// once with the replica on corrupt its database, so a context that only needs the API runs without it.
+async function newContext(options, touch, replica = true) {
   // WebKit keeps the replica (OPFS) only in a persistent profile.
   const context = engine === 'webkit' ? await webkit.launchPersistentContext(mkdtempSync(path.join(tmpdir(), 'vasta-bulk-')), options) : await browser.newContext(options)
   opened.push(context)
-  if (process.env.MODE === 'json') await context.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))
+  if (process.env.MODE === 'json' || !replica) await context.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))
   if (touch && engine === 'webkit') {
     await context.addInitScript(() => {
       const original = window.matchMedia.bind(window)
@@ -417,7 +419,7 @@ try {
   process.exitCode = 1
 } finally {
   try {
-    const cleanup = await newContext(desktop)
+    const cleanup = await newContext(desktop, false, false)
     page = await login(cleanup)
     for (const t of tasks) await page.request.delete(`${base}/api/objects/${t.id}`, { headers })
     const now = await get(`/api/types/${taskType.id}`)

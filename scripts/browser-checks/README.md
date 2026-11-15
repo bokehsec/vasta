@@ -32,7 +32,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node compactblock.mjs [chromium|webkit] [base]   # an embedded block shown compact: no frame or group panel, Open block in the block menu, hidden while empty
     node calmhome.mjs [chromium|webkit] [base]   # a calm home page: a space's start page has its icon beside the title and no empty tags row or "Add property" line (Tags/Property on hover; another page unchanged), an Agenda's all-day events as chips beside timed rows, an empty compact query and its heading hidden, this year's dates on list rows without the year (replica off: the agenda's calendar is faked in the browser; SHOTS=<dir>)
     node handover.mjs [base]     # a second tab takes the replica over when the first closes
-    node capture.mjs [base]      # /Type in quick capture (embedded in today's note), a relation's values, ⌘K, the panel's bridge (MODE=json too)
+    node capture.mjs [base]      # /Type in quick capture (alone by default; in today’s note with Settings › Desktop app), a relation's values, ⌘K, the panel's bridge (MODE=json too)
     node toggles.mjs [base]      # Tab nests under the line above (a toggle), ⇧Tab takes it out, /Toggle on a written line (MODE=json too)
     node blockrefs.mjs [base]    # @Title#… mentions a block, @@ embeds one read-only; it follows edits; links open the block (MODE=json too)
     node channels.mjs [base]     # Settings › Capture channels and Telegram's chats (the bot's state faked)
@@ -64,8 +64,10 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
 
 Notes: WebKit has no OPFS in an ephemeral context, so the scripts use a persistent profile; and
 Playwright's WebKit keeps OPFS across profiles, so a WebKit run reuses the replica of the last one
-(firstsync.mjs empties OPFS first). device.mjs's banner step times out (its `context.route` of `/`
-does not reach the app's fetch in WebKit, likely because the service worker answers it);
+(firstsync.mjs empties OPFS first). Nor do its locks span profiles: two WebKit contexts open at once
+must not both run the replica, or they corrupt its database (SQLITE_CORRUPT), so a setup or cleanup
+context that only needs the API opens with `vasta.replica` off. device.mjs's banner step times
+out (its `context.route` of `/` does not reach the app's fetch in WebKit, likely because the service worker answers it);
 update.mjs checks the banner.
 For timing with more data, build a copy with extra objects and start the env on it:
 `VASTA_TEST_SOURCE=<dir with vasta.db> scripts/test-env.sh`. In

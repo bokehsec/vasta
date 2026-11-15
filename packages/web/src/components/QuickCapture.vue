@@ -37,6 +37,10 @@ const cursor = ref(0)
 const close = () => (ui.captureOpen = false)
 
 const space = computed(captureSpace)
+// The desktop app's captures go where Settings › Desktop app says (both off by default: the
+// object alone, or a Page for plain text); the others always go to today's note.
+const toDaily = computed(() => !isDesktop || ui.captureDaily)
+const where = computed(() => (toDaily.value ? `today’s note in ${space.value?.name}` : space.value?.name))
 
 // A phone keeps what was not saved: put back here, kept again by `leave`, dropped once saved.
 const draftRestored = ref(false)
@@ -90,7 +94,7 @@ const pickable = computed(() => types.value.filter(offered))
 const destination = computed(() => {
   const name = space.value?.name ?? ''
   if (eaten.value !== undefined) return `Food log · ${name}`
-  return typed.value ? `${typed.value.type.name} in ${name}` : `Today’s note · ${name}`
+  return typed.value ? `${typed.value.type.name} in ${name}` : toDaily.value ? `Today’s note · ${name}` : `Page in ${name}`
 })
 const hasText = computed(() => !!writtenText(types.value, text.value) || (eaten.value !== undefined && !!text.value.trim()))
 
@@ -315,13 +319,13 @@ function onKey(event: KeyboardEvent) {
         <template v-if="preview.title"> “{{ preview.title }}”</template>
         <template v-if="preview.template"> · from {{ preview.template }}</template>
         <template v-if="preview.parts.length"> · {{ preview.parts.join(', ') }}</template>
-        <span>, in today’s note in {{ space?.name }}.</span>
+        <span>, in {{ where }}.</span>
         <span v-if="!isPhone && !isTouch"> Ctrl+Enter saves and opens it.</span>
       </p>
       <p v-if="preview.errors.length" class="text-amber-700 dark:text-amber-400">Cannot read {{ preview.errors.join('; ') }}; it stays in the title.</p>
       <p v-else-if="!preview.parts.length && preview.properties.length">name:value sets {{ preview.properties.join(', ') }}.</p>
     </div>
-    <p v-else-if="!isPhone" class="mt-2 text-xs text-ink-faint">Goes to today’s note in {{ space?.name }}.<template v-if="!isTouch"> Enter saves, Ctrl+Enter saves and opens it, Shift+Enter adds a line.</template></p>
+    <p v-else-if="!isPhone" class="mt-2 text-xs text-ink-faint">{{ toDaily ? `Goes to today’s note in ${space?.name}` : ui.captureInbox ? `Goes to the inbox of ${space?.name}` : `Saved as a page in ${space?.name}` }}.<template v-if="!isTouch"> Enter saves, Ctrl+Enter saves and opens it, Shift+Enter adds a line.</template></p>
     <template v-if="isPhone" #footer>
       <div class="flex w-full flex-col gap-1">
         <p v-if="error" class="text-sm text-red-600 dark:text-red-400" role="alert">{{ error }}</p>

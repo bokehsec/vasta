@@ -115,6 +115,8 @@ async function search() {
 
 let searchPending = false
 watch(query, () => {
+  // A new line has a new list: Enter takes its first row, not the row picked last time.
+  active.value = 0
   clearTimeout(timer)
   searchPending = true
   inFlight = new Promise((resolve) => {
