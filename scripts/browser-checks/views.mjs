@@ -56,10 +56,13 @@ for (const path of ['/', '/inbox', '/calendar', '/trash', '/settings']) {
 
 step('search from the palette')
 await page.goto(base)
+await page.waitForSelector('nav', { state: 'attached', timeout: 30000 })
 await sleep(500)
 const target = (await get(`/api/spaces/${space.id}/search?q=&limit=5`)).find((o) => o.title)
-await page.keyboard.press('Meta+k')
-await page.fill('input[placeholder="Search or create…"]', target.title.slice(0, 6))
+// ⌘K before the app has its shortcuts is lost: press again until the palette shows.
+const paletteInput = page.locator('input[placeholder="Search or create…"]')
+await until(async () => (await paletteInput.count()) > 0 || (await page.keyboard.press('Meta+k'), await sleep(300), (await paletteInput.count()) > 0), 'the palette opens')
+await paletteInput.fill(target.title.slice(0, 6))
 await until(async () => (await page.textContent('body')).includes(target.title), `palette finds ${target.title}`)
 await page.keyboard.press('Escape')
 

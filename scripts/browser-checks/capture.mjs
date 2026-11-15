@@ -1,6 +1,7 @@
 // "/Type" in quick capture and ⌘K (test env only): "/liv" lists the types, Enter picks one, a
 // relation's `name:` lists its objects, the line's properties show before saving; quick capture
-// embeds the new object in today's note, ⌘K creates and opens it; the desktop capture panel's
+// makes the object alone by default (not in today's note, and it says so), and with Settings ›
+// Desktop app › "Add quick captures to the daily note" embeds it there; ⌘K creates and opens it; the desktop capture panel's
 // questions (vasta:capture-suggest) get the same list; Ctrl+Enter, in the dialog or from the panel,
 // opens what it made; with Settings › Desktop app › "Ask a template's questions", a line whose
 // template asks something shows the questions first (in the dialog, and through the panel's
@@ -71,7 +72,7 @@ console.log('after the pick:', JSON.stringify(await field.inputValue()))
 await field.pressSequentially('nota:4,5')
 const preview = clean(await page.locator('[data-testid=capture-preview]').textContent())
 console.log('preview:', preview)
-if (!preview.includes('“Duna”') || !preview.includes('autor Frank Herbert, nota 4.5')) throw new Error('wrong preview')
+if (!preview.includes('“Duna”') || !preview.includes('autor Frank Herbert, nota 4.5') || preview.includes('today’s note')) throw new Error('wrong preview')
 await page.keyboard.press('Enter')
 await field.waitFor({ state: 'detached' })
 await page.waitForTimeout(1500)
@@ -86,8 +87,30 @@ console.log('on the server:', object.title, JSON.stringify(object.props))
 if (object.props.rating?.value !== 4.5 || object.props.author?.value?.length !== 1) throw new Error('the properties did not arrive')
 const today = await get(`/api/spaces/${object.spaceId}/inbox?today=${new Date().toLocaleDateString('sv')}`)
 const item = today.items.find((i) => i.objectIds.includes(dune.id))
-console.log('in today’s note:', !!item, item?.channel)
-if (!item) throw new Error('not embedded in today’s note')
+console.log('in today’s note (off by default):', !!item)
+if (item) throw new Error('embedded in today’s note with the setting off')
+
+// Settings › Desktop app: add quick captures to the daily note (and the inbox).
+await page.goto(`${base}/settings#desktop`)
+await page.getByText('Add quick captures to the daily note').click()
+await page.getByText('Show quick captures in the inbox').click()
+await page.goto(base)
+await page.waitForSelector('nav', { state: 'attached', timeout: 30000 })
+await page.waitForTimeout(1000)
+await page.evaluate(() => window.dispatchEvent(new Event('vasta:capture')))
+await field.waitFor()
+await field.fill(`/${name} Duna II nota:4`)
+const dailyPreview = clean(await page.locator('[data-testid=capture-preview]').textContent())
+console.log('preview with the daily note:', dailyPreview)
+if (!dailyPreview.includes('in today’s note in')) throw new Error('the preview does not name today’s note')
+await page.keyboard.press('Enter')
+await field.waitFor({ state: 'detached' })
+await page.waitForTimeout(1500)
+const dune2 = (await Promise.all(books.map((t) => get(`/api/types/${t.id}/objects`).catch(() => [])))).flat().find((o) => o.title === 'Duna II')
+const daily = await get(`/api/spaces/${object.spaceId}/inbox?today=${new Date().toLocaleDateString('sv')}`)
+const embedded = daily.items.find((i) => i.objectIds.includes(dune2?.id))
+console.log('in today’s note:', !!embedded, embedded?.channel)
+if (!embedded) throw new Error('not embedded in today’s note')
 
 // The capture panel asks through the app; the web app answers with the same list.
 await page.evaluate((text) => window.dispatchEvent(new CustomEvent('vasta:capture-suggest', { detail: { text, cursor: text.length, seq: 7 } })), `/${name.slice(0, -1).toLowerCase()}`)

@@ -49,7 +49,10 @@ let days
 const skipped = []
 const failures = []
 
-async function openContext(wanted, scheme) {
+// Playwright's WebKit shares OPFS between contexts (and navigator.locks does not span them), so two
+// contexts with the replica on write the one database file at once and corrupt it. The setup context
+// only needs the API: it runs without a replica; the context under test has it.
+async function openContext(wanted, scheme, replica = true) {
   const options = { ...profiles[wanted], locale: 'en-US', timezoneId: 'America/Toronto', colorScheme: scheme }
   const opened = launched ? await launched.newContext(options) : await webkit.launchPersistentContext(mkdtempSync(path.join(tmpdir(), 'vasta-completion-')), options)
   await opened.addInitScript((value) => {
@@ -57,7 +60,7 @@ async function openContext(wanted, scheme) {
       localStorage.setItem('vasta.theme', value)
     } catch {}
   }, scheme)
-  if (json) await opened.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))
+  if (json || !replica) await opened.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))
   if (engine === 'webkit' && wanted === 'phone') {
     await opened.addInitScript(() => {
       const original = window.matchMedia.bind(window)
@@ -98,7 +101,7 @@ const expect = (ok, what) => {
 }
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right)
 
-const setup = await openContext('desktop', 'light')
+const setup = await openContext('desktop', 'light', false)
 const api = setup.opening.request
 const get = async (url) => (await api.get(`${base}${url}`)).json()
 const post = async (url, data) => (await api.post(`${base}${url}`, { headers, data })).json()
@@ -155,7 +158,8 @@ try {
       { id: ids.quick, name: 'CFQuick', layout: 'list', openIn: 'page', sort: newest, quickActions: true, filter: tasksFilter },
       { id: ids.board, name: 'CFBoard', layout: 'kanban', openIn: 'page', groupBy: [{ field: 'status' }], filter: group(ours, dueToday) },
       { id: ids.pane, name: 'CFPane', layout: 'list', openIn: 'pane', sort: newest, filter: tasksFilter },
-      { id: ids.other, name: 'CFOther', layout: 'list', openIn: 'page', filter: group(ours) },
+      // Another view, as a new one starts: leaving closed tasks out by its own filter.
+      { id: ids.other, name: 'CFOther', layout: 'list', openIn: 'page', filter: group(ours, notDone) },
       ...original.views,
     ],
   })

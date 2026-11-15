@@ -224,6 +224,14 @@ GitHub release page.
 
 ### Fixed
 
+- **Enter in ⌘K always takes the top row of what you just typed.** Opening the palette again after
+  picking a lower row could make Enter do nothing, so a line like `/food 300 kcal at snack` was not
+  logged and the palette stayed open.
+
+- **The desktop app's quick capture says where a capture goes.** With "Add quick captures to the
+  daily note" off (the default), the capture box and the capture panel no longer promise "in
+  today's note": they name the space, or the inbox when only that is on.
+
 - **Phone controls and failed bulk saves are easier to use.** View, Filters, template choices and
   filter-building buttons have full-height touch targets. Failed bulk changes offer Retry for only
   the unsaved tasks, keeping one Undo for the whole action. Capture types wrap in a bounded picker
