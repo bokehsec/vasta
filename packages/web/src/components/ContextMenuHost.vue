@@ -9,8 +9,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ColorName, Icon } from '@vasta/core'
 import { blockBackgroundClasses, blockTextClasses, colorNames } from '../lib/colors.ts'
 import { closeContextMenu, contextMenu, type MenuItem } from '../lib/overlays.ts'
+import { closesOnBack } from '../lib/back.ts'
 import { isPhone, keyboardInset, sheetMaxHeight } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
+import SheetGrabber from './SheetGrabber.vue'
 
 const panels: (HTMLElement | null)[] = [null, null]
 /** The highlighted row of each panel, -1 for none. */
@@ -36,6 +38,8 @@ const reachable = (at: number) => itemsOf(at).flatMap((item, i) => ((isAction(it
 const sheet = computed(() => isPhone.value)
 /** The list the sheet shows: the submenu once one is open. */
 const sheetLevel = computed(() => (sub.value === null ? 0 : 1))
+// Back on a phone: out of a submenu to the menu, else the sheet closes.
+closesOnBack(() => contextMenu.open && sheet.value, () => (sub.value === null ? closeContextMenu() : closeSub()))
 
 const iconProps = (icon: string | Icon) => (typeof icon === 'string' ? { fallback: icon } : { icon })
 
@@ -243,7 +247,7 @@ onBeforeUnmount(() => {
         data-menu-sheet
         @contextmenu.prevent
       >
-        <div class="mx-auto mb-1.5 h-1 w-9 rounded-full bg-line-strong" aria-hidden="true" />
+        <SheetGrabber @close="closeContextMenu()" />
         <button v-if="sheetLevel" class="flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[15px] font-medium text-ink-soft" data-menu-back @click="closeSub">
           <AppIcon fallback="ph:caret-left" :size="16" /> {{ sub !== null && isSubmenu(contextMenu.items[sub]) ? (contextMenu.items[sub] as Submenu).label : 'Back' }}
         </button>

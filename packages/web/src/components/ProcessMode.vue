@@ -15,6 +15,7 @@ import { currentId, isFinished, moveBy, recordOutcome, reviewActions, skipCurren
 import { lastError, ui } from '../lib/state.ts'
 import { addSubtask, subtasksOf } from '../lib/subtasks.ts'
 import { cardRelease, DECIDE, tracker } from '../lib/swipe.ts'
+import { closesOnBack } from '../lib/back.ts'
 import { isPhone, keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import DocPreview from './DocPreview.ts'
@@ -215,6 +216,8 @@ function pause() {
   rememberCard()
   emit('close')
 }
+// Back on a phone pauses the review here instead of leaving the list under it.
+closesOnBack(() => true, pause)
 function trapFocus(event: KeyboardEvent) {
   if (!panel.value) return
   const elements = [...panel.value.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), [tabindex="0"]'), ...document.querySelectorAll<HTMLElement>('[role="status"] button:not(:disabled)')].filter((e) => e.getClientRects().length)

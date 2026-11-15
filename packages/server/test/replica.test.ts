@@ -197,6 +197,16 @@ describe('local replica', () => {
     expect(inbox.items[0]!.content[0]!.content!.map((n) => n.marks?.[0]?.type ?? 'text')).toEqual(['text', 'link'])
   })
 
+  it('captures offline when "where it goes" arrives as null (an unset option through the worker)', async () => {
+    const { store, user, phone } = setup()
+    store.putType(book('s'))
+    const today = (await (await user.request('/api/capture/today?spaceId=s')).json()) as { day: string; dailyNoteId: string }
+    await phone.sync.sync()
+    phone.online = false
+    expect(phone.store.capture('s', 'Call the plumber', 'app', today.day, now(), null as never).dailyNoteId).toBe(today.dailyNoteId)
+    expect(phone.store.captureObject('s', 'book', 'Dune', 'app', today.day, now(), 'America/Toronto', null as never, null as never).dailyNoteId).toBe(today.dailyNoteId)
+  })
+
   it('captures offline into another of the user’s spaces (the capture space), not the open one', async () => {
     const { store, user, phone } = setup()
     store.putMember({ spaceId: 'other', userId: user.user.id, role: 'editor', createdAt: at })

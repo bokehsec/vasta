@@ -16,7 +16,10 @@ import QuickCapture from './components/QuickCapture.vue'
 import ShortcutsDialog from './components/ShortcutsDialog.vue'
 import SidePane from './components/SidePane.vue'
 import TopBar from './components/TopBar.vue'
+import { closesOnBack } from './lib/back.ts'
+import { closeContextMenu } from './lib/overlays.ts'
 import { listenToDesktop, trafficLights } from './lib/platform.ts'
+import { quickAsk } from './lib/quick-actions.ts'
 import { installShortcuts } from './lib/shortcuts.ts'
 import { checkSession, session } from './lib/session.ts'
 import { ui, workspace } from './lib/state.ts'
@@ -40,6 +43,16 @@ const stopDesktopWatch = watch(
 
 // On a phone the sidebar is a drawer over the page: it closes when a page opens and on Escape.
 watch(() => route.fullPath, () => (ui.sidebarOpen = false))
+closesOnBack(() => isPhone.value && ui.sidebarOpen, () => (ui.sidebarOpen = false))
+// The row menu and a quick action's question are about the page they were opened on: another page
+// closes them (Back on a phone closes them first and stays, lib/back.ts; this is any other way).
+watch(
+  () => route.path,
+  () => {
+    closeContextMenu()
+    quickAsk.value?.answer(null)
+  }
+)
 // A selection belongs to the page it was made on (the side pane opening keeps it).
 watch(() => route.path, clearSelection)
 watch(isPhone, () => (ui.sidebarOpen = false))

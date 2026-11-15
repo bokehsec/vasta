@@ -4,14 +4,18 @@
 // the bottom, where the thumb is. It closes by Cancel, Escape or a tap outside, and only once saved
 // (QuickAskForm shows Saving, and a failed save stays open to retry).
 import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { closesOnBack } from '../lib/back.ts'
 import { quickAsk } from '../lib/quick-actions.ts'
 import { isPhone, keyboardInset, sheetMaxHeight } from '../lib/viewport.ts'
 import PopoverMenu from './PopoverMenu.vue'
 import QuickAskForm from './QuickAskForm.vue'
+import SheetGrabber from './SheetGrabber.vue'
 
 const anchored = computed(() => !!quickAsk.value?.anchor && !isPhone.value)
 const open = computed({ get: () => !!quickAsk.value, set: (value) => !value && quickAsk.value?.answer(null) })
 const isDate = computed(() => quickAsk.value?.def.kind === 'date')
+// The centred box and the phone's sheet (the anchored popover says for itself). While an answer saves it stays.
+closesOnBack(() => !!quickAsk.value && !anchored.value, () => (open.value = false))
 
 // Escape closes the centred box wherever the focus is (the popover closes itself).
 function onKey(event: KeyboardEvent) {
@@ -39,7 +43,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         :aria-busy="quickAsk.state.saving || undefined"
         data-quick-ask-sheet
       >
-        <div v-if="isPhone" class="mx-auto mb-2 h-1 w-9 rounded-full bg-line-strong" aria-hidden="true" />
+        <SheetGrabber v-if="isPhone" @close="open = false" />
         <p class="px-2 pt-1.5 font-medium" :class="isPhone ? 'text-base text-ink' : 'text-xs text-ink-faint'">{{ quickAsk.action.name }}</p>
         <QuickAskForm :key="quickAsk.id" :ask="quickAsk" />
       </div>

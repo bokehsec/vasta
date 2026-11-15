@@ -1,4 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { closeTopLayer } from './lib/back.ts'
+import { isPhone } from './lib/viewport.ts'
 import HomeView from './views/HomeView.vue'
 
 // Pages load as their own chunks, so the first paint does not wait for the editor or the calendar.
@@ -38,6 +40,14 @@ export const router = createRouter({
     { path: '/inbox', component: pages.inbox },
     { path: '/nutrition', component: pages.nutrition },
   ],
+})
+
+// Back or forward (the history already holds the entry being gone to) on a phone with a sheet,
+// dialog, Triage or the side menu open closes that instead, and the page stays (lib/back.ts); the
+// router puts the history entry back.
+router.beforeEach((to) => {
+  if (router.options.history.state.current !== to.fullPath || !isPhone.value) return
+  if (closeTopLayer()) return false
 })
 
 // The side pane (lib/open.ts) lives in the query, as ?pane=<id>&paneBlock=<id>. A page that

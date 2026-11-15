@@ -2,9 +2,11 @@
 // The box lib/pick.ts asks with: a title and a search over objects (ObjectPicker, nothing created),
 // centred over a dimmed page, or a sheet from the bottom on a phone. Escape or a tap outside closes it.
 import { onBeforeUnmount, onMounted } from 'vue'
+import { closesOnBack } from '../lib/back.ts'
 import { pickRequest } from '../lib/pick.ts'
 import { isPhone, keyboardInset, sheetMaxHeight } from '../lib/viewport.ts'
 import ObjectPicker from './ObjectPicker.vue'
+import SheetGrabber from './SheetGrabber.vue'
 
 function onKey(event: KeyboardEvent) {
   if (event.key !== 'Escape' || !pickRequest.value) return
@@ -12,6 +14,7 @@ function onKey(event: KeyboardEvent) {
   event.stopImmediatePropagation()
   pickRequest.value.resolve(null)
 }
+closesOnBack(() => !!pickRequest.value, () => pickRequest.value?.resolve(null))
 onMounted(() => window.addEventListener('keydown', onKey, true))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 </script>
@@ -27,7 +30,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         :aria-label="pickRequest.title"
         data-pick-object
       >
-        <div v-if="isPhone" class="mx-auto mb-2 h-1 w-9 rounded-full bg-line-strong" aria-hidden="true" />
+        <SheetGrabber v-if="isPhone" @close="pickRequest.resolve(null)" />
         <p class="px-1 pb-2 font-medium" :class="isPhone ? 'text-base' : 'text-sm'">{{ pickRequest.title }}</p>
         <ObjectPicker :type-ids="pickRequest.typeIds" :exclude="pickRequest.exclude" no-create @pick="pickRequest.resolve($event)" />
       </div>

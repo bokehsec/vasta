@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Renders the active prompt/confirm dialog from lib/overlays.ts.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { closesOnBack } from '../lib/back.ts'
 import { activeDialog } from '../lib/overlays.ts'
 
 const text = ref('')
@@ -54,6 +55,7 @@ function onKey(event: KeyboardEvent) {
   }
 }
 // Capture phase so Escape closes this dialog before anything underneath reacts.
+closesOnBack(() => !!activeDialog.value, cancel)
 onMounted(() => window.addEventListener('keydown', onKey, true))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 </script>

@@ -6,13 +6,16 @@
 // would let the tap through to the page underneath), focus moves in and returns to the opener.
 import { autoUpdate, computePosition, flip, offset, shift, type Placement } from '@floating-ui/dom'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { closesOnBack } from '../lib/back.ts'
 import { isPhone, keyboardInset, sheetMaxHeight } from '../lib/viewport.ts'
+import SheetGrabber from './SheetGrabber.vue'
 
 const props = defineProps<{ anchor: HTMLElement | null | undefined; placement?: Placement; width?: string; anchored?: boolean; label?: string }>()
 const open = defineModel<boolean>('open', { required: true })
 const panel = ref<HTMLElement | null>(null)
 let stop: (() => void) | undefined
 const sheet = computed(() => isPhone.value && !props.anchored)
+closesOnBack(() => open.value && sheet.value, () => (open.value = false))
 
 async function position() {
   if (!props.anchor || !panel.value || sheet.value) return
@@ -113,7 +116,7 @@ onBeforeUnmount(() => {
         class="vasta-sheet fixed inset-x-0 z-50 overflow-y-auto rounded-t-2xl border border-b-0 border-line bg-surface px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-6px_24px_rgb(0_0_0/0.14)] outline-none"
         :style="{ bottom: `${keyboardInset}px`, maxHeight: sheetMaxHeight }"
       >
-        <div class="mx-auto mb-2 h-1 w-9 rounded-full bg-line-strong" aria-hidden="true" />
+        <SheetGrabber @close="open = false" />
         <slot />
       </div>
     </template>

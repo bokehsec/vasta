@@ -169,6 +169,16 @@ GitHub release page.
 
 ### Fixed
 
+- **Quick capture saves with no connection.** On a phone or computer that could not reach
+  the server (Tailscale off, no signal), Save capture showed "null is not an object" and saved
+  nothing. It now saves on this device and reaches the server when the connection is back, like
+  the other changes made offline.
+- **Back on a phone closes what is open instead of leaving the page.** With a menu, a question such
+  as Defer, the Filters or View sheet, the side menu, Quick capture, Triage & review or a dialog
+  open, Back (the button, or swiping from the edge) closes it and you stay where you were; in a
+  menu's submenu it goes back to the menu. Before, the page behind changed and a sheet like Defer
+  stayed open over another page. Quick capture keeps what you typed for next time. Every sheet's
+  bar at the top can now be pulled down to close it, as on iOS.
 - **A quick action that asks for a line of text (a next step) can be answered on a phone**: the
   question's sheet has a Save button. Before there was no way to submit it: the keyboard's Enter
   key only put the keyboard away, so the text was never saved. On a computer Enter still saves,

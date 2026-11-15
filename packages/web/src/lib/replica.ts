@@ -7,6 +7,7 @@ import type * as Yjs from 'yjs'
 import type { Id } from '@vasta/core'
 import type { RefusedChange, ReplicaChange } from '@vasta/core/client'
 import type { Answer, Notice, Request, StoreArgs, StoreMethod, StoreResult, SyncStatus, WorkerEvent } from '../replica/protocol.ts'
+import { clone } from './clone.ts'
 
 export const replica = reactive({
   /** The worker runs and its replica is open. */
@@ -169,9 +170,14 @@ export async function stopReplica(options: { wipe?: boolean } = {}) {
   stopWorker()
 }
 
-/** Call a store method of the replica. Arguments are records (often Vue's reactive proxies, which cannot be posted): they go as plain JSON. */
+/**
+ * Call a store method of the replica. Arguments are records (often Vue's reactive proxies, which
+ * cannot be posted): each goes as plain JSON. An argument left out stays left out (JSON would make
+ * it null, and a method's default applies only to one not given).
+ */
 export function callStore<M extends StoreMethod>(method: M, ...args: StoreArgs<M>): Promise<StoreResult<M>> {
-  return send({ op: 'store', method, args: JSON.parse(JSON.stringify(args)) as unknown[] }) as Promise<StoreResult<M>>
+  const plain = (args as unknown[]).map((arg) => (arg === undefined ? undefined : clone(arg)))
+  return send({ op: 'store', method, args: plain }) as Promise<StoreResult<M>>
 }
 
 /** Push and pull now; resolves when done (or failed for lack of a network). */

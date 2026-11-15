@@ -309,7 +309,9 @@ export interface CaptureDestinations {
 
 const inboxPageId = (spaceId: Id, day: string) => `capture-inbox-${spaceId}-${day}`
 
-export function recordCapture(store: Store, spaceId: Id, day: string, capture: CaptureInfo, blocks: DocNode[], destinations: CaptureDestinations = { daily: true, inbox: true }) {
+export function recordCapture(store: Store, spaceId: Id, day: string, capture: CaptureInfo, blocks: DocNode[], destinations?: CaptureDestinations | null) {
+  // Not said (or null, as a JSON copy of "not said" arrives): today's note, and the inbox.
+  destinations ??= { daily: true, inbox: true }
   if (destinations.daily) {
     const dailyNote = appendCapture(store, spaceId, day, destinations.inbox ? capture : { ...capture, inbox: false }, blocks)
     return { dailyNote, page: dailyNote }
