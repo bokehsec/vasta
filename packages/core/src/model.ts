@@ -628,7 +628,7 @@ export interface ViewDef {
   quickActions?: boolean
   /** Steps are listed flat instead of nested under their parent (types with subtasks, list layout). */
   flat?: boolean
-  /** Closed objects (a task's Done, Dropped) are listed too; unset: left out (closedFilterOf). */
+  /** Older views only: closed objects listed too. ensureBuiltinTypes turns it into the view's filter (closed-filter.ts) once. */
   showClosed?: boolean
 }
 

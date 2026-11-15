@@ -4,6 +4,7 @@
 // no sprint that are not done). The current sprint is the one whose dates hold today; queries name
 // it with the `current-sprint` variable.
 import { SPRINT_DATES_PROPERTY_ID, SPRINT_PROPERTY_ID, builtinTypeId, createBuiltinTypes } from './builtin-types.ts'
+import { defaultViewFilter } from './closed-filter.ts'
 import type { Id, IsoDateTime, ObjectSummary, ObjectType, PropertyDef, Space, SprintSettings, ViewDef } from './model.ts'
 import type { Store } from './store.ts'
 import { addDays, dayIn } from './time.ts'
@@ -94,7 +95,10 @@ export function setSprints(store: Store, spaceId: Id, input: { enabled?: boolean
           properties.splice(after >= 0 ? after + 1 : properties.length, 0, sprintRelation(spaceId, settings))
           next = { ...next, properties }
         }
-        const views = taskViews(spaceId, settings).filter((v) => !next.views.some((existing) => existing.id === v.id))
+        // Closed tasks are left out as in any new view: the Backlog's "not Done" covers Dropped too.
+        const views = taskViews(spaceId, settings)
+          .filter((v) => !next.views.some((existing) => existing.id === v.id))
+          .map((v) => ({ ...v, filter: defaultViewFilter(next, v) }))
         if (views.length) next = { ...next, views: [...next.views, ...views] }
       }
       // A rename follows into the relation's and the current sprint view's names.

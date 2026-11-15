@@ -162,11 +162,15 @@ GitHub release page.
 - **Defer from a list says which task.** The Defer sheet opened from a row names the task, picks no
   day until you do (today is only marked as today), has larger days and month arrows on a phone,
   and keeps Cancel and Save in reach when the sheet has to scroll on a small screen.
-- **Done and dropped tasks are hidden in every view.** A task list shows what is still open, so the
-  rows you can swipe come first. Turn on **Show done and dropped** in a view's filters (Filters on a
-  phone, Filter on a desktop) to list them again, saved with that view. A task you finish stays on
-  screen, crossed out, until you leave the view, so Undo is still in reach. A view that asks for a
-  closed status ("Status is Done") and a board with a Done column show them as before.
+- **Done and dropped tasks are hidden in every view, the calendar and embedded queries.** A task
+  list shows what is still open, so the rows you can swipe come first. Views hide them with a filter
+  you can see, **Status is not Done, Dropped**: new views and new queries of tasks start with it,
+  and your existing views and embedded queries got it once. Remove it, or turn on **Show done and
+  dropped** in a view's filters (Filters on a phone, Filter on a desktop), to list them again; the
+  filter count and **Clear** leave it alone. On the Calendar page, tick **Done and dropped tasks** in
+  the Filter menu to show them (remembered on this device). A task you finish stays on screen,
+  crossed out, until you leave the view, so Undo is still in reach. A view that asks for a closed
+  status ("Status is Done") and a board with a Done column show them as before.
 - **The phone's Filters sheet has a Done button** and says how many tasks the filters leave, since
   changes apply as you make them. A filter's choices (a status's Inbox, Next, Done…) get a line of
   their own and are big enough to tap.

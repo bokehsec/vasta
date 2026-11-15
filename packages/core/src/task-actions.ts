@@ -9,7 +9,7 @@
 // field). Changes naming a property the type no longer has, or a value that does not fit it, are
 // left out.
 import { DUE_PROPERTY_ID, REVIEWED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
-import type { Filter, FilterGroup, Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActionValue, SelectOption, TextPropertyDef, ViewDef } from './model.ts'
+import type { Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActionValue, SelectOption, TextPropertyDef } from './model.ts'
 import { statusProperty } from './metrics.ts'
 import { addDays } from './time.ts'
 
@@ -115,26 +115,6 @@ export function isClosedTask(type: ObjectType | undefined, object: Pick<ObjectRe
   const value = object.props[def.id]
   const ids = value?.kind === 'select' ? value.value : []
   return def.options.some((o) => o.status === 'done' && ids.includes(o.id))
-}
-
-/**
- * The condition a view of a type with a status adds to its filter to leave closed objects out (a
- * task's Done, Dropped), as views do unless they show them (`showClosed`). A view whose own filter
- * asks for a closed status (a view of what is done) and a board in status columns (its Done column)
- * are left as they are; one that only leaves some out ("not Done") still loses the others.
- */
-export function closedFilterOf(type: ObjectType | undefined, view: Pick<ViewDef, 'filter' | 'showClosed'>, columns?: string): Filter | undefined {
-  const def = statusProperty(type)
-  const closed = def?.options.filter((o) => o.status === 'done').map((o) => o.id) ?? []
-  if (!def || !closed.length || view.showClosed || columns === def.id || asksFor(view.filter, def.id, closed)) return undefined
-  return { kind: 'filter', field: def.id, operator: 'not-contains', value: { kind: 'literal', value: closed } }
-}
-
-function asksFor(filter: Filter | FilterGroup | undefined, field: string, ids: Id[]): boolean {
-  if (!filter) return false
-  if (filter.kind === 'group') return filter.items.some((item) => asksFor(item, field, ids))
-  const value = filter.value?.kind === 'literal' && Array.isArray(filter.value.value) ? filter.value.value : []
-  return filter.field === field && (filter.operator === 'is' || filter.operator === 'contains') && value.some((id) => ids.includes(id))
 }
 
 export interface QuickActionContext {

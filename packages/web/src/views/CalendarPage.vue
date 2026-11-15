@@ -2,11 +2,13 @@
 // Calendar: month, week, three-day and day views over everything dated in the space (daily notes,
 // date properties, task due dates) plus events from subscribed calendars. The day view is a page of
 // its own (DayPage), and Today opens it. Beside the week and day views, a small month calendar marks
-// what each day holds. The view and day live in the URL (?view=week&date=2026-10-18).
+// what each day holds. The view and day live in the URL (?view=week&date=2026-10-18). Closed tasks
+// (Done, Dropped) are left out unless asked for; one marked Done here stays where it was, checked
+// and struck, until the calendar is looked at afresh (lib/completion-feedback.ts, as in an agenda).
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { CalendarEntry, CalendarSource, Id, ObjectSummary } from '@vasta/core'
-import { addDays, dayEntries, dayTotals, isValidDay } from '@vasta/core'
+import type { CalendarEntry, CalendarSource, Id, ObjectRecord, ObjectSummary } from '@vasta/core'
+import { addDays, dayEntries, dayTotals, isClosedTask, isValidDay } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import PopoverMenu from '../components/PopoverMenu.vue'
 import CalendarSources from '../components/calendar/CalendarSources.vue'
@@ -18,7 +20,7 @@ import MonthGrid from '../components/calendar/MonthGrid.vue'
 import OccurrenceDetails from '../components/calendar/OccurrenceDetails.vue'
 import QuickCreate from '../components/calendar/QuickCreate.vue'
 import TimeGrid from '../components/calendar/TimeGrid.vue'
-import { dayKey } from '../lib/actions.ts'
+import { dayKey, setProperties } from '../lib/actions.ts'
 import { nutritionOn } from '../lib/nutrition.ts'
 import { api } from '../lib/api.ts'
 import {
@@ -35,8 +37,10 @@ import {
 } from '../lib/calendar.ts'
 import { ENTRY_DRAGGING, type DropTarget } from '../lib/calendar-drag.ts'
 import { swatchClasses } from '../lib/colors.ts'
+import { ENTRY_COMPLETION, createCompletionFeedback, type RetainedCompletion } from '../lib/completion-feedback.ts'
 import { onChange } from '../lib/events.ts'
-import { cachedSummary, lastError, primeFromObject, primeSummaries, refreshCounts, typesById, workspace } from '../lib/state.ts'
+import { onObjectSave } from '../lib/object-saves.ts'
+import { cachedSummary, lastError, notice, primeFromObject, primeSummaries, refreshCounts, typesById, workspace } from '../lib/state.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { openObject } from '../lib/open.ts'
 
@@ -45,6 +49,7 @@ const router = useRouter()
 
 const VIEW_KEY = 'vasta.calendar.view'
 const HIDDEN_KEY = 'vasta.calendar.hidden'
+const CLOSED_KEY = 'vasta.calendar.showClosed'
 const PANEL_KEY = 'vasta.calendar.panel'
 const storage = {
   get(key: string) {
@@ -90,6 +95,13 @@ async function load() {
     if (id !== requestId) return
     primeSummaries(data.objects)
     entries.value = data.entries
+    // What was kept after a completion: an entry whose task was deleted goes with it, and one
+    // whose completion was undone (or failed) keeps its place only until this fresh feed says
+    // where the task now is.
+    for (const [key, entry] of kept) {
+      if (!entry.objectId || !cachedSummary(entry.objectId) || !completion.entries.has(entry.objectId)) kept.delete(key)
+    }
+    completion.prune(new Set([...kept.values()].map((entry) => entry.objectId!)))
   } catch (error) {
     lastError.value = (error as Error).message
   } finally {
@@ -127,6 +139,17 @@ type Category = 'tasks' | 'objects' | `source:${string}`
 const hidden = reactive(new Set<string>(JSON.parse(storage.get(HIDDEN_KEY) ?? '[]') as string[]))
 watch(hidden, () => storage.set(HIDDEN_KEY, JSON.stringify([...hidden])))
 const showDailyNotes = computed(() => !hidden.has('daily-notes'))
+// Closed tasks are their own choice, off by default: not in `hidden`, so a saved list of hidden
+// categories never brings them back.
+const showClosed = ref(storage.get(CLOSED_KEY) === '1')
+watch(showClosed, (show) => storage.set(CLOSED_KEY, show ? '1' : '0'))
+
+/** Whether the entry's object is closed (done, dropped) and closed tasks are not asked for. */
+function leftOut(entry: CalendarEntry): boolean {
+  if (showClosed.value || !entry.objectId) return false
+  const summary = cachedSummary(entry.objectId)
+  return !!summary && isClosedTask(typesById.value.get(summary.typeId), summary)
+}
 
 function categoryOf(entry: CalendarEntry): Category {
   if (entry.kind === 'external') return `source:${entry.sourceId}`
@@ -152,12 +175,67 @@ const dayKcal = computed(() => {
   return map
 })
 
+const selected = computed(() => entries.value.filter((entry) => entry.kind !== 'daily-note' && !hidden.has(categoryOf(entry)) && !leftOut(entry)))
+
+// Completion feedback, as in an agenda (components/AgendaView.vue): a task marked Done here saves,
+// then its entry stays where it was, checked and struck, through the background reloads; only a
+// fresh look (a reload, another range, view or filter) drops it. Closed tasks are left out, so
+// the entry it had is kept here and merged back; a repeating task's entry stays at the occurrence
+// just done. Only entries shown when the completion happens are kept.
+const kept = reactive(new Map<string, CalendarEntry>())
+function replace(object: ObjectRecord | ObjectSummary) {
+  if (!completion.entries.has(object.id)) return
+  if ([...kept.values()].some((entry) => entry.objectId === object.id)) return
+  for (const entry of selected.value) {
+    if (entry.objectId !== object.id || entry.field !== 'due' || (entry.recurring && !entry.current)) continue
+    kept.set(entry.key, { ...entry })
+  }
+}
+const completion = createCompletionFeedback({
+  type: (object) => typesById.value.get(object.typeId),
+  rows: () => {
+    // The summaries behind what is shown, kept completions included (an undone one reaches
+    // observe only if its row is still here).
+    const summaries: ObjectSummary[] = []
+    const seen = new Set<Id>()
+    for (const entry of [...selected.value, ...kept.values()]) {
+      if (!entry.objectId || seen.has(entry.objectId)) continue
+      seen.add(entry.objectId)
+      const summary = cachedSummary(entry.objectId)
+      if (summary) summaries.push(summary)
+    }
+    return summaries
+  },
+  replace,
+  save: setProperties,
+  failed: (retry) => {
+    notice.value = { message: 'The task was not saved. Try again.', action: { label: 'Retry', run: () => retry().catch(() => {}) } }
+  },
+})
+/** What a kept entry's checkbox asks: the completion it is kept for, and its Undo. */
+provide(ENTRY_COMPLETION, {
+  retained: (entry: CalendarEntry): RetainedCompletion | undefined => (kept.has(entry.key) ? completion.entries.get(entry.objectId ?? '') : undefined),
+  undo: (objectId: Id) => void completion.undo(objectId),
+})
+const stopSaves = onObjectSave((object) => completion.observe(object))
+onBeforeUnmount(stopSaves)
+// A fresh look at the calendar (another view, range or filter) drops what it kept. The source is
+// one string: an array would be new on every re-run and clear what it should not.
+watch(
+  () => [view.value, days.value[0], days.value.at(-1), showClosed.value, [...hidden].join()].join('\u0000'),
+  () => {
+    completion.clear()
+    kept.clear()
+  },
+  { flush: 'sync' }
+)
+
 const entriesByDay = computed(() => {
   const map = new Map<string, CalendarEntry[]>()
   const first = days.value[0]!
   const last = days.value.at(-1)!
-  for (const entry of entries.value) {
-    if (entry.kind === 'daily-note' || hidden.has(categoryOf(entry))) continue
+  const held = [...kept.values()].filter((entry) => !selected.value.some((one) => one.key === entry.key))
+  for (const entry of [...selected.value, ...held]) {
     for (let day = entry.startDay < first ? first : entry.startDay; day <= entry.endDay && day <= last; day = addDays(day, 1)) {
       const list = map.get(day) ?? []
       list.push(entry)
@@ -294,7 +372,7 @@ async function loadMini() {
         continue
       }
       const category = categoryOf(entry)
-      if (hidden.has(category)) continue
+      if (hidden.has(category) || leftOut(entry)) continue
       const key = category === 'tasks' ? 'tasks' : category === 'objects' ? 'dated' : 'events'
       for (let day = entry.startDay < range[0]! ? range[0]! : entry.startDay; day <= entry.endDay && day <= range.at(-1)!; day = addDays(day, 1)) {
         const marks = mark(day)
@@ -307,7 +385,7 @@ async function loadMini() {
     // The marks are a nicety; the calendar itself reports errors.
   }
 }
-watch([miniMonth, showPanel, () => hidden.size], () => void loadMini(), { immediate: true })
+watch([miniMonth, showPanel, () => hidden.size, showClosed], () => void loadMini(), { immediate: true })
 
 // Keyboard ------------------------------------------------------------------------
 function onKey(event: KeyboardEvent) {
@@ -364,6 +442,10 @@ const openNote = (day: string) => {
           <label v-for="item in [{ key: 'daily-notes', label: 'Daily notes', icon: 'ph:calendar-check' }, { key: 'tasks', label: 'Tasks', icon: 'ph:check-circle' }, { key: 'objects', label: 'Dated objects', icon: 'ph:cube' }]" :key="item.key" class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm hover:bg-hover">
             <input type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" :checked="!hidden.has(item.key)" @change="toggle(item.key)" />
             <AppIcon :fallback="item.icon" class="text-ink-soft" /> {{ item.label }}
+          </label>
+          <label class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm hover:bg-hover">
+            <input v-model="showClosed" type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" />
+            <AppIcon fallback="ph:check-square" class="text-ink-soft" /> Done and dropped tasks
           </label>
           <template v-if="sources.length">
             <div class="mx-2.5 my-1 border-t border-line" />

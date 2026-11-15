@@ -1,8 +1,9 @@
-// Closed tasks in a type's views: Done and Dropped left out by default (a phone list's first row is
-// an open task that swipes; one closed there stays until the view is left), "Show done and dropped" in the phone's Filters sheet and the desktop's
-// Filter menu bringing them back, saved on the view (kept on reload), the sheet's count of what is
-// shown and its Done; a view whose filter names the
-// status, and a board in status columns, list them as before.
+// Closed tasks in a type's views: Done and Dropped left out by the view's own filter, "Status is not
+// Done, Dropped", shown with its others but not counted (a phone list's first row is an open task
+// that swipes; one closed there stays until the view is left), "Show done and dropped" in the
+// phone's Filters sheet and the desktop's Filter menu removing it and adding it back, saved on the
+// view (kept on reload), the sheet's count of what is shown and its Done; a view whose filter names
+// the status, and a board in status columns, list them as before; a new view starts with it.
 //   node closed.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode); SHOTS=<dir>: the sheet
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -113,11 +114,13 @@ const original = {
 }
 const ours = { kind: 'filter', field: 'title', operator: 'contains', value: { kind: 'literal', value: 'ClosedCheck' } }
 const doneId = status.options.find((o) => o.status === 'done').id
+const hiding = { kind: 'filter', field: 'status', operator: 'not-contains', value: { kind: 'literal', value: [doneId, 'dropped'] } }
+const hides = (view) => !!view?.filter?.items.some((item) => item.field === 'status' && item.operator === 'not-contains' && item.value.value.includes(doneId) && item.value.value.includes('dropped'))
 await put(`/api/types/${taskType.id}`, {
   ...original,
   properties: original.properties.map((p) => (p.id === 'status' ? { ...p, options: [...p.options, { id: 'dropped', label: 'Dropped', status: 'done' }] } : p)),
   views: [
-    { id: ids.list, name: 'ClosedList', layout: 'list', sort: [{ field: 'createdAt', direction: 'desc' }], filter: { kind: 'group', operator: 'and', items: [ours] } },
+    { id: ids.list, name: 'ClosedList', layout: 'list', sort: [{ field: 'createdAt', direction: 'desc' }], filter: { kind: 'group', operator: 'and', items: [ours, hiding] } },
     { id: ids.done, name: 'ClosedDone', layout: 'list', filter: { kind: 'group', operator: 'and', items: [ours, { kind: 'filter', field: 'status', operator: 'is', value: { kind: 'literal', value: [doneId] } }] } },
     { id: ids.board, name: 'ClosedBoard', layout: 'kanban', groupBy: [{ field: 'status' }], filter: { kind: 'group', operator: 'and', items: [ours] } },
     ...original.views,
@@ -170,14 +173,20 @@ try {
   await put(`/api/objects/${open.id}`, { ...reopened, props: { ...reopened.props, status: { kind: 'select', value: [todoId] } } })
   await sleep(1500)
 
-  step('phone: the Filters sheet shows them, saved on the view')
+  step('phone: the Filters sheet lists the filter, counts only the others, and its switch removes it')
   await page.goto(page.url())
   await row(open).waitFor()
+  const count = (await page.locator('[data-filters-count]').textContent())?.trim()
+  if (count !== '1') throw new Error(`the filter button counts ${count}, not just the view's own filter`)
   await page.locator('[data-filters-button]').click()
+  if ((await page.locator('[data-show-closed]').getAttribute('aria-pressed')) !== 'false') throw new Error('the switch is on while they are left out')
   await page.locator('[data-show-closed]').filter({ hasText: 'Show done and dropped' }).click()
   await row(done).waitFor()
   await row(dropped).waitFor()
-  await until(async () => (await savedView(ids.list))?.showClosed === true, 'showClosed saved')
+  await until(async () => {
+    const view = await savedView(ids.list)
+    return !hides(view) && view?.filter?.items.length === 1
+  }, 'the filter removed, the others kept')
   await until(async () => /^3 tasks shown$/.test((await page.locator('[data-filters-shown]').textContent())?.trim() ?? ''), 'the sheet counts what is shown')
   if (process.env.SHOTS) await page.screenshot({ path: path.join(process.env.SHOTS, `filters-sheet-${engine}.png`) })
   await page.locator('[data-filters-done]').click()
@@ -190,7 +199,7 @@ try {
   await openView('ClosedDone')
   await row(done).waitFor()
   await page.locator('[data-filters-button]').click()
-  if (await page.locator('[data-show-closed]').count()) throw new Error('the switch shows where the view decides itself')
+  if ((await page.locator('[data-show-closed]').getAttribute('aria-pressed')) !== 'true') throw new Error('the switch is off where the view asks for Done')
   await page.keyboard.press('Escape')
 
   step('phone: a board in status columns keeps its Done column')
@@ -204,7 +213,16 @@ try {
   await page.locator('main button', { hasText: /^\s*Filter/ }).first().click()
   await page.locator('[data-show-closed]').click()
   await until(async () => !(await row(done).count()) && !(await row(dropped).count()), 'closed rows hidden')
-  await until(async () => (await savedView(ids.list))?.showClosed === undefined, 'showClosed cleared')
+  await until(async () => hides(await savedView(ids.list)), 'the filter added back')
+
+  step('desktop: a new view starts with the filter')
+  const before = (await get(`/api/types/${taskType.id}`)).views.map((v) => v.id)
+  await page.locator('main button[title="Add view"]').click()
+  await page.locator('form input').last().fill(`ClosedNew ${tag}`)
+  await page.locator('form button[type=submit]').click()
+  const added = await until(async () => (await get(`/api/types/${taskType.id}`)).views.find((v) => !before.includes(v.id)), 'the new view saved')
+  ids.added = added.id
+  if (!hides(added)) throw new Error(`the new view does not leave closed tasks out: ${JSON.stringify(added.filter)}`)
 
   const unexpected = problems.filter((p) => !/Failed to load resource/.test(p))
   if (unexpected.length) throw new Error(unexpected.join('\n'))

@@ -3,7 +3,7 @@ import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, closedFilterOf, dueForReview, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
+import { RANK_PROPERTY_ID, closedStatusIds, defaultViewFilter, dueForReview, hidesClosed, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
 import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -149,7 +149,13 @@ watch(type, (t) => {
   if (activeViewId.value !== fixed?.id && !metrics && !t.views.some((v) => v.id === activeViewId.value)) activeViewId.value = t.views[0]?.id ?? ''
 }, { immediate: true })
 
-const view = computed<ViewDef>(() => type.value?.views.find((v) => v.id === activeViewId.value) ?? { id: 'default', name: 'All', layout: 'list' })
+// A type without views shows one as a new view starts: closed objects left out (defaultViewFilter).
+const view = computed<ViewDef>(() => {
+  const found = type.value?.views.find((v) => v.id === activeViewId.value)
+  if (found) return found
+  const filter = defaultViewFilter(type.value, { layout: 'list' })
+  return { id: 'default', name: 'All', layout: 'list', ...(filter ? { filter } : {}) }
+})
 
 // View settings are saved on the type, debounced. Until the save answers, the edited copy is the
 // type (unsavedTypes): a change event reloading the stored one meanwhile would undo the edit.
@@ -189,7 +195,8 @@ async function addView() {
   const name = await promptDialog({ title: 'New view', value: 'New view', confirmLabel: 'Create' })
   if (!name || !type.value) return
   const next = clone(type.value)
-  next.views.push({ id, name, layout: view.value.layout })
+  const filter = defaultViewFilter(next, { layout: view.value.layout })
+  next.views.push({ id, name, layout: view.value.layout, ...(filter ? { filter } : {}) })
   replaceType(next)
   pickView(id)
   void api.saveType(next).then(replaceType)
@@ -457,19 +464,17 @@ const groupField = computed(() => {
   if (view.value.layout === 'kanban') return view.value.groupBy?.[0]?.field ?? selectProps.value[0]?.id ?? 'tags'
   return view.value.groupBy?.[0]?.field ?? ''
 })
-// Closed tasks (Done, Dropped) are left out unless the view shows them (closedFilterOf); a switch
-// in its filters turns them on, saved on the view.
-const columnsField = computed(() => (view.value.layout === 'kanban' ? groupField.value : undefined))
-const closedFilter = computed(() => closedFilterOf(type.value, view.value, columnsField.value))
-const viewFilter = computed<FilterGroup | undefined>(() =>
-  closedFilter.value ? { kind: 'group', operator: 'and', items: [...(view.value.filter ? [view.value.filter] : []), closedFilter.value] } : view.value.filter
-)
-const canShowClosed = computed(() => !!closedFilterOf(type.value, { ...view.value, showClosed: false }, columnsField.value))
+// Closed tasks (Done, Dropped) are left out by a filter of the view's own, "Status is not Done,
+// Dropped", that new views start with (closed-filter.ts). The switch in its filters adds or removes
+// it; filter counts and Clear leave it out, as the view's resting state.
+const viewFilter = computed(() => view.value.filter)
+const canShowClosed = computed(() => closedStatusIds(type.value).length > 0)
+const closedHidden = computed(() => hidesClosed(type.value, view.value.filter))
 const closedLabel = computed(() => {
   const names = (statusProperty(type.value)?.options ?? []).filter((o) => o.status === 'done').map((o) => o.label.toLowerCase())
   return `Show ${new Intl.ListFormat('en', { type: 'conjunction' }).format(names)}`
 })
-const toggleClosed = () => updateView({ showClosed: view.value.showClosed ? undefined : true })
+const toggleClosed = () => updateView({ filter: closedHidden.value ? withClosedShown(type.value, view.value.filter) : withClosedHidden(type.value, view.value.filter) })
 const completion = createCompletionFeedback({
   type: () => type.value,
   rows: () => visible.value,
@@ -483,7 +488,7 @@ provide(COMPLETION_FEEDBACK, completion)
 const stopSaves = onObjectSave((object) => agendaActive.value ? undefined : completion.observe(object))
 onBeforeUnmount(stopSaves)
 watch(
-  () => JSON.stringify([props.id, activeViewId.value, view.value.filter, view.value.showClosed, sort.value, groupField.value, view.value.layout, view.value.agenda, view.value.flat, view.value.list, view.value.table, view.value.board?.swimlanes, mineOnly.value]),
+  () => JSON.stringify([props.id, activeViewId.value, view.value.filter, sort.value, groupField.value, view.value.layout, view.value.agenda, view.value.flat, view.value.list, view.value.table, view.value.board?.swimlanes, mineOnly.value]),
   () => completion.clear(),
   { flush: 'sync' }
 )
@@ -552,7 +557,7 @@ function moved(saved: ObjectRecord | ObjectSummary) {
 const filterAnchor = ref<HTMLElement | null>(null)
 const filterOpen = ref(false)
 const filterGroup = computed<FilterGroup>(() => view.value.filter ?? { kind: 'group', operator: 'and', items: [] })
-const filterCount = computed(() => filterGroup.value.items.length)
+const filterCount = computed(() => filterGroup.value.items.length - Number(closedHidden.value))
 const setFilter = (group: FilterGroup) => updateView({ filter: group.items.length ? group : undefined })
 
 // ---------------------------------------------------------------------------
@@ -618,7 +623,7 @@ const activeFilterCount = computed(() => Number(searching.value) + Number(mineOn
 function clearFilters() {
   filterText.value = ''
   if (mineOnly.value) toggleMine()
-  if (!fixedActive.value && filterCount.value) setFilter({ ...filterGroup.value, items: [] })
+  if (!fixedActive.value && filterCount.value) updateView({ filter: closedHidden.value ? withClosedHidden(type.value, undefined) : undefined })
 }
 const arrangeRows = computed(() => {
   const layout = view.value.layout
@@ -797,9 +802,9 @@ async function newMenu(event: MouseEvent) {
             <AppIcon fallback="ph:user-circle" :size="16" class="text-ink-soft" /> Mine
             <AppIcon :fallback="mineOnly ? 'ph:check-square-fill' : 'ph:square'" :class="mineOnly ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
           </button>
-          <button v-if="canShowClosed && !fixedActive" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" :aria-pressed="!!view.showClosed" data-show-closed @click="toggleClosed">
+          <button v-if="canShowClosed && !fixedActive" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" :aria-pressed="!closedHidden" data-show-closed @click="toggleClosed">
             <AppIcon fallback="ph:check-circle" :size="16" class="text-ink-soft" /> {{ closedLabel }}
-            <AppIcon :fallback="view.showClosed ? 'ph:check-square-fill' : 'ph:square'" :class="view.showClosed ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
+            <AppIcon :fallback="!closedHidden ? 'ph:check-square-fill' : 'ph:square'" :class="!closedHidden ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
           </button>
           <template v-if="!fixedActive">
             <div class="px-2.5 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Filters</div>
@@ -912,9 +917,9 @@ async function newMenu(event: MouseEvent) {
         </template>
       </div>
       <PopoverMenu v-model:open="filterOpen" :anchor="filterAnchor" placement="bottom-end" width="34rem">
-        <button v-if="canShowClosed" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" :aria-pressed="!!view.showClosed" data-show-closed @click="toggleClosed">
+        <button v-if="canShowClosed" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" :aria-pressed="!closedHidden" data-show-closed @click="toggleClosed">
           <AppIcon fallback="ph:check-circle" class="text-ink-soft" /> {{ closedLabel }}
-          <AppIcon :fallback="view.showClosed ? 'ph:check-square-fill' : 'ph:square'" :class="view.showClosed ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
+          <AppIcon :fallback="!closedHidden ? 'ph:check-square-fill' : 'ph:square'" :class="!closedHidden ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
         </button>
         <div class="p-1.5">
           <FilterGroupEditor :group="filterGroup" :type-ids="[id]" @update="setFilter" />

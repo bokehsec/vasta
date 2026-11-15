@@ -345,7 +345,7 @@ const rowsType = {
     { id: 'nextstep', kind: 'text', name: 'Next step' },
   ],
   // Done tasks listed too: the steps check that they lose their actions.
-  views: [{ id: allId, name: 'All', layout: 'list', showClosed: true }, { id: plainId, name: 'Plain', layout: 'list', showClosed: true }],
+  views: [{ id: allId, name: 'All', layout: 'list' }, { id: plainId, name: 'Plain', layout: 'list' }],
 }
 await resetType()
 await put(`/api/types/${taskType.id}`, rowsType)
