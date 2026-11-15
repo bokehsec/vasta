@@ -3,7 +3,7 @@
 // whole new query. The agenda layout has no sort or grouping (it is by day and time).
 import { computed, ref } from 'vue'
 import type { AgendaSettings, FilterGroup, Id, ListSettings, QueryDef, SortRule, TableSettings, ViewLayout } from '@vasta/core'
-import { parentFieldOf, quickActionsOf } from '@vasta/core'
+import { defaultQueryFilter, parentFieldOf, quickActionsOf } from '@vasta/core'
 import { chip } from '../lib/colors.ts'
 import { quickActionsColumnShown, toggleQuickActionsColumn } from '../lib/columns.ts'
 import { fieldOptions, groupOptions } from '../lib/query.ts'
@@ -35,9 +35,12 @@ const update = (patch: Partial<QueryDef>) => {
 }
 
 const types = computed(() => [...workspace.types].sort((a, b) => a.name.localeCompare(b.name)))
+// A type with a status chosen starts the query with its closed objects (Done, Dropped) left out,
+// as a new view of it does, unless the filters already say something about its status.
 function toggleType(id: Id) {
-  const typeIds = props.query.typeIds.includes(id) ? props.query.typeIds.filter((t) => t !== id) : [...props.query.typeIds, id]
-  update({ typeIds })
+  if (props.query.typeIds.includes(id)) return update({ typeIds: props.query.typeIds.filter((t) => t !== id) })
+  const added = workspace.types.filter((t) => t.id === id)
+  update({ typeIds: [...props.query.typeIds, id], filter: defaultQueryFilter(added, props.query) })
 }
 
 const filter = computed<FilterGroup>(() => props.query.filter ?? { kind: 'group', operator: 'and', items: [] })

@@ -3,7 +3,7 @@ import { createBuiltinTypes } from '../src/builtin-types.ts'
 import type { ObjectType, PropertyDef, PropertyValue, QuickActionDef } from '../src/model.ts'
 import { completeRepeat } from '../src/calendar.ts'
 import type { ObjectRecord } from '../src/model.ts'
-import { askOf, closedFilterOf, defaultQuickActions, isClosedTask, nextStepFieldOf, quickActionChanges, quickActionEdits, quickActionMessage, quickActionsOf, withAskCleared } from '../src/task-actions.ts'
+import { askOf, defaultQuickActions, isClosedTask, nextStepFieldOf, quickActionChanges, quickActionEdits, quickActionMessage, quickActionsOf, withAskCleared } from '../src/task-actions.ts'
 
 const AT = '2026-11-13T12:00:00.000Z'
 const types = createBuiltinTypes('s', AT)
@@ -250,31 +250,5 @@ describe('an action on many objects', () => {
     const markDone = quickActionsOf(task)[0]!
     expect(markDone.name).toBe('Mark done')
     expect(quickActionMessage(task, markDone, quickActionEdits(task, objects, markDone, context), format)).toBe('Done · 3 tasks')
-  })
-})
-
-describe('closed tasks in views', () => {
-  const type = triageTask()
-  const hidden = { kind: 'filter', field: 'status', operator: 'not-contains', value: { kind: 'literal', value: ['done', 'dropped'] } }
-
-  it('are left out unless the view shows them', () => {
-    expect(closedFilterOf(type, {})).toEqual(hidden)
-    expect(closedFilterOf(type, { showClosed: true })).toBeUndefined()
-  })
-
-  it('are left out of a view that leaves only some out (a Backlog of what is not Done)', () => {
-    const notDone = { kind: 'group' as const, operator: 'and' as const, items: [{ kind: 'filter' as const, field: 'status', operator: 'not-contains' as const, value: { kind: 'literal' as const, value: ['done'] } }] }
-    expect(closedFilterOf(type, { filter: notDone })).toEqual(hidden)
-  })
-
-  it('are the view’s own business when its filter asks for one, or its board has status columns', () => {
-    const doneThisWeek = { kind: 'group' as const, operator: 'and' as const, items: [{ kind: 'filter' as const, field: 'status', operator: 'is' as const, value: { kind: 'literal' as const, value: ['done'] } }] }
-    expect(closedFilterOf(type, { filter: doneThisWeek })).toBeUndefined()
-    expect(closedFilterOf(type, {}, 'status')).toBeUndefined()
-    expect(closedFilterOf(type, {}, 'priority')).toEqual(hidden)
-  })
-
-  it('do not exist for a type without a status', () => {
-    expect(closedFilterOf(page, {})).toBeUndefined()
   })
 })

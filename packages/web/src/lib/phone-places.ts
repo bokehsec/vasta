@@ -1,4 +1,5 @@
-// Shared destinations for the phone bar and its settings. Type ids stay within their space.
+// Shared destinations for the phone bar and its settings. One menu for every space: a type is
+// remembered by its plural name, so it shows in each space that has a type of that name.
 import { computed } from 'vue'
 import type { Icon } from '@vasta/core'
 import { dayKey } from './actions.ts'
@@ -14,7 +15,10 @@ export interface PhonePlace {
   to?: string
 }
 
-export const phoneMenu = usePhoneMenu(() => people.me && workspace.space ? JSON.stringify([people.me, workspace.space.id]) : '')
+export const phoneMenu = usePhoneMenu(() => people.me)
+
+/** The menu's id for a type: its plural name, case aside (the same type in another space matches). */
+export const typeMenuItem = (pluralName: string): PhoneMenuItem => `type:${pluralName.trim().toLowerCase()}`
 
 export const phonePlaces = computed<PhonePlace[]>(() => {
   const task = systemType('task')
@@ -24,17 +28,17 @@ export const phonePlaces = computed<PhonePlace[]>(() => {
     { id: 'inbox', label: 'Inbox', fallback: 'ph:tray', to: '/inbox' },
     { id: 'calendar', label: 'Calendar', fallback: 'ph:calendar-blank', to: '/calendar' },
     { id: 'search', label: 'Search', fallback: 'ph:magnifying-glass' },
-    { id: 'today', label: 'Today', fallback: 'ph:calendar-dot' },
+    { id: 'today', label: 'Today', fallback: 'ph:calendar-check' },
     { id: 'settings', label: 'Settings', fallback: 'ph:gear', to: '/settings' },
     ...workspace.types.filter((type) => type.system !== 'task').map((type): PhonePlace => ({
-      id: `type:${type.id}`, label: type.pluralName, fallback: 'ph:shapes', ...(type.icon ? { icon: type.icon } : {}), to: `/t/${type.id}`,
+      id: typeMenuItem(type.pluralName), label: type.pluralName, fallback: 'ph:shapes', ...(type.icon ? { icon: type.icon } : {}), to: `/t/${type.id}`,
     })),
   ]
 })
 
 export const visiblePhonePlaces = computed(() => {
   const places = phoneMenu.value.flatMap((id) => phonePlaces.value.find((place) => place.id === id) ?? [])
-  // A space without the selected types must still have a usable bar.
+  // A type this space doesn't have is left out; a bar of only such types falls back to Home.
   return places.length ? places : [phonePlaces.value[0]!]
 })
 

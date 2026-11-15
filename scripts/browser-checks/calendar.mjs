@@ -209,7 +209,7 @@ if (!phone) {
 }
 
 if (!phone) {
-  step('month view: a weekly task whose first week is cancelled has its checkbox on the second, and done moves it on; an ended one is struck through every week')
+  step('month view: a weekly task whose first week is cancelled has its checkbox on the second, and done moves it on; an ended one is left out, and struck through every week when closed tasks are shown')
   const bins = await post('/api/objects', {
     typeId: task.id,
     title: `Bins ${tag}`,
@@ -231,8 +231,14 @@ if (!phone) {
   await until(async () => dueOf(await get(`/api/objects/${bins.id}`)).start === '2027-03-15T00:00:00.000Z', 'bins due March 15')
   await until(async () => (await page.locator('[data-day="2027-03-15"] .vasta-entry', { hasText: `Bins ${tag}` }).locator('button[title="Mark as done"]').count()) === 1, 'the checkbox moved to March 15')
   const endedEntries = page.locator('.vasta-entry', { hasText: `Ended ${tag}` })
+  // A closed task is left out by default (calendar-closed.mjs); asked for, every week of it shows.
+  if (await endedEntries.count()) throw new Error('the ended task is shown without asking for closed tasks')
+  await page.getByRole('button', { name: /Show/ }).click()
+  await page.getByLabel('Done and dropped tasks').check()
+  await page.keyboard.press('Escape')
   await until(async () => (await endedEntries.count()) >= 4, 'the ended task shows every week')
   for (const title of await endedEntries.locator('span.font-medium').all()) if (!(await title.getAttribute('class')).includes('line-through')) throw new Error('a week of the ended task is not struck through')
+  await page.evaluate(() => localStorage.removeItem('vasta.calendar.showClosed'))
   for (const id of [bins.id, ended.id]) await page.request.delete(`${base}/api/objects/${id}`, { headers })
 }
 

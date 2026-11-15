@@ -3,6 +3,7 @@
 // copy, daily notes, the inbox, running a query.
 import { newId } from './ids.ts'
 import { ADDED_BUILTIN_PROPERTIES, BODY_PROPERTY_ID, SOURCE_PROPERTY_ID, builtinProperty, builtinTypeId, missingBuiltinTypes } from './builtin-types.ts'
+import { closedStatusIds, defaultQueryFilter, defaultViewFilter } from './closed-filter.ts'
 import { docReferences } from './doc.ts'
 import type { CaptureInfo, DocNode, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, OpensOn, Person, QueryDef, Space } from './model.ts'
 import { addHabitFoodProperty } from './nutrition.ts'
@@ -142,8 +143,44 @@ export function ensureBuiltinTypes(store: Store, at: IsoDateTime): ObjectType[] 
       for (const space of store.listSpaces()) if (space.nutrition) addHabitFoodProperty(store, space.id, at)
       store.setMeta('habit-food-2026-10-20', at)
     }
+    // Closed tasks left out of views by a filter of their own instead of a hidden rule (2026-11-15).
+    if (!store.getMeta('closed-filter-2026-11-15')) {
+      for (const space of store.listSpaces()) addClosedFilters(store, space.id, at)
+      store.setMeta('closed-filter-2026-11-15', at)
+    }
     return added
   })
+}
+
+/**
+ * Views and queries made before closed objects were left out by a filter of their own get that
+ * filter (defaultViewFilter, defaultQueryFilter), so they list what they did: a view that showed
+ * them (`showClosed`) keeps doing so without it. Queries of no type in particular are left alone.
+ */
+function addClosedFilters(store: Store, spaceId: Id, at: IsoDateTime) {
+  const types = store.listTypes(spaceId)
+  for (const type of types) {
+    if (!closedStatusIds(type).length) continue
+    const views = type.views.map((view) => {
+      if (view.showClosed) {
+        const { showClosed: _shown, ...rest } = view
+        return rest
+      }
+      const filter = defaultViewFilter(type, view)
+      return filter ? { ...view, filter } : view
+    })
+    if (JSON.stringify(views) !== JSON.stringify(type.views)) store.putType({ ...type, views, updatedAt: at })
+  }
+  const byId = new Map(types.map((type) => [type.id, type]))
+  for (const queryType of types.filter((type) => type.system === 'query')) {
+    for (const summary of store.listObjects(queryType.id)) {
+      const object = store.getObject(summary.id)
+      const query = object?.query
+      if (!object || object.deletedAt || !query?.typeIds.length) continue
+      const filter = defaultQueryFilter(query.typeIds.flatMap((id) => byId.get(id) ?? []), query)
+      if (filter && filter !== query.filter) store.putObject({ ...object, query: { ...query, filter } })
+    }
+  }
 }
 
 export class QuoteError extends Error {}

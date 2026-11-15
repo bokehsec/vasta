@@ -1,4 +1,5 @@
 import type { IsoDateTime, ObjectType, PropertyDef, SystemTypeKey, Id, ViewLayout } from './model.ts'
+import { defaultViewFilter } from './closed-filter.ts'
 
 /** Property id of the main rich-text field every built-in type has. */
 export const BODY_PROPERTY_ID = 'body'
@@ -237,7 +238,7 @@ export function builtinTypeKey(spaceId: Id, typeId: Id): SystemTypeKey | undefin
 export function createBuiltinTypes(spaceId: Id, now: IsoDateTime, keys: SystemTypeKey[] = systemTypeKeys): ObjectType[] {
   return keys.map((key) => {
     const spec = specs[key]
-    return {
+    const type: ObjectType = {
       id: builtinTypeId(spaceId, key),
       spaceId,
       system: key,
@@ -245,10 +246,15 @@ export function createBuiltinTypes(spaceId: Id, now: IsoDateTime, keys: SystemTy
       pluralName: spec.pluralName,
       icon: { kind: 'icon', value: spec.icon },
       properties: structuredClone(spec.properties),
-      views: [{ id: `${key}:all`, name: 'All', layout: DEFAULT_LAYOUTS[key] ?? 'list' }],
+      views: [],
       createdAt: now,
       updatedAt: now,
     }
+    // Its first view starts with closed objects left out (a task's Done), as new views do.
+    const layout = DEFAULT_LAYOUTS[key] ?? 'list'
+    const filter = defaultViewFilter(type, { layout })
+    type.views = [{ id: `${key}:all`, name: 'All', layout, ...(filter ? { filter } : {}) }]
+    return type
   })
 }
 

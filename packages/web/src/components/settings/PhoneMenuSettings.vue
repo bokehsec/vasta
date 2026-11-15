@@ -3,10 +3,11 @@ import { computed, ref } from 'vue'
 import { DEFAULT_PHONE_MENU, PHONE_MENU_LIMIT, type PhoneMenuItem } from '../../lib/phone-menu.ts'
 import { phoneMenu, phonePlaces } from '../../lib/phone-places.ts'
 import AppIcon from '../AppIcon.vue'
-import { secondary } from './styles.ts'
+import { label, secondary } from './styles.ts'
 
+// A type another space has keeps its place here, named as it was saved (its name, lowercased).
 const selected = computed(() => phoneMenu.value.map((id) => phonePlaces.value.find((place) => place.id === id) ?? {
-  id, label: id === 'tasks' ? 'Tasks (unavailable in this space)' : 'Unavailable type', fallback: 'ph:shapes',
+  id, label: `${id === 'tasks' ? 'Tasks' : id.slice(5)} (not in this space)`, fallback: 'ph:shapes',
 }))
 const available = computed(() => phonePlaces.value.filter((place) => !phoneMenu.value.includes(place.id)))
 const announcement = ref('')
@@ -33,9 +34,10 @@ function add(event: Event) {
 </script>
 
 <template>
-  <div id="phone-menu" role="group" aria-labelledby="phone-menu-title">
-    <h3 id="phone-menu-title" class="text-sm font-medium">Phone bottom menu</h3>
-    <p class="mt-1 mb-4 text-sm text-ink-soft">Choose up to five items, in the order they appear. Saved on this device for this account and space. Changes appear immediately on a phone.</p>
+  <!-- Only where the bar is (phones): a choice made on a computer would stay on the computer. -->
+  <div id="phone-menu" class="md:hidden" role="group" aria-labelledby="phone-menu-title">
+    <span id="phone-menu-title" :class="label">Bottom menu, on this device</span>
+    <p class="mt-1 mb-2 text-sm text-ink-soft">Up to five places, in this order. The same in every space; a type shows in the spaces that have it.</p>
     <ol class="divide-y divide-line rounded-lg border border-line" aria-label="Phone menu items">
       <li v-for="(place, index) in selected" :key="place.id" class="flex min-h-12 items-center gap-2 px-2" :data-phone-menu-item="place.id">
         <AppIcon :icon="place.icon" :fallback="place.fallback" :size="20" />

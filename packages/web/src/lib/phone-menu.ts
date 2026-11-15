@@ -1,4 +1,4 @@
-// Phone menu choices belong to this device and account/space, like the last picked type view.
+// Phone menu choices belong to this device and account (the same in every space), like the theme.
 import { computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 
 export const DEFAULT_PHONE_MENU = ['home', 'tasks', 'inbox', 'calendar', 'search'] as const
@@ -11,7 +11,7 @@ const valid = (value: unknown): value is PhoneMenuItem => typeof value === 'stri
   [...DEFAULT_PHONE_MENU, 'today', 'settings'].includes(value) || value.startsWith('type:') && value.length > 5
 )
 
-/** Ignore damaged preferences; missing types are kept so they return if restored from trash. */
+/** Ignore damaged preferences; types missing here are kept for the spaces that have them. */
 export function normalizePhoneMenu(value: unknown): PhoneMenuItem[] {
   const items = Array.isArray(value) ? [...new Set(value.filter(valid))].slice(0, PHONE_MENU_LIMIT) : []
   return items.length ? items : [...DEFAULT_PHONE_MENU]

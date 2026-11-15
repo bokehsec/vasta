@@ -20,7 +20,7 @@ describe('phone menu preferences', () => {
     expect(normalizePhoneMenu(['type:'])).toEqual(DEFAULT_PHONE_MENU)
   })
 
-  it('saves order, reloads it, and keeps accounts/spaces separate', async () => {
+  it('saves order, reloads it, and keeps accounts separate', async () => {
     const data = new Map<string, string>()
     const { usePhoneMenu, DEFAULT_PHONE_MENU } = await load(data)
     const scope = ref('user-a:space-a')
