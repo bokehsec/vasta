@@ -116,6 +116,7 @@ export interface RunOptions {
   scope?: string
   /** Called with the edits saved, once, after the notice is up (the returned edits are the same). */
   onSaved?: (edits: QuickActionEdit[]) => void
+  onFailed?: (retry: () => Promise<QuickActionEdit[]>) => void
   /** Called after Undo with the edits it put back: only the ones restored, not the ones that failed to. */
   onUndo?: (edits: QuickActionEdit[]) => void
 }
@@ -150,16 +151,18 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
   if (!targets.length) return []
   const save = options.save ?? ((id: Id, values: Values) => setProperties(id, values))
   const context = { today: dayKey(), nextWeek: nextWeekStart(), me: session.user?.id, dayOfTime }
+  let completed: QuickActionEdit[] = []
+  let undoing = false
   /** Tells the person what was saved: the notice with its Undo (which puts back only what a try restores, once at a time). */
   const finish = (saved: QuickActionEdit[], failed: number): QuickActionEdit[] => {
-    const message = quickActionMessage(type, action, saved, { longDay, dayOfTime, due: targets.length === 1 ? targets[0]!.props[DUE_PROPERTY_ID] : undefined, failed, noun: options.noun })
-    let left = [...saved]
-    let undoing = false
+    completed.push(...saved)
+    const message = quickActionMessage(type, action, completed, { longDay, dayOfTime, due: targets.length === 1 ? targets[0]!.props[DUE_PROPERTY_ID] : undefined, failed, noun: options.noun })
     const undo = async () => {
       if (undoing) return
       undoing = true
       const restored: QuickActionEdit[] = []
-      await eachLimited(left, 4, async (edit) => {
+      const beforeUndo = [...completed]
+      await eachLimited(beforeUndo, 4, async (edit) => {
         try {
           await save(edit.id, edit.before)
           restored.push(edit)
@@ -167,23 +170,31 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
           lastError.value = (error as Error).message
         }
       })
-      left = left.filter((edit) => !restored.includes(edit))
+      completed = completed.filter((edit) => !restored.includes(edit))
       undoing = false
-      if (restored.length) options.onUndo?.(saved.filter((edit) => restored.includes(edit)))
+      if (restored.length) options.onUndo?.(beforeUndo.filter((edit) => restored.includes(edit)))
     }
-    const note = options.note ? options.note() : openStepsNote(type, closedBy(type, targets, saved))
+    const note = options.note ? options.note() : openStepsNote(type, closedBy(type, targets, completed))
     notice.value = { message: note ? `${message} · ${note}` : message, action: { label: 'Undo', run: undo } }
     options.onSaved?.(saved)
     return saved
+  }
+
+  const attempt = async (edits: readonly QuickActionEdit[]): Promise<QuickActionEdit[]> => {
+    const { saved, failed, error } = await saveEdits(edits, save)
+    if (failed) {
+      lastError.value = error
+      const savedIds = new Set(saved.map((edit) => edit.id))
+      options.onFailed?.(() => attempt(edits.filter((edit) => !savedIds.has(edit.id))))
+    }
+    return saved.length ? finish(saved, failed) : []
   }
 
   const asked = askOf(type, action)
   if (!asked) {
     const edits = quickActionEdits(type, targets, action, context)
     if (!edits.length) return []
-    const { saved, failed, error } = await saveEdits(edits, save)
-    if (failed) lastError.value = error
-    return saved.length ? finish(saved, failed) : []
+    return attempt(edits)
   }
 
   const one = targets.length === 1 ? targets[0] : undefined
@@ -230,7 +241,11 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
           state.error = error || 'Could not save'
           return
         }
-        if (failed) lastError.value = error
+        if (failed) {
+          lastError.value = error
+          const savedIds = new Set(saved.map((edit) => edit.id))
+          options.onFailed?.(() => attempt(edits.filter((edit) => !savedIds.has(edit.id))))
+        }
         over(finish(saved, failed))
       },
     }

@@ -693,7 +693,7 @@ async function newMenu(event: MouseEvent) {
         <button class="flex items-center gap-1.5 rounded-l-lg px-3 py-1.5 hover:opacity-90" :title="defaultTemplate ? `New ${type.name} from “${defaultTemplate.template!.name}”` : `New ${type.name}`" @click="createNew">
           <AppIcon fallback="ph:plus" /> <span class="max-sm:hidden">New {{ type.name }}</span>
         </button>
-        <button class="grid place-items-center rounded-r-lg border-l border-surface/25 px-1.5 hover:opacity-90" title="Templates" aria-label="New from a template" @click="newMenu">
+        <button class="grid place-items-center rounded-r-lg border-l border-surface/25 px-1.5 hover:opacity-90 max-md:min-w-11" title="Templates" aria-label="New from a template" @click="newMenu">
           <AppIcon fallback="ph:caret-down" :size="13" />
         </button>
       </div>
@@ -746,7 +746,7 @@ async function newMenu(event: MouseEvent) {
     <div class="mt-6 flex flex-wrap items-center gap-1 border-b border-line pb-2">
       <!-- A phone: one button for the view, its list in a sheet (the tabs would take rows of the screen). -->
       <template v-if="isPhone">
-        <button ref="viewPickerAnchor" class="flex h-10 items-center gap-1.5 rounded-lg border border-line px-3 text-[15px] font-medium" data-view-picker @click="viewPickerOpen = true">
+        <button ref="viewPickerAnchor" class="flex h-11 items-center gap-1.5 rounded-lg border border-line px-3 text-[15px] font-medium" data-view-picker @click="viewPickerOpen = true">
           {{ currentViewLabel }} <AppIcon fallback="ph:caret-down" :size="14" class="text-ink-faint" />
         </button>
         <PopoverMenu v-model:open="viewPickerOpen" :anchor="viewPickerAnchor">
@@ -771,7 +771,7 @@ async function newMenu(event: MouseEvent) {
         <button
           v-if="!metricsActive"
           ref="filtersAnchor"
-          class="flex h-10 items-center gap-1.5 rounded-lg border border-line px-3 text-[15px] font-medium"
+          class="flex h-11 items-center gap-1.5 rounded-lg border border-line px-3 text-[15px] font-medium"
           :class="activeFilterCount ? 'text-accent' : ''"
           data-filters-button
           @click="filtersOpen = true"

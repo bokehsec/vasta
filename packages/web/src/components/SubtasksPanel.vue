@@ -132,9 +132,11 @@ function swipes(step: ObjectSummary): { right?: SwipeAction; left: SwipeAction[]
           aria-label="Add subtask"
           :disabled="adding"
           data-add-subtask
+          enterkeyhint="enter"
           @paste="onPaste"
           @keydown.escape="title = ''"
         />
+        <button v-if="isTouch" type="submit" class="min-h-11 shrink-0 rounded-lg px-3 text-[15px] font-medium text-accent disabled:text-ink-faint" :disabled="adding || !title.trim()" data-add-subtask-button>Add</button>
       </form>
     </div>
     <div v-if="progress.readyToClose && parentOpen" class="mt-2 flex items-center gap-2 rounded-lg border border-line px-3 py-1.5 text-sm" data-ready-to-close>

@@ -192,6 +192,13 @@ GitHub release page.
 
 ### Fixed
 
+- **Phone controls and failed bulk saves are easier to use.** View, Filters, template choices and
+  filter-building buttons have full-height touch targets. Failed bulk changes offer Retry for only
+  the unsaved tasks, keeping one Undo for the whole action. Capture types wrap in a bounded picker
+  without keyboard-only hints; subtasks have a visible Add button. Lists scroll clear of Capture,
+  including while a notice shows; Triage fills the status-bar area and says Saving only during a
+  save. Faint text and placeholders are more readable in both themes.
+
 - **Quick capture saves with no connection.** On a phone or computer that could not reach
   the server (Tailscale off, no signal), Save capture showed "null is not an object" and saved
   nothing. It now saves on this device and reaches the server when the connection is back, like

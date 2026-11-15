@@ -101,6 +101,7 @@ const textPreview = computed(() => shownTexts.value.length ? docToPlainText(show
 const stays = (action: QuickActionDef) => askOf(props.type, action)?.def.kind === 'text' || (triaging.value && !settlesTriage(props.type, action))
 
 const busy = ref(false)
+const saving = computed(() => busy.value && (!quickAsk.value || quickAsk.value.state.saving))
 async function act(action: QuickActionDef, anchor: HTMLElement | null) {
   const object = current.value
   if (!object || busy.value || addingStep.value) return
@@ -363,16 +364,16 @@ const actionButton = 'flex min-h-12 min-w-0 items-center justify-center gap-2 ro
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-40 grid bg-black/30" :style="isPhone && keyboardInset ? { bottom: `${keyboardInset}px` } : undefined" :class="isPhone ? '' : 'place-items-center p-6'" data-process-mode>
+    <div class="fixed inset-0 z-40 grid" :style="isPhone && keyboardInset ? { bottom: `${keyboardInset}px` } : undefined" :class="isPhone ? 'bg-surface pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]' : 'place-items-center bg-black/30 p-6'" data-process-mode>
       <section
         ref="panel"
         tabindex="-1"
         aria-modal="true"
         class="flex min-h-0 w-full flex-col overflow-hidden bg-surface outline-none"
-        :class="isPhone ? 'h-full pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]' : 'max-h-[85vh] max-w-xl rounded-2xl border border-line shadow-2xl shadow-black/20'"
+        :class="isPhone ? 'h-full' : 'max-h-[85vh] max-w-xl rounded-2xl border border-line shadow-2xl shadow-black/20'"
         role="dialog"
         :aria-label="title"
-        :aria-busy="busy || undefined"
+        :aria-busy="saving || undefined"
       >
         <header class="flex shrink-0 items-start gap-2 px-4 pt-3">
           <div class="min-w-0 flex-1 py-1">
@@ -383,7 +384,7 @@ const actionButton = 'flex min-h-12 min-w-0 items-center justify-center gap-2 ro
         </header>
         <div class="flex shrink-0 items-center justify-between px-4 pt-1 text-xs text-ink-soft">
           <span>{{ triaging ? 'Decide what happens next' : 'Confirm or change the plan' }}</span>
-          <span class="tabular-nums" aria-live="polite" data-process-position>{{ busy ? 'Saving…' : `${done ? total : index + 1} of ${total}` }}</span>
+          <span class="tabular-nums" aria-live="polite" data-process-position>{{ saving ? 'Saving…' : `${done ? total : index + 1} of ${total}` }}</span>
         </div>
         <div class="mx-4 mt-2 h-[3px] shrink-0 rounded-full bg-line" aria-hidden="true">
           <div class="h-full rounded-full bg-ink-soft transition-[width] duration-200" :style="{ width: `${total ? (Math.min(index, total) / total) * 100 : 0}%` }" />

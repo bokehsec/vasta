@@ -82,6 +82,67 @@ describe('runQuickAction', () => {
     expect(notice.value).toBeNull()
   })
 
+  it('offers retries for only failed objects and keeps narrowing after another failure', async () => {
+    let failing = new Set(['b', 'c'])
+    const save = vi.fn(async (id: string) => {
+      if (failing.has(id)) throw new Error('offline')
+    })
+    const onFailed = vi.fn()
+    const saved = await runQuickAction(task, [open('a'), open('b'), open('c')], done, { save, onFailed })
+    expect(saved.map((edit) => edit.id)).toEqual(['a'])
+    expect(onFailed).toHaveBeenCalledTimes(1)
+    save.mockClear()
+    failing = new Set(['c'])
+    expect((await onFailed.mock.calls[0]![0]()).map((edit: { id: string }) => edit.id)).toEqual(['b'])
+    expect(save.mock.calls.map(([id]) => id)).toEqual(['b', 'c'])
+    expect(onFailed).toHaveBeenCalledTimes(2)
+    save.mockClear()
+    failing.clear()
+    expect((await onFailed.mock.calls[1]![0]()).map((edit: { id: string }) => edit.id)).toEqual(['c'])
+    expect(save.mock.calls.map(([id]) => id)).toEqual(['c'])
+    save.mockClear()
+    await message().action!.run()
+    expect(save.mock.calls).toEqual(['a', 'b', 'c'].map((id) => [id, { status: status('todo') }]))
+    expect(message().message).toBe('Done · 3 tasks')
+  })
+
+  it('offers Retry after every unprompted save fails', async () => {
+    const save = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(undefined)
+    const onFailed = vi.fn()
+    expect(await runQuickAction(task, [open('a')], done, { save, onFailed })).toEqual([])
+    expect(onFailed).toHaveBeenCalledTimes(1)
+    expect((await onFailed.mock.calls[0]![0]()).map((edit: { id: string }) => edit.id)).toEqual(['a'])
+  })
+
+  it('retries a partially saved question with the original answer and without asking again', async () => {
+    let offline = true
+    const save = vi.fn(async (id: string) => {
+      if (offline && id === 'b') throw new Error('offline')
+    })
+    const onFailed = vi.fn()
+    const running = runQuickAction(task, [open('a'), open('b')], defer, { save, onFailed })
+    await quickAsk.value!.answer(day('2026-11-20'))
+    expect((await running).map((edit) => edit.id)).toEqual(['a'])
+    expect(quickAsk.value).toBeNull()
+    offline = false
+    save.mockClear()
+    const retried = await onFailed.mock.calls[0]![0]()
+    expect(retried.map((edit: { id: string }) => edit.id)).toEqual(['b'])
+    expect(save.mock.calls).toEqual([['b', { due: day('2026-11-20') }]])
+    expect(quickAsk.value).toBeNull()
+  })
+
+  it('keeps a completely failed question open with its own Retry rather than a bulk retry', async () => {
+    const save = vi.fn().mockRejectedValue(new Error('offline'))
+    const onFailed = vi.fn()
+    const running = runQuickAction(task, [open('a')], defer, { save, onFailed })
+    await quickAsk.value!.answer(day('2026-11-20'))
+    expect(quickAsk.value!.state).toEqual({ saving: false, error: 'offline' })
+    expect(onFailed).not.toHaveBeenCalled()
+    await quickAsk.value!.answer(null)
+    expect(await running).toEqual([])
+  })
+
   it('Undo of Done on repeating tasks puts the date back on the occurrence it had', async () => {
     const weekly = day('2026-11-13', 'FREQ=WEEKLY')
     const objects = [open('r1', weekly), open('r2', day('2026-11-14', 'FREQ=DAILY')), open('plain', day('2026-11-13'))]
