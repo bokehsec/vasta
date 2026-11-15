@@ -13,6 +13,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { foodCommand, type ObjectSummary, type ObjectType, type TemplateAsk } from '@vasta/core'
 import { captureAsks, captureSpace, captureText, completionSource, dayKey, openCapture, typesOf } from '../lib/actions.ts'
+import { greyButton, mainButton } from '../lib/buttons.ts'
 import { foodSourcesOf, previewFoodLine } from '../lib/nutrition.ts'
 import { clearDraft, readDraft, withType, writeDraft, writtenText } from '../lib/capture-draft.ts'
 import { isDesktop } from '../lib/platform.ts'
@@ -324,19 +325,19 @@ function onKey(event: KeyboardEvent) {
     <template v-if="isPhone" #footer>
       <div class="flex w-full flex-col gap-1">
         <p v-if="error" class="text-sm text-red-600 dark:text-red-400" role="alert">{{ error }}</p>
-        <button class="min-h-11 w-full rounded-lg bg-ink px-3 text-sm font-medium text-surface disabled:opacity-50" :disabled="!hasText || saving" @click="save()">
+        <button class="w-full" :class="mainButton" :disabled="!hasText || saving" @click="save()">
           {{ saving ? 'Saving…' : 'Save capture' }}
         </button>
         <div class="flex gap-2">
-          <button v-if="asks" class="min-h-11 flex-1 rounded-lg px-3 text-sm hover:bg-hover" @click="backToText">Back</button>
-          <button class="min-h-11 flex-1 rounded-lg px-3 text-sm hover:bg-hover" @click="leave">Cancel</button>
+          <button v-if="asks" class="flex-1" :class="greyButton" @click="backToText">Back</button>
+          <button class="flex-1" :class="greyButton" @click="leave">Cancel</button>
         </div>
       </div>
     </template>
     <template v-else #footer>
-      <button v-if="asks" class="rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="backToText">Back</button>
-      <button class="ml-auto rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="leave">Cancel</button>
-      <button class="rounded-lg bg-ink px-3 py-1.5 text-sm text-surface disabled:opacity-50" :disabled="!text.trim() || saving" @click="save()">Capture</button>
+      <button v-if="asks" :class="greyButton" @click="backToText">Back</button>
+      <button class="ml-auto" :class="greyButton" @click="leave">Cancel</button>
+      <button :class="mainButton" :disabled="!text.trim() || saving" @click="save()">Capture</button>
     </template>
   </ModalDialog>
 </template>

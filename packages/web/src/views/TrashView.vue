@@ -8,6 +8,7 @@ import type { Icon, Id, ObjectType, Space } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import { deleteForeverFlow, restoreObjectFlow, restoreTypeFlow } from '../lib/actions.ts'
 import { api, type Trash } from '../lib/api.ts'
+import { deleteButton, greyButton } from '../lib/buttons.ts'
 import { chip, iconTextClasses } from '../lib/colors.ts'
 import { onChange } from '../lib/events.ts'
 import { displayTitle, formatRelative } from '../lib/format.ts'
@@ -187,7 +188,8 @@ function remaining(deletedAt: string) {
       <h1 class="text-2xl font-semibold">Trash</h1>
       <button
         v-if="entries.length"
-        class="ml-auto rounded-lg border border-line px-3 py-1.5 text-sm text-red-600 hover:bg-hover disabled:opacity-40 max-md:py-2"
+        class="ml-auto"
+        :class="deleteButton"
         :disabled="busy.has('__all')"
         @click="emptyTrash"
       >
@@ -229,7 +231,7 @@ function remaining(deletedAt: string) {
           </span>
         </button>
         <div class="flex shrink-0 items-center gap-1">
-          <button class="rounded-lg border border-line px-2.5 py-1 text-sm hover:bg-hover max-md:py-1.5" :disabled="busy.has(entry.id)" @click="restore(entry)">
+          <button :class="greyButton" :disabled="busy.has(entry.id)" @click="restore(entry)">
             Restore
           </button>
           <button
@@ -257,7 +259,7 @@ function remaining(deletedAt: string) {
             <span class="block truncate text-sm font-medium">{{ space.name }}</span>
             <span class="text-xs text-ink-faint">{{ formatRelative(space.deletedAt) }} · {{ remaining(space.deletedAt) }}</span>
           </span>
-          <button class="rounded-lg border border-line px-2.5 py-1 text-sm hover:bg-hover max-md:py-1.5" :disabled="busy.has(space.id)" @click="restoreSpace(space)">Restore</button>
+          <button :class="greyButton" :disabled="busy.has(space.id)" @click="restoreSpace(space)">Restore</button>
         </li>
       </ul>
     </template>

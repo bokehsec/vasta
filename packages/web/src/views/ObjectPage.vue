@@ -39,6 +39,7 @@ import WhiteboardCanvas from '../components/whiteboard/WhiteboardCanvas.vue'
 import DocEditor from '../editor/DocEditor.vue'
 import { addSelectOption, dayKey, deleteForeverFlow, deleteObjectFlow, isInSidebar, openDay, pinItems, restoreObjectFlow, tagFromPath } from '../lib/actions.ts'
 import { api, mediaUrl, serverApi } from '../lib/api.ts'
+import { mainButton } from '../lib/buttons.ts'
 import { onChange } from '../lib/events.ts'
 import { offline } from '../lib/network.ts'
 import { openText, useReplica, type TextSession } from '../lib/replica.ts'
@@ -1083,7 +1084,7 @@ async function startFrom(template: ObjectRecord) {
             placeholder="{Price} * {Quantity}"
             @keydown.enter.prevent="addProperty"
           />
-          <button class="mt-1 w-full rounded-lg bg-ink px-2.5 py-1.5 text-sm text-surface disabled:opacity-40" :disabled="!newProperty.name.trim()" @click="addProperty">
+          <button :class="mainButton" class="mt-1 w-full" :disabled="!newProperty.name.trim()" @click="addProperty">
             Add property
           </button>
         </PopoverMenu>

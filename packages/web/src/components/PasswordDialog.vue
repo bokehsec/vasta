@@ -2,6 +2,7 @@
 // Change the logged-in user's password. Other browsers and devices are logged out by the server.
 import { computed, ref } from 'vue'
 import { authApi } from '../lib/api.ts'
+import { greyButton, mainButton } from '../lib/buttons.ts'
 import { ui } from '../lib/state.ts'
 import ModalDialog from './ModalDialog.vue'
 
@@ -46,12 +47,12 @@ const field = 'mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 te
     </form>
     <template #footer>
       <div class="ml-auto flex gap-2">
-        <button class="rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="ui.passwordOpen = false">{{ done ? 'Close' : 'Cancel' }}</button>
+        <button :class="greyButton" @click="ui.passwordOpen = false">{{ done ? 'Close' : 'Cancel' }}</button>
         <button
           v-if="!done"
           type="submit"
           form="password-form"
-          class="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface hover:opacity-90 disabled:opacity-40"
+          :class="mainButton"
           :disabled="!ready"
         >
           Change password

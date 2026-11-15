@@ -15,6 +15,7 @@ import IconPicker from '../IconPicker.vue'
 import ObjectPicker from '../ObjectPicker.vue'
 import PopoverMenu from '../PopoverMenu.vue'
 import SettingsSection from './SettingsSection.vue'
+import { deleteButton } from '../../lib/buttons.ts'
 import { errorText, field, label, primary, secondary } from './styles.ts'
 
 const spaceId = ref<Id>(workspace.space!.id)
@@ -351,7 +352,7 @@ async function remove(member: Member) {
         <div class="font-medium">Delete this space</div>
         <div class="text-xs text-ink-faint">{{ workspace.spaces.length > 1 ? 'For every member. Kept 30 days in case it was a mistake.' : 'Your only space cannot be deleted; create another one first.' }}</div>
       </div>
-      <button class="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40 dark:border-red-900 dark:hover:bg-red-950" :disabled="workspace.spaces.length <= 1" @click="deleteSpace">
+      <button :class="deleteButton" :disabled="workspace.spaces.length <= 1" @click="deleteSpace">
         Delete space…
       </button>
     </div>

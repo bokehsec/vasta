@@ -27,6 +27,7 @@ import {
 } from '@vasta/core'
 import { api } from '../../lib/api.ts'
 import { createObject, dayKey } from '../../lib/actions.ts'
+import { deleteButton, greyButton, mainButton } from '../../lib/buttons.ts'
 import { clone } from '../../lib/clone.ts'
 import {
   dailyNotesBetween,
@@ -237,7 +238,7 @@ function dayMenu(event: MouseEvent) {
       <div class="ml-auto flex items-center gap-1">
         <button
           v-if="!future"
-          class="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink max-md:py-1.5"
+          :class="greyButton"
           @click="compact ? (opened = true) : openPicker()"
         >
           <AppIcon fallback="ph:plus" :size="13" /> Log food
@@ -339,8 +340,8 @@ function dayMenu(event: MouseEvent) {
           {{ formatGrams(editing.entry.grams) }} g · <NutrientLine :nutrients="editing.entry.nutrients" />
         </p>
         <div class="flex items-center gap-2">
-          <button type="submit" class="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-40" :disabled="!!editError">Save</button>
-          <button type="button" class="rounded-lg px-3 py-1.5 text-sm text-red-600 hover:bg-hover dark:text-red-400" @click="remove(editing.id); editing = null">Delete</button>
+          <button type="submit" :class="mainButton" :disabled="!!editError">Save</button>
+          <button type="button" :class="deleteButton" @click="remove(editing.id); editing = null">Delete</button>
         </div>
       </form>
     </ModalDialog>

@@ -8,6 +8,7 @@ import AppIcon from '../components/AppIcon.vue'
 import DocPreview from '../components/DocPreview.ts'
 import { dayKey } from '../lib/actions.ts'
 import { api, type InboxItem } from '../lib/api.ts'
+import { greyButton } from '../lib/buttons.ts'
 import { onChange } from '../lib/events.ts'
 import { channelIconName, formatCaptureTime, formatChannel, formatLongDay } from '../lib/format.ts'
 import { reviewed } from '../lib/inbox.ts'
@@ -159,7 +160,7 @@ async function showOlder() {
     </section>
 
     <div v-if="!loading && days < MAX_DAYS" class="mt-8 flex justify-center">
-      <button class="rounded-lg border border-line px-3 py-1.5 text-sm text-ink-soft hover:bg-hover max-md:py-2" @click="showOlder">Show older</button>
+      <button :class="greyButton" @click="showOlder">Show older</button>
     </div>
   </div>
 </template>

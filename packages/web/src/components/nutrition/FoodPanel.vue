@@ -26,6 +26,7 @@ import {
 } from '@vasta/core'
 import { api } from '../../lib/api.ts'
 import { dayKey } from '../../lib/actions.ts'
+import { mainButton } from '../../lib/buttons.ts'
 import { formatLongDay } from '../../lib/format.ts'
 import { dailyNotesBetween, formatGrams, formatKcal, useFoodLibrary } from '../../lib/nutrition.ts'
 import AppIcon from '../AppIcon.vue'
@@ -153,7 +154,7 @@ const small = 'rounded-md border border-line bg-surface px-2 py-1 text-sm tabula
         <span class="min-w-0 flex-1 truncate">{{ adding.title }}</span>
         <input ref="gramsInput" v-model="addGrams" :class="small" class="w-20 text-right" inputmode="decimal" placeholder="grams" aria-label="Grams" @keydown.esc.prevent="adding = null" />
         <span class="text-ink-faint">g</span>
-        <button type="submit" class="rounded-md bg-ink px-2 py-1 text-xs font-medium text-surface disabled:opacity-40" :disabled="!num(addGrams)">Add</button>
+        <button type="submit" :class="mainButton" :disabled="!num(addGrams)">Add</button>
       </form>
       <div v-else class="relative mt-1">
         <input

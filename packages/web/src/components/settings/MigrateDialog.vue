@@ -9,7 +9,7 @@ import { switchToServer } from '../../lib/platform.ts'
 import { session } from '../../lib/session.ts'
 import AppIcon from '../AppIcon.vue'
 import ModalDialog from '../ModalDialog.vue'
-import { errorText, field, label, primary } from './styles.ts'
+import { errorText, field, label, primary, secondary } from './styles.ts'
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -168,10 +168,10 @@ onBeforeUnmount(() => clearTimeout(timer))
 
     <template #footer>
       <div class="ml-auto flex gap-2">
-        <button v-if="!running" class="rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="close">{{ state.phase === 'done' ? 'Not now' : 'Cancel' }}</button>
+        <button v-if="!running" :class="secondary" @click="close">{{ state.phase === 'done' ? 'Not now' : 'Cancel' }}</button>
         <button v-if="state.phase === 'idle' || editing" type="submit" form="migrate-form" :class="primary" :disabled="!ready">Move my notes</button>
         <template v-else-if="state.phase === 'failed'">
-          <button class="rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="editing = true">Change details</button>
+          <button :class="secondary" @click="editing = true">Change details</button>
           <!-- The account is made already: trying again goes on with it. -->
           <button :class="primary" :disabled="!ready" @click="start">Try again</button>
         </template>

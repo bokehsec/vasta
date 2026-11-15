@@ -28,8 +28,8 @@ text (grey in a page, quiet in a menu), solid red only to confirm in the "Are yo
 pressed, disabled and keyboard-focus states. Settings' `primary`/`secondary` are Main and Grey.
 Triage and Review on the Tasks page are tinted while work waits and grey when it doesn't; a press
 starts the queue, the paused one says "Resume triage 4 of 12". On a phone, one button beside the
-view picker opens the chooser. Screens not yet moved to these classes keep their own looks until
-they are.
+view picker opens the chooser. Navigation (sidebar, tab bar, calendar grids), segmented controls,
+chips, menu rows and the whiteboard keep their own looks; they are not buttons of these kinds.
 
 **The shell**: the sidebar runs the full height with the space switcher on top; the top bar holds
 back/forward and where you are (an object's type, then the object); the page is a rounded panel

@@ -5,6 +5,7 @@ import { computed, provide, ref, watch } from 'vue'
 import { defaultTemplate, type CalendarEntry, type CalendarSource, type Id, type ObjectSummary } from '@vasta/core'
 import { ENTRY_DRAGGING } from '../../lib/calendar-drag.ts'
 import { formatClock, isToday, isoWeek } from '../../lib/calendar.ts'
+import { greyButton, mainButton } from '../../lib/buttons.ts'
 import { displayTitle } from '../../lib/format.ts'
 import { systemType, typesById } from '../../lib/state.ts'
 import { pageWidthClass } from '../../lib/page-width.ts'
@@ -74,7 +75,7 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
     <section class="mt-8">
       <div class="mb-2 flex items-center">
         <h2 :class="heading"><AppIcon fallback="ph:clock" /> On this day</h2>
-        <button class="ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink max-md:py-1.5" @click="emit('create', $event.currentTarget as HTMLElement)">
+        <button class="ml-auto" :class="greyButton" @click="emit('create', $event.currentTarget as HTMLElement)">
           <AppIcon fallback="ph:plus" :size="13" /> Add
         </button>
       </div>
@@ -97,12 +98,12 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
         </ObjectLink>
       </div>
       <ObjectPage v-if="noteId" :id="noteId" :key="noteId" variant="embedded" backlinks-title="References to this day" @columns="noteColumns = $event" />
-      <button v-else-if="hasTemplate" class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink" :disabled="starting" @click="emit('start-note')">
+      <button v-else-if="hasTemplate" :class="greyButton" :disabled="starting" @click="emit('start-note')">
         <AppIcon fallback="ph:plus" /> {{ starting ? 'Starting…' : 'Start the daily note' }}
       </button>
       <form v-else class="space-y-2" @submit.prevent="draft.trim() && emit('start-note', draft)">
         <textarea v-model="draft" :disabled="starting" aria-label="Daily note" placeholder="Write something about this day…" class="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" rows="3" />
-        <button class="rounded-lg px-3 py-2 text-sm ring-1 ring-line hover:bg-hover disabled:opacity-50" :disabled="starting || !draft.trim()">
+        <button :class="mainButton" :disabled="starting || !draft.trim()">
           {{ starting ? 'Saving…' : 'Save daily note' }}
         </button>
       </form>

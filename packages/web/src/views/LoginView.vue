@@ -4,6 +4,7 @@
 import { computed, onMounted, ref } from 'vue'
 import VastaMark from '../components/VastaMark.vue'
 import { authApi } from '../lib/api.ts'
+import { mainButton } from '../lib/buttons.ts'
 import { join, logIn, session, setUp } from '../lib/session.ts'
 
 const code = ref('')
@@ -80,7 +81,8 @@ const field = 'mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 te
       <p v-if="error" class="mt-3 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
       <button
         type="submit"
-        class="mt-5 w-full rounded-lg bg-ink px-3 py-2 text-sm font-medium text-surface hover:opacity-90 disabled:opacity-40"
+        class="mt-5 w-full"
+        :class="mainButton"
         :disabled="busy || !ready()"
       >
         {{ mode === 'login' ? (busy ? 'Logging in…' : 'Log in') : busy ? 'Creating…' : 'Create account' }}

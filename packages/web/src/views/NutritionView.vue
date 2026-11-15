@@ -18,6 +18,7 @@ import {
   type PropertyValue,
 } from '@vasta/core'
 import { createObject, dayKey } from '../lib/actions.ts'
+import { greyButton, mainButton } from '../lib/buttons.ts'
 import { formatLongDay } from '../lib/format.ts'
 import { dailyNotesBetween, formatGrams, formatKcal, nutrientColor, nutritionOn, nutritionTypeId, setNutrition, useGoals } from '../lib/nutrition.ts'
 import { onChange } from '../lib/events.ts'
@@ -185,7 +186,7 @@ const heading = 'mb-3 flex items-center gap-2 text-sm font-semibold text-ink-sof
 
     <div v-if="!nutritionOn" class="mt-8 rounded-xl border border-dashed border-line p-5 text-sm text-ink-soft">
       <p>This space does not track food. Turning it on adds a Food block to each day, and Foods, Recipes and Nutrition goals.</p>
-      <button class="mt-3 rounded-lg bg-ink px-3 py-1.5 font-medium text-surface disabled:opacity-40" :disabled="turningOn" @click="turnOn">Track food in {{ workspace.space?.name }}</button>
+      <button class="mt-3" :class="mainButton" :disabled="turningOn" @click="turnOn">Track food in {{ workspace.space?.name }}</button>
     </div>
 
     <template v-else-if="loaded">
@@ -251,7 +252,7 @@ const heading = 'mb-3 flex items-center gap-2 text-sm font-semibold text-ink-sof
       <section id="goals" class="mt-10 scroll-mt-6" data-nutrition-goals>
         <div class="mb-3 flex items-center gap-2">
           <h2 :class="heading" class="!mb-0"><AppIcon fallback="ph:chart-pie-slice" /> Goals</h2>
-          <button v-if="!form" class="ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink max-md:py-1.5" @click="newGoal">
+          <button v-if="!form" class="ml-auto" :class="greyButton" @click="newGoal">
             <AppIcon fallback="ph:plus" :size="13" /> New goal
           </button>
         </div>
@@ -284,8 +285,8 @@ const heading = 'mb-3 flex items-center gap-2 text-sm font-semibold text-ink-sof
           </div>
           <p v-if="formError" class="text-xs text-amber-700 dark:text-amber-400">{{ formError }}</p>
           <div class="flex gap-2">
-            <button type="submit" class="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-40" :disabled="!!formError">Save goal</button>
-            <button type="button" class="rounded-lg px-3 py-1.5 text-sm text-ink-soft hover:bg-hover" @click="form = null">Cancel</button>
+            <button type="submit" :class="mainButton" :disabled="!!formError">Save goal</button>
+            <button type="button" :class="greyButton" @click="form = null">Cancel</button>
           </div>
           <p class="text-xs text-ink-faint">A goal applies from its day on; the days before keep the goal they had.</p>
         </form>

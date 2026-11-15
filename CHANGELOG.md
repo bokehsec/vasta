@@ -151,7 +151,11 @@ GitHub release page.
   waiting; a press starts that queue at once, a paused one reads "Resume triage 4 of 12", and with
   nothing waiting they turn grey. **Triage & review…** in the ⋯ menu still explains both queues and
   ends a paused session. On a phone one button sits beside the view picker: Triage, else Review,
-  else Resume, with its count; the view picker and Filters are grey buttons.
+  else Resume, with its count; the view picker and Filters are grey buttons. The same kinds now
+  run through review mode, Quick capture, comments, type settings and templates, sprints,
+  subtasks, the calendar's quick create and event details, food logging and the Nutrition page,
+  Trash (Empty trash and Delete in red, Restore grey), Settings, password and login, and a notice's
+  Undo.
 - **Done tasks stay put in agendas, and subtasks can be undone.** A task marked done in an agenda
   (a Tasks view or a list in a page laid out as days) stays on its day, checked and struck through,
   until you leave or reload; a repeating one says "Done this time · Next: …". Its checkbox undoes it,

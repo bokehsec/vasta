@@ -5,6 +5,7 @@ import { newId } from '@vasta/core'
 import { computed, reactive, ref } from 'vue'
 import type { ColorName, FormulaPropertyDef, Icon, ObjectType, PropertyDef, QuickActions, SelectOption } from '@vasta/core'
 import { FORMULA_BUILTIN_FIELDS, FORMULA_FUNCTIONS, checkFormula, eligibleParentFields, formulaFromNames, formulaKind, formulaToNames, formulaUses } from '@vasta/core'
+import { greyButton, mainButton } from '../lib/buttons.ts'
 import { api } from '../lib/api.ts'
 import { clone } from '../lib/clone.ts'
 import { chip, colorNames, iconTextClasses, swatchClasses } from '../lib/colors.ts'
@@ -475,7 +476,7 @@ async function leave(path: string) {
         <select v-model="newKind" class="rounded-lg border border-line bg-surface px-2 text-sm">
           <option v-for="k in PROPERTY_KINDS" :key="k.kind" :value="k.kind">{{ k.label }}</option>
         </select>
-        <button class="rounded-lg border border-line px-3 text-sm hover:bg-hover disabled:opacity-40" :disabled="!newName.trim()">Add</button>
+        <button :class="greyButton" :disabled="!newName.trim()">Add</button>
       </form>
     </section>
 
@@ -488,8 +489,8 @@ async function leave(path: string) {
     <template #footer>
       <span v-if="error" class="text-sm text-red-600">{{ error }}</span>
       <span v-else-if="dirty" class="text-xs text-ink-faint">Unsaved changes</span>
-      <button class="ml-auto rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="close">Cancel</button>
-      <button class="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-40" :disabled="!dirty || saving" @click="save">
+      <button class="ml-auto" :class="greyButton" @click="close">Cancel</button>
+      <button :class="mainButton" :disabled="!dirty || saving" @click="save">
         {{ saving ? 'Saving…' : 'Save' }}
       </button>
     </template>

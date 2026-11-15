@@ -8,6 +8,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Id, QueryDef } from '@vasta/core'
 import { api } from '../lib/api.ts'
 import { displayTitle } from '../lib/format.ts'
+import { greyButton } from '../lib/buttons.ts'
 import { openObject } from '../lib/open.ts'
 import { primeFromObject, summaryOf, typesById } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
@@ -78,7 +79,7 @@ onBeforeUnmount(() => {
     <div v-if="editing && !(compact && readonly)" :class="compact ? 'mb-2 rounded-xl border border-line bg-surface px-3 py-3' : 'border-t border-line px-3 py-3'">
       <!-- Compact has no header, so the settings carry their own Done -->
       <div v-if="compact" class="mb-2 flex justify-end">
-        <button class="flex items-center gap-1 rounded-md bg-hover px-1.5 py-1 text-xs text-ink" @click="editing = false">
+        <button :class="greyButton" @click="editing = false">
           <AppIcon fallback="ph:sliders-horizontal" :size="13" /> Done
         </button>
       </div>

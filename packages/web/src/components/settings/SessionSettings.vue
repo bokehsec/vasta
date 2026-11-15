@@ -7,7 +7,8 @@ import { formatRelative } from '../../lib/format.ts'
 import { confirmDialog } from '../../lib/overlays.ts'
 import AppIcon from '../AppIcon.vue'
 import SettingsSection from './SettingsSection.vue'
-import { errorText, secondary } from './styles.ts'
+import { deleteButton } from '../../lib/buttons.ts'
+import { errorText } from './styles.ts'
 
 const sessions = ref<SessionInfo[]>([])
 const error = ref('')
@@ -77,7 +78,7 @@ async function revokeOthers() {
         </button>
       </li>
     </ul>
-    <button :class="secondary" :disabled="!others" @click="revokeOthers">Log out everywhere else</button>
+    <button :class="deleteButton" :disabled="!others" @click="revokeOthers">Log out everywhere else</button>
     <p v-if="error" :class="errorText" class="mt-2">{{ error }}</p>
   </SettingsSection>
 </template>

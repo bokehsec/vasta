@@ -5,6 +5,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ARTICLE_PROPERTY_ID, type ObjectRecord } from '@vasta/core'
 import { api, mediaUrl } from '../lib/api.ts'
 import { embedFor } from '../lib/embeds.ts'
+import { mainButton } from '../lib/buttons.ts'
 import { promptDialog } from '../lib/overlays.ts'
 import { notice } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
@@ -92,7 +93,7 @@ async function copy() {
         placeholder="Paste a link to save this page"
         :disabled="!!busy"
       />
-      <button class="rounded-lg bg-ink px-3 py-1.5 text-sm text-surface disabled:opacity-40" :disabled="!address.trim() || !!busy">Save</button>
+      <button :class="mainButton" :disabled="!address.trim() || !!busy">Save</button>
     </form>
 
     <template v-else>
