@@ -139,6 +139,11 @@ GitHub release page.
 
 ### Changed
 
+- **Done tasks stay put in agendas, and subtasks can be undone.** A task marked done in an agenda
+  (a Tasks view or a list in a page laid out as days) stays on its day, checked and struck through,
+  until you leave or reload; a repeating one says "Done this time · Next: …". Its checkbox undoes it,
+  back to its exact status. Marking a subtask done shows a notice with Undo, and the subtask's
+  checkbox also puts back the status it had. The Calendar page already kept done tasks in view.
 - **Done tasks stay put in lists inside pages too.** A task marked done in a list embedded in a page
   (Home's Today, a project page, a dashboard) stays where it was, checked and struck through, until
   you leave or reload the page; Undo puts back its exact status. A list whose last open task you

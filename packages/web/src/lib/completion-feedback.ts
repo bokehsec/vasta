@@ -1,5 +1,5 @@
 import { reactive, type InjectionKey } from 'vue'
-import type { Id, ObjectRecord, ObjectSummary, ObjectType, PropertyValue } from '@vasta/core'
+import type { CalendarEntry, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyValue } from '@vasta/core'
 import { isClosedTask, statusProperty } from '@vasta/core'
 import { clone } from './clone.ts'
 import type { ObjectSaveObserver } from './object-saves.ts'
@@ -118,3 +118,15 @@ export function createCompletionFeedback(options: {
 
 export type CompletionFeedback = ReturnType<typeof createCompletionFeedback>
 export const COMPLETION_FEEDBACK: InjectionKey<CompletionFeedback> = Symbol('completion-feedback')
+
+/**
+ * What a calendar entry's checkbox asks the view that kept it after a completion (the agenda
+ * layout): the completion the entry is still shown for, and its Undo. Only an agenda that keeps
+ * entries provides it; the Calendar page does not, so its checkboxes work straight on the object.
+ */
+export interface EntryCompletion {
+  /** The completion this entry is kept for, if it is (another entry of the same task is not). */
+  retained: (entry: CalendarEntry) => RetainedCompletion | undefined
+  undo: (objectId: Id) => void
+}
+export const ENTRY_COMPLETION: InjectionKey<EntryCompletion> = Symbol('entry-completion')

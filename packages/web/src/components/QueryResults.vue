@@ -84,7 +84,8 @@ function moved(saved: ObjectSummary) {
 // saves, then stays in place, checked and struck, through the background re-runs; only a fresh
 // view (a reload, the query's own definition changing) drops it. The query no longer returns it,
 // so its latest row is kept here and merged back where it was. A query spans types; only
-// task-type objects are retained. The agenda (Phase 3) lists no rows, so nothing is ever kept.
+// task-type objects are retained. An agenda keeps its own completions (AgendaView), which list no
+// rows here, so nothing is ever kept for one.
 const kept = reactive(new Map<Id, ObjectSummary>())
 function replaceRow(object: ObjectRecord | ObjectSummary) {
   const index = results.value.findIndex((o) => o.id === object.id)
