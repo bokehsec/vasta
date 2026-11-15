@@ -340,7 +340,7 @@ try {
   if (await page.locator('[data-process-action]').count()) throw new Error('review still shows individual action buttons')
   await page.locator('[data-process-more]').waitFor()
   const doneTitle = (await page.locator('[data-process-title]').innerText()).trim()
-  await reviewAction('Done')
+  await reviewAction('Mark done')
   await until(async () => (await pos.innerText()).startsWith('3 of'), 'Done moved on')
   const phoneDone = tasks.find((t) => t.title === doneTitle)
   await until(async () => (await statusOf(phoneDone.id)) === doneId, 'Done saved')

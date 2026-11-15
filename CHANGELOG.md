@@ -129,8 +129,10 @@ GitHub release page.
 
 ### Changed
 
-- **A task's page buttons look like buttons.** Done, Defer, Drop and Next step are drawn alike, as
-  raised buttons, so none looks like the task's current status. On a phone these buttons, the page's ⋯ and the Undo and close buttons on a notice
+- **A task's page buttons look like buttons.** They are raised buttons named with verbs: **Mark
+  done** (tinted, so it stands out), **Defer…** and **Drop**. New task types name the first one Mark
+  done; an existing type keeps its names (Type settings › Quick actions). None is filled, so none
+  looks like the task's current status. On a phone these buttons, the page's ⋯ and the Undo and close buttons on a notice
   are full finger size, and a notice with Undo stays while your finger or pointer is on it.
 - **Defer from a list says which task.** The Defer sheet opened from a row names the task, picks no
   day until you do (today is only marked as today), has larger days and month arrows on a phone,

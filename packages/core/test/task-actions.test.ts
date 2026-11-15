@@ -27,13 +27,13 @@ const day = (value: string, rrule?: string): PropertyValue => ({ kind: 'date', v
 const names = (type: ObjectType) => quickActionsOf(type).map((a) => a.name)
 
 describe('default quick actions', () => {
-  it('are Done and Defer (the due date) on the built-in task', () => {
-    expect(names(task)).toEqual(['Done', 'Defer'])
+  it('are Mark done and Defer (the due date) on the built-in task', () => {
+    expect(names(task)).toEqual(['Mark done', 'Defer'])
     expect(askOf(task, quickActionsOf(task)[1]!)?.def.id).toBe('due')
   })
 
   it('add Drop for a second option meaning done, and Next step for a next step field', () => {
-    expect(names(triageTask({ nextStepField: 'next' }))).toEqual(['Done', 'Defer', 'Drop', 'Next step'])
+    expect(names(triageTask({ nextStepField: 'next' }))).toEqual(['Mark done', 'Defer', 'Drop', 'Next step'])
   })
 
   it('follow the older settings, falling back when they name something gone or of the wrong kind', () => {
@@ -245,6 +245,11 @@ describe('an action on many objects', () => {
     expect(quickActionMessage(type, defer, one, { ...format, due: day('2026-11-18') })).toBe('Defer · Do date <2026-11-20> (after its due date, <2026-11-18>)')
     const all = quickActionEdits(type, objects, defer, context, day('2026-11-20'))
     expect(quickActionMessage(type, defer, all, { ...format, due: day('2026-11-18'), failed: 1 })).toBe('Defer · Do date <2026-11-20> · 3 tasks · 1 not saved')
+
+    // A button named for what it does ("Mark done") says what happened ("Done").
+    const markDone = quickActionsOf(task)[0]!
+    expect(markDone.name).toBe('Mark done')
+    expect(quickActionMessage(task, markDone, quickActionEdits(task, objects, markDone, context), format)).toBe('Done · 3 tasks')
   })
 })
 

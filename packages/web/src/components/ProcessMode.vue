@@ -4,7 +4,7 @@
 // queue, Undo, explicit save, and reading position across interruptions.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Doc, ObjectSummary, ObjectType, QuickActionDef } from '@vasta/core'
-import { askOf, docToPlainText, holdAction, isClosedTask, nextStepFieldOf, parentFieldOf, quickActionsOf, reviewedAction, withReviewed, settlesTriage, triageDispositionActions, needsTriage } from '@vasta/core'
+import { askOf, docToPlainText, quickActionDoneName, holdAction, isClosedTask, nextStepFieldOf, parentFieldOf, quickActionsOf, reviewedAction, withReviewed, settlesTriage, triageDispositionActions, needsTriage } from '@vasta/core'
 import { api } from '../lib/api.ts'
 import { rowFields, type ListField } from '../lib/columns.ts'
 import { onChange } from '../lib/events.ts'
@@ -395,7 +395,7 @@ const actionButton = 'flex min-h-12 min-w-0 items-center justify-center gap-2 ro
           <p class="text-lg font-semibold">{{ triaging ? 'Triage session finished' : 'Review session finished' }}</p>
           <p class="text-sm text-ink-soft" data-process-summary>
             <template v-if="summary.outcomes.length || summary.skipped">
-              {{ [...summary.outcomes.map((o) => `${o.name} ${o.count}`), ...(summary.skipped ? [`${summary.skipped} left for later`] : [])].join(' · ') }}
+              {{ [...summary.outcomes.map((o) => `${quickActionDoneName(o.name)} ${o.count}`), ...(summary.skipped ? [`${summary.skipped} left for later`] : [])].join(' · ') }}
             </template>
             <template v-else>Nothing changed</template>
           </p>
