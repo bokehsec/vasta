@@ -124,6 +124,11 @@ GitHub release page.
 
 ### Changed
 
+- **Swipes on a phone are less sticky.** A short swipe on a task row no longer springs back: a quick
+  flick counts as much as a long drag. Flick right (or drag a third of the way) to defer; a short,
+  slow swipe right uncovers the Defer button, and a short swipe left uncovers Done and the others.
+  Swipe back to close. Rows also settle more smoothly, and the review screen's swipe to defer or
+  skip needs a quarter of the screen, or a flick.
 - **Whole titles on a phone.** Task lists, search results, a page's links and a tag's list wrap
   long titles onto more lines instead of cutting them off. Phone task rows no longer show when a task
   was last edited or keep a blank indent for subtask arrows, so the title has the row's width, and

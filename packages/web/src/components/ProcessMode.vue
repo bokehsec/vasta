@@ -14,6 +14,7 @@ import { quickAsk, runQuickAction, type QuickSave } from '../lib/quick-actions.t
 import { currentId, isFinished, moveBy, recordOutcome, reviewActions, skipCurrent, skippedSession, summarize, undoOutcome, workflowTitle, type ReviewSession } from '../lib/review-session.ts'
 import { lastError, ui } from '../lib/state.ts'
 import { addSubtask, subtasksOf } from '../lib/subtasks.ts'
+import { cardRelease, DECIDE, tracker } from '../lib/swipe.ts'
 import { isPhone, keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import DocPreview from './DocPreview.ts'
@@ -289,16 +290,22 @@ function onKey(event: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
-// A phone: swipe the card (right: Defer, left: skip). As in SwipeRow the direction is decided after
-// 10px and kept: a mostly vertical move scrolls, and a scroll that drifts sideways does not swipe.
-const DECIDE = 10
+// A phone: swipe the card (right: Defer, left: skip), dragged a quarter of the screen or flicked
+// (lib/swipe.ts). As in SwipeRow the direction is decided after 10px and kept: a mostly vertical
+// move scrolls, and a scroll that drifts sideways does not swipe.
 let touch: { x: number; y: number; direction?: 'x' | 'y' } | undefined
 const shift = ref(0)
+const springing = ref(false)
+const speed = tracker()
+const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 function onTouchStart(event: TouchEvent) {
   const t = event.touches[0]
   shift.value = 0
+  springing.value = false
   if (blocked.value || (event.target as Element | null)?.closest('button, a, input, textarea, [contenteditable]')) { touch = undefined; return }
   touch = t && event.touches.length === 1 && t.clientX > 24 ? { x: t.clientX, y: t.clientY } : undefined
+  speed.reset()
+  if (touch) speed.add(touch.x)
 }
 function onTouchMove(event: TouchEvent) {
   const t = event.touches[0]
@@ -310,7 +317,10 @@ function onTouchMove(event: TouchEvent) {
     else if (Math.abs(dx) > DECIDE) touch.direction = 'x'
     else return
   }
-  if (touch.direction === 'x') shift.value = dx
+  if (touch.direction === 'x') {
+    shift.value = dx
+    speed.add(t.clientX)
+  }
 }
 /** The browser took the touch (a scroll, a system gesture): no swipe. */
 function onTouchCancel() {
@@ -319,11 +329,13 @@ function onTouchCancel() {
 }
 function onTouchEnd() {
   const dx = touch?.direction === 'x' ? shift.value : 0
+  const end = cardRelease(dx, speed.velocity(), window.innerWidth)
+  // A card that stays springs back; one that goes is replaced by the next.
+  springing.value = end === 0 && dx !== 0 && !reducedMotion
   shift.value = 0
   touch = undefined
-  const width = window.innerWidth
-  if (dx > width * 0.35 && rightAction.value) void act(rightAction.value, null)
-  else if (dx < -width * 0.35) skip()
+  if (end > 0 && rightAction.value) void act(rightAction.value, null)
+  else if (end < 0) skip()
 }
 
 // On a phone the buttons are where notices show: the notice (Undo) sits just above them instead.
@@ -395,6 +407,7 @@ const actionButton = 'flex min-h-12 min-w-0 items-center justify-center gap-2 ro
           <div
             ref="card"
             class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-5"
+            :class="springing ? 'transition-[transform,opacity] duration-250 ease-[cubic-bezier(0.25,1,0.5,1)]' : ''"
             :style="shift ? { transform: `translateX(${shift}px)`, opacity: String(1 - Math.min(Math.abs(shift) / 400, 0.5)) } : undefined"
             data-process-card
             @touchstart.passive="onTouchStart"

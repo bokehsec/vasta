@@ -67,8 +67,8 @@ const put = async (url, data) => {
 
 // Touches ------------------------------------------------------------------
 const cdp = engine === 'webkit' ? undefined : await context.newCDPSession(page)
-/** A finger from (x, y) moved by (dx, dy) in steps, then lifted. */
-async function swipe(x, y, dx, dy, steps = 8) {
+/** A finger from (x, y) moved by (dx, dy) in steps of 16ms, then lifted (after `hold` ms still: no flick). */
+async function swipe(x, y, dx, dy, steps = 8, hold = 0) {
   if (cdp) {
     const at = (px, py) => [{ x: px, y: py, id: 1 }]
     await sleep(700)
@@ -77,11 +77,12 @@ async function swipe(x, y, dx, dy, steps = 8) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(x + (dx * i) / steps, y + (dy * i) / steps) })
       await sleep(16)
     }
+    if (hold) await sleep(hold)
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     return
   }
   await page.evaluate(
-    async ({ x, y, dx, dy, steps }) => {
+    async ({ x, y, dx, dy, steps, hold }) => {
       const target = document.elementFromPoint(x, y)
       if (!target) throw new Error(`nothing to touch at ${x}, ${y}`)
       // Linux WebKit has no Touch constructor: an event carrying touch-shaped points instead.
@@ -98,9 +99,10 @@ async function swipe(x, y, dx, dy, steps = 8) {
         send('touchmove', t, [t])
         await new Promise((r) => setTimeout(r, 16))
       }
+      if (hold) await new Promise((r) => setTimeout(r, hold))
       send('touchend', t, [])
     },
-    { x, y, dx, dy, steps }
+    { x, y, dx, dy, steps, hold }
   )
 }
 /** A finger's tap at the middle of the element (Chromium: a real touch; WebKit: its touches, then a click). */
@@ -234,7 +236,7 @@ try {
   await sleep(500)
   if ((await tip.count()) !== 0) throw new Error('the tip came back after a reload')
 
-  step('swipe right past 40%: Defer asks in the bottom sheet, sets the do date and status; Undo')
+  step('swipe right past 35%: Defer asks in the bottom sheet, sets the do date and status; Undo')
   let p = await centre(row(a))
   await swipe(60, p.y, W * 0.6, 0)
   await page.locator('[data-quick-ask-sheet]').waitFor()
@@ -245,15 +247,31 @@ try {
   await tap(toast.filter({ hasText: 'Defer' }).locator('button', { hasText: 'Undo' }))
   await until(async () => !(await dodateOf(a.id)) && (await statusOf(a.id)) === todo.value[0], 'Undo put the task back')
 
-  step('a short swipe right springs back and does nothing')
+  step('a tiny slow swipe right springs back; a short slow one uncovers Defer, which a swipe back hides')
   p = await centre(row(b))
-  await swipe(60, p.y, 60, 0)
+  const open = page.locator('[data-swipe-open]')
+  await swipe(60, p.y, 25, 0, 8, 200)
   await sleep(500)
-  if ((await page.locator('[data-quick-ask-sheet]').count()) !== 0) throw new Error('a short swipe deferred')
+  if ((await open.count()) !== 0 || (await page.locator('[data-quick-ask-sheet]').count()) !== 0) throw new Error('a tiny swipe did something')
+  await swipe(60, p.y, 60, 0, 8, 200)
+  await open.locator('[data-swipe-button="defer"]').waitFor()
+  if ((await page.locator('[data-quick-ask-sheet]').count()) !== 0) throw new Error('a short slow swipe deferred')
+  await sleep(400)
+  await swipe(150, p.y, -60, 0, 8, 200)
+  await until(async () => (await open.count()) === 0, 'a swipe back closed the row')
+
+  step('a short quick flick right (15% of the row) defers; a short flick left uncovers the buttons')
+  await swipe(60, p.y, W * 0.18, 0, 4)
+  await page.locator('[data-quick-ask-sheet]').waitFor()
+  await page.keyboard.press('Escape')
+  await until(async () => (await page.locator('[data-quick-ask-sheet]').count()) === 0, 'the sheet closed')
+  await swipe(W - 40, p.y, -50, 0, 3)
+  await open.waitFor()
+  await tap(page.locator('main h1').first())
+  await until(async () => (await open.count()) === 0, 'the open row closed')
 
   step('swipe left uncovers Done first and More; Done closes the task without opening it')
   await swipe(W - 40, p.y, -200, 0)
-  const open = page.locator('[data-swipe-open]')
   await open.waitFor()
   const buttons = await open.locator('[data-swipe-button]').evaluateAll((els) => els.map((e) => e.dataset.swipeButton))
   if (buttons[0] !== 'done' || buttons.at(-1) !== 'more') throw new Error(`swipe buttons: ${buttons}`)

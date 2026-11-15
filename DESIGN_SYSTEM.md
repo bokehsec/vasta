@@ -93,9 +93,13 @@ fields, the start of the notes, Open; then the quick actions as large buttons (t
 with its number key), Break into steps for types with subtasks, Back and Skip. It ends with what
 was done.
 
-**Swipes** (`SwipeRow`, touch screens): on a row of a type with quick actions, a swipe right past 40%
-runs the type's Defer (else its first quick action); a swipe left uncovers the other actions, Done first, then
-More (the row's long-press menu). One row is open at a time; a tap elsewhere closes it. On phones
+**Swipes** (`SwipeRow`, touch screens): on a row of a type with quick actions, a swipe right past 35%,
+or a flick past 15%, runs the type's Defer (else its first quick action); a slower one past 40px
+uncovers it as a button. A swipe left past 40px (or a flick) uncovers the other actions, Done first,
+then More (the row's long-press menu). As on iOS a release is judged by distance and speed
+(`lib/swipe.ts`), so a deliberate short swipe never springs back; an open row closes when swiped
+back 40px, flicked back or tapped, and settles with an ease-out (no bounce). Process mode's card
+goes past 25% of the screen, or flicked past 40px. One row is open at a time; a tap elsewhere closes it. On phones
 swipes replace the row's buttons; tablets keep both. Swipes start 24px in from the left edge (the
 drawer's). Done is a deep green, Defer the (light theme's) accent blue, the rest warm greys: fixed
 shades, so the white labels stay readable in both themes. A tip says it once per device.
