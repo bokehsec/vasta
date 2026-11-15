@@ -1,5 +1,5 @@
-// Custom phone menu: choices, order, limits, reload, types, missing types, space isolation, reset
-// and desktop visibility. Runs only against scripts/test-env.sh's isolated data.
+// Custom phone menu: choices, order, limits, reload, types, missing types, one menu for every space,
+// reset and desktop visibility. Runs only against scripts/test-env.sh's isolated data.
 //   node phone-menu.mjs [chromium|webkit] [base]        MODE=json disables the replica.
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -72,14 +72,14 @@ try {
   console.log('• any type can replace a built-in, retains its route and active state')
   await page.goto(`${base}/settings#appearance`)
   await settings.getByRole('button', { name: 'Remove Calendar', exact: true }).click()
-  await add.selectOption(`type:${type.id}`)
+  await add.selectOption(`type:${type.pluralName.toLowerCase()}`)
   const typeTab = bar.locator(`[data-tab]`).filter({ hasText: type.pluralName })
   assert.equal(await typeTab.getAttribute('href'), `/t/${type.id}`)
   await typeTab.click()
   await page.waitForURL(`${base}/t/${type.id}`)
   assert.equal(await typeTab.getAttribute('aria-current'), 'page')
 
-  console.log('• a one-item menu, fallback for unavailable types, and defaults for another space')
+  console.log('• a one-item menu, fallback for unavailable types, and the same menu in another space')
   await page.goto(`${base}/settings#appearance`)
   for (const name of ['Home', 'Tasks', 'Today', 'Search']) await settings.getByRole('button', { name: `Remove ${name}`, exact: true }).click()
   assert(await settings.getByRole('button', { name: `Remove ${type.pluralName}`, exact: true }).isDisabled())
@@ -99,15 +99,15 @@ try {
     await page.evaluate((id) => localStorage.setItem('vasta.space', id), spaces[1].id)
     await page.reload({ waitUntil: 'domcontentloaded' })
     await settings.waitFor()
-    await wait(async () => (await labels())[0] === 'Home', 'another space has defaults')
+    await wait(async () => (await labels()).includes('Settings') && !(await labels()).includes('Home'), 'another space shares the menu')
     await page.evaluate((id) => localStorage.setItem('vasta.space', id), spaceId)
     await page.reload({ waitUntil: 'domcontentloaded' })
     await settings.waitFor()
-    await wait(async () => (await labels()).includes('Settings') && !(await labels()).includes('Home'), 'original space keeps choices')
+    await wait(async () => (await labels()).includes('Settings') && !(await labels()).includes('Home'), 'original space has the same menu')
   }
   await settings.getByRole('button', { name: 'Reset to defaults', exact: true }).click()
 
-  console.log('• 320px phone fits, controls stay 44px, desktop has no bottom bar')
+  console.log('• 320px phone fits, controls stay 44px, desktop has no bottom bar or its setting')
   await page.setViewportSize({ width: 320, height: 700 })
   await settings.scrollIntoViewIfNeeded()
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
@@ -116,6 +116,7 @@ try {
   await page.screenshot({ path: '/private/tmp/vasta-phone-menu.png' })
   await page.setViewportSize({ width: 1280, height: 900 })
   await wait(async () => !(await bar.count()), 'desktop hides phone bar')
+  assert(!(await settings.isVisible()), 'desktop hides the bottom menu setting')
   assert.deepEqual(errors, [])
   console.log(`PASS phone-menu (${engine}, ${process.env.MODE ?? 'replica'})`)
 } finally {

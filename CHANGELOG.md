@@ -8,9 +8,10 @@ GitHub release page.
 
 ### Added
 
-- **Choose your phone bottom menu.** Settings › Appearance › Phone bottom menu lets you pick one to five places
-  (including Today, Settings and your object types), reorder them with arrows, or reset to the
-  original menu. Changes appear immediately and stay on this device for each account and space.
+- **Choose your phone bottom menu.** On a phone, Settings › Appearance › Bottom menu lets you pick one
+  to five places (including Today, Settings and your object types), reorder them with arrows, or
+  reset to the original menu. Changes appear immediately, stay on this device, and are the same in
+  every space; a type shows in each space that has a type of that name.
 
 - **A task you mark Done stays where it was until you leave.** On a type's page (Tasks views, in
   every layout: list, table, phone rows, cards and board, plus the Done button, swipe, menu and
