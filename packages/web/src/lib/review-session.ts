@@ -6,6 +6,8 @@
 // another. Each object counts once in the end's totals: its last outcome, taken off again by Undo.
 import type { Id, QuickActionDef } from '@vasta/core'
 
+export type WorkflowKind = 'triage' | 'review'
+
 export interface ReviewSession {
   v: 1
   userId: Id
@@ -24,13 +26,24 @@ export interface ReviewSession {
   skipped: Id[]
   /** An object opened from the review: coming back to the list from it reopens the review there. */
   openedId?: Id
+  /** Optional for old saved sessions, which remain view-scoped reviews. */
+  kind?: WorkflowKind
+  scope?: 'space' | 'view'
+  scopeLabel?: string
+  fieldIds?: string[]
+  /** Reading position and notes disclosure survive Pause and Open details. */
+  cards?: Record<Id, { scrollTop: number; notesOpen: boolean }>
 }
 
 export const REVIEW_KEY = 'vasta.review'
 
-export function startSession(scope: Pick<ReviewSession, 'userId' | 'spaceId' | 'typeId' | 'viewId' | 'viewName'>, ids: readonly Id[]): ReviewSession {
+export type ReviewScope = Pick<ReviewSession, 'userId' | 'spaceId' | 'typeId' | 'viewId' | 'viewName' | 'kind' | 'scope' | 'scopeLabel' | 'fieldIds'>
+
+export function startSession(scope: ReviewScope, ids: readonly Id[]): ReviewSession {
   return { v: 1, ...scope, ids: [...ids], index: 0, outcomes: {}, skipped: [] }
 }
+
+export const workflowTitle = (session: ReviewSession) => session.kind === 'triage' ? 'Triage incoming' : session.scope === 'space' ? 'Review commitments' : 'Review this view'
 
 export const isFinished = (session: ReviewSession) => session.index >= session.ids.length
 export const currentId = (session: ReviewSession): Id | undefined => session.ids[session.index]
@@ -82,8 +95,8 @@ export function summarize(session: ReviewSession): { outcomes: { name: string; c
 /** A new review of the objects skipped in this one, in the same order. */
 export function skippedSession(session: ReviewSession): ReviewSession {
   const skipped = new Set(session.skipped.filter((id) => !session.outcomes[id]))
-  const { userId, spaceId, typeId, viewId, viewName } = session
-  return startSession({ userId, spaceId, typeId, viewId, viewName }, session.ids.filter((id) => skipped.has(id)))
+  const { ids, index: _, outcomes: __, skipped: ___, openedId: ____, cards: _____, v: ______, ...scope } = session
+  return startSession(scope, ids.filter((id) => skipped.has(id)))
 }
 
 /**
@@ -132,6 +145,11 @@ function valid(data: unknown): ReviewSession | null {
   if (![s.userId, s.spaceId, s.typeId, s.viewId, s.viewName].every((x) => typeof x === 'string') || !strings(s.ids) || !strings(s.skipped)) return null
   if (typeof s.index !== 'number' || !Number.isInteger(s.index) || s.index < 0 || s.index > s.ids.length) return null
   if (!s.outcomes || typeof s.outcomes !== 'object' || Object.values(s.outcomes).some((x) => typeof x !== 'string')) return null
+  if (s.kind !== undefined && s.kind !== 'triage' && s.kind !== 'review') return null
+  if (s.scope !== undefined && s.scope !== 'space' && s.scope !== 'view') return null
+  if (s.scopeLabel !== undefined && typeof s.scopeLabel !== 'string') return null
+  if (s.fieldIds !== undefined && !strings(s.fieldIds)) return null
+  if (s.cards !== undefined && (!s.cards || typeof s.cards !== 'object' || Object.values(s.cards).some((c) => !c || !Number.isFinite(c.scrollTop) || c.scrollTop < 0 || typeof c.notesOpen !== 'boolean'))) return null
   return s as ReviewSession
 }
 

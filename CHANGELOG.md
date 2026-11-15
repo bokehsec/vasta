@@ -8,6 +8,16 @@ GitHub release page.
 
 ### Added
 
+- **Triage and review as two steps of one routine.** A task type's page has one **Triage & review**
+  button instead of a Review button on every view. It offers two queues across the whole space,
+  whatever view or filters you are on: **Triage incoming** (tasks with no status or an incoming one,
+  Inbox by default) and **Review commitments** (open, already-organised tasks due for review,
+  including ones on hold). In Triage you pick a status for each task; a next step or a date alone
+  leaves it in Triage, and a recent review never hides an incoming task. The review screen has a
+  shorter footer (Keep as is, and the other actions in a menu), notes you can open and close, and it
+  keeps your place in the notes when you pause or open a task's details. Reviewing just the current
+  view stays in the page's ⋯ menu as **Review this view…**. Type settings › Quick actions lets you
+  choose which statuses count as incoming.
 - **Search and filters in one place on a phone.** A type's page (Tasks and the rest) shows the view
   and a Filters button on one row, with a count of what is on, instead of a toolbar that scrolled
   sideways. Filters opens a sheet with Search this view, Mine, the view's filters and Arrange (sort,

@@ -95,7 +95,12 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   views: Array.isArray,
   openIn: optional((v) => v === 'page' || v === 'pane'),
   subtasks: optional((v) => isObject(v) && isNonEmpty((v as { parentField?: unknown }).parentField)),
-  quickActions: optional((v) => isObject(v) && Object.entries(v as object).every(([key, x]) => (key === 'actions' ? Array.isArray(x) && x.every(isQuickAction) : isNonEmpty(x)))),
+  quickActions: optional((v) => isObject(v) && Object.entries(v as object).every(([key, x]) => {
+    if (key === 'actions') return Array.isArray(x) && x.every(isQuickAction)
+    if (key === 'triageStatuses') return Array.isArray(x) && x.every(isNonEmpty)
+    if (key === 'reviewEvery') return typeof x === 'number' && Number.isInteger(x) && x >= 0
+    return isNonEmpty(x)
+  })),
   aliases: isStringArray,
   tagIds: isStringArray,
   collectionIds: isStringArray,

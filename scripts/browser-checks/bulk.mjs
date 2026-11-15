@@ -125,6 +125,14 @@ const openView = async () => {
   } else await page.locator('main :is(button, [role=button])', { hasText: /^\s*Bulk\s*$/ }).first().click()
   await page.locator(`main a[href="/o/${tasks[0].id}"]`).waitFor()
 }
+const openReviewChooser = async () => {
+  await page.locator('main header button[title="More"]').click()
+  await page.locator('[data-review-view]').click()
+}
+const reviewAction = async (name) => {
+  await page.locator('[data-process-more]').click()
+  await page.locator('[role="menu"] button').filter({ hasText: new RegExp(`^\\s*${name}\\s*$`) }).click()
+}
 const row = (task) => page.locator(`main a[href="/o/${task.id}"]`).first()
 const bar = () => page.locator('[data-bulk-bar]')
 const count = async () => ((await bar().count()) ? (await page.locator('[data-bulk-count]').innerText()).trim() : '')
@@ -195,6 +203,7 @@ try {
 
   step('review: keys 1 (Done), → skip, ← back, 2 (Defer), to the end, its counts (each task once), Escape')
   await openView()
+  await openReviewChooser()
   if (!/Review 5 tasks/.test(await page.locator('[data-process]').innerText())) throw new Error(`review button: ${await page.locator('[data-process]').innerText()}`)
   await page.locator('[data-process]').click()
   const position = page.locator('[data-process-position]')
@@ -219,17 +228,18 @@ try {
   for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight')
   await page.locator('[data-process-end]').waitFor()
   const summary = await page.locator('[data-process-summary]').innerText()
-  if (!/Done 1/.test(summary) || !/Defer 1/.test(summary) || !/3 skipped, unchanged/.test(summary)) throw new Error(`end summary: ${summary}`)
+  if (!/Done 1/.test(summary) || !/Defer 1/.test(summary) || !/3 left for later/.test(summary)) throw new Error(`end summary: ${summary}`)
   await page.keyboard.press('Escape')
   await until(async () => (await page.locator('[data-process-mode]').count()) === 0, 'Escape closed it')
   // Closed at the end, the review is over: no Resume, a new review offered.
-  await until(async () => (await page.locator('[data-process]').count()) === 1 && (await page.locator('[data-process-resume]').count()) === 0, 'a finished review is not offered to resume')
+  await until(async () => (await page.locator('[data-process-resume]').count()) === 0, 'a finished review is not offered to resume')
+  await openReviewChooser()
 
   step('review dates: the deferred task was reviewed today, so the review is of 3; All 4 (open); R marks one reviewed; whole notes')
   const deferred = tasks.find((t) => t.title === deferTitle)
   if (dayOf((await propsOf(deferred.id)).reviewed) !== days.today) throw new Error('Defer in a review did not mark the task reviewed')
   await until(async () => /Review 3 tasks/.test(await page.locator('[data-process]').innerText()), 'Review 3 tasks (one reviewed today, one done)')
-  if (!/All 4/.test(await page.locator('[data-process-all]').innerText())) throw new Error(`review all: ${await page.locator('[data-process-all]').innerText()}`)
+  if (!/Review all 4/.test(await page.locator('[data-process-all]').innerText())) throw new Error(`review all: ${await page.locator('[data-process-all]').innerText()}`)
   await page.locator('[data-process-all]').click()
   await until(async () => (await position.innerText()).startsWith('1 of 4'), 'Review all: 1 of 4')
   const reviewedTitle = await titleNow()
@@ -240,6 +250,7 @@ try {
   await until(async () => dayOf((await propsOf(reviewedId)).reviewed) === days.today, 'R set Last reviewed to today')
   if ((await statusOf(reviewedId)) !== statusBefore) throw new Error('Reviewed changed the status')
   if (!/^Reviewed/.test(await toast().innerText())) throw new Error(`notice: ${await toast().innerText()}`)
+  await page.locator('[data-process-notes-toggle]').click()
   await until(async () => (await page.locator('[data-process-text]').count()) === 1 && (await page.locator('[data-process-text]').innerText()).includes(`The end of the notes ${tag}.`), 'the whole notes in the review')
   await page.keyboard.press('Escape')
   await until(async () => (await page.locator('[data-process-mode]').count()) === 0, 'Escape closed it')
@@ -309,8 +320,9 @@ try {
   await tap(toast().locator('button', { hasText: 'Undo' }))
   for (const t of phoneOrder.slice(0, 2)) await until(async () => (await statusOf(t.id)) === todo, `${t.title} back`)
 
-  step('phone: "Review 5 tasks" shows in full under the view; the review fills the screen; a swipe left skips; Done moves on')
+  step('phone: Review this view in More; full-screen review; swipe left skips; Done moves on')
   await openView()
+  await openReviewChooser()
   const entry = page.locator('[data-process]')
   await entry.waitFor()
   const entryBox = await entry.boundingBox()
@@ -324,12 +336,11 @@ try {
   const card = await page.locator('[data-process-card]').boundingBox()
   await touchAt(card.x + card.width - 40, card.y + 80, -260, 0, 8)
   await until(async () => (await pos.innerText()).startsWith('2 of'), 'a swipe left skipped')
-  // Three decisions as buttons (More holds the rest: none for this type, with no Drop or subtasks).
-  const featured = await page.locator('[data-process-action]').evaluateAll((els) => els.map((e) => e.getAttribute('data-process-action')))
-  if (featured.join() !== 'done,defer,next-step') throw new Error(`review buttons: ${featured}`)
-  if (await page.locator('[data-process-more]').count()) throw new Error('More shown with nothing in it')
+  // A compact footer: keep the plan or change it; actions are in the menu.
+  if (await page.locator('[data-process-action]').count()) throw new Error('review still shows individual action buttons')
+  await page.locator('[data-process-more]').waitFor()
   const doneTitle = (await page.locator('[data-process-title]').innerText()).trim()
-  await tap(page.locator('[data-process-action="done"]'))
+  await reviewAction('Done')
   await until(async () => (await pos.innerText()).startsWith('3 of'), 'Done moved on')
   const phoneDone = tasks.find((t) => t.title === doneTitle)
   await until(async () => (await statusOf(phoneDone.id)) === doneId, 'Done saved')
@@ -340,7 +351,7 @@ try {
 
   step('phone: the next step has a visible Save; it saves the text and stays on the task; Next goes on')
   const stepTitle = (await page.locator('[data-process-title]').innerText()).trim()
-  await tap(page.locator('[data-process-action="next-step"]'))
+  await reviewAction('Next step…')
   const save = page.locator('[data-next-step] [data-ask-save]')
   await save.waitFor()
   if ((await save.innerText()).trim() !== 'Save') throw new Error(`save button: ${await save.innerText()}`)
@@ -355,7 +366,7 @@ try {
   const stepTask = tasks.find((t) => t.title === stepTitle)
   await until(async () => (await propsOf(stepTask.id)).bulknext?.value === 'Call the plumber', 'the next step saved')
   // Cancel writes nothing and stays.
-  await tap(page.locator('[data-process-action="next-step"]'))
+  await reviewAction('Next step…')
   await page.locator('[data-next-step] input').fill('Never saved')
   await tap(page.locator('[data-next-step] [data-ask-cancel]'))
   await until(async () => (await page.locator('[data-next-step]').count()) === 0, 'Cancel closed the question')
@@ -382,12 +393,14 @@ try {
   await page.locator('[data-process-end]').waitFor()
   const phoneSummary = await page.locator('[data-process-summary]').innerText()
   // Skipped: the swiped one, the one whose Done was undone, two more; the next step is its own.
-  if (!/Next step 1/.test(phoneSummary) || /Done/.test(phoneSummary) || !/4 skipped, unchanged/.test(phoneSummary)) throw new Error(`end summary: ${phoneSummary}`)
+  if (!/Next step 1/.test(phoneSummary) || /Done/.test(phoneSummary) || !/4 left for later/.test(phoneSummary)) throw new Error(`end summary: ${phoneSummary}`)
   await tap(page.locator('[data-process-review-skipped]'))
   await until(async () => (await pos.innerText()).startsWith('1 of 4'), 'a review of the 4 skipped')
   await tap(page.locator('[data-process-close]'))
+  await page.locator('[data-workflows]').click()
   await tap(page.locator('[data-process-end-session]'))
-  await until(async () => (await page.locator('[data-process]').count()) === 1 && (await resume.count()) === 0, 'End forgot the review')
+  await page.getByRole('button', { name: 'End session', exact: true }).click()
+  await until(async () => (await resume.count()) === 0, 'End forgot the review')
   await phoneContext.close()
 
   if (problems.length) throw new Error(problems.join('\n'))

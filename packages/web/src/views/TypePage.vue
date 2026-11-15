@@ -3,7 +3,7 @@ import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, dueForReview, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, reviewEveryOf, reviewFieldOf, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
+import { RANK_PROPERTY_ID, dueForReview, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
 import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -13,6 +13,7 @@ import FilterGroupEditor from '../components/FilterGroupEditor.vue'
 import FlowMetrics from '../components/FlowMetrics.vue'
 import ObjectCollection from '../components/ObjectCollection.vue'
 import ProcessMode from '../components/ProcessMode.vue'
+import WorkflowChooser from '../components/WorkflowChooser.vue'
 import HabitBoard from '../components/HabitBoard.vue'
 import TagTree from '../components/TagTree.vue'
 import PopoverMenu from '../components/PopoverMenu.vue'
@@ -31,7 +32,7 @@ import { keysOf } from '../lib/shortcuts.ts'
 import { meId, sharedSpace } from '../lib/people.ts'
 import { primeSummaries, replaceType, typesById, unsavedTypes, workspace } from '../lib/state.ts'
 import { session } from '../lib/session.ts'
-import { readSession, startSession, undoOutcome, writeSession, type ReviewSession } from '../lib/review-session.ts'
+import { readSession, startSession, undoOutcome, writeSession, workflowTitle, type WorkflowKind, type ReviewSession } from '../lib/review-session.ts'
 import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
 import { copyObjectLink, openObject } from '../lib/open.ts'
 import { quickActionMenuItems } from '../lib/quick-actions.ts'
@@ -282,48 +283,55 @@ const viewPickerOpen = ref(false)
 const viewPickerAnchor = ref<HTMLElement | null>(null)
 const currentViewLabel = computed(() => (metricsActive.value ? 'Metrics' : fixedActive.value && fixedView.value ? fixedView.value.label : view.value.name))
 
-// Review (ProcessMode): the view's open objects due for review one at a time, in its order (a type
-// with quick actions; a closed object is one whose status means done; due: not reviewed in the
-// type's number of days, @vasta/core task-review.ts). "Review 12 tasks" counts exactly the objects
-// it will show; "Review all" also takes the ones reviewed lately. The review is kept on this device
-// (lib/review-session.ts): closed, it offers Resume here; opened from it, an object's page leads
-// Back into it at the same place.
+// Global workflows have stable, explicit queues independent of the list's filters. A targeted
+// review remains in More. The session snapshots its scope/order/fields, with one paused on device.
 const processOpen = ref(false)
 const hasQuickActions = computed(() => quickActionsOf(type.value).length > 0)
-const openList = computed(() => (hasQuickActions.value ? visible.value.filter((o) => !isClosedTask(type.value, o)) : []))
-const processList = computed(() => {
-  const today = dayKey()
-  return openList.value.filter((o) => dueForReview(type.value, o, today))
-})
-/** Open ones reviewed lately, left out of the review unless it is of all of them. */
-const reviewedLately = computed(() => openList.value.length - processList.value.length)
-const reviewSpan = computed(() => {
-  const every = reviewEveryOf(type.value)
-  return every === 1 ? 'today' : `in the last ${every} days`
-})
-const reviewable = computed(() => !fixedActive.value && !agendaActive.value && hasQuickActions.value)
-const canProcess = computed(() => reviewable.value && processList.value.length > 0)
-const canReviewAll = computed(() => reviewable.value && !!reviewFieldOf(type.value) && reviewedLately.value > 0)
-const processFields = computed(() =>
-  view.value.layout === 'table' ? rowFieldsFromTable(tableColumns(view.value.table, [props.id])) : view.value.list?.fields ? listFields(view.value.list, [props.id]) : []
-)
-const reviewNoun = (n: number) => (n === 1 ? type.value?.name : type.value?.pluralName)?.toLowerCase() ?? ''
+const taskWorkflows = computed(() => type.value?.system === 'task')
+const reviewable = computed(() => !fixedActive.value && !agendaActive.value && (hasQuickActions.value || !!reviewFieldOf(type.value)))
+const openList = computed(() => visible.value.filter((o) => !isClosedTask(type.value, o)))
+const processList = computed(() => openList.value.filter((o) => dueForReview(type.value, o, dayKey())))
+const queues = computed(() => taskWorkflowQueues(type.value, [...objects.value].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)), dayKey()))
+const viewScope = computed(() => `${view.value.name}${showMine.value && mineOnly.value ? ' · Mine' : ''}${filterText.value.trim() ? ` · Search: “${filterText.value.trim()}”` : ''}`)
 const review = ref<ReviewSession | null>(null)
+const currentFields = computed(() => view.value.layout === 'table' ? rowFieldsFromTable(tableColumns(view.value.table, [props.id])) : view.value.list?.fields ? listFields(view.value.list, [props.id]) : [])
+const processFields = computed(() => review.value?.fieldIds ? listFields({ fields: review.value.fieldIds }, [props.id]) : currentFields.value)
+const workflowOpen = ref(false)
+const workflowMode = ref<'tasks' | 'view'>('tasks')
+const workflowAnchor = ref<HTMLElement | null>(null)
+function chooseWorkflow(mode: 'tasks' | 'view', anchor: HTMLElement | null) {
+  menuOpen.value = false
+  workflowMode.value = mode
+  workflowAnchor.value = anchor
+  workflowOpen.value = true
+}
 function setReview(next: ReviewSession | null) {
   review.value = next
   writeSession(next)
 }
-function startProcess(all = false) {
-  const list = all ? openList.value : processList.value
-  if (!reviewable.value || !list.length || !session.user || !workspace.space) return
+async function startProcess(kind: WorkflowKind, scope: 'space' | 'view', all = false) {
+  if (scope === 'space' ? !taskWorkflows.value : !reviewable.value) return
+  if (!session.user || !workspace.space) return
+  if (review.value && !(await confirmDialog({ title: 'Start a new session?', message: `This replaces your paused ${workflowTitle(review.value).toLowerCase()} position. Changes to tasks stay saved.`, confirmLabel: 'Start new session' }))) return
+  const list = scope === 'space' ? queues.value[kind] : all ? openList.value : processList.value
+  if (!list.length || !session.user || !workspace.space) return
   clearSelection()
-  const scope = { userId: session.user.id, spaceId: workspace.space.id, typeId: props.id, viewId: view.value.id, viewName: view.value.name }
-  setReview(startSession(scope, list.map((o) => o.id)))
+  const fields = scope === 'space'
+    ? ['status', 'due', ...(type.value?.quickActions?.deferField ? [type.value.quickActions.deferField] : []), 'assignee']
+    : currentFields.value.filter((f) => f.on).map((f) => f.field)
+  setReview(startSession({
+    userId: session.user.id, spaceId: workspace.space.id, typeId: props.id,
+    viewId: view.value.id, viewName: view.value.name, kind, scope,
+    scopeLabel: scope === 'space' ? `All tasks in ${workspace.space.name}` : viewScope.value,
+    fieldIds: [...new Set(fields)],
+  }, list.map((o) => o.id)))
+  workflowOpen.value = false
   processOpen.value = true
 }
 function resumeReview() {
   if (!review.value) return
   clearSelection()
+  workflowOpen.value = false
   processOpen.value = true
 }
 function closeReview() {
@@ -331,8 +339,13 @@ function closeReview() {
   if (review.value && review.value.index >= review.value.ids.length) setReview(null)
 }
 function endReview() {
+  const origin = review.value?.viewId
   processOpen.value = false
   setReview(null)
+  if (origin && type.value?.views.some((v) => v.id === origin)) pickView(origin)
+}
+async function discardReview() {
+  if (await confirmDialog({ title: 'End this session?', message: 'Your task changes stay saved. Only the saved queue and position are cleared.', confirmLabel: 'End session' })) endReview()
 }
 // Undo of a decision from the notice, also once the review (or this page) has closed: the stored
 // session loses the outcome too, so the end does not count it.
@@ -658,6 +671,9 @@ async function newMenu(event: MouseEvent) {
       <div class="my-1 border-t border-line" />
       <template v-if="!fixedActive">
       <div class="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">View “{{ view.name }}”</div>
+      <button v-if="reviewable" class="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" data-review-view @click="chooseWorkflow('view', menuAnchor)">
+        <AppIcon fallback="ph:play" class="text-ink-soft" /> Review this view…
+      </button>
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="renameView">
         <AppIcon fallback="ph:pencil-simple" class="text-ink-soft" /> Rename view
       </button>
@@ -788,19 +804,6 @@ async function newMenu(event: MouseEvent) {
       </template>
 
       <div v-if="!isPhone" class="ml-auto flex items-center gap-1 whitespace-nowrap text-sm [&>*]:shrink-0">
-        <template v-if="!isPhone">
-          <button v-if="review && reviewable" class="flex items-center gap-1 rounded-lg px-2 py-1.5 font-medium text-ink hover:bg-hover" :title="`Back to ${review.index + 1} of ${review.ids.length} in ${review.viewName}`" data-process-resume @click="resumeReview">
-            <AppIcon fallback="ph:play" /> Resume review<template v-if="review.viewId !== view.id"> of {{ review.viewName }}</template>
-          </button>
-          <template v-else>
-            <button v-if="canProcess" class="flex items-center gap-1 rounded-lg px-2 py-1.5 font-medium text-ink hover:bg-hover" :title="`One ${type.name.toLowerCase()} at a time: mark it reviewed, decide or skip each`" data-process @click="startProcess()">
-              <AppIcon fallback="ph:play" /> Review {{ processList.length }} {{ reviewNoun(processList.length) }}
-            </button>
-            <button v-if="canReviewAll" class="rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover hover:text-ink" :title="`Also the ${reviewedLately} reviewed ${reviewSpan}`" data-process-all @click="startProcess(true)">
-              {{ canProcess ? 'All' : 'Review all' }} {{ openList.length }}
-            </button>
-          </template>
-        </template>
         <div v-if="!agendaActive" class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-ink-faint focus-within:bg-hover">
           <AppIcon fallback="ph:magnifying-glass" :size="14" />
           <input v-model="filterText" class="w-28 bg-transparent md:w-36 text-ink outline-none placeholder:text-ink-faint" placeholder="Filter…" />
@@ -959,27 +962,17 @@ async function newMenu(event: MouseEvent) {
         </template>
       </PopoverMenu>
     </div>
-    <!-- A phone: the review in full view under the controls, not one more button in the toolbar's scroll. -->
-    <div v-if="isPhone && reviewable && !loading" class="mt-3" data-review-entry>
-      <div v-if="review" class="flex gap-2">
-        <button class="flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-ink px-3 text-[15px] font-medium text-surface" data-process-resume @click="resumeReview">
-          <AppIcon fallback="ph:play" :size="16" class="shrink-0" /><span class="truncate">Resume review<template v-if="review.viewId !== view.id"> of {{ review.viewName }}</template> · {{ Math.min(review.index + 1, review.ids.length) }} of {{ review.ids.length }}</span>
-        </button>
-        <button class="h-12 shrink-0 rounded-xl border border-line px-3 text-sm text-ink-soft" :aria-label="`End the review of ${review.viewName}`" data-process-end-session @click="endReview">End</button>
-      </div>
-      <button v-else-if="canProcess" class="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-3 text-[15px] font-medium text-surface" data-process @click="startProcess()">
-        <AppIcon fallback="ph:play" :size="16" class="shrink-0" />Review {{ processList.length }} {{ reviewNoun(processList.length) }}<span v-if="filterText || mineOnly" class="font-normal opacity-70">· filtered</span>
+    <div v-if="!loading && (taskWorkflows || review)" class="mt-2 flex flex-wrap items-center gap-x-3 text-sm" data-workflow-entry>
+      <button v-if="taskWorkflows" class="flex min-h-11 items-center gap-2 rounded-lg px-2 font-medium text-ink-soft hover:bg-hover hover:text-ink" data-workflows @click="chooseWorkflow('tasks', $event.currentTarget as HTMLElement)">
+        <AppIcon fallback="ph:tray" :size="17" /> Triage &amp; review
       </button>
-      <p v-else class="flex min-h-11 items-center gap-2 text-sm text-ink-faint" data-review-none>
-        <template v-if="openList.length">All {{ openList.length }} reviewed {{ reviewSpan }}</template>
-        <template v-else>No open {{ reviewNoun(2) }} in this view</template>
-        <button v-if="filterText && !openList.length" class="ml-auto h-11 rounded-lg px-2 text-accent" @click="filterText = ''">Clear search</button>
-      </p>
-      <p v-if="!review && canReviewAll" class="flex min-h-11 items-center gap-2 text-sm text-ink-faint">
-        <template v-if="canProcess">{{ reviewedLately }} more reviewed {{ reviewSpan }}</template>
-        <button class="ml-auto h-11 rounded-lg px-2 text-accent" data-process-all @click="startProcess(true)">Review all {{ openList.length }}</button>
-      </p>
+      <button v-if="review" class="min-h-11 min-w-0 rounded-lg px-2 text-left text-accent hover:bg-hover" data-process-resume @click="resumeReview">
+        Resume {{ review.scope === 'space' ? workflowTitle(review).toLowerCase() : `review of ${review.viewName}` }} · {{ Math.min(review.index + 1, review.ids.length) }} of {{ review.ids.length }}
+      </button>
     </div>
+    <WorkflowChooser v-model:open="workflowOpen" :type="type" :anchor="workflowAnchor" :mode="workflowMode" :space-name="workspace.space?.name ?? ''" :view-scope="viewScope"
+      :triage-count="queues.triage.length" :review-count="queues.review.length" :view-count="processList.length" :view-all-count="openList.length" :session="review"
+      @start="startProcess" @resume="resumeReview" @end="discardReview" />
 
     <p v-if="loading" class="py-10 text-sm text-ink-faint">Loading…</p>
     <div v-else-if="!objects.length" class="py-16 text-center text-sm text-ink-faint">

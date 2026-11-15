@@ -747,6 +747,8 @@ await toast.locator('button', { hasText: 'Undo' }).click()
 await until(async () => (await propsOf(visitPage.id)).nextvisit === undefined && (await propsOf(visitPage2.id)).nextvisit === undefined, 'Undo emptied both')
 
 step('process mode walks the type one object at a time')
+await page.locator('main header button[title="More"]').click()
+await page.locator('[data-review-view]').click()
 if ((await page.locator('[data-process]').count()) !== 1) throw new Error('the Process button does not show for the type')
 await page.locator('[data-process]').click()
 await page.locator('[data-process-mode]').waitFor()

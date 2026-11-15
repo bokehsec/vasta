@@ -18,6 +18,17 @@ function fakeStorage(initial?: string) {
 }
 
 describe('review session', () => {
+  it('preserves the workflow and frozen scope when revisiting skipped work and resuming', () => {
+    const workflow = { ...scope, kind: 'triage' as const, scope: 'space' as const, scopeLabel: 'All tasks in Main', fieldIds: ['status', 'due'] }
+    const session = skipCurrent(startSession(workflow, ['a', 'b']))
+    const storage = fakeStorage()
+    writeSession({ ...session, cards: { b: { scrollTop: 250, notesOpen: true } } }, storage)
+    expect(readSession('u1', 's1', storage)).toMatchObject({ ...workflow, index: 1, cards: { b: { scrollTop: 250, notesOpen: true } } })
+    expect(skippedSession(session)).toMatchObject({ ...workflow, ids: ['a'], index: 0 })
+    expect(readSession('u1', 's1', fakeStorage(JSON.stringify({ ...session, kind: 'unknown' })))).toBeNull()
+    expect(readSession('u1', 's1', fakeStorage(JSON.stringify({ ...session, cards: { b: { scrollTop: -1 } } })))).toBeNull()
+  })
+
   it('starts on the first object with a copy of the ids and nothing decided', () => {
     const ids = ['a', 'b', 'c']
     const session = startSession(scope, ids)

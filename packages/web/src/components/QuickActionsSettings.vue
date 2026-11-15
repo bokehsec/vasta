@@ -7,7 +7,7 @@
 // again (task-review.ts; a week unless set) and the status Hold sets there.
 import { computed, ref } from 'vue'
 import type { Id, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActions, QuickActionValue } from '@vasta/core'
-import { CHANGEABLE_KINDS, DEFAULT_REVIEW_EVERY, STATUS_PROPERTY_ID, defaultQuickActions, holdOptionOf, newId, quickActionsOf, reviewEveryOf, reviewFieldOf } from '@vasta/core'
+import { CHANGEABLE_KINDS, DEFAULT_REVIEW_EVERY, STATUS_PROPERTY_ID, defaultQuickActions, holdOptionOf, newId, quickActionsOf, reviewEveryOf, reviewFieldOf, triageOptionsOf } from '@vasta/core'
 import { clone } from '../lib/clone.ts'
 import AppIcon from './AppIcon.vue'
 import IconPicker from './IconPicker.vue'
@@ -32,6 +32,10 @@ const openStatuses = computed(() => {
 function setReviewEvery(text: string) {
   const days = Number(text)
   emitSettings({ reviewEvery: text.trim() === '' || !Number.isInteger(days) || days < 0 || days === DEFAULT_REVIEW_EVERY ? undefined : days })
+}
+function toggleIncoming(id: Id) {
+  const selected = triageOptionsOf(props.type).map((o) => o.id)
+  emitSettings({ triageStatuses: selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id] })
 }
 /** Actions that would do nothing as they are (every change left out): said under them. */
 const working = computed(() => new Set(quickActionsOf(props.type).map((a) => a.id)))
@@ -269,8 +273,17 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
       <span class="text-ink-soft">Review each {{ type.name.toLowerCase() }} every</span>
       <input :value="reviewEveryOf(type)" type="number" min="0" step="1" inputmode="numeric" :class="[control, 'w-16']" data-review-every @change="setReviewEvery(($event.target as HTMLInputElement).value)" />
       <span class="text-ink-soft">days</span>
-      <span class="w-full text-xs text-ink-faint">Review shows the open ones not marked reviewed in that time (0: all of them every time).</span>
+      <span class="w-full text-xs text-ink-faint">Review commitments shows organised, open tasks not reviewed in that time (0: every time). Incoming tasks go to Triage.</span>
     </label>
+    <fieldset v-if="type.system === 'task'" class="mt-4 space-y-1 text-sm" data-triage-settings>
+      <legend class="font-medium">Incoming statuses for Triage</legend>
+      <p class="text-xs text-ink-soft">Tasks with no status always need triage. A recent review or a next step does not remove them.</p>
+      <label v-for="option in openStatuses" :key="option.id" class="flex min-h-11 items-center gap-2">
+        <input type="checkbox" class="h-5 w-5 accent-[var(--color-accent)]" :checked="triageOptionsOf(type).some((o) => o.id === option.id)" @change="toggleIncoming(option.id)" />
+        {{ option.label }}
+      </label>
+      <button v-if="type.quickActions?.triageStatuses" class="min-h-11 text-accent" @click="emitSettings({ triageStatuses: undefined })">Use default incoming statuses</button>
+    </fieldset>
     <label v-if="type.system === 'task' && openStatuses.length" class="mt-2 flex flex-wrap items-center gap-2 text-sm">
       <span class="text-ink-soft">Hold in Review sets the status</span>
       <select :value="holdOptionOf(type)?.id ?? 'none'" :class="control" data-hold-status @change="emitSettings({ holdStatus: ($event.target as HTMLSelectElement).value })">

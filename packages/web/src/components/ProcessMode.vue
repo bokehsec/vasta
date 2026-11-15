@@ -1,33 +1,20 @@
 <script setup lang="ts">
-// Review: a view's objects due for review one at a time, in the order fixed when the review started
-// (lib/review-session.ts, kept on this device). Each shows its place ("3 of 48"), title, next step,
-// the view's row fields, all of its text (it scrolls; the buttons stay) and Open details. Reviewed
-// (a task's Last reviewed day, @vasta/core task-review.ts) says it is fine as it is and moves on;
-// three buttons run the type's main quick actions (Done, Defer, the next step: lib/quick-actions.ts,
-// a question first if the action asks) and More holds the rest (Drop, Hold, other actions, Break
-// into steps). An action made here marks the object reviewed too. One that removes the object from
-// the way (Done, Defer…) moves on; one that asks for a line of text (the next step) keeps it on
-// screen, and Skip becomes Next. Skip and Back move without changing anything. The object is always
-// shown as it is now (`objects`, the type's live list), so Undo or a change on its page shows here.
-// Keys: R reviewed, 1–9 the actions, → or Space skip, ← back, Return open, Escape close. On a phone
-// it fills the screen with the buttons at the bottom; a swipe right runs Defer (as on rows), a swipe
-// left skips. The end counts each object once, by its last decision (Undo takes it off), and the
-// skipped ones apart.
-// One action at a time: while one saves (or its question is open) further keys, taps and swipes,
-// Skip and Back do nothing, and the move on is from the object the action was run on.
+// One focused session for incoming triage and periodic/view reviews. Triage edits stay unresolved
+// until a status decision places the task. Reviews can keep the plan as it is. Both keep a stable
+// queue, Undo, explicit save, and reading position across interruptions.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Doc, ObjectSummary, ObjectType, QuickActionDef } from '@vasta/core'
-import { askOf, docToPlainText, holdAction, nextStepFieldOf, parentFieldOf, quickActionsOf, reviewedAction, withReviewed } from '@vasta/core'
+import { askOf, docToPlainText, holdAction, isClosedTask, nextStepFieldOf, parentFieldOf, quickActionsOf, reviewedAction, withReviewed, settlesTriage, triageDispositionActions, needsTriage } from '@vasta/core'
 import { api } from '../lib/api.ts'
 import { rowFields, type ListField } from '../lib/columns.ts'
 import { onChange } from '../lib/events.ts'
 import { displayTitle } from '../lib/format.ts'
-import { openMenuAt, type MenuItem } from '../lib/overlays.ts'
+import { contextMenu, openMenuAt, type MenuItem } from '../lib/overlays.ts'
 import { quickAsk, runQuickAction, type QuickSave } from '../lib/quick-actions.ts'
-import { currentId, isFinished, moveBy, recordOutcome, reviewActions, skipCurrent, skippedSession, summarize, undoOutcome, type ReviewSession } from '../lib/review-session.ts'
+import { currentId, isFinished, moveBy, recordOutcome, reviewActions, skipCurrent, skippedSession, summarize, undoOutcome, workflowTitle, type ReviewSession } from '../lib/review-session.ts'
 import { lastError, ui } from '../lib/state.ts'
 import { addSubtask, subtasksOf } from '../lib/subtasks.ts'
-import { isPhone } from '../lib/viewport.ts'
+import { isPhone, keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import DocPreview from './DocPreview.ts'
 import PropertyDisplay from './PropertyDisplay.vue'
@@ -66,13 +53,16 @@ const current = computed(() => (currentObjectId.value ? byId.value.get(currentOb
 const missing = computed(() => !done.value && !current.value)
 const outcome = computed(() => (currentObjectId.value ? props.session.outcomes[currentObjectId.value] : undefined))
 
+const triaging = computed(() => props.session.kind === 'triage')
+const title = computed(() => workflowTitle(props.session))
 const actions = computed(() => quickActionsOf(props.type))
 const split = computed(() => reviewActions(actions.value))
-const reviewed = computed(() => reviewedAction(props.type))
+const reviewed = computed(() => triaging.value ? undefined : reviewedAction(props.type))
+const nextStepAction = computed(() => actions.value.find((a) => askOf(props.type, a)?.def.id === nextStepFieldOf(props.type)?.id && !!askOf(props.type, a)))
 const hold = computed(() => holdAction(props.type))
 /** Keys 1–9: the buttons first, then More's actions. */
 const keyed = computed(() => [...split.value.featured, ...split.value.more, ...(hold.value ? [hold.value] : [])])
-const rightAction = computed(() => actions.value.find((a) => a.id === 'defer') ?? actions.value[0])
+const rightAction = computed(() => actions.value.find((a) => a.id === 'defer'))
 const noun = computed(() => props.type.name.toLowerCase())
 const label = (action: QuickActionDef) => (askOf(props.type, action) ? `${action.name}…` : action.name)
 
@@ -103,56 +93,76 @@ const stopChanges = onChange((event) => {
 })
 onBeforeUnmount(stopChanges)
 const shownTexts = computed(() => texts.value.filter((t) => t.id === currentObjectId.value))
+const textPreview = computed(() => shownTexts.value.length ? docToPlainText(shownTexts.value[0]!.doc).slice(0, 280) : notes.value)
 
 /** An action that asks for a line of text (the next step) adds to the object rather than settling it: the review stays on it. */
-const stays = (action: QuickActionDef) => askOf(props.type, action)?.def.kind === 'text'
+const stays = (action: QuickActionDef) => askOf(props.type, action)?.def.kind === 'text' || (triaging.value && !settlesTriage(props.type, action))
 
 const busy = ref(false)
 async function act(action: QuickActionDef, anchor: HTMLElement | null) {
   const object = current.value
-  if (!object || busy.value) return
+  if (!object || busy.value || addingStep.value) return
   // Reviewed on one already decided here (a next step set): nothing more to save, on to the next.
   if (action.id === 'reviewed' && outcome.value) return move(1)
+  rememberCard()
   const at = index.value
+  const recordsDecision = !triaging.value || settlesTriage(props.type, action)
   const stay = stays(action)
   busy.value = true
   try {
-    const saved = await runQuickAction(props.type, object, withReviewed(props.type, action), {
+    const saved = await runQuickAction(props.type, object, recordsDecision ? withReviewed(props.type, action) : action, {
       anchor: isPhone.value ? null : anchor,
       save: props.save,
       submitLabel: stay ? 'Save' : `Save & next ${noun.value}`,
-      onUndo: () => (alive ? update((s) => undoOutcome(s, object.id, action.name)) : props.undone(object.id, action.name)),
+      onUndo: () => { if (recordsDecision) alive ? update((s) => undoOutcome(s, object.id, action.name)) : props.undone(object.id, action.name) },
     })
     if (!saved.length || !alive) return
     breakingDown.value = false
-    update((s) => recordOutcome(s, object.id, action.name, at, !stay))
+    if (recordsDecision) update((s) => recordOutcome(s, object.id, action.name, at, !stay))
   } finally {
     busy.value = false
   }
 }
 function move(delta: number) {
-  if (busy.value) return
+  if (busy.value || addingStep.value) return
+  rememberCard()
   breakingDown.value = false
   update((s) => moveBy(s, delta))
 }
 function skip() {
-  if (done.value || busy.value) return
+  if (done.value || busy.value || addingStep.value) return
+  rememberCard()
   breakingDown.value = false
   update(skipCurrent)
 }
 function open() {
-  if (current.value && !busy.value) emit('open', current.value.id)
+  if (!current.value || busy.value || addingStep.value) return
+  rememberCard()
+  emit('open', current.value.id)
 }
 function reviewSkipped() {
   update(skippedSession)
 }
 
-// More: the other actions, and Break into steps.
+// A short footer opens the full action list. The user's configured actions remain available.
 const moreButton = ref<HTMLElement | null>(null)
-const moreItems = computed<MenuItem[]>(() => [
-  ...[...split.value.more, ...(hold.value ? [hold.value] : [])].map((action) => ({ label: label(action), icon: action.icon ?? 'ph:lightning', run: () => act(action, moreButton.value) })),
-  ...(canBreakDown.value ? [{ label: 'Break into steps', icon: 'ph:tree-structure', run: () => void startBreakDown() }] : []),
-])
+const menuAction = (action: QuickActionDef): MenuItem => {
+  const key = keyed.value.findIndex((a) => a.id === action.id) + 1
+  return { label: label(action), icon: action.icon ?? 'ph:lightning', ...(!isPhone.value && key > 0 && key <= 9 ? { hint: String(key) } : {}), run: () => act(action, moreButton.value) }
+}
+const moreItems = computed<MenuItem[]>(() => {
+  const dispositions = triaging.value ? triageDispositionActions(props.type) : []
+  const open = dispositions.filter((a) => !a.changes.some((c) => c.value.kind === 'value' && isClosedTask(props.type, { props: { [c.field]: c.value.value } })))
+  const closed = dispositions.filter((a) => !open.includes(a))
+  return [
+    ...(open.length ? [{ kind: 'heading' as const, label: 'Move to' }, ...open.map(menuAction), { kind: 'separator' as const }] : []),
+    ...actions.value.filter((a) => !open.some((d) => d.id === a.id)).map(menuAction),
+    ...(!triaging.value && hold.value ? [menuAction(hold.value)] : []),
+    // Completion remains available even when a custom action list omits Done/Drop.
+    ...(triaging.value ? closed.filter((a) => !actions.value.some((other) => JSON.stringify(other.changes) === JSON.stringify(a.changes))).map(menuAction) : []),
+    ...(canBreakDown.value ? [{ label: 'Break into steps', icon: 'ph:tree-structure', run: () => void startBreakDown() }] : []),
+  ]
+})
 function openMore() {
   if (busy.value || !moreButton.value) return
   const box = moreButton.value.getBoundingClientRect()
@@ -186,19 +196,76 @@ async function addStep() {
   }
 }
 
+// Keep the app behind the session out of the focus order; teleported questions/menus and Undo
+// stay usable. Focus returns to the entry when the session closes.
+const panel = ref<HTMLElement | null>(null)
+const card = ref<HTMLElement | null>(null)
+const notesOpen = ref(false)
+let opener: HTMLElement | null = null
+let app: HTMLElement | null = null
+let wasInert = false
+const blocked = computed(() => busy.value || addingStep.value)
+function rememberCard() {
+  const id = currentObjectId.value
+  if (id && card.value) update((s) => ({ ...s, cards: { ...s.cards, [id]: { scrollTop: card.value!.scrollTop, notesOpen: notesOpen.value } } }))
+}
+function pause() {
+  if (blocked.value) return
+  rememberCard()
+  emit('close')
+}
+function trapFocus(event: KeyboardEvent) {
+  if (!panel.value) return
+  const elements = [...panel.value.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), [tabindex="0"]'), ...document.querySelectorAll<HTMLElement>('[role="status"] button:not(:disabled)')].filter((e) => e.getClientRects().length)
+  const at = elements.indexOf(document.activeElement as HTMLElement)
+  if (event.shiftKey && at <= 0) { event.preventDefault(); elements.at(-1)?.focus() }
+  else if (!event.shiftKey && (at < 0 || at === elements.length - 1)) { event.preventDefault(); elements[0]?.focus() }
+}
+watch(currentObjectId, async (id) => {
+  notesOpen.value = id ? props.session.cards?.[id]?.notesOpen ?? false : false
+  await nextTick()
+  if (card.value) card.value.scrollTop = id ? props.session.cards?.[id]?.scrollTop ?? 0 : 0
+}, { immediate: true })
+// Full text arrives after the card; restore a scroll position beyond the short preview then.
+watch(shownTexts, async () => {
+  await nextTick()
+  const id = currentObjectId.value
+  if (card.value && id && props.session.cards?.[id]) card.value.scrollTop = props.session.cards[id]!.scrollTop
+})
+watch(() => !!quickAsk.value || contextMenu.open, async (overlay) => {
+  if (overlay) return
+  await nextTick()
+  if (document.activeElement === document.body) moreButton.value?.focus({ preventScroll: true })
+})
+onMounted(() => {
+  opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  app = document.getElementById('app')
+  if (app) { wasInert = app.inert; app.inert = true }
+  panel.value?.focus({ preventScroll: true })
+})
+onBeforeUnmount(() => {
+  if (app) app.inert = wasInert
+  void nextTick(() => {
+    const target = opener?.isConnected ? opener : document.querySelector<HTMLElement>('[data-process-resume], [data-workflows], main header button[title="More"]')
+    target?.focus({ preventScroll: true })
+  })
+})
+
 // Keys, while no question or text box has them.
-const buttons = ref<HTMLButtonElement[]>([])
 const reviewedButton = ref<HTMLButtonElement | null>(null)
 function onKey(event: KeyboardEvent) {
-  if (event.defaultPrevented || quickAsk.value || event.metaKey || event.ctrlKey || event.altKey) return
+  if (event.defaultPrevented || quickAsk.value || contextMenu.open || event.metaKey || event.ctrlKey || event.altKey) return
   const typing = (event.target as Element | null)?.closest('input, textarea, [contenteditable="true"]')
   if (event.key === 'Escape') {
     event.preventDefault()
     if (typing && breakingDown.value) breakingDown.value = false
-    else emit('close')
+    else pause()
     return
   }
+  if (event.key === 'Tab') { trapFocus(event); return }
   if (typing) return
+  // Enter/Space on a button belongs to that button, not to the session shortcuts.
+  if ((event.target as Element | null)?.closest('button, a') && (event.key === 'Enter' || event.key === ' ')) return
   if ((event.key === 'r' || event.key === 'R') && reviewed.value && !done.value) {
     event.preventDefault()
     void act(reviewed.value, reviewedButton.value)
@@ -207,7 +274,7 @@ function onKey(event: KeyboardEvent) {
   const number = Number(event.key)
   if (number >= 1 && number <= 9 && keyed.value[number - 1] && !done.value) {
     event.preventDefault()
-    void act(keyed.value[number - 1]!, buttons.value[number - 1] ?? moreButton.value)
+    void act(keyed.value[number - 1]!, moreButton.value)
   } else if (event.key === 'ArrowRight' || event.key === ' ') {
     event.preventDefault()
     skip()
@@ -230,6 +297,7 @@ const shift = ref(0)
 function onTouchStart(event: TouchEvent) {
   const t = event.touches[0]
   shift.value = 0
+  if (blocked.value || (event.target as Element | null)?.closest('button, a, input, textarea, [contenteditable]')) { touch = undefined; return }
   touch = t && event.touches.length === 1 && t.clientX > 24 ? { x: t.clientX, y: t.clientY } : undefined
 }
 function onTouchMove(event: TouchEvent) {
@@ -275,54 +343,58 @@ onBeforeUnmount(() => {
 })
 
 const summary = computed(() => summarize(props.session))
-const plural = computed(() => props.type.pluralName.toLowerCase())
-const actionButton = 'flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-line px-2 text-[15px] font-medium text-ink hover:bg-hover disabled:opacity-50'
+const actionButton = 'flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-line px-3 py-2 text-[15px] font-medium text-ink hover:bg-hover disabled:opacity-50'
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-40 grid bg-black/30" :class="isPhone ? '' : 'place-items-center p-6'" data-process-mode>
+    <div class="fixed inset-0 z-40 grid bg-black/30" :style="isPhone && keyboardInset ? { bottom: `${keyboardInset}px` } : undefined" :class="isPhone ? '' : 'place-items-center p-6'" data-process-mode>
       <section
-        class="flex w-full flex-col bg-surface"
+        ref="panel"
+        tabindex="-1"
+        aria-modal="true"
+        class="flex min-h-0 w-full flex-col overflow-hidden bg-surface outline-none"
         :class="isPhone ? 'h-full pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]' : 'max-h-[85vh] max-w-xl rounded-2xl border border-line shadow-2xl shadow-black/20'"
         role="dialog"
-        :aria-label="`Review ${session.viewName}`"
+        :aria-label="title"
         :aria-busy="busy || undefined"
       >
-        <header class="flex items-center gap-2 px-2 pt-2">
-          <button class="grid h-11 w-11 place-items-center rounded-lg text-ink-soft hover:bg-hover hover:text-ink" aria-label="Close review (you can resume it)" title="Close (Esc): resume later" data-process-close @click="emit('close')">
-            <AppIcon fallback="ph:x" :size="18" />
-          </button>
-          <div class="min-w-0 flex-1">
-            <p class="truncate font-semibold">Review</p>
-            <p class="truncate text-xs text-ink-faint">{{ session.viewName }}</p>
+        <header class="flex shrink-0 items-start gap-2 px-4 pt-3">
+          <div class="min-w-0 flex-1 py-1">
+            <h2 class="font-semibold" data-process-heading>{{ title }}</h2>
+            <p class="break-words text-xs text-ink-soft">{{ session.scopeLabel ?? session.viewName }}</p>
           </div>
-          <span class="px-3 text-sm tabular-nums text-ink-faint" aria-live="polite" data-process-position>{{ busy ? 'Saving…' : `${done ? total : index + 1} of ${total}` }}</span>
+          <button class="min-h-11 shrink-0 rounded-lg px-3 text-sm text-ink-soft hover:bg-hover disabled:opacity-50" :disabled="blocked" :aria-label="`Pause ${title.toLowerCase()} (resume later)`" data-process-close @click="pause">{{ done ? 'Close' : 'Pause' }}</button>
         </header>
-        <div class="mx-4 mt-1 h-[3px] rounded-full bg-line" aria-hidden="true">
+        <div class="flex shrink-0 items-center justify-between px-4 pt-1 text-xs text-ink-soft">
+          <span>{{ triaging ? 'Decide what happens next' : 'Confirm or change the plan' }}</span>
+          <span class="tabular-nums" aria-live="polite" data-process-position>{{ busy ? 'Saving…' : `${done ? total : index + 1} of ${total}` }}</span>
+        </div>
+        <div class="mx-4 mt-2 h-[3px] shrink-0 rounded-full bg-line" aria-hidden="true">
           <div class="h-full rounded-full bg-ink-soft transition-[width] duration-200" :style="{ width: `${total ? (Math.min(index, total) / total) * 100 : 0}%` }" />
         </div>
 
         <!-- The end: what was decided, and what was left. -->
-        <div v-if="done" class="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-12 text-center" data-process-end>
+        <div v-if="done" class="flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto px-5 py-8 text-center" data-process-end>
           <AppIcon fallback="ph:check-circle" :size="32" class="text-[var(--color-flow-done)]" />
-          <p class="text-lg font-semibold">Review finished</p>
+          <p class="text-lg font-semibold">{{ triaging ? 'Triage session finished' : 'Review session finished' }}</p>
           <p class="text-sm text-ink-soft" data-process-summary>
             <template v-if="summary.outcomes.length || summary.skipped">
-              {{ [...summary.outcomes.map((o) => `${o.name} ${o.count}`), ...(summary.skipped ? [`${summary.skipped} skipped, unchanged`] : [])].join(' · ') }}
+              {{ [...summary.outcomes.map((o) => `${o.name} ${o.count}`), ...(summary.skipped ? [`${summary.skipped} left for later`] : [])].join(' · ') }}
             </template>
             <template v-else>Nothing changed</template>
           </p>
           <div class="mt-2 flex flex-wrap justify-center gap-2">
             <button class="h-11 rounded-lg border border-line px-3 text-sm text-ink-soft hover:bg-hover" data-process-back @click="move(-1)">Back</button>
-            <button v-if="summary.skipped" class="h-11 rounded-lg border border-line px-3 text-sm text-ink hover:bg-hover" data-process-review-skipped @click="reviewSkipped">Review {{ summary.skipped }} skipped</button>
-            <button class="h-11 rounded-lg bg-ink px-4 text-sm font-medium text-surface" data-process-finish @click="emit('end')">Back to {{ plural }}</button>
+            <button v-if="summary.skipped" class="h-11 rounded-lg border border-line px-3 text-sm text-ink hover:bg-hover" data-process-review-skipped @click="reviewSkipped">{{ triaging ? 'Triage' : 'Review' }} {{ summary.skipped }} skipped</button>
+            <button class="h-11 rounded-lg bg-ink px-4 text-sm font-medium text-surface" data-process-finish @click="emit('end')">Back to {{ session.viewName }}</button>
           </div>
         </div>
 
         <template v-else>
           <div
-            class="flex-1 overflow-y-auto px-5 pb-4 pt-5"
+            ref="card"
+            class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-5"
             :style="shift ? { transform: `translateX(${shift}px)`, opacity: String(1 - Math.min(Math.abs(shift) / 400, 0.5)) } : undefined"
             data-process-card
             @touchstart.passive="onTouchStart"
@@ -332,22 +404,24 @@ const actionButton = 'flex h-12 min-w-0 items-center justify-center gap-2 rounde
           >
             <p v-if="missing" class="text-sm text-ink-soft" data-process-missing>This {{ noun }} is no longer here (deleted or moved since the review started). Skip to go on.</p>
             <template v-else-if="current">
-              <h2 class="text-[1.35rem] font-semibold leading-tight tracking-[-0.01em]" data-process-title>{{ displayTitle(current, type) }}</h2>
+              <h2 class="text-[1.35rem] font-semibold leading-tight tracking-[-0.01em] break-words" data-process-title>{{ displayTitle(current, type) }}</h2>
               <p v-if="outcome" class="mt-2 inline-flex items-center gap-1.5 rounded-md bg-hover px-2 py-0.5 text-xs text-ink-soft" data-process-outcome>
                 <AppIcon fallback="ph:check" :size="12" />{{ outcome }}
               </p>
               <p v-if="nextStep" class="mt-2 flex items-center gap-1.5 text-sm text-ink-soft"><AppIcon fallback="ph:arrow-right" :size="13" class="shrink-0 text-ink-faint" />{{ nextStep }}</p>
               <div v-if="fieldsShown.length" class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                <PropertyDisplay v-for="field in fieldsShown" :key="field.field" :def="field.def!" :value="current.props[field.field]" :object="current" :wrap="false" short />
+                <span v-for="field in fieldsShown" :key="field.field" class="inline-flex min-w-0 items-center gap-1"><span class="text-ink-soft">{{ field.def!.name }}:</span><PropertyDisplay :def="field.def!" :value="current.props[field.field]" :object="current" :wrap="true" short /></span>
               </div>
-              <div v-if="shownTexts.length" class="mt-3 space-y-3 text-sm leading-relaxed text-ink-soft" data-process-text>
+              <p v-if="!notesOpen && textPreview" class="mt-3 line-clamp-3 break-words text-sm leading-relaxed text-ink-soft">{{ textPreview }}</p>
+              <button v-if="shownTexts.length || notes" class="mt-2 flex min-h-11 items-center gap-2 rounded-lg text-sm text-ink-soft hover:text-ink" :aria-expanded="notesOpen" data-process-notes-toggle @click="notesOpen = !notesOpen"><AppIcon :fallback="notesOpen ? 'ph:caret-down' : 'ph:caret-right'" :size="14" />{{ notesOpen ? 'Collapse notes' : 'Read full notes' }}</button>
+              <div v-if="notesOpen && shownTexts.length" class="mt-3 space-y-3 text-sm leading-relaxed text-ink-soft" data-process-text>
                 <div v-for="text in shownTexts" :key="text.field" class="space-y-1">
                   <p v-if="text.name" class="text-xs font-medium text-ink-faint">{{ text.name }}</p>
                   <DocPreview :content="text.doc.content" />
                 </div>
               </div>
-              <p v-else-if="notes" class="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink-soft">{{ notes }}</p>
-              <button class="mt-2 flex min-h-11 items-center gap-1 text-sm text-accent hover:underline" data-process-open @click="open">Open details<AppIcon fallback="ph:caret-right" :size="13" /></button>
+              <p v-else-if="notesOpen && notes" class="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink-soft">{{ notes }}</p>
+              <button class="mt-2 flex min-h-11 items-center gap-1 text-sm text-accent hover:underline" :disabled="blocked" data-process-open @click="open">Open details<AppIcon fallback="ph:caret-right" :size="13" /></button>
               <p v-if="steps.length" class="mt-1 text-xs text-ink-faint">{{ steps.length }} {{ steps.length === 1 ? 'step' : 'steps' }}</p>
               <form v-if="breakingDown" class="mt-3 space-y-2" @submit.prevent="addStep">
                 <div class="flex items-center gap-2 rounded-lg border border-line px-2.5">
@@ -362,44 +436,24 @@ const actionButton = 'flex h-12 min-w-0 items-center justify-center gap-2 rounde
             </template>
           </div>
 
-          <!-- The buttons, where the thumb is on a phone: the main decisions, then More. -->
-          <div ref="buttonBlock" class="grid grid-cols-2 gap-2 border-t border-line px-4 pb-3 pt-3">
-            <template v-if="current">
-              <button
-                v-if="reviewed"
-                ref="reviewedButton"
-                class="col-span-full flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl bg-ink px-2 text-[15px] font-medium text-surface hover:opacity-90 disabled:opacity-50"
-                :disabled="busy"
-                title="Fine as it is: mark it reviewed today and go on"
-                data-process-reviewed
-                @click="act(reviewed, $event.currentTarget as HTMLElement)"
-              >
-                <AppIcon fallback="ph:check" :size="18" class="shrink-0" /><span class="truncate">Reviewed</span>
-                <kbd v-if="!isPhone" class="ml-1 rounded border border-surface/40 px-1 font-sans text-[11px] opacity-70">R</kbd>
+          <!-- Two choices, followed by quiet navigation. Full-size targets leave room to read. -->
+          <div ref="buttonBlock" class="shrink-0 border-t border-line px-4 pb-2 pt-3">
+            <div v-if="current" class="grid grid-cols-2 gap-2">
+              <button v-if="reviewed" ref="reviewedButton" class="flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-xl bg-ink px-3 py-2 text-[15px] font-medium text-surface hover:opacity-90 disabled:opacity-50"
+                :class="!moreItems.length ? 'col-span-full' : ''" :disabled="blocked" data-process-reviewed @click="act(reviewed, $event.currentTarget as HTMLElement)">
+                <span>{{ outcome ? 'Next task' : 'Keep as is & next' }}</span>
               </button>
-              <button
-                v-for="(action, i) in split.featured"
-                :key="action.id"
-                ref="buttons"
-                :class="actionButton"
-                :disabled="busy"
-                :data-process-action="action.id"
-                @click="act(action, $event.currentTarget as HTMLElement)"
-              >
-                <AppIcon :icon="action.icon" fallback="ph:lightning" :size="18" class="shrink-0" /><span class="truncate">{{ label(action) }}</span>
-                <kbd v-if="!isPhone" class="ml-1 rounded border border-line px-1 font-sans text-[11px] opacity-60">{{ i + 1 }}</kbd>
+              <button v-if="triaging && nextStepAction" :class="actionButton" :disabled="blocked" :data-process-action="nextStepAction.id" @click="act(nextStepAction, $event.currentTarget as HTMLElement)">
+                <AppIcon fallback="ph:pencil-simple-line" :size="18" class="shrink-0" /><span>{{ label(nextStepAction) }}</span>
               </button>
-              <button v-if="moreItems.length" ref="moreButton" :class="actionButton" :disabled="busy" aria-haspopup="menu" data-process-more @click="openMore">
-                <AppIcon fallback="ph:dots-three" :size="18" class="shrink-0" />More
+              <button v-if="moreItems.length" ref="moreButton" :class="[actionButton, triaging ? 'bg-ink !text-surface hover:!bg-ink/90' : '', !reviewed && !(triaging && nextStepAction) ? 'col-span-full' : '']" :disabled="blocked" aria-haspopup="menu" data-process-more @click="openMore">
+                {{ triaging ? 'Decide…' : 'Change plan…' }}<AppIcon fallback="ph:caret-down" :size="14" class="shrink-0" />
               </button>
-            </template>
-            <div class="col-span-full flex justify-between">
-              <button class="flex h-11 items-center gap-1 rounded-lg px-3 text-sm text-ink-soft hover:bg-hover disabled:opacity-40" :disabled="index === 0 || busy" data-process-back @click="move(-1)">
-                <AppIcon fallback="ph:caret-left" :size="14" />Back<kbd v-if="!isPhone" class="ml-1 rounded border border-line px-1 font-sans text-[11px] opacity-60">←</kbd>
-              </button>
-              <button class="flex h-11 items-center gap-1 rounded-lg px-3 text-sm text-ink-soft hover:bg-hover disabled:opacity-40" :disabled="busy" data-process-skip @click="skip">
-                <kbd v-if="!isPhone" class="mr-1 rounded border border-line px-1 font-sans text-[11px] opacity-60">→</kbd>{{ outcome ? 'Next' : 'Skip' }}<AppIcon fallback="ph:caret-right" :size="14" />
-              </button>
+              <p v-if="triaging && !outcome && !needsTriage(type, current)" class="col-span-full text-xs text-ink-soft">This task has already been organised. Skip it or choose a new plan.</p>
+            </div>
+            <div class="mt-1 flex justify-between">
+              <button class="flex min-h-11 items-center gap-1 rounded-lg px-3 text-sm text-ink-soft hover:bg-hover disabled:opacity-40" :disabled="index === 0 || blocked" data-process-back @click="move(-1)"><AppIcon fallback="ph:caret-left" :size="14" />Back</button>
+              <button class="flex min-h-11 items-center gap-1 rounded-lg px-3 text-sm text-ink-soft hover:bg-hover disabled:opacity-40" :disabled="blocked" data-process-skip @click="skip">{{ outcome ? 'Next' : 'Skip for now' }}<AppIcon fallback="ph:caret-right" :size="14" /></button>
             </div>
           </div>
         </template>
