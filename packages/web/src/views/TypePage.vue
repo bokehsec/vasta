@@ -20,6 +20,7 @@ import PopoverMenu from '../components/PopoverMenu.vue'
 import TypeSettings from '../components/TypeSettings.vue'
 import { dayKey, deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu, removeFromSidebar, setProperties, viewItem } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
+import { greyButton, tintedButton } from '../lib/buttons.ts'
 import { onChange } from '../lib/events.ts'
 import { clone } from '../lib/clone.ts'
 import { listFields, quickActionsColumnShown, rowFieldsFromTable, tableColumns, toggleQuickActionsColumn } from '../lib/columns.ts'
@@ -332,6 +333,21 @@ async function startProcess(kind: WorkflowKind, scope: 'space' | 'view', all = f
   workflowOpen.value = false
   processOpen.value = true
 }
+// Triage and Review in the header (DESIGN_SYSTEM.md › Buttons): tinted with the count while
+// something waits, grey without; the one with a paused session resumes it. A press starts the
+// queue; an empty one opens the chooser, which says why. A phone has room for one button, the
+// chooser's, beside its view picker.
+const sessionAt = computed(() => review.value ? `${Math.min(review.value.index + 1, review.value.ids.length)} of ${review.value.ids.length}` : '')
+function pressWorkflow(kind: WorkflowKind, anchor: HTMLElement) {
+  if (review.value?.kind === kind) resumeReview()
+  else if (queues.value[kind].length) void startProcess(kind, 'space')
+  else chooseWorkflow('tasks', anchor)
+}
+const phoneWorkflow = computed(() =>
+  review.value ? { label: 'Resume', count: sessionAt.value, icon: 'ph:play', waiting: true }
+  : queues.value.triage.length ? { label: 'Triage', count: String(queues.value.triage.length), icon: 'ph:tray', waiting: true }
+  : queues.value.review.length ? { label: 'Review', count: String(queues.value.review.length), icon: 'ph:arrows-clockwise', waiting: true }
+  : { label: 'Triage', count: '', icon: 'ph:tray', waiting: false })
 function resumeReview() {
   if (!review.value) return
   clearSelection()
@@ -686,12 +702,28 @@ async function newMenu(event: MouseEvent) {
       </button>
       <h1 class="min-w-0 text-2xl font-bold tracking-tight max-md:break-words md:truncate">{{ type.pluralName }}</h1>
       <span class="text-sm text-ink-faint max-md:hidden">{{ objects.length }}</span>
-      <button ref="menuAnchor" class="ml-auto rounded-lg p-2 text-ink-soft hover:bg-hover hover:text-ink max-md:p-3.5" title="More" @click="menuOpen = !menuOpen">
+      <span class="flex-1" />
+      <template v-if="!loading && taskWorkflows && !isPhone">
+        <button :class="review?.kind === 'triage' || queues.triage.length ? tintedButton : greyButton" data-workflow-triage @click="pressWorkflow('triage', $event.currentTarget as HTMLElement)">
+          <AppIcon fallback="ph:tray" />
+          <template v-if="review?.kind === 'triage'">Resume triage <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
+          <template v-else>Triage <span v-if="queues.triage.length" class="tabular-nums">{{ queues.triage.length }}</span></template>
+        </button>
+        <button :class="review?.kind === 'review' || queues.review.length ? tintedButton : greyButton" data-workflow-review @click="pressWorkflow('review', $event.currentTarget as HTMLElement)">
+          <AppIcon fallback="ph:arrows-clockwise" />
+          <template v-if="review?.kind === 'review'">Resume {{ review.scope === 'space' ? 'review' : `review of ${review.viewName}` }} <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
+          <template v-else>Review <span v-if="queues.review.length" class="tabular-nums">{{ queues.review.length }}</span></template>
+        </button>
+      </template>
+      <button v-else-if="!loading && review && !taskWorkflows" :class="tintedButton" class="min-w-0" data-process-resume @click="resumeReview">
+        <AppIcon fallback="ph:play" /> <span class="truncate">{{ isPhone ? 'Resume' : `Resume review of ${review.viewName}` }}</span> <span class="tabular-nums">{{ sessionAt }}</span>
+      </button>
+      <button ref="menuAnchor" class="rounded-lg p-2 text-ink-soft hover:bg-hover hover:text-ink max-md:p-3.5" title="More" @click="menuOpen = !menuOpen">
         <AppIcon fallback="ph:dots-three" :size="18" />
       </button>
       <div class="flex shrink-0 items-stretch rounded-lg bg-ink text-sm font-medium text-surface max-md:min-h-11" data-new-split>
         <button class="flex items-center gap-1.5 rounded-l-lg px-3 py-1.5 hover:opacity-90" :title="defaultTemplate ? `New ${type.name} from “${defaultTemplate.template!.name}”` : `New ${type.name}`" @click="createNew">
-          <AppIcon fallback="ph:plus" /> <span class="max-sm:hidden">New {{ type.name }}</span>
+          <AppIcon fallback="ph:plus" /> <span :class="taskWorkflows ? 'max-lg:hidden' : 'max-sm:hidden'">New {{ type.name }}</span>
         </button>
         <button class="grid place-items-center rounded-r-lg border-l border-surface/25 px-1.5 hover:opacity-90 max-md:min-w-11" title="Templates" aria-label="New from a template" @click="newMenu">
           <AppIcon fallback="ph:caret-down" :size="13" />
@@ -705,6 +737,10 @@ async function newMenu(event: MouseEvent) {
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="pinFrom">
         <AppIcon fallback="ph:push-pin" class="text-ink-soft" /> {{ pinned ? 'Pinned in sidebar' : 'Pin to sidebar' }}
         <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
+      </button>
+      <!-- The chooser behind the header's buttons: what each queue holds, and End session. -->
+      <button v-if="taskWorkflows && !isPhone" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" data-workflows @click="chooseWorkflow('tasks', menuAnchor)">
+        <AppIcon fallback="ph:tray" class="text-ink-soft" /> Triage &amp; review…
       </button>
       <button v-if="isPhone && collection?.canSelect" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" data-select-mode @click="selectFromMenu">
         <AppIcon fallback="ph:check-square" class="text-ink-soft" /> Select {{ type.pluralName.toLowerCase() }}
@@ -746,7 +782,7 @@ async function newMenu(event: MouseEvent) {
     <div class="mt-6 flex flex-wrap items-center gap-1 border-b border-line pb-2">
       <!-- A phone: one button for the view, its list in a sheet (the tabs would take rows of the screen). -->
       <template v-if="isPhone">
-        <button ref="viewPickerAnchor" class="flex h-11 items-center gap-1.5 rounded-lg border border-line px-3 text-[15px] font-medium" data-view-picker @click="viewPickerOpen = true">
+        <button ref="viewPickerAnchor" :class="greyButton" data-view-picker @click="viewPickerOpen = true">
           {{ currentViewLabel }} <AppIcon fallback="ph:caret-down" :size="14" class="text-ink-faint" />
         </button>
         <PopoverMenu v-model:open="viewPickerOpen" :anchor="viewPickerAnchor">
@@ -771,13 +807,16 @@ async function newMenu(event: MouseEvent) {
         <button
           v-if="!metricsActive"
           ref="filtersAnchor"
-          class="flex h-11 items-center gap-1.5 rounded-lg border border-line px-3 text-[15px] font-medium"
-          :class="activeFilterCount ? 'text-accent' : ''"
+          :class="activeFilterCount ? tintedButton : greyButton"
           data-filters-button
           @click="filtersOpen = true"
         >
           <AppIcon fallback="ph:funnel" :size="16" /> Filters
           <span v-if="activeFilterCount" class="grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-semibold text-white" data-filters-count>{{ activeFilterCount }}</span>
+        </button>
+        <!-- Triage & review sits here on a phone: the header has no room beside the title. -->
+        <button v-if="!loading && taskWorkflows" :class="[phoneWorkflow.waiting ? tintedButton : greyButton, 'ml-auto']" data-workflows @click="chooseWorkflow('tasks', $event.currentTarget as HTMLElement)">
+          <AppIcon :fallback="phoneWorkflow.icon" /> {{ phoneWorkflow.label }} <span v-if="phoneWorkflow.count" class="tabular-nums">{{ phoneWorkflow.count }}</span>
         </button>
         <PopoverMenu v-model:open="filtersOpen" :anchor="filtersAnchor" label="Search and filter">
           <!-- Changes apply as they are made: the count says what they leave, Done closes the sheet. -->
@@ -1015,15 +1054,6 @@ async function newMenu(event: MouseEvent) {
           </button>
         </template>
       </PopoverMenu>
-    </div>
-    <div v-if="!loading && (taskWorkflows || review)" class="mt-2 flex flex-wrap items-center gap-x-3 text-sm" data-workflow-entry>
-      <button v-if="taskWorkflows" class="flex min-h-11 items-center gap-2 rounded-lg px-2 font-medium text-ink-soft hover:bg-hover hover:text-ink" data-workflows @click="chooseWorkflow('tasks', $event.currentTarget as HTMLElement)">
-        <AppIcon fallback="ph:tray" :size="17" /> Triage &amp; review
-      </button>
-      <button v-if="review" class="min-h-11 min-w-0 rounded-lg px-2 text-left text-accent hover:bg-hover" data-process-resume @click="resumeReview">
-        <!-- A phone says it shorter, so it fits on the line beside Triage & review. -->
-        Resume {{ isPhone ? (review.kind === 'triage' ? 'triage' : 'review') : review.scope === 'space' ? workflowTitle(review).toLowerCase() : `review of ${review.viewName}` }} · {{ Math.min(review.index + 1, review.ids.length) }} of {{ review.ids.length }}
-      </button>
     </div>
     <WorkflowChooser v-model:open="workflowOpen" :type="type" :anchor="workflowAnchor" :mode="workflowMode" :space-name="workspace.space?.name ?? ''" :view-scope="viewScope"
       :triage-count="queues.triage.length" :review-count="queues.review.length" :view-count="processList.length" :view-all-count="openList.length" :session="review"

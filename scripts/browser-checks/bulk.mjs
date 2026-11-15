@@ -374,11 +374,14 @@ try {
 
   step('phone: Close keeps the place, also over a reload; Open details and Back return to the same task')
   await tap(page.locator('[data-process-close]'))
-  const resume = page.locator('[data-process-resume]')
-  await until(async () => (await resume.count()) === 1 && /4 of 5/.test(await resume.innerText()), 'Resume review · 4 of 5')
+  // A phone's one Triage & review button says the paused place; the chooser resumes it.
+  const workflows = page.locator('[data-workflows]')
+  const pausedAt = async (at) => (await workflows.count()) === 1 && new RegExp(`Resume\\s+${at}`).test(await workflows.innerText())
+  await until(() => pausedAt('4 of 5'), 'Resume 4 of 5')
   await openView()
-  await until(async () => (await resume.count()) === 1 && /4 of 5/.test(await resume.innerText()), 'Resume after a reload')
-  await tap(resume)
+  await until(() => pausedAt('4 of 5'), 'Resume after a reload')
+  await tap(workflows)
+  await tap(page.locator('[data-workflow-paused] [data-process-resume]'))
   await until(async () => (await pos.innerText()).startsWith('4 of 5'), 'resumed at 4 of 5')
   const openedTitle = (await page.locator('[data-process-title]').innerText()).trim()
   await tap(page.locator('[data-process-open]'))
@@ -400,7 +403,7 @@ try {
   await page.locator('[data-workflows]').click()
   await tap(page.locator('[data-process-end-session]'))
   await page.getByRole('button', { name: 'End session', exact: true }).click()
-  await until(async () => (await resume.count()) === 0, 'End forgot the review')
+  await until(async () => (await page.locator('[data-workflow-paused]').count()) === 0 && !/Resume/.test(await workflows.innerText()), 'End forgot the review')
   await phoneContext.close()
 
   if (problems.length) throw new Error(problems.join('\n'))

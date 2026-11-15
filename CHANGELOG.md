@@ -143,6 +143,15 @@ GitHub release page.
 
 ### Changed
 
+- **Buttons that look like buttons, and Triage you can see.** Buttons now come in a few
+  consistent kinds: the main action in dark ink (New Task, Save), a light blue one for a way into a
+  feature or the action a page leads with (Triage, Mark done), and grey for everyday actions
+  (Cancel, Defer…, Drop, Sync now). Settings' outlined buttons and dialogs' plain Cancel are grey
+  now. On the Tasks page, **Triage** and **Review** sit beside New Task with how many tasks are
+  waiting; a press starts that queue at once, a paused one reads "Resume triage 4 of 12", and with
+  nothing waiting they turn grey. **Triage & review…** in the ⋯ menu still explains both queues and
+  ends a paused session. On a phone one button sits beside the view picker: Triage, else Review,
+  else Resume, with its count; the view picker and Filters are grey buttons.
 - **Done tasks stay put in agendas, and subtasks can be undone.** A task marked done in an agenda
   (a Tasks view or a list in a page laid out as days) stays on its day, checked and struck through,
   until you leave or reload; a repeating one says "Done this time · Next: …". Its checkbox undoes it,

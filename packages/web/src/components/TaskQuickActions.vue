@@ -9,6 +9,7 @@ import { computed, inject, onBeforeUnmount, ref } from 'vue'
 import type { Id, ObjectRecord, ObjectType, PropertyValue, QuickActionDef } from '@vasta/core'
 import { STATUS_PROPERTY_ID, askOf, isClosedTask, quickActionsOf } from '@vasta/core'
 import { setProperties } from '../lib/actions.ts'
+import { greyButton, tintedButton } from '../lib/buttons.ts'
 import { quickAsk, runQuickAction } from '../lib/quick-actions.ts'
 import AppIcon from './AppIcon.vue'
 import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
@@ -64,11 +65,8 @@ const askingId = computed(() => {
   return ask?.anchor && root.value?.contains(ask.anchor) ? ask.action.id : undefined
 })
 
-// On the page raised buttons named with verbs; none filled, so none reads as the task's current
-// state. 44px tall on a phone (the design system's tap size).
-const pageButton = 'flex items-center gap-1.5 rounded-lg border px-2.5 py-1 shadow-sm max-md:min-h-11 max-md:px-3.5'
-const pageQuiet = 'border-line bg-surface text-ink hover:bg-hover'
-const pageMain = 'border-accent/40 bg-accent/10 font-medium text-accent hover:bg-accent/15'
+// On the page buttons named with verbs: the main action tinted, the rest grey; none filled, so
+// none reads as the task's current state (lib/buttons.ts).
 const rowButton = 'grid h-7 w-7 place-items-center rounded-md text-ink-faint hover:bg-hover hover:text-ink max-md:h-9 max-md:w-9'
 </script>
 
@@ -78,7 +76,7 @@ const rowButton = 'grid h-7 w-7 place-items-center rounded-md text-ink-faint hov
     <button
       v-for="action in actions"
       :key="action.id"
-      :class="[row ? rowButton : [pageButton, action.id === mainId ? pageMain : pageQuiet], retained ? 'opacity-40' : '']"
+      :class="[row ? rowButton : action.id === mainId ? tintedButton : greyButton, retained ? 'opacity-40' : '']"
       :title="row ? action.name : undefined"
       :aria-expanded="askingId === action.id || undefined"
       :aria-disabled="retained || undefined"
