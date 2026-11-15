@@ -1,26 +1,26 @@
 <script setup lang="ts">
-// The bar at the bottom of a phone: places to go, as iPhone apps have (Home: what the space opens
-// on; Tasks: the type's last picked view; Inbox; Calendar; Search), with Capture as a round button
+// The bar at the bottom of a phone: places chosen in Settings, with Capture as a round button
 // above it on the right. The sidebar stays behind the menu at the top left. Hidden while the
 // keyboard is up or a full-screen surface (a whiteboard) is open; dialogs cover it; while rows are
 // selected the bulk bar takes its place. Its z-index (20) is below the sidebar drawer's (30).
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import { isTodayRoute } from '../lib/actions.ts'
+import { phonePlacePath, visiblePhonePlaces, type PhonePlace } from '../lib/phone-places.ts'
 import { selecting } from '../lib/selection.ts'
-import { lastError, notice, systemType, ui, workspace } from '../lib/state.ts'
+import { lastError, notice, ui, workspace } from '../lib/state.ts'
 import { keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 
 const route = useRoute()
-const taskType = computed(() => systemType('task'))
 /** Where Home lands: the page the space opens on, when it is one (else "/" decides). */
 const homePath = computed(() => (workspace.space?.opensOn?.kind === 'object' ? `/o/${workspace.space.opensOn.id}` : '/'))
-const tabs = computed(() => [
-  { label: 'Home', icon: 'ph:house', to: '/', active: route.path === '/' || route.path === homePath.value },
-  ...(taskType.value ? [{ label: 'Tasks', icon: 'ph:check-circle', to: `/t/${taskType.value.id}`, active: route.path === `/t/${taskType.value.id}` }] : []),
-  { label: 'Inbox', icon: 'ph:tray', to: '/inbox', active: route.path === '/inbox' },
-  { label: 'Calendar', icon: 'ph:calendar-blank', to: '/calendar', active: route.path === '/calendar' || route.path.startsWith('/day/') },
-])
+function active(place: PhonePlace) {
+  if (place.id === 'home') return route.path === '/' || route.path === homePath.value
+  if (place.id === 'today') return isTodayRoute(route)
+  if (place.id === 'calendar') return (route.path === '/calendar' || route.path.startsWith('/day/')) && !(visiblePhonePlaces.value.some((item) => item.id === 'today') && isTodayRoute(route))
+  return !!place.to && route.path === place.to
+}
 const hidden = computed(() => keyboardInset.value > 80 || ui.surfaceFull)
 </script>
 
@@ -42,20 +42,22 @@ const hidden = computed(() => keyboardInset.value > 80 || ui.surfaceFull)
       aria-label="Places"
       data-tab-bar
     >
-      <RouterLink
-        v-for="tab in tabs"
-        :key="tab.label"
-        :to="tab.to"
-        class="flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px]"
-        :class="tab.active ? 'text-accent' : 'text-ink-soft'"
-        :aria-current="tab.active ? 'page' : undefined"
-        :data-tab="tab.label"
-      >
-        <AppIcon :fallback="tab.icon" :size="22" />{{ tab.label }}
-      </RouterLink>
-      <button class="flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] text-ink-soft" data-tab="Search" @click="ui.paletteOpen = true">
-        <AppIcon fallback="ph:magnifying-glass" :size="22" />Search
-      </button>
+      <template v-for="tab in visiblePhonePlaces" :key="tab.id">
+        <RouterLink
+          v-if="tab.id !== 'search'"
+          :to="phonePlacePath(tab)!"
+          class="flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[11px]"
+          :class="active(tab) ? 'text-accent' : 'text-ink-soft'"
+          :aria-current="active(tab) ? 'page' : undefined"
+          :aria-label="tab.label"
+          :data-tab="tab.label"
+        >
+          <AppIcon :icon="tab.icon" :fallback="tab.fallback" :size="22" /><span class="w-full truncate text-center">{{ tab.label }}</span>
+        </RouterLink>
+        <button v-else class="flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] text-ink-soft" data-tab="Search" @click="ui.paletteOpen = true">
+          <AppIcon :fallback="tab.fallback" :size="22" />Search
+        </button>
+      </template>
     </nav>
   </template>
 </template>
