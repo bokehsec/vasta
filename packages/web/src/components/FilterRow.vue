@@ -159,13 +159,14 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
       </template>
 
       <!-- Ids -->
-      <div v-else-if="kind === 'ids'" class="flex min-w-0 flex-1 flex-col gap-1">
-        <div class="flex flex-wrap items-center gap-1">
+      <!-- A phone gives the values a line of their own under the field and how it compares. -->
+      <div v-else-if="kind === 'ids'" class="flex min-w-0 flex-1 flex-col gap-1 max-md:order-last max-md:basis-full">
+        <div class="flex flex-wrap items-center gap-1 max-md:gap-2">
           <template v-if="selectOptions">
             <button
               v-for="option in selectOptions"
               :key="option.id"
-              class="rounded-md px-1.5 py-0.5 text-xs"
+              class="rounded-md px-1.5 py-0.5 text-xs max-md:px-2.5 max-md:py-1.5 max-md:text-sm"
               :class="ids.includes(option.id) ? chip(option.color) : 'text-ink-faint ring-1 ring-line hover:text-ink'"
               @click="toggleId(option.id)"
             >
@@ -174,7 +175,7 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
           </template>
           <template v-else-if="isPerson">
             <button
-              class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs"
+              class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs max-md:px-2.5 max-md:py-1.5 max-md:text-sm"
               :class="isMe ? 'bg-accent/10 text-accent ring-1 ring-accent/30' : 'text-ink-faint ring-1 ring-line hover:text-ink'"
               title="Whoever is looking"
               @click="toggleMe"
@@ -184,7 +185,7 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
             <button
               v-for="id in personChoices"
               :key="id"
-              class="inline-flex items-center gap-1 rounded-md py-0.5 pl-0.5 pr-1.5 text-xs"
+              class="inline-flex items-center gap-1 rounded-md py-0.5 pl-0.5 pr-1.5 text-xs max-md:py-1.5 max-md:pr-2.5 max-md:text-sm"
               :class="ids.includes(id) ? 'bg-hover text-ink ring-1 ring-line-strong' : 'text-ink-faint ring-1 ring-line hover:text-ink'"
               @click="toggleId(id)"
             >
@@ -195,7 +196,7 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
             <button
               v-for="t in workspace.types"
               :key="t.id"
-              class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs"
+              class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs max-md:px-2.5 max-md:py-1.5 max-md:text-sm"
               :class="ids.includes(t.id) ? chip(t.color) : 'text-ink-faint ring-1 ring-line hover:text-ink'"
               @click="toggleId(t.id)"
             >

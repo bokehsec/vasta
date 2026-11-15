@@ -3,7 +3,7 @@ import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, dueForReview, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
+import { RANK_PROPERTY_ID, closedFilterOf, dueForReview, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
 import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -453,12 +453,37 @@ const groupField = computed(() => {
   if (view.value.layout === 'kanban') return view.value.groupBy?.[0]?.field ?? selectProps.value[0]?.id ?? 'tags'
   return view.value.groupBy?.[0]?.field ?? ''
 })
+// Closed tasks (Done, Dropped) are left out unless the view shows them (closedFilterOf); a switch
+// in its filters turns them on, saved on the view.
+const columnsField = computed(() => (view.value.layout === 'kanban' ? groupField.value : undefined))
+const closedFilter = computed(() => closedFilterOf(type.value, view.value, columnsField.value))
+const viewFilter = computed<FilterGroup | undefined>(() =>
+  closedFilter.value ? { kind: 'group', operator: 'and', items: [...(view.value.filter ? [view.value.filter] : []), closedFilter.value] } : view.value.filter
+)
+const canShowClosed = computed(() => !!closedFilterOf(type.value, { ...view.value, showClosed: false }, columnsField.value))
+const closedLabel = computed(() => {
+  const names = (statusProperty(type.value)?.options ?? []).filter((o) => o.status === 'done').map((o) => o.label.toLowerCase())
+  return `Show ${new Intl.ListFormat('en', { type: 'conjunction' }).format(names)}`
+})
+const toggleClosed = () => updateView({ showClosed: view.value.showClosed ? undefined : true })
+// A task closed while the view is open stays on it (struck through, its Undo at hand) until the
+// view is left: whatever was open here is kept.
+const keptOpen = new Set<string>()
+let keptFor = ''
+watch(
+  [() => [...objects.value], () => `${props.id}/${activeViewId.value}`, type],
+  ([list, key, t]) => {
+    if (key !== keptFor) (keptOpen.clear(), (keptFor = key))
+    if (t) for (const o of list) if (!isClosedTask(t, o)) keptOpen.add(o.id)
+  },
+  { immediate: true, flush: 'sync' }
+)
 
 const visible = computed(() => {
   const q = filterText.value.trim().toLowerCase()
   const context = queryContext()
   const list = objects.value.filter(
-    (o) => matchesFilter(o, view.value.filter, context) && (!showMine.value || !mineOnly.value || isMine(o)) && (!q || displayTitle(o, type.value).toLowerCase().includes(q) || o.preview.toLowerCase().includes(q))
+    (o) => matchesFilter(o, keptOpen.has(o.id) ? view.value.filter : viewFilter.value, context) && (!showMine.value || !mineOnly.value || isMine(o)) && (!q || displayTitle(o, type.value).toLowerCase().includes(q) || o.preview.toLowerCase().includes(q))
   )
   const { field, direction } = sort.value
   const factor = direction === 'asc' ? 1 : -1
@@ -739,9 +764,14 @@ async function newMenu(event: MouseEvent) {
           <span v-if="activeFilterCount" class="grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-semibold text-white" data-filters-count>{{ activeFilterCount }}</span>
         </button>
         <PopoverMenu v-model:open="filtersOpen" :anchor="filtersAnchor" label="Search and filter">
+          <!-- Changes apply as they are made: the count says what they leave, Done closes the sheet. -->
           <div class="flex items-center px-2.5 pb-1">
-            <p class="text-base font-semibold">Search and filter</p>
-            <button v-if="activeFilterCount" class="-mr-1 ml-auto h-11 rounded-lg px-2.5 text-[15px] text-accent" data-filters-clear @click="clearFilters">Clear</button>
+            <div class="min-w-0">
+              <p class="text-base font-semibold">Search and filter</p>
+              <p class="text-[13px] text-ink-faint" data-filters-shown>{{ visible.length }} {{ visible.length === 1 ? type.name.toLowerCase() : type.pluralName.toLowerCase() }} shown</p>
+            </div>
+            <button v-if="activeFilterCount" class="ml-auto h-11 rounded-lg px-2.5 text-[15px] text-accent" data-filters-clear @click="clearFilters">Clear</button>
+            <button class="-mr-1 h-11 rounded-lg px-2.5 text-[15px] font-semibold text-accent" :class="activeFilterCount ? '' : 'ml-auto'" data-filters-done @click="filtersOpen = false">Done</button>
           </div>
           <div v-if="!agendaActive" class="mx-1.5 mb-2 flex items-center gap-2 rounded-lg bg-hover px-3 text-ink-faint focus-within:ring-1 focus-within:ring-accent/50">
             <AppIcon fallback="ph:magnifying-glass" :size="16" />
@@ -750,6 +780,10 @@ async function newMenu(event: MouseEvent) {
           <button v-if="showMine && !agendaActive && !fixedActive" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" :aria-pressed="mineOnly" data-filters-mine @click="toggleMine">
             <AppIcon fallback="ph:user-circle" :size="16" class="text-ink-soft" /> Mine
             <AppIcon :fallback="mineOnly ? 'ph:check-square-fill' : 'ph:square'" :class="mineOnly ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
+          </button>
+          <button v-if="canShowClosed && !fixedActive" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" :aria-pressed="!!view.showClosed" data-show-closed @click="toggleClosed">
+            <AppIcon fallback="ph:check-circle" :size="16" class="text-ink-soft" /> {{ closedLabel }}
+            <AppIcon :fallback="view.showClosed ? 'ph:check-square-fill' : 'ph:square'" :class="view.showClosed ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
           </button>
           <template v-if="!fixedActive">
             <div class="px-2.5 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Filters</div>
@@ -862,6 +896,10 @@ async function newMenu(event: MouseEvent) {
         </template>
       </div>
       <PopoverMenu v-model:open="filterOpen" :anchor="filterAnchor" placement="bottom-end" width="34rem">
+        <button v-if="canShowClosed" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" :aria-pressed="!!view.showClosed" data-show-closed @click="toggleClosed">
+          <AppIcon fallback="ph:check-circle" class="text-ink-soft" /> {{ closedLabel }}
+          <AppIcon :fallback="view.showClosed ? 'ph:check-square-fill' : 'ph:square'" :class="view.showClosed ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
+        </button>
         <div class="p-1.5">
           <FilterGroupEditor :group="filterGroup" :type-ids="[id]" @update="setFilter" />
         </div>
@@ -999,7 +1037,7 @@ async function newMenu(event: MouseEvent) {
       :list="view.list"
       :manual="manual"
       :agenda="view.agenda"
-      :filter="view.filter"
+      :filter="viewFilter"
       :open-in="view.openIn"
       :quick-actions="view.quickActions"
       :phone-table="phoneTable"
