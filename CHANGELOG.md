@@ -8,6 +8,11 @@ GitHub release page.
 
 ### Added
 
+- **Choose your page width.** Settings › Appearance has Standard, Wide and Full width, remembered
+  on this device for all object pages and daily notes. Standard keeps the reading width and gives
+  pages with columns more room; daily notes with columns now get that same room. Full width uses
+  the available content area while keeping the page margins.
+
 - **Triage and review as two steps of one routine.** A task type's page has one **Triage & review**
   button instead of a Review button on every view. It offers two queues across the whole space,
   whatever view or filters you are on: **Triage incoming** (tasks with no status or an incoming one,
