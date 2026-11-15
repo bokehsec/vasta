@@ -14,7 +14,8 @@ export interface RetainedCompletion {
 }
 
 export function createCompletionFeedback(options: {
-  type: () => ObjectType | undefined
+  /** The type to judge an object by: a single-type view's one, or each object's own (a query spanning types). */
+  type: (object: { typeId: Id }) => ObjectType | undefined
   rows: () => ObjectSummary[]
   replace: (object: ObjectRecord | ObjectSummary) => void
   save: (id: Id, values: Values) => Promise<unknown>
@@ -24,9 +25,9 @@ export function createCompletionFeedback(options: {
   const placements = reactive(new Map<Id, Pick<RetainedCompletion, 'before' | 'index'>>())
   const suppressed = new Set<Id>()
   let generation = 0
-  const done = (object: Pick<ObjectRecord, 'props'>) => {
+  const done = (object: Pick<ObjectRecord, 'props' | 'typeId'>) => {
     const status = object.props.status
-    return status?.kind === 'select' && !!statusProperty(options.type())?.options.some((option) => option.status === 'done' && status.value.includes(option.id))
+    return status?.kind === 'select' && !!statusProperty(options.type(object))?.options.some((option) => option.status === 'done' && status.value.includes(option.id))
   }
   const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right)
   const feedback = {
@@ -41,7 +42,7 @@ export function createCompletionFeedback(options: {
       return placed
     },
     observe(object: ObjectRecord): ObjectSaveObserver | undefined {
-      const type = options.type()
+      const type = options.type(object)
       if (type?.system !== 'task' || object.typeId !== type.id || suppressed.has(object.id)) return
       const existing = entries.get(object.id)
       const rows = options.rows()

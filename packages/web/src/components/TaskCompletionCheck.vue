@@ -47,8 +47,10 @@ async function toggle() {
     :disabled="disabled"
     @click.prevent.stop="toggle"
   >
+    <!-- The icon lets the pointer through: the button itself is the click's target, so the editor
+         around an embedded list leaves the click here instead of following the row's link. -->
     <span
-      class="grid size-5 place-items-center rounded-full border transition-colors duration-150 motion-reduce:transition-none"
+      class="pointer-events-none grid size-5 place-items-center rounded-full border transition-colors duration-150 motion-reduce:transition-none"
       :class="done ? 'border-accent bg-accent text-white' : lastError ? 'border-red-500 text-transparent' : 'border-line-strong text-transparent hover:border-accent'"
     >
       <AppIcon fallback="ph:check-bold" :size="12" />

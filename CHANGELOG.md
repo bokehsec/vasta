@@ -139,6 +139,11 @@ GitHub release page.
 
 ### Changed
 
+- **Done tasks stay put in lists inside pages too.** A task marked done in a list embedded in a page
+  (Home's Today, a project page, a dashboard) stays where it was, checked and struck through, until
+  you leave or reload the page; Undo puts back its exact status. A list whose last open task you
+  complete keeps that task in view instead of saying nothing matches.
+
 - **A task's page buttons look like buttons.** They are raised buttons named with verbs: **Mark
   done** (tinted, so it stands out), **Defer…** and **Drop**. New task types name the first one Mark
   done; an existing type keeps its names (Type settings › Quick actions). None is filled, so none

@@ -13,14 +13,14 @@ const summary = (id: string, state = 'todo', due?: PropertyValue, typeId = task.
   ({ id, typeId, title: id, preview: '', props: { status: status(state), ...(due ? { due } : {}) } }) as unknown as ObjectSummary
 const asRecord = (object: ObjectSummary, props: ObjectSummary['props'] = object.props) => ({ ...object, props, content: {} }) as unknown as ObjectRecord
 
-function setup(initial: ObjectSummary[], type: ObjectType | undefined | null = task) {
+function setup(initial: ObjectSummary[], type: ObjectType | undefined | null = task, typeOf?: (object: { typeId: string }) => ObjectType | undefined) {
   let rows = initial
   const replace = vi.fn((object: ObjectRecord | ObjectSummary) => {
     rows = rows.map((row) => (row.id === object.id ? ({ ...row, props: object.props } as ObjectSummary) : row))
   })
   const save = vi.fn(async (_id: string, _values: Record<string, PropertyValue | undefined>) => ({}))
   const failed = vi.fn()
-  const feedback = createCompletionFeedback({ type: () => type ?? undefined, rows: () => rows, replace, save, failed })
+  const feedback = createCompletionFeedback({ type: typeOf ?? (() => type ?? undefined), rows: () => rows, replace, save, failed })
   const complete = (id: string, props?: ObjectSummary['props']) => {
     const row = rows.find((candidate) => candidate.id === id)!
     return feedback.observe(asRecord(row, props ?? { ...row.props, status: status('done') }))
@@ -88,6 +88,27 @@ describe('retention eligibility', () => {
     const entry = feedback.entries.get('a')
     expect(complete('a')).toBeUndefined()
     expect(feedback.entries.get('a')).toBe(entry)
+  })
+})
+
+describe('a type per object (a query spanning types)', () => {
+  const typeOf = (object: { typeId: string }) => (object.typeId === task.id ? task : page)
+
+  it('retains the task-type row and ignores a done save of another type', () => {
+    const { feedback, complete } = setup([summary('t'), summary('n', 'todo', undefined, page.id)], task, typeOf)
+    expect(complete('t')).toBeDefined()
+    expect(feedback.entries.has('t')).toBe(true)
+    expect(feedback.observe(asRecord(summary('n', 'done', undefined, page.id)))).toBeUndefined()
+    expect(feedback.entries.size).toBe(1)
+  })
+
+  it('undoes a retained task judged by its own type', () => {
+    const { feedback, complete, replace } = setup([summary('t', 'doing')], task, typeOf)
+    complete('t')!.saved!(asRecord(summary('t'), { status: status('done') }))
+    const reopened = asRecord(summary('t'), { status: status('doing') })
+    expect(feedback.observe(reopened)).toBeDefined()
+    expect(feedback.entries.has('t')).toBe(false)
+    expect(replace).toHaveBeenLastCalledWith(reopened)
   })
 })
 
