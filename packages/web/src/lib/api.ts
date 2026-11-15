@@ -16,6 +16,14 @@ export function setUnauthorizedHandler(handler: () => void) {
   onUnauthorized = handler
 }
 
+/** A request that never reached the server (no network, the server down). Its message is shown as is. */
+export class NetworkError extends Error {
+  constructor(options?: ErrorOptions) {
+    super("Couldn't reach the server. Check the connection and try again.", options)
+    this.name = 'NetworkError'
+  }
+}
+
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   let response: Response
   try {
@@ -27,7 +35,8 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     })
   } catch (error) {
     noteNetworkError()
-    throw error
+    // The browser's own words ("Load failed", "Failed to fetch") mean nothing to the person reading them.
+    throw new NetworkError({ cause: error })
   }
   noteResponse(response)
   if (!response.ok) {
@@ -436,7 +445,7 @@ function viaServer<A extends unknown[], R>(call: (...args: A) => Promise<R>) {
     try {
       result = await call(...args)
     } catch (error) {
-      if (error instanceof TypeError) throw new Error(OFFLINE_MESSAGE)
+      if (error instanceof NetworkError) throw new Error(OFFLINE_MESSAGE)
       throw error
     }
     await syncNow()

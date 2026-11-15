@@ -868,11 +868,11 @@ async function startFrom(template: ObjectRecord) {
         </div>
         <div class="ml-auto flex items-center gap-1 text-xs text-ink-faint">
           <span v-if="!boardLayout" :class="status === 'unsaved' && offline ? 'text-amber-600' : status === 'saved' ? 'max-sm:hidden' : ''" :title="authorship.title || undefined">{{ status === 'saved' ? `Edited ${formatRelative(object.updatedAt)}${authorship.by}` : status === 'saving' ? 'Saving…' : offline ? 'Not saved (offline)' : 'Unsaved' }}</span>
-          <button ref="menuAnchor" class="grid h-7 w-7 place-items-center rounded-md text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink max-md:h-9 max-md:w-9" title="More" @click="menuOpen = !menuOpen">
+          <button ref="menuAnchor" class="grid h-7 w-7 place-items-center rounded-md text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink max-md:h-11 max-md:w-11" title="More" @click="menuOpen = !menuOpen">
             <AppIcon fallback="ph:dots-three" :size="17" />
           </button>
           <PopoverMenu v-model:open="menuOpen" :anchor="menuAnchor" placement="bottom-end" width="12rem">
-            <RouterLink :to="`/t/${object.typeId}`" class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover">
+            <RouterLink :to="`/t/${object.typeId}`" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover">
               <AppIcon fallback="ph:cube" /> Open type
             </RouterLink>
             <button v-if="!object.deletedAt" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="copyObjectLink(object.id), (menuOpen = false)">

@@ -124,6 +124,12 @@ GitHub release page.
 
 ### Changed
 
+- **Done stands out on a task's page.** Done is the one filled button; Defer, Drop and Next step stay
+  quiet beside it. On a phone these buttons, the page's ⋯ and the Undo and close buttons on a notice
+  are full finger size, and a notice with Undo stays while your finger or pointer is on it.
+- **Defer from a list says which task.** The Defer sheet opened from a row names the task, picks no
+  day until you do (today is only marked as today), has larger days and month arrows on a phone,
+  and keeps Cancel and Save in reach when the sheet has to scroll on a small screen.
 - **Done and dropped tasks are hidden in every view.** A task list shows what is still open, so the
   rows you can swipe come first. Turn on **Show done and dropped** in a view's filters (Filters on a
   phone, Filter on a desktop) to list them again, saved with that view. A task you finish stays on
@@ -179,6 +185,12 @@ GitHub release page.
   menu's submenu it goes back to the menu. Before, the page behind changed and a sheet like Defer
   stayed open over another page. Quick capture keeps what you typed for next time. Every sheet's
   bar at the top can now be pulled down to close it, as on iOS.
+- **Copy link works where the clipboard is blocked** (such as the server's plain-http address): it
+  copies another way, and failing that opens the phone's share sheet or a box with the link to copy
+  by hand, instead of only saying it could not.
+- **No connection says so in words.** A change that cannot reach the server says "Couldn't reach the
+  server. Check the connection and try again." instead of the browser's "Load failed".
+- **"Open type" in a page's ⋯ menu** is a full-height row on a phone like the others.
 - **A quick action that asks for a line of text (a next step) can be answered on a phone**: the
   question's sheet has a Save button. Before there was no way to submit it: the keyboard's Enter
   key only put the keyboard away, so the text was never saved. On a computer Enter still saves,

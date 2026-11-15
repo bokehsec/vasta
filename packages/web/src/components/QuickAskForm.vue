@@ -80,12 +80,12 @@ const saveClass = 'flex-1 rounded-lg bg-ink px-3 py-1.5 font-medium text-surface
 
 <template>
   <div v-if="ask.def.kind === 'date'" class="space-y-3 p-2 text-sm" data-defer-menu :aria-busy="saving || undefined">
-    <p v-if="ask.scope" class="text-xs text-ink-faint" data-ask-scope>{{ ask.scope }}</p>
+    <p v-if="ask.scope" class="line-clamp-2 text-xs text-ink-soft max-md:text-sm" data-ask-scope>{{ ask.scope }}</p>
     <div class="flex gap-2">
       <button :class="presetClass(tomorrow)" :aria-pressed="picked === tomorrow" :disabled="saving" @click="pick(tomorrow)">Tomorrow</button>
       <button :class="presetClass(nextWeek)" :aria-pressed="picked === nextWeek" :disabled="saving" @click="pick(nextWeek)">Next week</button>
     </div>
-    <MiniMonth :selected="picked ?? dayKey()" @pick="pick" />
+    <MiniMonth :selected="picked" @pick="pick" />
     <p class="font-medium" :class="picked ? 'text-ink' : 'text-ink-faint'" data-picked-day>{{ ask.def.name }}: {{ picked ? longDay(picked) : 'choose a day' }}</p>
     <p v-if="dueLine" class="flex items-center gap-1.5 text-xs text-ink-faint" data-due-line>
       <AppIcon fallback="ph:flag" :size="12" /> {{ dueLine }}
@@ -96,13 +96,14 @@ const saveClass = 'flex-1 rounded-lg bg-ink px-3 py-1.5 font-medium text-surface
     </label>
     <p v-if="stays" class="text-xs text-ink-faint">{{ stays }}</p>
     <p v-if="failed" class="text-xs text-red-600" role="alert" data-ask-error>Not saved: {{ failed }}</p>
-    <div class="flex gap-2">
+    <!-- On a short phone the sheet scrolls: Cancel and Save stay at its bottom edge. -->
+    <div class="flex gap-2 max-md:sticky max-md:bottom-0 max-md:-mx-2 max-md:bg-surface max-md:px-2 max-md:pt-2">
       <button :class="cancelClass" :disabled="saving" data-ask-cancel @click="cancel">Cancel</button>
       <button :class="saveClass" :disabled="!canSave" data-ask-save @click="save">{{ submitText }}</button>
     </div>
   </div>
   <form v-else class="space-y-2 p-2 text-sm" data-next-step :aria-busy="saving || undefined" @submit.prevent="save">
-    <p v-if="ask.scope" class="text-xs text-ink-faint" data-ask-scope>{{ ask.scope }}</p>
+    <p v-if="ask.scope" class="line-clamp-2 text-xs text-ink-soft max-md:text-sm" data-ask-scope>{{ ask.scope }}</p>
     <label class="block text-xs text-ink-faint" for="quick-ask-text">{{ ask.def.name }}</label>
     <input
       id="quick-ask-text"

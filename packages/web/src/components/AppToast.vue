@@ -13,11 +13,17 @@ watch(lastError, (message) => {
   if (message) errorTimer = setTimeout(() => (lastError.value = ''), 6000)
 })
 
+// A notice waits while a finger or the pointer is on it, or the focus is in it (reaching for Undo).
 let noticeTimer: ReturnType<typeof setTimeout> | undefined
-watch(notice, (value) => {
+const holding = ref(false)
+const startNoticeTimer = () => {
   clearTimeout(noticeTimer)
-  if (value) noticeTimer = setTimeout(() => (notice.value = null), value.action ? 8000 : 4000)
-})
+  const value = notice.value
+  if (value && !holding.value) noticeTimer = setTimeout(() => (notice.value = null), value.action ? 8000 : 4000)
+}
+watch(notice, startNoticeTimer)
+watch(holding, (held) => (held ? clearTimeout(noticeTimer) : startNoticeTimer()))
+watch(notice, (value) => !value && (holding.value = false))
 
 const running = ref(false)
 async function runAction() {
@@ -45,22 +51,30 @@ async function runAction() {
       :style="keyboardInset > 80 ? { bottom: `${keyboardInset + 16}px` } : ui.noticeLift ? { bottom: `${ui.noticeLift + 8}px` } : undefined"
       :class="selecting ? (isPhone ? 'bottom-[calc(8.5rem+env(safe-area-inset-bottom))]' : 'bottom-20') : isPhone && keyboardInset <= 80 ? 'bottom-[calc(4.5rem+env(safe-area-inset-bottom))]' : 'bottom-[calc(1rem+env(safe-area-inset-bottom))]'"
     >
-      <div v-if="notice" class="pointer-events-auto flex max-w-full items-center gap-2 rounded-xl border border-line bg-surface py-1.5 pl-3 pr-1.5 text-sm shadow-lg" role="status">
+      <div
+        v-if="notice"
+        class="pointer-events-auto flex max-w-full items-center gap-2 rounded-xl border border-line bg-surface py-1.5 pl-3 pr-1.5 text-sm shadow-lg max-md:gap-1 max-md:py-1 max-md:pr-1"
+        role="status"
+        @pointerenter="holding = true"
+        @pointerleave="holding = false"
+        @focusin="holding = true"
+        @focusout="holding = false"
+      >
         <span class="min-w-0 flex-1">{{ notice.message }}</span>
         <button
           v-if="notice.action"
-          class="shrink-0 rounded-lg px-2.5 py-1 font-medium text-accent hover:bg-hover disabled:opacity-50 max-md:py-2"
+          class="shrink-0 rounded-lg px-2.5 py-1 font-medium text-accent hover:bg-hover disabled:opacity-50 max-md:min-h-11 max-md:px-3.5"
           :disabled="running"
           @click="runAction"
         >
           {{ notice.action.label }}
         </button>
-        <button class="shrink-0 rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" title="Dismiss" @click="notice = null"><AppIcon fallback="ph:x" :size="14" /></button>
+        <button class="shrink-0 rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center" title="Dismiss" @click="notice = null"><AppIcon fallback="ph:x" :size="14" /></button>
       </div>
       <div v-if="lastError" class="pointer-events-auto flex max-w-full items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-sm shadow-lg" role="alert">
         <AppIcon fallback="ph:warning-circle" class="shrink-0 text-red-600" />
         <span class="min-w-0 flex-1">{{ lastError }}</span>
-        <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" title="Dismiss" @click="lastError = ''"><AppIcon fallback="ph:x" :size="14" /></button>
+        <button class="shrink-0 rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink max-md:-my-1.5 max-md:-mr-2 max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center" title="Dismiss" @click="lastError = ''"><AppIcon fallback="ph:x" :size="14" /></button>
       </div>
     </div>
   </Teleport>

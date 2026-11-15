@@ -1,17 +1,19 @@
 <script setup lang="ts">
 // Small month calendar for jumping to a day. Dots under a day say what it holds (DAY_MARKS): a
 // daily note with text, tasks due, dated objects, references to its note, events. The shown month
-// is `month` (its first day), so the page can load that month's marks.
+// is `month` (its first day), so the page can load that month's marks. With nothing selected it
+// shows this month, and today is marked as today only.
 import { computed, ref, watch } from 'vue'
 import { DAY_MARKS, describeMarks, formatWeekday, isToday, monthOf, stepAnchor, viewTitle, visibleDays, type DayMarks } from '../../lib/calendar.ts'
+import { dayKey } from '../../lib/actions.ts'
 import AppIcon from '../AppIcon.vue'
 
-const props = defineProps<{ selected: string; marks?: Map<string, DayMarks> }>()
+const props = defineProps<{ selected?: string | undefined; marks?: Map<string, DayMarks> }>()
 const emit = defineEmits<{ pick: [day: string] }>()
 const month = defineModel<string>('month')
 
-const shown = ref(props.selected)
-watch(() => props.selected, (day) => (shown.value = day))
+const shown = ref(props.selected ?? dayKey())
+watch(() => props.selected, (day) => day && (shown.value = day))
 watch(shown, (day) => (month.value = `${monthOf(day)}-01`), { immediate: true })
 const days = computed(() => visibleDays('month', shown.value))
 const dots = (day: string) => DAY_MARKS.filter((m) => props.marks?.get(day)?.[m.key])
@@ -21,19 +23,19 @@ const dots = (day: string) => DAY_MARKS.filter((m) => props.marks?.get(day)?.[m.
   <div class="select-none text-sm">
     <div class="mb-2 flex items-center gap-1">
       <span class="flex-1 font-semibold first-letter:uppercase">{{ viewTitle('month', days, shown) }}</span>
-      <button class="rounded-md p-1.5 text-ink-faint hover:bg-hover hover:text-ink" title="Previous month" @click="shown = stepAnchor('month', shown, -1)">
+      <button class="rounded-md p-1.5 text-ink-faint hover:bg-hover hover:text-ink max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center" title="Previous month" @click="shown = stepAnchor('month', shown, -1)">
         <AppIcon fallback="ph:caret-left" :size="14" />
       </button>
-      <button class="rounded-md p-1.5 text-ink-faint hover:bg-hover hover:text-ink" title="Next month" @click="shown = stepAnchor('month', shown, 1)">
+      <button class="rounded-md p-1.5 text-ink-faint hover:bg-hover hover:text-ink max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center" title="Next month" @click="shown = stepAnchor('month', shown, 1)">
         <AppIcon fallback="ph:caret-right" :size="14" />
       </button>
     </div>
-    <div class="grid grid-cols-7 gap-y-0.5 text-center">
+    <div class="grid grid-cols-7 gap-y-0.5 text-center max-md:gap-y-0">
       <span v-for="day in days.slice(0, 7)" :key="day" class="pb-1 text-[11px] text-ink-faint first-letter:uppercase">{{ formatWeekday(day).slice(0, 2) }}</span>
       <button
         v-for="day in days"
         :key="day"
-        class="relative mx-auto flex h-9 w-9 flex-col items-center justify-center rounded-lg text-[13px] tabular-nums"
+        class="relative mx-auto flex h-9 w-9 flex-col items-center justify-center rounded-lg text-[13px] tabular-nums max-md:h-11 max-md:w-full max-md:max-w-11 max-md:text-[15px]"
         :class="[
           day === selected ? 'bg-ink font-semibold text-surface' : isToday(day) ? 'font-semibold text-accent hover:bg-hover' : 'hover:bg-hover',
           monthOf(day) !== monthOf(shown) && day !== selected ? 'text-ink-faint/70' : '',

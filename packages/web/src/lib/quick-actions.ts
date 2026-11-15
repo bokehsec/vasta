@@ -17,7 +17,8 @@ import { session } from './session.ts'
 import { lastError, notice } from './state.ts'
 import { openStepsNote } from './subtasks.ts'
 
-type Target = Pick<ObjectRecord, 'id' | 'props'>
+/** An object an action runs on; its title, when given, names it in the question (a row's Defer). */
+type Target = Pick<ObjectRecord, 'id' | 'props'> & { title?: string }
 type Values = Record<Id, PropertyValue | undefined>
 /** Saves one object's values; the task page keeps its own (its editor holds a copy of the object). */
 export type QuickSave = (id: Id, values: Values) => unknown
@@ -111,7 +112,7 @@ export interface RunOptions {
   note?: () => string | undefined
   /** The question's save button ("Save & next task" in a review); default "Save". With it the question says whether saving leaves the objects open. */
   submitLabel?: string
-  /** What the question says it applies to when there is one object (its title); several are "5 tasks". */
+  /** What the question says it applies to when there is one object (default its title, if given; '' for nothing); several are "5 tasks". */
   scope?: string
   /** Called with the edits saved, once, after the notice is up (the returned edits are the same). */
   onSaved?: (edits: QuickActionEdit[]) => void
@@ -197,7 +198,7 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
       def: asked.def,
       anchor: options.anchor ?? null,
       count: targets.length,
-      scope: targets.length > 1 ? (options.noun ? options.noun(targets.length) : `${targets.length} tasks`) : options.scope,
+      scope: targets.length > 1 ? (options.noun ? options.noun(targets.length) : `${targets.length} tasks`) : (options.scope ?? (one?.title || undefined)),
       submitLabel: options.submitLabel ?? 'Save',
       closes,
       day: one && asked.def.kind === 'date' ? dayOf(one.props[asked.def.id]) : undefined,

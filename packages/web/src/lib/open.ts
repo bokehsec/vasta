@@ -31,17 +31,56 @@ export function objectRoute(id: Id, options: Pick<OpenOptions, 'block' | 'query'
 }
 
 /**
+ * Puts text on the clipboard: the clipboard API, else the older copy command (the API is missing on
+ * a plain-http address, such as the server's LAN address). False when neither worked.
+ */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    const box = document.createElement('textarea')
+    box.value = text
+    box.readOnly = true
+    box.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px'
+    document.body.append(box)
+    try {
+      box.select()
+      box.setSelectionRange(0, text.length)
+      return document.execCommand('copy')
+    } catch {
+      return false
+    } finally {
+      box.remove()
+    }
+  }
+}
+
+/**
  * "Copy link to page": <server>/o/<object-id> in the browser, vasta://o/<object-id> in the
- * desktop app. Shows a notice on success or an error banner on rejection.
+ * desktop app. Shows a notice once copied. When the clipboard refuses, the link still gets out:
+ * the share sheet where there is one (it has Copy), else a box with the link selected to copy by hand.
  */
 export async function copyObjectLink(objectId: Id) {
   const path = `o/${objectId}`
-  const desktop = '__TAURI_INTERNALS__' in window
-  try {
-    await navigator.clipboard.writeText(desktop ? `vasta://${path}` : `${location.origin}/${path}`)
+  const link = '__TAURI_INTERNALS__' in window ? `vasta://${path}` : `${location.origin}/${path}`
+  if (await copyText(link)) {
     notice.value = { message: 'Link to the page copied' }
+    return
+  }
+  if (typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ url: link })
+      return
+    } catch (error) {
+      // Closed without sharing: nothing more to do.
+      if ((error as Error).name === 'AbortError') return
+    }
+  }
+  try {
+    window.prompt('Copy this link to the page', link)
   } catch {
-    lastError.value = 'Could not copy the link'
+    lastError.value = `Could not copy the link: ${link}`
   }
 }
 

@@ -1,6 +1,7 @@
 // "Copy link to page" in the test env: the action in the sidebar right-click menu, the right-click
 // menu of a type view and query results, and the ⋯ More menu of an object's page and side pane;
-// the browser and simulated desktop URL formats; clipboard rejection; and that existing block-link
+// the browser and simulated desktop URL formats; clipboard rejection (the copy command, else the link
+// offered to copy by hand); and that existing block-link
 // copying and normal link navigation are unchanged.
 //   node copy-link.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
@@ -150,20 +151,41 @@ if (desktopLink !== expectedDesktop) throw new Error(`desktop link: ${desktopLin
 await page.evaluate(() => { delete window.__TAURI_INTERNALS__ })
 
 // ---------------------------------------------------------------------------
-step('clipboard rejection shows error feedback')
-// Override writeText to reject, then copy again.
-await page.evaluate(() => {
-  navigator.clipboard.writeText = async () => { throw new Error('denied') }
-})
+step('clipboard API refused: the older copy command takes over')
 await clearCopied()
 await page.goto(`${base}/o/${created.id}`)
 await page.waitForSelector('textarea[data-large-text]')
-await page.click('button[title="More"]')
-await page.waitForSelector('[role=menu]')
-await page.click('[role=menu] button:has-text("Copy link to page")')
-// The error banner should appear.
-const err = await until(() => errorText(), 'error banner after clipboard rejection')
-if (!err.includes('Could not copy the link')) throw new Error(`unexpected error text: ${err}`)
+// writeText refuses (as on a plain-http address); keep what the copy command copies.
+await page.evaluate(() => {
+  navigator.clipboard.writeText = async () => { throw new Error('denied') }
+  document.execCommand = (command) => {
+    if (command !== 'copy') return false
+    window.__copied = document.querySelector('body > textarea[readonly]')?.value
+    return true
+  }
+})
+const copyFromMenu = async () => {
+  await page.click('button[title="More"]')
+  await page.waitForSelector('[role=menu]')
+  await page.click('[role=menu] button:has-text("Copy link to page")')
+}
+await copyFromMenu()
+const fallbackCopied = await until(() => page.evaluate(() => window.__copied), 'link copied by the copy command')
+if (fallbackCopied !== `${base}/o/${created.id}`) throw new Error(`copy command copied: ${fallbackCopied}`)
+await until(() => page.locator('[role=status]:has-text("Link to the page copied")').count(), 'copied notice after the copy command')
+
+step('nothing copies: a box shows the link to copy by hand')
+await page.evaluate(() => {
+  document.execCommand = () => false
+  Object.defineProperty(navigator, 'share', { value: undefined, configurable: true })
+})
+const shown = new Promise((resolve) => page.once('dialog', async (dialog) => {
+  resolve(dialog.defaultValue())
+  await dialog.dismiss()
+}))
+await copyFromMenu()
+const offered = await shown
+if (offered !== `${base}/o/${created.id}`) throw new Error(`link offered by hand: ${offered}`)
 
 // ---------------------------------------------------------------------------
 step('existing block-link copying still works')
