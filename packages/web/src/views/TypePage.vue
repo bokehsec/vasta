@@ -967,7 +967,8 @@ async function newMenu(event: MouseEvent) {
         <AppIcon fallback="ph:tray" :size="17" /> Triage &amp; review
       </button>
       <button v-if="review" class="min-h-11 min-w-0 rounded-lg px-2 text-left text-accent hover:bg-hover" data-process-resume @click="resumeReview">
-        Resume {{ review.scope === 'space' ? workflowTitle(review).toLowerCase() : `review of ${review.viewName}` }} · {{ Math.min(review.index + 1, review.ids.length) }} of {{ review.ids.length }}
+        <!-- A phone says it shorter, so it fits on the line beside Triage & review. -->
+        Resume {{ isPhone ? (review.kind === 'triage' ? 'triage' : 'review') : review.scope === 'space' ? workflowTitle(review).toLowerCase() : `review of ${review.viewName}` }} · {{ Math.min(review.index + 1, review.ids.length) }} of {{ review.ids.length }}
       </button>
     </div>
     <WorkflowChooser v-model:open="workflowOpen" :type="type" :anchor="workflowAnchor" :mode="workflowMode" :space-name="workspace.space?.name ?? ''" :view-scope="viewScope"
@@ -988,7 +989,7 @@ async function newMenu(event: MouseEvent) {
     <ObjectCollection
       v-else
       ref="collection"
-      class="mt-6"
+      class="mt-6 max-md:mt-3"
       :objects="visible"
       :layout="view.layout"
       :group-field="groupField"

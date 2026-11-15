@@ -88,11 +88,12 @@ const heading = 'mb-2 flex items-center gap-2 text-sm font-semibold text-ink-sof
     <p v-if="!tagged.length" class="text-sm text-ink-faint">Nothing has this tag{{ children.length ? ' or its sub-tags' : '' }} yet.</p>
     <ObjectLink v-for="object in tagged" :key="object.id" :id="object.id" class="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-hover">
       <TypeIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
-      <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ displayTitle(object, typeOf(object)) }}</span>
+      <span class="min-w-0 flex-1 truncate text-sm font-medium max-md:whitespace-normal max-md:break-words">{{ displayTitle(object, typeOf(object)) }}</span>
       <span class="hidden shrink-0 items-center gap-1 sm:flex" @click.prevent>
         <ObjectChip v-for="id in object.tagIds.filter((t) => family.has(t) && t !== tagId)" :key="id" :id="id" tag />
       </span>
-      <span class="shrink-0 text-xs text-ink-faint">{{ formatRelative(object.updatedAt) }}</span>
+      <!-- A phone gives the title the room (it wraps there) instead of when it was edited. -->
+      <span class="shrink-0 text-xs text-ink-faint max-md:hidden">{{ formatRelative(object.updatedAt) }}</span>
     </ObjectLink>
   </section>
 </template>

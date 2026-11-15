@@ -124,6 +124,10 @@ GitHub release page.
 
 ### Changed
 
+- **Whole titles on a phone.** Task lists, search results, a page's links and a tag's list wrap
+  long titles onto more lines instead of cutting them off. Phone task rows no longer show when a task
+  was last edited or keep a blank indent for subtask arrows, so the title has the row's width, and
+  “Resume triage · 1 of 27” fits beside Triage & review.
 - **A quick action's question has Cancel and Save.** Every question (a next step, a day to defer
   to, a number or link) shows both buttons, on a computer as on a phone. Tomorrow, Next week or a
   day on the calendar now only picks the day: the question shows it, and where the due date ends up,

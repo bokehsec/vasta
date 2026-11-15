@@ -433,7 +433,8 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
             >
               <AppIcon :fallback="folded.has(object.id) ? 'ph:caret-right' : 'ph:caret-down'" :size="13" />
             </button>
-            <span v-else-if="outlined(group)" class="-mx-1 w-5 shrink-0" aria-hidden="true" />
+            <!-- A phone keeps the width for the title: only a parent's caret takes room there. -->
+            <span v-else-if="outlined(group) && !isPhone" class="-mx-1 w-5 shrink-0" aria-hidden="true" />
             <!-- On touch the checkbox's tap area reaches 44px around it. -->
             <button
               v-if="listColumns && typeOf(object)?.system === 'task'"
@@ -448,7 +449,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
             </button>
             <TypeIcon v-else :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
             <span v-if="quickType(object)" class="min-w-0 flex-1">
-              <span class="block font-medium max-md:text-base max-md:leading-snug" :class="list?.wrap || phoneRows ? 'break-words' : 'truncate'">{{ displayTitle(object, typeOf(object)) }}</span>
+              <span class="block font-medium max-md:text-base max-md:leading-snug" :class="list?.wrap || isPhone ? 'break-words' : 'truncate'">{{ displayTitle(object, typeOf(object)) }}</span>
               <span v-if="nextStepOf(object)" class="mt-0.5 flex items-center gap-1 text-xs text-ink-soft max-md:text-[13px]" data-next-step-line>
                 <AppIcon fallback="ph:arrow-right" :size="11" class="shrink-0 text-ink-faint" /><span class="truncate">{{ nextStepOf(object) }}</span>
               </span>
@@ -456,7 +457,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
             <span
               v-else
               class="min-w-0 flex-1 font-medium max-md:text-base max-md:leading-snug"
-              :class="[list?.wrap || phoneRows ? 'break-words' : 'truncate', listColumns && typeOf(object)?.system === 'task' && isDoneTask(object) ? 'text-ink-faint line-through' : '']"
+              :class="[list?.wrap || isPhone ? 'break-words' : 'truncate', listColumns && typeOf(object)?.system === 'task' && isDoneTask(object) ? 'text-ink-faint line-through' : '']"
             >{{ displayTitle(object, typeOf(object)) }}</span>
             <span v-if="progressOf(object)" class="shrink-0 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
               {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
@@ -480,7 +481,8 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
               <span class="hidden gap-1 md:flex" @click.prevent>
                 <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
               </span>
-              <span v-if="!quickType(object)" class="w-24 shrink-0 text-right text-xs text-ink-faint">{{ formatRelative(object.updatedAt) }}</span>
+              <!-- A phone leaves out when a task was last changed: the title needs the room more. -->
+              <span v-if="!quickType(object) && !(isPhone && typeOf(object)?.system === 'task')" class="w-24 shrink-0 text-right text-xs text-ink-faint max-md:w-auto">{{ formatRelative(object.updatedAt) }}</span>
             </template>
             <!-- In a narrow column the actions take a line of their own under the title; on a phone swipes replace them. -->
             <TaskQuickActions

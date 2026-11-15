@@ -59,10 +59,11 @@ const groups = computed(() => {
       >
         <TypeIcon :icon="link.object.icon ?? typesById.get(link.object.typeId)?.icon" fallback="ph:file-text" class="mt-0.5" :color="objectColor(link.object, typesById.get(link.object.typeId))" />
         <div class="min-w-0 flex-1">
-          <div class="truncate text-sm font-medium">{{ displayTitle(link.object, typesById.get(link.object.typeId)) }}</div>
+          <div class="truncate text-sm font-medium max-md:whitespace-normal max-md:break-words">{{ displayTitle(link.object, typesById.get(link.object.typeId)) }}</div>
           <div v-if="link.object.preview" class="truncate text-xs text-ink-faint">{{ link.object.preview }}</div>
         </div>
-        <span class="shrink-0 text-xs text-ink-faint">{{ formatRelative(link.object.updatedAt) }}</span>
+        <!-- A phone gives the title the room (it wraps there) instead of when it was edited. -->
+        <span class="shrink-0 text-xs text-ink-faint max-md:hidden">{{ formatRelative(link.object.updatedAt) }}</span>
       </ObjectLink>
     </div>
   </section>

@@ -245,7 +245,7 @@ const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
             <template v-if="result.kind === 'object'">
               <TypeIcon :icon="result.object.icon ?? typeOf(result.object)?.icon" fallback="ph:file-text" :size="18" :color="objectColor(result.object, typeOf(result.object))" />
               <div class="min-w-0 flex-1">
-                <div class="truncate text-sm font-medium">{{ displayTitle(result.object, typeOf(result.object)) }}</div>
+                <div class="truncate text-sm font-medium max-md:whitespace-normal max-md:break-words">{{ displayTitle(result.object, typeOf(result.object)) }}</div>
                 <div v-if="result.object.preview" class="truncate text-xs text-ink-faint">{{ result.object.preview }}</div>
               </div>
               <span class="shrink-0 text-xs text-ink-faint">{{ typeOf(result.object)?.name }}</span>
