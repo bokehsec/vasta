@@ -124,8 +124,8 @@ GitHub release page.
 
 ### Changed
 
-- **Done stands out on a task's page.** Done is the one filled button; Defer, Drop and Next step stay
-  quiet beside it. On a phone these buttons, the page's ⋯ and the Undo and close buttons on a notice
+- **A task's page buttons look like buttons.** Done, Defer, Drop and Next step are drawn alike, as
+  raised buttons, so none looks like the task's current status. On a phone these buttons, the page's ⋯ and the Undo and close buttons on a notice
   are full finger size, and a notice with Undo stays while your finger or pointer is on it.
 - **Defer from a list says which task.** The Defer sheet opened from a row names the task, picks no
   day until you do (today is only marked as today), has larger days and month arrows on a phone,

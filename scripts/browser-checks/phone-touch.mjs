@@ -1,5 +1,5 @@
 // Touch sizes and fallbacks on a phone (iPhone review, 2026-11-15): a task page's quick actions 44px
-// with Done the one filled button, the page's ⋯ and its "Open type" row 44px; Defer's sheet picking
+// all drawn alike (none looks like the task's state), the page's ⋯ and its "Open type" row 44px; Defer's sheet picking
 // no day at first, naming the task from a row (not on its own page), 44px days and month arrows, Save
 // on screen; Copy link when the clipboard refuses (the copy command, else the link offered by hand);
 // a failed save saying it could not reach the server (MODE=json); Undo and Dismiss 44px, the notice
@@ -69,7 +69,7 @@ try {
   await shot('1-defer-row')
   await page.locator('[data-defer-menu] [data-ask-cancel]').click()
 
-  step('task page: actions 44px, Done filled and the others quiet; ⋯ 44px')
+  step('task page: actions 44px and drawn alike; ⋯ 44px')
   await page.goto(`${base}/o/${task.id}`)
   const done = page.locator('[data-quick-actions] [data-action="done"]')
   await done.waitFor()
@@ -77,7 +77,7 @@ try {
   console.log(`  actions: ${(await actionButtons.allTextContents()).map((t) => t.trim()).join(', ')}`)
   for (let i = 0; i < (await actionButtons.count()); i++) await atLeast44(actionButtons.nth(i), `action ${i}`, { width: false })
   const bg = (l) => l.evaluate((el) => getComputedStyle(el).backgroundColor)
-  if ((await bg(done)) === (await bg(page.locator('[data-quick-actions] [data-action="defer"]')))) await fail('Done and Defer look the same')
+  if ((await bg(done)) !== (await bg(page.locator('[data-quick-actions] [data-action="defer"]')))) await fail('Done looks different from Defer (reads as the task\'s state)')
   const more = page.locator('main button[title="More"]').first()
   await atLeast44(more, 'page ⋯')
   await shot('2-task-page')
