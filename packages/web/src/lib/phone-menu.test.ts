@@ -18,6 +18,7 @@ describe('phone menu preferences', () => {
     for (const value of [null, {}, [], ['broken', 1]]) expect(normalizePhoneMenu(value)).toEqual(DEFAULT_PHONE_MENU)
     expect(normalizePhoneMenu(['search', 'type:book', 'search', false, 'settings', 'today', 'home', 'calendar'])).toEqual(['search', 'type:book', 'settings', 'today', 'home'])
     expect(normalizePhoneMenu(['type:'])).toEqual(DEFAULT_PHONE_MENU)
+    expect(normalizePhoneMenu(['menu', 'home'])).toEqual(['menu', 'home'])
   })
 
   it('saves order, reloads it, and keeps accounts separate', async () => {

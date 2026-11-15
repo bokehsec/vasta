@@ -8,6 +8,10 @@ GitHub release page.
 
 ### Added
 
+- **Menu in the phone bottom menu.** Settings › Appearance › Bottom menu can now include **Menu**,
+  which opens the side menu from within reach of your thumb. The ☰ button at the top left still
+  opens it too.
+
 - **Choose your phone bottom menu.** On a phone, Settings › Appearance › Bottom menu lets you pick one
   to five places (including Today, Settings and your object types), reorder them with arrows, or
   reset to the original menu. Changes appear immediately, stay on this device, and are the same in
@@ -223,6 +227,13 @@ GitHub release page.
   view, also after the views are reordered.
 
 ### Fixed
+
+- **Swiping back on an iPhone goes back.** A swipe from the screen's left edge could leave you on
+  the same page: it also started opening the side menu, and Back then closed that menu instead of
+  leaving. The edge swipe now only goes back; the side menu opens from the ☰ button (or Menu in the
+  bottom menu) and still closes with a swipe left. Going back to a list returns to where you had
+  scrolled, and a page you open starts at its top. Tapping the bottom-menu place you are already on
+  no longer adds a step to Back: it scrolls to the top (Calendar goes back to today).
 
 - **Phone controls and failed bulk saves are easier to use.** View, Filters, template choices and
   filter-building buttons have full-height touch targets. Failed bulk changes offer Retry for only

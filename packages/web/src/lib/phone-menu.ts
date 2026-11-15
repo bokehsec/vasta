@@ -3,12 +3,12 @@ import { computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 
 export const DEFAULT_PHONE_MENU = ['home', 'tasks', 'inbox', 'calendar', 'search'] as const
 export const PHONE_MENU_LIMIT = 5
-export type PhoneMenuItem = typeof DEFAULT_PHONE_MENU[number] | 'today' | 'settings' | `type:${string}`
+export type PhoneMenuItem = typeof DEFAULT_PHONE_MENU[number] | 'today' | 'settings' | 'menu' | `type:${string}`
 
 const choices = new Map<string, PhoneMenuItem[]>()
 const revision = ref(0)
 const valid = (value: unknown): value is PhoneMenuItem => typeof value === 'string' && (
-  [...DEFAULT_PHONE_MENU, 'today', 'settings'].includes(value) || value.startsWith('type:') && value.length > 5
+  [...DEFAULT_PHONE_MENU, 'today', 'settings', 'menu'].includes(value) || value.startsWith('type:') && value.length > 5
 )
 
 /** Ignore damaged preferences; types missing here are kept for the spaces that have them. */

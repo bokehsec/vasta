@@ -30,6 +30,8 @@ export const phonePlaces = computed<PhonePlace[]>(() => {
     { id: 'search', label: 'Search', fallback: 'ph:magnifying-glass' },
     { id: 'today', label: 'Today', fallback: 'ph:calendar-check' },
     { id: 'settings', label: 'Settings', fallback: 'ph:gear', to: '/settings' },
+    // The side menu, as the top-left button opens it, within reach of a thumb.
+    { id: 'menu', label: 'Menu', fallback: 'ph:list' },
     ...workspace.types.filter((type) => type.system !== 'task').map((type): PhonePlace => ({
       id: typeMenuItem(type.pluralName), label: type.pluralName, fallback: 'ph:shapes', ...(type.icon ? { icon: type.icon } : {}), to: `/t/${type.id}`,
     })),

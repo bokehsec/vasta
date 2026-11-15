@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppSidebar from './components/AppSidebar.vue'
 import BulkBar from './components/BulkBar.vue'
@@ -20,11 +20,13 @@ import { closesOnBack } from './lib/back.ts'
 import { closeContextMenu } from './lib/overlays.ts'
 import { listenToDesktop, trafficLights } from './lib/platform.ts'
 import { quickAsk } from './lib/quick-actions.ts'
+import { keepsScroll } from './lib/scroll-memory.ts'
 import { installShortcuts } from './lib/shortcuts.ts'
 import { checkSession, session } from './lib/session.ts'
 import { lastError, notice, ui, workspace } from './lib/state.ts'
 import { clearSelection, selecting } from './lib/selection.ts'
 import { isPhone } from './lib/viewport.ts'
+import { router } from './router.ts'
 import LoginView from './views/LoginView.vue'
 
 const route = useRoute()
@@ -62,22 +64,23 @@ function onKey(event: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 onBeforeUnmount(installShortcuts())
+const main = ref<HTMLElement | null>(null)
+onBeforeUnmount(keepsScroll(router, () => main.value))
 
-// Swipe right from the left edge opens the drawer, swipe left on it closes it.
-let swipe: { x: number; y: number; opening: boolean } | undefined
+// A swipe left on the open drawer closes it. Nothing opens it from the screen's left edge: on an
+// iPhone that swipe is Back, and a drawer opened under it would make Back close the drawer and stay
+// (lib/back.ts). The menu at the top left (and the bottom bar's Menu, if chosen) opens it.
+let swipe: { x: number; y: number } | undefined
 function onTouchStart(event: TouchEvent) {
   const touch = event.touches[0]
-  if (!isPhone.value || event.touches.length !== 1 || !touch) return
-  const opening = !ui.sidebarOpen && touch.clientX < 24
-  swipe = opening || ui.sidebarOpen ? { x: touch.clientX, y: touch.clientY, opening } : undefined
+  swipe = isPhone.value && ui.sidebarOpen && event.touches.length === 1 && touch ? { x: touch.clientX, y: touch.clientY } : undefined
 }
 function onTouchEnd(event: TouchEvent) {
   const touch = event.changedTouches[0]
   if (!swipe || !touch) return
   const dx = touch.clientX - swipe.x
   const dy = Math.abs(touch.clientY - swipe.y)
-  if (swipe.opening && dx > 60 && dy < dx) ui.sidebarOpen = true
-  else if (!swipe.opening && dx < -60 && dy < -dx) ui.sidebarOpen = false
+  if (dx < -60 && dy < -dx) ui.sidebarOpen = false
   swipe = undefined
 }
 </script>
@@ -107,6 +110,7 @@ function onTouchEnd(event: TouchEvent) {
              the query, so opening or closing the pane (?pane=) keeps the page as it is. -->
         <div class="flex min-h-0 flex-1">
           <main
+            ref="main"
             class="isolate min-h-0 min-w-0 flex-1 overflow-y-auto bg-surface md:mb-2 md:mr-2 md:rounded-xl md:border md:border-line md:shadow-[0_1px_3px_rgb(0_0_0/0.04)]"
             :class="[ui.sidebarCollapsed ? 'md:ml-2' : '', selecting ? (isPhone ? 'pb-[calc(10rem+env(safe-area-inset-bottom))]' : 'pb-32') : isPhone ? (notice || lastError ? 'pb-[calc(13rem+env(safe-area-inset-bottom))]' : 'pb-[calc(9rem+env(safe-area-inset-bottom))]') : 'pb-[env(safe-area-inset-bottom)]']"
           >
