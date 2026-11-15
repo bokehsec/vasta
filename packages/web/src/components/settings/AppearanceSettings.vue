@@ -8,6 +8,7 @@ import TypeIcon from '../TypeIcon.vue'
 import { iconBoxClasses, iconTextClasses } from '../../lib/colors.ts'
 import AppIcon from '../AppIcon.vue'
 import SettingsSection from './SettingsSection.vue'
+import PhoneMenuSettings from './PhoneMenuSettings.vue'
 import { label, secondary } from './styles.ts'
 
 const ICON_STYLES: { value: IconStyle; label: string }[] = [
@@ -93,6 +94,7 @@ const OPTIONS: { value: Theme; label: string }[] = [
           </button>
         </div>
       </div>
+      <PhoneMenuSettings />
       <div class="flex flex-wrap items-center gap-3 max-md:hidden">
         <button :class="secondary" class="flex items-center gap-2" @click="ui.shortcutsOpen = true">
           <AppIcon fallback="ph:keyboard" :size="15" /> Keyboard shortcuts

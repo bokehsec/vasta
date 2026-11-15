@@ -5,7 +5,6 @@ export const SECTIONS = [
   { id: 'device', label: 'This device', icon: 'ph:device-mobile' },
   ...(isDesktop ? [{ id: 'desktop', label: 'Desktop app', icon: 'ph:desktop' }] : []),
   { id: 'appearance', label: 'Appearance', icon: 'ph:palette' },
-  { id: 'phone-menu', label: 'Phone bottom menu', icon: 'ph:device-mobile' },
   { id: 'account', label: 'Account', icon: 'ph:user-circle' },
   { id: 'space', label: 'Space', icon: 'ph:planet' },
   // On the desktop app's own server: no other accounts, and the way to a real server.

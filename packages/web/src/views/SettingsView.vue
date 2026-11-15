@@ -5,7 +5,6 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import AccountSettings from '../components/settings/AccountSettings.vue'
 import AppearanceSettings from '../components/settings/AppearanceSettings.vue'
-import PhoneMenuSettings from '../components/settings/PhoneMenuSettings.vue'
 import ChannelSettings from '../components/settings/ChannelSettings.vue'
 import DesktopSettings from '../components/settings/DesktopSettings.vue'
 import DeviceSettings from '../components/settings/DeviceSettings.vue'
@@ -84,7 +83,6 @@ onBeforeUnmount(() => scroller?.removeEventListener('scroll', onScroll))
       <DeviceSettings />
       <DesktopSettings v-if="isDesktop" />
       <AppearanceSettings />
-      <PhoneMenuSettings />
       <AccountSettings />
       <SpaceSettings />
       <ServerAccountsSettings />

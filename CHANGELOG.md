@@ -8,7 +8,7 @@ GitHub release page.
 
 ### Added
 
-- **Choose your phone bottom menu.** Settings › Phone bottom menu lets you pick one to five places
+- **Choose your phone bottom menu.** Settings › Appearance › Phone bottom menu lets you pick one to five places
   (including Today, Settings and your object types), reorder them with arrows, or reset to the
   original menu. Changes appear immediately and stay on this device for each account and space.
 

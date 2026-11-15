@@ -19,7 +19,7 @@ const page = await context.newPage()
 const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
 const bar = page.locator('[data-tab-bar]')
-const settings = page.locator('#phone-menu')
+const settings = page.locator('#appearance #phone-menu')
 const labels = () => bar.locator('[data-tab]').evaluateAll((items) => items.map((item) => item.getAttribute('data-tab')))
 const selected = () => settings.locator('[data-phone-menu-item]').evaluateAll((items) => items.map((item) => item.getAttribute('data-phone-menu-item')))
 const wait = async (check, description) => {
@@ -46,7 +46,7 @@ try {
   assert(type, 'seed has a custom type')
 
   console.log('• settings enforce five items, remove and reorder immediately')
-  await page.goto(`${base}/settings#phone-menu`)
+  await page.goto(`${base}/settings#appearance`)
   await settings.waitFor()
   const add = settings.getByRole('combobox', { name: 'Add phone menu item' })
   assert(await add.isDisabled())
@@ -70,7 +70,7 @@ try {
   await page.keyboard.press('Escape')
 
   console.log('• any type can replace a built-in, retains its route and active state')
-  await page.goto(`${base}/settings#phone-menu`)
+  await page.goto(`${base}/settings#appearance`)
   await settings.getByRole('button', { name: 'Remove Calendar', exact: true }).click()
   await add.selectOption(`type:${type.id}`)
   const typeTab = bar.locator(`[data-tab]`).filter({ hasText: type.pluralName })
@@ -80,7 +80,7 @@ try {
   assert.equal(await typeTab.getAttribute('aria-current'), 'page')
 
   console.log('• a one-item menu, fallback for unavailable types, and defaults for another space')
-  await page.goto(`${base}/settings#phone-menu`)
+  await page.goto(`${base}/settings#appearance`)
   for (const name of ['Home', 'Tasks', 'Today', 'Search']) await settings.getByRole('button', { name: `Remove ${name}`, exact: true }).click()
   assert(await settings.getByRole('button', { name: `Remove ${type.pluralName}`, exact: true }).isDisabled())
   const storageKey = await page.evaluate(() => Object.keys(localStorage).find((key) => key.startsWith('vasta.phone-menu:')))

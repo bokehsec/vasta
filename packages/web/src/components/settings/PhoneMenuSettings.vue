@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import { DEFAULT_PHONE_MENU, PHONE_MENU_LIMIT, type PhoneMenuItem } from '../../lib/phone-menu.ts'
 import { phoneMenu, phonePlaces } from '../../lib/phone-places.ts'
 import AppIcon from '../AppIcon.vue'
-import SettingsSection from './SettingsSection.vue'
 import { secondary } from './styles.ts'
 
 const selected = computed(() => phoneMenu.value.map((id) => phonePlaces.value.find((place) => place.id === id) ?? {
@@ -34,7 +33,9 @@ function add(event: Event) {
 </script>
 
 <template>
-  <SettingsSection id="phone-menu" title="Phone bottom menu" description="Choose up to five items, in the order they appear. Saved on this device for this account and space. Changes appear immediately on a phone.">
+  <div id="phone-menu" role="group" aria-labelledby="phone-menu-title">
+    <h3 id="phone-menu-title" class="text-sm font-medium">Phone bottom menu</h3>
+    <p class="mt-1 mb-4 text-sm text-ink-soft">Choose up to five items, in the order they appear. Saved on this device for this account and space. Changes appear immediately on a phone.</p>
     <ol class="divide-y divide-line rounded-lg border border-line" aria-label="Phone menu items">
       <li v-for="(place, index) in selected" :key="place.id" class="flex min-h-12 items-center gap-2 px-2" :data-phone-menu-item="place.id">
         <AppIcon :icon="place.icon" :fallback="place.fallback" :size="20" />
@@ -55,5 +56,5 @@ function add(event: Event) {
     </label>
     <p class="mt-3 text-xs text-ink-soft">The top-left menu still opens all your places and Settings. Capture stays above the bottom menu.</p>
     <button :class="secondary" class="mt-3 min-h-11" @click="phoneMenu = [...DEFAULT_PHONE_MENU]">Reset to defaults</button>
-  </SettingsSection>
+  </div>
 </template>
