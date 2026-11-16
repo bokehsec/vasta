@@ -3,7 +3,8 @@
 // large title, an optional note (the type's text) and its fields as a row of chips; nothing is
 // made until it is added, so Cancel, Esc or a click outside leave nothing behind. Enter adds it
 // and the card stays for the next one ("Added …", with Open and Undo); ⌘↩ or Open adds it and
-// opens it in the window. On a phone it is a sheet from the bottom, above the keyboard.
+// opens it in the window. It starts with what the view it came from filters on (`initial`). On a
+// phone it is a sheet from the bottom, above the keyboard.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Doc, ObjectRecord, ObjectType, PropertyDef, PropertyValue } from '@vasta/core'
 import { createObject, deleteObjectFlow } from '../lib/actions.ts'
@@ -18,7 +19,9 @@ import PropertyValueEditor from './PropertyValueEditor.vue'
 import SheetGrabber from './SheetGrabber.vue'
 import TypeIcon from './TypeIcon.vue'
 
-const props = defineProps<{ type: ObjectType }>()
+// `initial`: what the fields start with (and go back to after each add): the values the view it
+// was opened from filters on, so what is made shows there (fillFromFilter in core).
+const props = defineProps<{ type: ObjectType; initial?: Record<string, PropertyValue> }>()
 const emit = defineEmits<{ close: [] }>()
 
 // The fields a row can hold, as on the object's page: not text blocks or formulas, nor fields
@@ -34,7 +37,7 @@ const fieldIcon = (def: PropertyDef) => icons[def.kind] ?? kindIcon(def.kind)
 const title = ref('')
 const note = ref('')
 const noteOpen = ref(false)
-const values = ref<Record<string, PropertyValue | undefined>>({})
+const values = ref<Record<string, PropertyValue | undefined>>({ ...props.initial })
 const titleInput = ref<HTMLTextAreaElement | null>(null)
 const noteInput = ref<HTMLTextAreaElement | null>(null)
 const busy = ref(false)
@@ -64,7 +67,7 @@ async function add(open: boolean) {
     title.value = ''
     note.value = ''
     noteOpen.value = false
-    values.value = {}
+    values.value = { ...props.initial }
     await nextTick()
     titleInput.value?.focus()
   } catch (e) {

@@ -5,7 +5,7 @@
 import { computed, type Ref } from 'vue'
 import { api } from './api.ts'
 import { clone } from './clone.ts'
-import { replaceType } from './state.ts'
+import { replaceType, unsavedTypes, workspace } from './state.ts'
 import { addDays, HABIT_PROGRESS_DEFAULT, HABIT_WEEKS_RANGES, habitDayTotals, habitReport, habitWeekPlan, isHabitPaused, mondayOf, type HabitPanelChart, type HabitProgressPlace, type HabitStripChart, type HabitTypeSettings, type HabitTally, type ObjectType, type ObjectSummary } from '@vasta/core'
 
 export type ProgressPlace = HabitProgressPlace
@@ -73,12 +73,35 @@ export function habitProgressOf(type: Pick<ObjectType, 'habits'> | undefined): H
   return settle(type?.habits ?? {}, deviceHabitProgress())
 }
 
+// Send changes in order: an earlier response must not undo a later optimistic choice.
+const progressSaves = new Map<string, Promise<void>>()
+
 /** Saves a change to a habit type's progress (place, charts, range), for every device. */
 export function saveHabitProgress(type: ObjectType, patch: Partial<HabitTypeSettings>) {
-  const next = clone(type)
-  next.habits = { ...habitProgressOf(type), ...patch }
+  const current = () => workspace.types.find((t) => t.id === type.id) ?? type
+  const next = clone(current())
+  next.habits = { ...habitProgressOf(next), ...patch }
+  unsavedTypes.set(type.id, next)
   replaceType(next)
-  void api.saveType(next).then(replaceType)
+  const previous = progressSaves.get(type.id) ?? Promise.resolve()
+  const save = previous.catch(() => {}).then(async () => {
+    // Preserve other type edits made while this request waited its turn.
+    const payload = clone(current())
+    payload.habits = next.habits
+    const saved = await api.saveType(payload)
+    if (progressSaves.get(type.id) === save && unsavedTypes.get(type.id) === next) {
+      unsavedTypes.delete(type.id)
+      replaceType(saved)
+    }
+  })
+  progressSaves.set(type.id, save)
+  void save.finally(() => {
+    if (progressSaves.get(type.id) === save) {
+      progressSaves.delete(type.id)
+      if (unsavedTypes.get(type.id) === next) unsavedTypes.delete(type.id)
+    }
+  }).catch(() => {})
+  return save
 }
 
 /** The type's progress, shown on every device alike. */

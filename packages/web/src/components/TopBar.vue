@@ -5,7 +5,7 @@
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { ColorName, Icon, ObjectType } from '@vasta/core'
-import { createObject, isTodayRoute } from '../lib/actions.ts'
+import { createObjectHere, isTodayRoute } from '../lib/actions.ts'
 import { displayTitle } from '../lib/format.ts'
 import { trafficLights } from '../lib/platform.ts'
 import { keysOf, toggleSidebar } from '../lib/shortcuts.ts'
@@ -73,7 +73,7 @@ const newButton = ref<HTMLElement | null>(null)
 const newOpen = ref(false)
 async function pickType(type: ObjectType) {
   newOpen.value = false
-  await createObject(type.id)
+  await createObjectHere(type.id)
 }
 
 const button = 'grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-35 max-md:h-11 max-md:w-11 max-md:text-ink-soft'

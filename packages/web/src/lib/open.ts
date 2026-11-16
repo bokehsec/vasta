@@ -115,7 +115,12 @@ export const popupBlockId = computed(() => {
   return typeof value === 'string' && value ? value : undefined
 })
 /** Whether the popup's object is new (its title gets the cursor): `?popup=<id>&new=1`. */
-export const popupIsNew = computed(() => router.currentRoute.value.query.new === '1')
+// A date-prefilled blank draft carries the automatic field so closing can ignore only that value.
+export const popupDefaultDate = computed(() => {
+  const value = router.currentRoute.value.query.new
+  return typeof value === 'string' && value.startsWith('date:') ? value.slice(5) : undefined
+})
+export const popupIsNew = computed(() => router.currentRoute.value.query.new === '1' || !!popupDefaultDate.value)
 /** Where a template put the cursor in the popup's text ("<block>:<offset>"). */
 export const popupCursor = computed(() => {
   const value = router.currentRoute.value.query.cursor

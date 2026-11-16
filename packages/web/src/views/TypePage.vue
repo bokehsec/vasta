@@ -2,8 +2,8 @@
 import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, closedStatusIds, defaultViewFilter, dueForReview, hidesClosed, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
+import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, PropertyValue, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
+import { RANK_PROPERTY_ID, closedStatusIds, defaultViewFilter, dueForReview, fillFromFilter, hidesClosed, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
 import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -223,6 +223,13 @@ async function addView() {
 const menuAnchor = ref<HTMLElement | null>(null)
 const menuOpen = ref(false)
 const quickAdd = ref(false)
+/** What the quick card's fields start with: what the view on show filters on (fillFromFilter). */
+const quickFill = ref<Record<string, PropertyValue>>({})
+function openQuickAdd() {
+  const t = type.value
+  quickFill.value = t ? fillFromFilter(t, view.value.filter, queryContext()) : {}
+  quickAdd.value = true
+}
 const settingsOpen = ref(route.query.settings === '1')
 watch(
   () => route.query.settings,
@@ -691,7 +698,7 @@ async function createNew() {
   if (!t) return
   await currentTemplates()
   if (defaultTemplate.value) void createFromTemplate(t, defaultTemplate.value)
-  else quickAdd.value = true
+  else openQuickAdd()
 }
 
 async function newMenu(event: MouseEvent) {
@@ -700,7 +707,7 @@ async function newMenu(event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   await loadTemplates()
   openMenuAt(rect.right - 224, rect.bottom + 4, [
-    { label: `Blank ${t.name.toLowerCase()}`, icon: 'ph:file', run: () => (quickAdd.value = true) },
+    { label: `Blank ${t.name.toLowerCase()}`, icon: 'ph:file', run: openQuickAdd },
     ...typeTemplates.value.map((template) => ({
       label: template.template!.name,
       icon: template === defaultTemplate.value ? 'ph:star-fill' : 'ph:copy-simple',
@@ -1138,7 +1145,7 @@ async function newMenu(event: MouseEvent) {
       @end="endReview"
       @open="openFromReview"
     />
-    <QuickAdd v-if="quickAdd" :type="type" @close="quickAdd = false" />
+    <QuickAdd v-if="quickAdd" :type="type" :initial="quickFill" @close="quickAdd = false" />
   </div>
   <div v-else class="grid h-full place-items-center text-sm text-ink-soft">Type not found.</div>
 </template>

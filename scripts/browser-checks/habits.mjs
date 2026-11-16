@@ -195,6 +195,18 @@ if (process.env.SHOTS) {
   await page.evaluate(() => document.documentElement.classList.remove('dark'))
 }
 
+step('Type settings: an old draft preserves a newer synced Display choice')
+await page.goto(`${base}/t/${habitType.id}?settings=1`)
+await until(() => page.getByRole('button', { name: 'Save', exact: true }).count(), 'Type settings draft')
+const latestType = await get(`/api/types/${habitType.id}`)
+await put(`/api/types/${habitType.id}`, { ...latestType, habits: { ...latestType.habits, strip: 'line' } })
+await until(async () => (await main.locator('[data-progress-strip][data-chart="line"]').count()) === 1, 'remote Display choice received')
+await page.getByLabel('Name', { exact: true }).fill(`${latestType.name} edited`)
+await page.getByRole('button', { name: 'Save', exact: true }).click()
+await until(async () => (await get(`/api/types/${habitType.id}`)).name === `${latestType.name} edited`, 'name saved')
+if ((await get(`/api/types/${habitType.id}`)).habits.strip !== 'line') throw new Error('Type settings overwrote Display')
+await page.goto(`${base}/t/${habitType.id}`)
+
 step('Progress: headline and rows match the report')
 const pick = async (name) => {
   if (process.env.PHONE) {

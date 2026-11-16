@@ -117,14 +117,15 @@ const dayTitle = (d: Day) =>
         <g v-for="(w, i) in byWeek" :key="w.monday">
           <rect :x="colX(i)" :y="cy(w.tally.done)" :width="colWidth" :height="BOTTOM - cy(w.tally.done)" fill="var(--color-chart)" />
           <rect
-            v-if="(w.current ? w.plan : w.tally.expected) > w.tally.done"
+            v-if="w.tally.expected > w.tally.done"
             :x="colX(i)"
-            :y="cy(w.current ? w.plan : w.tally.expected)"
+            :y="cy(w.tally.expected)"
             :width="colWidth"
-            :height="Math.max(0, cy(w.tally.done) - cy(w.current ? w.plan : w.tally.expected) - 1)"
+            :height="Math.max(0, cy(w.tally.done) - cy(w.tally.expected))"
             rx="2"
-            :fill="w.current ? 'url(#report-hatch)' : 'var(--color-line-strong)'"
+            fill="var(--color-line-strong)"
           />
+          <rect v-if="w.current && w.plan > w.tally.expected" :x="colX(i)" :y="cy(w.plan)" :width="colWidth" :height="cy(w.tally.expected) - cy(w.plan)" rx="2" fill="url(#report-hatch)" />
           <text v-if="i % labelEvery === 0 || w.current" :x="w.current ? Math.min(colX(i) + colWidth / 2 + 24, width) : colX(i) + colWidth / 2" :y="H - 4" font-size="10" fill="var(--color-ink-faint)" :text-anchor="w.current ? 'end' : 'middle'">{{ w.current ? 'This week' : dayLabel(w.monday) }}</text>
           <rect :x="LEFT + i * slot" y="0" :width="slot" :height="BOTTOM" fill="transparent"><title>{{ weekTitle(w) }}</title></rect>
         </g>
