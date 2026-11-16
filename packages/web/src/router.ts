@@ -50,16 +50,23 @@ router.beforeEach((to) => {
   if (closeTopLayer()) return false
 })
 
-// The side pane (lib/open.ts) lives in the query, as ?pane=<id>&paneBlock=<id>. A page that
-// changes only its own query (the calendar's view and date, a type page closing its settings)
-// keeps it: its part is carried over, so no page has to remember it. Not while closePane is
-// closing it, nor on back/forward (the entry already says).
-export const paneNavigation = { closing: false }
+// The side pane and the popup (lib/open.ts) live in the query, as ?pane=<id>&paneBlock=<id> and
+// ?popup=<id>&popupBlock=<id>. A page that changes only its own query (the calendar's view and
+// date, a type page closing its settings) keeps them: their part is carried over, so no page has
+// to remember it. Not while one is being closed, nor on back/forward (the entry already says).
+export const closingOverlay = { pane: false, popup: false }
 router.beforeEach((to, from) => {
-  const { pane, paneBlock } = from.query
-  if (!pane || paneNavigation.closing || to.path !== from.path || 'pane' in to.query) return
+  const { pane, paneBlock, popup, popupBlock, new: isNew, cursor } = from.query
+  if (closingOverlay.pane || closingOverlay.popup || to.path !== from.path) return
   if (router.options.history.state.current === to.fullPath) return
-  return { path: to.path, hash: to.hash, query: { ...to.query, pane, ...(paneBlock ? { paneBlock } : {}) } }
+  const carry =
+    pane && !('pane' in to.query) ? { pane, ...(paneBlock ? { paneBlock } : {}) } : undefined
+  const carryPopup =
+    popup && !('popup' in to.query)
+      ? { popup, ...(popupBlock ? { popupBlock } : {}), ...(isNew ? { new: isNew } : {}), ...(cursor ? { cursor } : {}) }
+      : undefined
+  if (!carry && !carryPopup) return
+  return { path: to.path, hash: to.hash, query: { ...to.query, ...carry, ...carryPopup } }
 })
 
 export function warmRoutes() {

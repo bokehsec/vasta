@@ -11,6 +11,7 @@ import OfflineBanner from './components/OfflineBanner.vue'
 import PasswordDialog from './components/PasswordDialog.vue'
 import PhoneTabBar from './components/PhoneTabBar.vue'
 import PickObjectHost from './components/PickObjectHost.vue'
+import PopupHost from './components/PopupHost.vue'
 import QuickAskHost from './components/QuickAskHost.vue'
 import QuickCapture from './components/QuickCapture.vue'
 import ShortcutsDialog from './components/ShortcutsDialog.vue'
@@ -125,6 +126,7 @@ function onTouchEnd(event: TouchEvent) {
     <DialogHost />
     <QuickAskHost />
     <PickObjectHost />
+    <PopupHost />
     <PhoneTabBar v-if="isPhone" />
     <BulkBar v-if="!(isPhone && ui.sidebarOpen)" />
     <AppToast />

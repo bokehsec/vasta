@@ -8,6 +8,18 @@ GitHub release page.
 
 ### Added
 
+- **Objects in a window over the page.** A click on an object in a list, table, board or query —
+  and every New — opens it in a window over what you were looking at, a sheet from the bottom on a
+  phone, instead of taking you to its page. In it the object is read and edited as on its page;
+  Esc, Back, a click outside or **Open full page** leaves the window. Type settings' **Open in**
+  chooses the window (the default), the side pane or its own page, and a view's layout menu can
+  choose for itself. A New closed without anything in it is removed, as if it was never made.
+- **The quick card.** A type page's New button opens a small card over the list: a large title,
+  **Add a note**, and the type's fields as a row of chips (Status, Due, Priority…). Nothing is made
+  until it is added. Enter adds it and the card stays for the next one, saying what was added
+  (with Open and Undo); ⌘↩ or **Open** adds it and opens it in the window; Cancel, Esc or a click
+  outside leave nothing behind. On a phone it is a sheet from the bottom. Types with a default
+  template keep their flow; the menu's Blank choice uses the card.
 - **Habits by the week.** A habit has a new field, **Times a week**: set it to 3 and the habit counts
   by the week (Monday to Sunday), on any days. Today's list, the Tracker, the habit's page,
   reminders and the agent tools say "2 of 3 this week", count streaks in weeks, and stop asking

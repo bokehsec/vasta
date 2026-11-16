@@ -11,7 +11,8 @@ import AppIcon from './AppIcon.vue'
 import PopoverMenu from './PopoverMenu.vue'
 
 // `autofocus`: open the picker on mount (a table cell being edited); `close` says it was closed.
-const props = defineProps<{ value: DateValue | undefined; withTime?: boolean; autofocus?: boolean }>()
+// `placeholder`: what an empty value reads as (the quick card shows the field's name).
+const props = defineProps<{ value: DateValue | undefined; withTime?: boolean; autofocus?: boolean; placeholder?: string }>()
 const emit = defineEmits<{ update: [value: DateValue | undefined]; close: [] }>()
 
 const anchor = ref<HTMLElement | null>(null)
@@ -120,7 +121,7 @@ function setToday() {
 <template>
   <button ref="anchor" class="flex min-h-8 items-center gap-1.5 rounded-md px-2 py-1 text-left hover:bg-hover" @click="open = !open">
     <span v-if="value">{{ label }}</span>
-    <span v-else class="text-ink-faint">Empty</span>
+    <span v-else class="text-ink-faint">{{ placeholder ?? 'Empty' }}</span>
     <span v-if="repeatLabel" class="flex items-center gap-1 text-xs text-ink-faint"><AppIcon fallback="ph:repeat" :size="12" />{{ repeatLabel }}</span>
   </button>
   <PopoverMenu v-model:open="open" :anchor="anchor" width="19rem">

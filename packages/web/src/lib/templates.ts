@@ -110,7 +110,7 @@ export async function createFromTemplate(type: ObjectType, template: ObjectRecor
   try {
     const object = await api.createObject({ ...data, typeId: type.id })
     primeFromObject(object)
-    if (open) await openObject(object.id, { query: { new: '1', ...(made ? cursorQuery(made) : {}) } })
+    if (open) await openObject(object.id, { where: 'popup', query: { new: '1', ...(made ? cursorQuery(made) : {}) } })
     return object
   } catch (error) {
     lastError.value = (error as Error).message

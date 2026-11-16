@@ -15,8 +15,9 @@ import PopoverMenu from './PopoverMenu.vue'
 
 // `autofocus`: a table cell being edited; the field takes the focus or its picker opens on mount,
 // and `close` says when editing ends: the picker closed, a press outside the editor, or the field
-// lost the focus (Enter keeps what was typed, Escape puts the value back).
-const props = defineProps<{ def: PropertyDef; value: PropertyValue | undefined; autofocus?: boolean }>()
+// lost the focus (Enter keeps what was typed, Escape puts the value back). `placeholder`: what an
+// empty value reads as (the quick card shows the field's name); unset, "Empty".
+const props = defineProps<{ def: PropertyDef; value: PropertyValue | undefined; autofocus?: boolean; placeholder?: string }>()
 const emit = defineEmits<{
   update: [value: PropertyValue | undefined]
   /** A select option was created; the parent saves it on the type. */
@@ -135,7 +136,7 @@ function removeRelation(id: string) {
       ref="field"
       :value="text"
       class="w-full rounded-md bg-transparent px-2 py-1 outline-none hover:bg-hover focus:bg-hover"
-      placeholder="Empty"
+      :placeholder="placeholder ?? 'Empty'"
       @change="setText(($event.target as HTMLInputElement).value)"
       @keydown.enter="enter"
       @keydown.esc="cancel"
@@ -162,7 +163,7 @@ function removeRelation(id: string) {
       type="number"
       :value="value?.kind === 'number' ? value.value : ''"
       class="w-full rounded-md bg-transparent px-2 py-1 outline-none hover:bg-hover focus:bg-hover"
-      placeholder="Empty"
+      :placeholder="placeholder ?? 'Empty'"
       @change="setNumber(($event.target as HTMLInputElement).value)"
       @keydown.enter="enter"
       @keydown.esc="cancel"
@@ -183,6 +184,7 @@ function removeRelation(id: string) {
       :value="value?.kind === 'date' ? value.value : undefined"
       :with-time="def.withTime"
       :autofocus="autofocus"
+      :placeholder="placeholder"
       @update="emit('update', $event ? { kind: 'date', value: $event } : undefined)"
       @close="emit('close')"
     />
@@ -192,7 +194,7 @@ function removeRelation(id: string) {
         <span v-for="id in ids" :key="id" class="rounded-md px-2 py-0.5 text-sm" :class="chip(options.find((o) => o.id === id)?.color)">
           {{ options.find((o) => o.id === id)?.label ?? '?' }}
         </span>
-        <span v-if="!ids.length" class="px-0.5 text-ink-faint">Empty</span>
+        <span v-if="!ids.length" class="px-0.5 text-ink-faint">{{ placeholder ?? 'Empty' }}</span>
       </button>
       <PopoverMenu v-model:open="open" :anchor="anchor">
         <button
@@ -216,8 +218,8 @@ function removeRelation(id: string) {
     <template v-else-if="def.kind === 'relation'">
       <div class="flex w-full flex-wrap items-center gap-1 px-1.5 py-1">
         <ObjectChip v-for="id in ids" :key="id" :id="id" removable @remove="removeRelation(id)" />
-        <button ref="anchor" class="rounded-md px-1 text-ink-faint hover:bg-hover hover:text-ink" title="Add" @click="open = !open">
-          <AppIcon fallback="ph:plus" :size="14" />
+        <button ref="anchor" class="flex items-center gap-1 rounded-md px-1 text-ink-faint hover:bg-hover hover:text-ink" title="Add" @click="open = !open">
+          <AppIcon fallback="ph:plus" :size="14" /><span v-if="placeholder && !ids.length">{{ placeholder }}</span>
         </button>
       </div>
       <PopoverMenu v-model:open="open" :anchor="anchor" width="18rem">
@@ -228,7 +230,7 @@ function removeRelation(id: string) {
     <template v-else-if="def.kind === 'person'">
       <button ref="anchor" class="flex min-h-8 w-full flex-wrap items-center gap-1 rounded-md px-1.5 py-1 text-left hover:bg-hover" @click="open = !open">
         <PersonChip v-for="id in ids" :key="id" :id="id" />
-        <span v-if="!ids.length" class="px-0.5 text-ink-faint">Empty</span>
+        <span v-if="!ids.length" class="px-0.5 text-ink-faint">{{ placeholder ?? 'Empty' }}</span>
       </button>
       <PopoverMenu v-model:open="open" :anchor="anchor" width="16rem">
         <PersonPicker :selected="ids" @toggle="togglePerson" />

@@ -13,6 +13,7 @@ import FilterGroupEditor from '../components/FilterGroupEditor.vue'
 import FlowMetrics from '../components/FlowMetrics.vue'
 import ObjectCollection from '../components/ObjectCollection.vue'
 import ProcessMode from '../components/ProcessMode.vue'
+import QuickAdd from '../components/QuickAdd.vue'
 import WorkflowChooser from '../components/WorkflowChooser.vue'
 import HabitBoard from '../components/HabitBoard.vue'
 import HabitProgress from '../components/HabitProgress.vue'
@@ -215,6 +216,7 @@ async function addView() {
 
 const menuAnchor = ref<HTMLElement | null>(null)
 const menuOpen = ref(false)
+const quickAdd = ref(false)
 const settingsOpen = ref(route.query.settings === '1')
 watch(
   () => route.query.settings,
@@ -607,7 +609,8 @@ function toggleQuickActions() {
 }
 
 const openChoices = computed<{ openIn: ViewOpenIn | undefined; label: string }[]>(() => [
-  { openIn: undefined, label: `Same as ${type.value?.name ?? 'the type'} (${type.value?.openIn === 'pane' ? 'side pane' : 'full page'})` },
+  { openIn: undefined, label: `Same as ${type.value?.name ?? 'the type'} (${type.value?.openIn === 'pane' ? 'side pane' : type.value?.openIn === 'page' ? 'full page' : 'window'})` },
+  { openIn: 'popup', label: 'Window' },
   { openIn: 'pane', label: 'Side pane' },
   { openIn: 'page', label: 'Full page' },
 ])
@@ -675,7 +678,8 @@ function selectFromMenu() {
   collection.value?.startSelecting()
 }
 
-// New: from the type's default template (lib/templates.ts); the chevron picks another, or none.
+// New: the quick card for a plain object (nothing is made until it is saved), or the type's default
+// template (lib/templates.ts); the chevron picks another, or none.
 const typeTemplates = computed(() => (type.value ? templatesOf(type.value.id) : []))
 const defaultTemplate = computed(() => typeTemplates.value.find((t) => t.template?.kind === 'template' && t.template.default))
 
@@ -683,7 +687,8 @@ async function createNew() {
   const t = type.value
   if (!t) return
   await currentTemplates()
-  void createFromTemplate(t, defaultTemplate.value)
+  if (defaultTemplate.value) void createFromTemplate(t, defaultTemplate.value)
+  else quickAdd.value = true
 }
 
 async function newMenu(event: MouseEvent) {
@@ -692,7 +697,7 @@ async function newMenu(event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   await loadTemplates()
   openMenuAt(rect.right - 224, rect.bottom + 4, [
-    { label: `Blank ${t.name.toLowerCase()}`, icon: 'ph:file', run: () => createFromTemplate(t, undefined) },
+    { label: `Blank ${t.name.toLowerCase()}`, icon: 'ph:file', run: () => (quickAdd.value = true) },
     ...typeTemplates.value.map((template) => ({
       label: template.template!.name,
       icon: template === defaultTemplate.value ? 'ph:star-fill' : 'ph:copy-simple',
@@ -1135,6 +1140,7 @@ async function newMenu(event: MouseEvent) {
       @end="endReview"
       @open="openFromReview"
     />
+    <QuickAdd v-if="quickAdd" :type="type" @close="quickAdd = false" />
   </div>
   <div v-else class="grid h-full place-items-center text-sm text-ink-soft">Type not found.</div>
 </template>

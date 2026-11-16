@@ -45,7 +45,7 @@ import { offline } from '../lib/network.ts'
 import { openText, useReplica, type TextSession } from '../lib/replica.ts'
 import { openRemoteText } from '../lib/remote-text.ts'
 import { PAGE_OBJECT_ID } from '../lib/page.ts'
-import { closePane, copyObjectLink } from '../lib/open.ts'
+import { closePane, closePopup, copyObjectLink } from '../lib/open.ts'
 import { clone } from '../lib/clone.ts'
 import { chip, iconTextClasses, swatchClasses } from '../lib/colors.ts'
 import { colorSource, tagAncestors, tagColor } from '../lib/tags.ts'
@@ -61,15 +61,16 @@ import { writeContent, type JsonDoc } from '@vasta/editor-schema/yjs'
 import { pageWidthClass } from '../lib/page-width.ts'
 
 /**
- * `variant`: 'page' (its own page), 'pane' (the side pane next to another page: no comments or
- * activity, which stay on the page) or 'embedded' (only the text and what links here, inside
- * another page: the calendar's day). What the page's address says comes in as props (router.ts):
- * `isNew` (just made: the title gets the cursor), `capture` (an item captured into the text to
- * reveal), `cursor` ("<block>:<offset>", from a template) and `block` (a linked block to scroll to).
+ * `variant`: 'page' (its own page), 'pane' (the side pane next to another page), 'popup' (the
+ * window over it; the pane and the popup share their layout: no comments or activity, which stay
+ * on the page) or 'embedded' (only the text and what links here, inside another page: the
+ * calendar's day). What the page's address says comes in as props (router.ts): `isNew` (just made:
+ * the title gets the cursor), `capture` (an item captured into the text to reveal), `cursor`
+ * ("<block>:<offset>", from a template) and `block` (a linked block to scroll to).
  */
 const props = defineProps<{
   id: string
-  variant?: 'page' | 'pane' | 'embedded'
+  variant?: 'page' | 'pane' | 'popup' | 'embedded'
   isNew?: boolean
   capture?: string | undefined
   cursor?: string | undefined
@@ -80,8 +81,11 @@ const emit = defineEmits<{ columns: [has: boolean] }>()
 const router = useRouter()
 const embedded = computed(() => props.variant === 'embedded')
 const inPane = computed(() => props.variant === 'pane')
-/** Somewhere else to go once this object is gone (deleted for good): the pane just closes. */
-const leave = (to: string) => (inPane.value ? closePane() : router.push(to))
+const inPopup = computed(() => props.variant === 'popup')
+/** In a frame over or beside the page (the side pane or the popup window), not on a page of its own. */
+const inFrame = computed(() => inPane.value || inPopup.value)
+/** Somewhere else to go once this object is gone (deleted for good): a frame just closes. */
+const leave = (to: string) => (inPopup.value ? closePopup() : inPane.value ? closePane() : router.push(to))
 provide(PAGE_OBJECT_ID, props.id)
 
 const object = ref<ObjectRecord | null>(null)
@@ -135,7 +139,7 @@ const isWhiteboard = computed(() => type.value?.system === 'whiteboard')
  */
 const isStartPage = computed(() => {
   const on = workspace.space?.opensOn
-  return on?.kind === 'object' && on.id === props.id && !embedded.value && !inPane.value && !isWhiteboard.value && !object.value?.deletedAt && !object.value?.template
+  return on?.kind === 'object' && on.id === props.id && !embedded.value && !inFrame.value && !isWhiteboard.value && !object.value?.deletedAt && !object.value?.template
 })
 const hideTagsRow = computed(() => isStartPage.value && !object.value?.tagIds.length)
 const propertiesEmpty = computed(() => !showOwnDate.value && !isTagObject.value && !isHabit.value && !visibleFields.value.length && !hiddenCount.value && !reverseCount.value)
@@ -179,7 +183,7 @@ watch(
  * (tags, properties, comments, backlinks) in a Details panel beside it, closed unless opened. In
  * the side pane and as a template it stays below the title as before.
  */
-const boardLayout = computed(() => isWhiteboard.value && !embedded.value && !inPane.value && !info.value)
+const boardLayout = computed(() => isWhiteboard.value && !embedded.value && !inFrame.value && !info.value)
 const DETAILS_KEY = 'vasta.board-details'
 const detailsOpen = ref(readFlag(DETAILS_KEY))
 watch(detailsOpen, (open) => writeFlag(DETAILS_KEY, open))
@@ -283,7 +287,7 @@ onMounted(async () => {
   }
   // An object of another space (a link to it) opens that space: its type, so its text and
   // properties, is among that space's types.
-  if (!inPane.value && !embedded.value && workspace.space?.id !== object.value.spaceId) await loadWorkspace(object.value.spaceId)
+  if (!inFrame.value && !embedded.value && workspace.space?.id !== object.value.spaceId) await loadWorkspace(object.value.spaceId)
   if (useReplica()) text.value = await openText(props.id).catch(() => null)
   if (isWhiteboard.value && !embedded.value) {
     board.value = text.value ?? (await openRemoteText(props.id).catch(() => null))
@@ -747,7 +751,7 @@ async function startFrom(template: ObjectRecord) {
 <template>
   <div v-if="missing" class="grid h-full place-items-center text-sm text-ink-soft">This object does not exist or was deleted for good.</div>
 
-  <article v-else-if="object" ref="article" :class="boardLayout ? 'flex h-full flex-col' : embedded ? '' : inPane ? 'pb-16' : 'pb-32'">
+  <article v-else-if="object" ref="article" :class="boardLayout ? 'flex h-full flex-col' : embedded ? '' : inFrame ? 'pb-16' : 'pb-32'">
     <div v-if="object.deletedAt && !embedded" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
       <AppIcon fallback="ph:trash" class="shrink-0" />
       <span class="min-w-0 flex-1 max-sm:min-w-[80%]">In the trash since {{ formatDate({ start: object.deletedAt, resolution: 'time' }) }}. It goes for good 30 days later.</span>
@@ -820,7 +824,7 @@ async function startFrom(template: ObjectRecord) {
       </div>
     </template>
 
-    <div v-if="object.coverUrl && !embedded && !boardLayout" class="group/cover relative w-full overflow-hidden bg-hover" :class="inPane ? 'h-32' : 'h-56 max-md:h-40'">
+    <div v-if="object.coverUrl && !embedded && !boardLayout" class="group/cover relative w-full overflow-hidden bg-hover" :class="inFrame ? 'h-32' : 'h-56 max-md:h-40'">
       <img :src="object.coverUrl" alt="" class="h-full w-full object-cover" />
       <button
         class="absolute right-3 top-3 flex items-center gap-1.5 rounded-lg bg-surface/90 px-2.5 py-1 text-xs font-medium text-ink shadow-sm ring-1 ring-line backdrop-blur transition-opacity hover:bg-surface md:opacity-0 md:group-hover/cover:opacity-100 md:focus-visible:opacity-100 [@media(hover:none)]:opacity-100 max-md:py-1.5"
@@ -832,7 +836,7 @@ async function startFrom(template: ObjectRecord) {
     <input ref="coverInput" type="file" accept="image/*" class="hidden" @change="uploadCover" />
 
     <Teleport defer :to="`#${detailsSlot}`" :disabled="!boardLayout">
-    <div class="relative" :class="boardLayout ? 'px-5 pt-4' : embedded ? '' : inPane ? ['px-6', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-4') : 'pt-5'] : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon && !isStartPage ? '-mt-10' : 'pt-6') : isWhiteboard ? 'pt-4 md:pt-6' : 'pt-8 md:pt-14', isWhiteboard ? 'max-w-6xl' : pageWidthClass(hasColumns)]">
+    <div class="relative" :class="boardLayout ? 'px-5 pt-4' : embedded ? '' : inFrame ? ['px-6', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-4') : 'pt-5'] : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon && !isStartPage ? '-mt-10' : 'pt-6') : isWhiteboard ? 'pt-4 md:pt-6' : 'pt-8 md:pt-14', isWhiteboard ? 'max-w-6xl' : pageWidthClass(hasColumns)]">
       <template v-if="!embedded">
       <button
         v-if="object.icon && !isStartPage"
@@ -1151,13 +1155,13 @@ async function startFrom(template: ObjectRecord) {
         />
       </div>
 
-      <ObjectComments v-if="!embedded && !inPane && !day && !object.deletedAt && !isTagObject && !info" :object="object" />
+      <ObjectComments v-if="!embedded && !inFrame && !day && !object.deletedAt && !isTagObject && !info" :object="object" />
 
       <TagPanel v-if="isTagObject && !embedded" :tag-id="object.id" />
 
       <template v-if="!info">
         <BacklinksPanel :object-id="object.id" :title="backlinksTitle" :hide-tagged="isTagObject" />
-        <ObjectActivity v-if="!embedded && !inPane && !day" :object-id="object.id" :type="type" />
+        <ObjectActivity v-if="!embedded && !inFrame && !day" :object-id="object.id" :type="type" />
       </template>
     </div>
     </Teleport>

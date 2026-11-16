@@ -45,9 +45,10 @@ function setColor(color: ColorName) {
 
 // Properties ---------------------------------------------------------------
 
-function setOpenIn(pane: boolean) {
-  if (pane) draft.value.openIn = 'pane'
-  else delete draft.value.openIn
+function setOpenIn(value: 'popup' | 'pane' | 'page') {
+  // Unset is the popup: the choice where nothing is set, so a type never made to pick keeps it.
+  if (value === 'popup') delete draft.value.openIn
+  else draft.value.openIn = value
 }
 
 // Quick actions (tasks): the buttons and the next step field (QuickActionsSettings).
@@ -259,11 +260,19 @@ async function leave(path: string) {
       <ColorPicker :color="draft.color" @pick="setColor" />
     </section>
     <section class="mt-4">
-      <label class="flex items-center gap-2 text-sm">
-        <input type="checkbox" class="accent-[var(--color-accent)]" :checked="draft.openIn === 'pane'" @change="setOpenIn(($event.target as HTMLInputElement).checked)" />
-        Open in side pane
-      </label>
-      <p class="mt-0.5 pl-6 text-xs text-ink-faint">A click on a {{ (draft.name || 'object').toLowerCase() }} in a list, table, board or query opens it next to the page. A view can choose otherwise.</p>
+      <label class="mb-1 block text-xs text-ink-faint" for="type-open-in">Open in</label>
+      <select
+        id="type-open-in"
+        class="block w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-line-strong max-md:py-2.5 max-md:text-base"
+        :value="draft.openIn ?? 'popup'"
+        data-open-in
+        @change="setOpenIn(($event.target as HTMLSelectElement).value as 'popup' | 'pane' | 'page')"
+      >
+        <option value="popup">A window over the page</option>
+        <option value="pane">The side pane</option>
+        <option value="page">Its own page</option>
+      </select>
+      <p class="mt-0.5 text-xs text-ink-faint">A click on a {{ (draft.name || 'object').toLowerCase() }} in a list, table, board or query opens it there. A view can choose otherwise.</p>
     </section>
     <QuickActionsSettings :type="draft" @update="setQuickActions" />
     <section class="mt-4" data-subtask-settings>

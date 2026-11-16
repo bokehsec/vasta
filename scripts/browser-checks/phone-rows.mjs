@@ -318,9 +318,9 @@ try {
   await page.keyboard.press('Escape')
   await until(async () => (await rowMenu.count()) === 0, 'the row menu closed')
 
-  step('a plain tap on a row still opens the task')
+  step('a plain tap on a row opens the task in the sheet')
   await tap(row(b).locator('span.font-medium').first())
-  await page.waitForURL(/\/o\//)
+  await page.waitForURL((url) => new URLSearchParams(url.search).get('popup') === b.id)
 
   step('"Show as table on this phone" brings the table back for this view, and off again')
   await openView('PhoneTable')

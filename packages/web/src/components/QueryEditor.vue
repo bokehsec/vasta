@@ -66,7 +66,7 @@ const setList = (list: ListSettings | undefined) => update({ list })
 const agendaAnchor = ref<HTMLElement | null>(null)
 const agendaOpen = ref(false)
 const setAgenda = (agenda: AgendaSettings | undefined) => update({ agenda })
-const setOpenIn = (value: string) => update({ openIn: value === 'pane' || value === 'page' ? value : undefined })
+const setOpenIn = (value: string) => update({ openIn: value === 'pane' || value === 'page' || value === 'popup' ? value : undefined })
 // Quick actions, offered when the query can find a type that has them: in a table, a column (shown,
 // hidden and moved like the others); in a list, on each row.
 const findsActions = computed(() => !props.query.typeIds.length || workspace.types.some((t) => props.query.typeIds.includes(t.id) && quickActionsOf(t).length > 0))
@@ -172,6 +172,7 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
         Open in
         <select :value="query.openIn ?? ''" :class="control" @change="setOpenIn(($event.target as HTMLSelectElement).value)">
           <option value="">As each type says</option>
+          <option value="popup">Window</option>
           <option value="pane">Side pane</option>
           <option value="page">Full page</option>
         </select>

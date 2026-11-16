@@ -80,8 +80,8 @@ const emit = defineEmits<{
 const types = computed(() => typesOf(props.typeIds))
 const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
 // Where links inside open, for every link, card and relation chip (lib/open.ts, VIEW_OPENS): the
-// view's choice, else the type's of the object linked, else its page.
-provide(VIEW_OPENS, (id) => props.openIn ?? typesById.value.get(summaryOf(id)?.typeId ?? '')?.openIn)
+// view's choice, else the type's of the object linked, else a window over the page.
+provide(VIEW_OPENS, (id) => props.openIn ?? typesById.value.get(summaryOf(id)?.typeId ?? '')?.openIn ?? 'popup')
 const completion = inject(COMPLETION_FEEDBACK, undefined)
 const groups = computed<Group[]>(() => {
   const actual = new Map(props.objects.map((object) => [object.id, object]))

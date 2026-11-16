@@ -217,7 +217,7 @@ export interface ObjectType {
   color?: ColorName
   properties: PropertyDef[]
   views: ViewDef[]
-  /** Where a click on one of its objects in a view or query opens it, unless the view says; unset: its page. */
+  /** Where a click on one of its objects in a view or query opens it, unless the view says; unset: a window over the page. */
   openIn?: ViewOpenIn
   /** What a task's Done, Defer and Drop buttons set (task-actions.ts); unset: the defaults. */
   quickActions?: QuickActions
@@ -645,8 +645,10 @@ export interface AgendaSettings {
   calendars?: boolean | Id[]
 }
 
-/** Where a view opens the object clicked: its own page, or the side pane next to the view. */
-export type ViewOpenIn = 'page' | 'pane'
+/** Where a view opens the object clicked: its own page, the side pane next to the view, or a
+ * window over it (a sheet from the bottom on a phone). Unset is the type's choice, and a type
+ * without one opens the window. */
+export type ViewOpenIn = 'page' | 'pane' | 'popup'
 
 /**
  * The board layout's settings: which fields cards show, a second grouping in rows (swimlanes),

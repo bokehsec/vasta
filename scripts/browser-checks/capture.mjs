@@ -137,19 +137,21 @@ await query.pressSequentially('Hyperion nota:4')
 await page.waitForTimeout(300)
 console.log('⌘K result:', clean(await page.locator('.max-w-xl .bg-hover').first().textContent()))
 await page.keyboard.press('Enter')
-await page.waitForURL(/\/o\//)
+// The made object opens in the window (?popup=<id>&new=1) over the page.
+await page.waitForURL((url) => new URLSearchParams(url.search).get('popup'))
 await page.waitForTimeout(1500)
-const created = await get(`/api/objects/${new URL(page.url()).pathname.split('/').pop()}`)
+const created = await get(`/api/objects/${new URL(page.url()).searchParams.get('popup')}`)
 console.log('⌘K created:', created.title, JSON.stringify(created.props))
 if (created.title !== 'Hyperion' || created.props.rating?.value !== 4) throw new Error('⌘K did not read the line')
 
-// Ctrl+Enter in quick capture saves and opens the object it made.
+// Ctrl+Enter in quick capture saves and opens the object it made (on its page: a capture, unlike
+// a New, can come from anywhere, the desktop app's shortcut included).
 await page.evaluate(() => window.dispatchEvent(new Event('vasta:capture')))
 await field.waitFor()
 await field.fill(`/${name} Endymion nota:3`)
 await page.keyboard.press('Control+Enter')
 await field.waitFor({ state: 'detached' })
-await page.waitForURL((url) => url.pathname !== `/o/${created.id}` && url.pathname.startsWith('/o/'))
+await page.waitForURL((url) => url.pathname.startsWith('/o/'))
 await page.waitForTimeout(800)
 const endymion = await get(`/api/objects/${new URL(page.url()).pathname.split('/').pop()}`)
 console.log('Ctrl+Enter opened:', endymion.title, JSON.stringify(endymion.props))

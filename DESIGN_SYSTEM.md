@@ -50,12 +50,23 @@ reaching what is underneath, focus moves in and goes back);
 row. A type page shows one "View ▾" button with the views in a sheet instead of tabs. A task's page
 folds its fields into one outlined line under the quick actions, opened with a tap.
 
-**Side pane**: objects in views and queries can open in a second panel to the right of the page
-(`SidePane`, same surface and border), keeping the list in view: when the view or query says
-`openIn: 'pane'`, or says nothing and their type does (Type settings › "Open in side pane"; unset
-everywhere: the page). Links elsewhere (mentions, the sidebar, ⌘K, the calendar) open the page. Everything that opens an object goes through `lib/open.ts`
-(`openObject`, and `ObjectLink` in templates), which decides page or pane; the pane is `?pane=<id>`
-on the page's address. The link of the object the pane shows is tinted (`bg-hover`). Phones: no pane.
+**Where objects open** (`lib/open.ts`, the one place that decides): a **window** over the page
+(`PopupHost`, `?popup=<id>`; the default), the **side pane** next to it (`SidePane`, `?pane=<id>`),
+or the object's own **page**. Views and queries say `openIn`, else their type does (Type settings ›
+Open in: Window / Side pane / Its own page; unset is the window). Links elsewhere (mentions, the
+sidebar, ⌘K's search results, quick capture) open the page; every New opens what it made in the
+window. The window: centred over a dimmed page (a raised surface, 16px radius, soft offset shadow),
+the object as in the pane (no comments or activity), **Open full page** and Close at the top; Esc,
+Back or a click outside close it. On a phone it is a sheet from the bottom (grabber, Close and Open
+full page at 44px). A New closed untouched is removed. The pane: same surface and border as the
+page; phones have none. The link of the object the pane shows is tinted (`bg-hover`).
+
+**Quick card** (`QuickAdd`): a type page's New, for a plain object. A large title (20px semibold),
+**Add a note** (the type's text), the fields a row can hold as chips (field icon and name, the value
+once set; not text blocks, formulas or fields shown only with a value), and a footer on the raised
+surface: the type, the keys (↵ add · ⌘↵ add and open), Cancel, Open, Add <type> (Main). Nothing is
+made until it is added; Enter adds and the card stays for the next one, with an "Added …" line
+(Open, Undo). On a phone a sheet above the keyboard, chips in one scrolling row, 44px controls.
 
 **Sidebar top**: Calendar, Inbox and Tasks (⌘1, ⌘2, ⌘3, in that order), the places visited every
 day, above the user's sections; Tasks is never listed again among the types. Today is not a row:

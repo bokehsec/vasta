@@ -11,14 +11,14 @@ import { previewLine, typedLine, type CompletionSource } from './typed-line.ts'
 import { people } from './people.ts'
 import { loadTemplates, templates } from './templates.ts'
 import { router } from '../router.ts'
-import { closePane, objectPath, openObject, pageObjectId, paneObjectId } from './open.ts'
+import { closePane, closePopup, objectPath, openObject, pageObjectId, paneObjectId, popupObjectId } from './open.ts'
 
 /** With `line`, the title and properties are read from it, e.g. `Dune author:"Frank Herbert"`. */
 export async function createObject(typeId: Id, data: Partial<ObjectRecord> = {}, open = true, line?: string): Promise<ObjectRecord> {
   const object = await api.createObject({ ...data, typeId }, line)
   primeFromObject(object)
   void refreshCounts()
-  if (open) await openObject(object.id, { query: { new: '1' } })
+  if (open) await openObject(object.id, { where: 'popup', query: { new: '1' } })
   return object
 }
 
@@ -249,12 +249,14 @@ export async function deleteObjectFlow(id: Id): Promise<boolean> {
   const places = sidebarPlaces(id)
   const onPage = pageObjectId.value === id
   const inPane = paneObjectId.value === id
+  const inPopup = popupObjectId.value === id
   await api.deleteObject(id)
   forgetSummary(id)
   void refreshCounts()
   if (places.length) await updateSidebar((space) => removeEverywhere(space, id))
   if (onPage) await router.push(summary ? `/t/${summary.typeId}` : '/')
   else if (inPane) await closePane()
+  else if (inPopup) await closePopup()
   notice.value = {
     message: `Moved “${title}” to the trash`,
     action: {
@@ -262,7 +264,7 @@ export async function deleteObjectFlow(id: Id): Promise<boolean> {
       run: async () => {
         await restoreObjectFlow(id)
         await restorePlaces(id, places)
-        if (onPage || inPane) await openObject(id, { where: inPane ? 'pane' : 'page' })
+        if (onPage || inPane || inPopup) await openObject(id, { where: inPane ? 'pane' : inPopup ? 'popup' : 'page' })
       },
     },
   }

@@ -1,25 +1,27 @@
-// Where an object opens: its own page (/o/<id>), or the side pane next to the page that is
-// showing (?pane=<id> on that page's address). Everything that opens an object goes through here,
-// so the choice is made in one place. The pane lives in the address, so back/forward, reload and
-// copied links bring it back; leaving the page closes it, and a page changing only its own query
-// (the calendar's view and date) keeps it (the guard in router.ts).
+// Where an object opens: its own page (/o/<id>), the side pane next to the page that is showing
+// (?pane=<id> on that page's address), or a window over the page (?popup=<id>; a sheet from the
+// bottom on a phone). Everything that opens an object goes through here, so the choice is made in
+// one place. The pane and the popup live in the address, so back/forward, reload and copied links
+// bring them back; leaving the page closes them, and a page changing only its own query (the
+// calendar's view and date) keeps them (the guard in router.ts).
 import { computed, type InjectionKey } from 'vue'
 import type { LocationQueryRaw, RouteLocationRaw } from 'vue-router'
 import type { Id } from '@vasta/core'
-import { paneNavigation, router } from '../router.ts'
+import { closingOverlay, router } from '../router.ts'
 import { isPhone } from './viewport.ts'
 import { lastError, notice } from './state.ts'
 
-export type OpenPlace = 'page' | 'pane'
+export type OpenPlace = 'page' | 'pane' | 'popup'
 
 export interface OpenOptions {
   /** A block of its text to scroll to (#b-<id>). */
   block?: Id | undefined
   /** Extra query for the page, such as `new` or `capture`. */
   query?: LocationQueryRaw
-  /** 'pane' opens it next to the current page where there is room for one; the default is its page. */
+  /** 'pane' opens it next to the current page where there is room for one, 'popup' in a window
+   * over what is showing; the default is its page. */
   where?: OpenPlace
-  /** Replace the current history entry; a pane already open is always replaced (see openObject). */
+  /** Replace the current history entry; a pane or popup already open is always replaced (see openObject). */
   replace?: boolean
 }
 
@@ -102,48 +104,96 @@ export const paneBlockId = computed(() => {
   return typeof value === 'string' && value ? value : undefined
 })
 
+/** The object in the popup window, if one is open. */
+export const popupObjectId = computed(() => {
+  const value = router.currentRoute.value.query.popup
+  return typeof value === 'string' && value ? value : undefined
+})
+/** The block the popup scrolls to. */
+export const popupBlockId = computed(() => {
+  const value = router.currentRoute.value.query.popupBlock
+  return typeof value === 'string' && value ? value : undefined
+})
+/** Whether the popup's object is new (its title gets the cursor): `?popup=<id>&new=1`. */
+export const popupIsNew = computed(() => router.currentRoute.value.query.new === '1')
+/** Where a template put the cursor in the popup's text ("<block>:<offset>"). */
+export const popupCursor = computed(() => {
+  const value = router.currentRoute.value.query.cursor
+  return typeof value === 'string' && value ? value : undefined
+})
+
 /** The object whose page is showing. */
 export const pageObjectId = computed(() => {
   const route = router.currentRoute.value
   return route.path.startsWith('/o/') ? (route.params.id as string | undefined) : undefined
 })
 
-/** Whether an object is open, on its page or in the pane. */
-export const isOpen = (id: Id) => pageObjectId.value === id || paneObjectId.value === id
+/** Whether an object is open, on its page, in the pane or in the popup. */
+export const isOpen = (id: Id) => pageObjectId.value === id || paneObjectId.value === id || popupObjectId.value === id
 
 /**
- * Where an object asked to open in the pane goes: phones have no room for a pane, and the page
- * of the same object is already showing it, so both open (or stay on) the page.
+ * Where an object asked to open in the pane or the popup goes: phones have no room for a pane, and
+ * the page of the same object is already showing it, so both open (or stay on) the page. A popup
+ * has room everywhere, but not over the same object's page either.
  */
 export function resolvePlace(id: Id, where: OpenPlace = 'page', phone = isPhone.value, onPage = pageObjectId.value): OpenPlace {
-  return where === 'pane' && !phone && onPage !== id ? 'pane' : 'page'
+  if (onPage === id) return 'page'
+  if (where === 'pane') return phone ? 'page' : 'pane'
+  return where
 }
 
 /** The current address with the pane set to an object, or without a pane. */
 function withPane(id: Id | undefined, block?: Id): RouteLocationRaw {
-  const { pane: _pane, paneBlock: _block, ...rest } = router.currentRoute.value.query
+  const { pane: _pane, paneBlock: _block, popup: _popup, popupBlock: _popupBlock, new: _new, ...rest } = router.currentRoute.value.query
   return { query: { ...rest, ...(id ? { pane: id } : {}), ...(id && block ? { paneBlock: block } : {}) }, hash: router.currentRoute.value.hash }
 }
 
+/** The current address with the popup set to an object, or without a popup. */
+function withPopup(id: Id | undefined, block?: Id, query?: LocationQueryRaw): RouteLocationRaw {
+  const { pane: _pane, paneBlock: _block, popup: _popup, popupBlock: _popupBlock, new: _new, ...rest } = router.currentRoute.value.query
+  return { query: { ...rest, ...(id ? { popup: id, ...(query ?? {}), ...(block ? { popupBlock: block } : {}) } : {}) }, hash: router.currentRoute.value.hash }
+}
+
 /**
- * Opens an object. With the pane already open, showing another object in it replaces the history
- * entry: reading through a list is one Back to leave it, not one per object.
+ * Opens an object. With the pane or popup already open, showing another object in it replaces the
+ * history entry: reading through a list is one Back to leave it, not one per object.
  */
 export function openObject(id: Id, options: OpenOptions = {}) {
-  const inPane = resolvePlace(id, options.where) === 'pane'
-  const to = inPane ? withPane(id, options.block) : objectRoute(id, options)
-  return options.replace || (inPane && paneObjectId.value) ? router.replace(to) : router.push(to)
+  const place = resolvePlace(id, options.where)
+  const to = place === 'pane' ? withPane(id, options.block) : place === 'popup' ? withPopup(id, options.block, options.query) : objectRoute(id, options)
+  const replacing = options.replace || (place === 'pane' && paneObjectId.value) || (place === 'popup' && popupObjectId.value)
+  return replacing ? router.replace(to) : router.push(to)
 }
 
 export async function closePane(replace = false) {
   if (!paneObjectId.value) return
   const to = withPane(undefined)
-  paneNavigation.closing = true
+  closingOverlay.pane = true
   try {
     return await (replace ? router.replace(to) : router.push(to))
   } finally {
-    paneNavigation.closing = false
+    closingOverlay.pane = false
   }
+}
+
+/** Closes the popup window. An untouched new item in it is removed (PopupHost does that). */
+export async function closePopup(replace = false) {
+  if (!popupObjectId.value) return
+  const to = withPopup(undefined)
+  closingOverlay.popup = true
+  try {
+    return await (replace ? router.replace(to) : router.push(to))
+  } finally {
+    closingOverlay.popup = false
+  }
+}
+
+/** The popup's object on its own page, in place of the page behind it. */
+export function expandPopup(replace = false) {
+  const id = popupObjectId.value
+  if (!id) return
+  const to = objectRoute(id, { block: popupBlockId.value })
+  return replace ? router.replace(to) : router.push(to)
 }
 
 /** The pane's object on its own page, in place of the page behind it. */

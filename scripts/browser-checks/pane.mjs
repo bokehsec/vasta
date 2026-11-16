@@ -1,7 +1,8 @@
-// The side pane in the test env: with nothing set, a view opens the page; Type settings › "Open
-// in side pane" turns it on for the type's objects, and a view's layout menu can choose otherwise
-// (Full page, Side pane, Same as the type); then a click on an object in a list, table, board, a
-// query (as each type says, or its own choice) opens it next to the page (?pane=<id>), where it
+// The side pane in the test env: with the type set to it, a view opens the page; Type settings ›
+// "Open in" chooses the side pane for the type's objects, and a view's layout menu can choose
+// otherwise (Full page, Side pane, Same as the type); then a click on an object in a list, table,
+// board, a query (as each type says, or its own choice) opens it next to the page (?pane=<id>),
+// where it
 // is edited (the calendar still opens the page);
 // another click switches it in place (one Back closes it); a relation chip opens where the view does; back and forward, reload, Esc, "Open full page", resizing (kept after
 // a reload), the calendar keeping it while its view changes, a move to the trash from the pane (and
@@ -54,6 +55,7 @@ const pane = page.locator('[data-side-pane]')
 const paneTitle = pane.locator('textarea[data-large-text]')
 const query = () => new URL(page.url()).searchParams
 const paneId = () => query().get('pane')
+const popupId = () => query().get('popup')
 
 await page.goto(base)
 await page.fill('#login-username', 'tester')
@@ -90,23 +92,22 @@ await openType()
 
 if (phone) {
   step('phone: a click opens the page, and an address with a pane opens the page')
+  // The type says the side pane (set here through the API: the phone has no room for the settings'
+  // walk), which on a phone opens the page.
+  await put(`/api/types/${task.id}`, { ...(await get(`/api/types/${task.id}`)), openIn: 'pane' })
+  await openType()
   await page.locator(`main a[href="/o/${made.Alpha.id}"]`).first().click()
   await until(() => new URL(page.url()).pathname === `/o/${made.Alpha.id}`, 'the page of Alpha')
   if (await pane.count()) throw new Error('a pane on a phone')
   await page.goto(`${base}/t/${task.id}?pane=${made.Bravo.id}`)
   await until(() => new URL(page.url()).pathname === `/o/${made.Bravo.id}` && !paneId(), 'the pane address becomes the page')
 } else {
-  step('without the setting, a click in a list opens the page')
-  await page.locator(`main a[href="/o/${made.Alpha.id}"]`).first().click()
-  await until(() => new URL(page.url()).pathname === `/o/${made.Alpha.id}` && !paneId(), 'the page of Alpha')
-  if (await pane.count()) throw new Error('a pane without the setting')
-
-  step('Type settings › "Open in side pane" turns it on for the type')
+  step('Type settings › "Open in" set to the side pane for the type')
   await openType()
   await page.getByTitle('Type settings').click()
-  const box = page.getByLabel('Open in side pane')
-  if (await box.isChecked()) throw new Error('the type setting starts on')
-  await box.check()
+  const box = page.locator('[data-open-in]')
+  if ((await box.inputValue()) !== 'popup') throw new Error('the type setting starts as the window')
+  await box.selectOption('pane')
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await until(async () => (await typeOpenIn()) === 'pane', 'openIn saved on the type')
 
@@ -204,7 +205,7 @@ if (phone) {
   await clickChip(made.Charlie)
   await until(() => paneId() === made.Charlie.id && new URL(page.url()).pathname === `/t/${task.id}`, 'a task chip: the pane, as Task says')
   await clickChip(made.Delta)
-  await until(() => new URL(page.url()).pathname === `/o/${made.Delta.id}` && !paneId(), 'a page chip: its page, as Page says')
+  await until(() => popupId() === made.Delta.id && new URL(page.url()).pathname === `/t/${task.id}`, 'a page chip: the window, as Page says')
   await setLayout('table', 'pane')
   await clickChip(made.Delta)
   await until(() => paneId() === made.Delta.id && new URL(page.url()).pathname === `/t/${task.id}`, 'view set to Side pane: the page chip in the pane')

@@ -566,7 +566,8 @@ if ((await rowActions(rowTask4.id).count()) !== 1) throw new Error('a deferred t
 
 step('list: a click elsewhere on the row still opens the task')
 await row(rowTask2.id).locator('span.font-medium').first().click()
-await until(async () => new URL(page.url()).pathname === `/o/${rowTask2.id}`, 'the title click opened the task')
+// It opens where the type says, by default the window over the list (?popup=).
+await until(async () => new URL(page.url()).searchParams.get('popup') === rowTask2.id, 'the title click opened the task')
 
 step('table: Quick actions is a column of its own, hidden by default; the list toggle does not show it')
 // The view has quickActions on from the list steps above: it must not affect a table.
