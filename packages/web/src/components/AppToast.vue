@@ -3,6 +3,7 @@
 // trash · Undo") for a few seconds each.
 import { ref, watch } from 'vue'
 import { selecting } from '../lib/selection.ts'
+import { tintedButton } from '../lib/buttons.ts'
 import { lastError, notice, ui } from '../lib/state.ts'
 import { isPhone, keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
@@ -63,7 +64,7 @@ async function runAction() {
         <span class="min-w-0 flex-1">{{ notice.message }}</span>
         <button
           v-if="notice.action"
-          class="shrink-0 rounded-lg px-2.5 py-1 font-medium text-accent hover:bg-hover disabled:opacity-50 max-md:min-h-11 max-md:px-3.5"
+          :class="tintedButton"
           :disabled="running"
           @click="runAction"
         >

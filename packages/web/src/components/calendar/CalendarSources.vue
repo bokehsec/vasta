@@ -4,6 +4,7 @@ import { onMounted, ref } from 'vue'
 import type { CalendarSource, ColorName } from '@vasta/core'
 import { api } from '../../lib/api.ts'
 import { colorNames, swatchClasses } from '../../lib/colors.ts'
+import { mainButton } from '../../lib/buttons.ts'
 import { formatRelative } from '../../lib/format.ts'
 import { confirmDialog } from '../../lib/overlays.ts'
 import { workspace } from '../../lib/state.ts'
@@ -135,7 +136,7 @@ function cycleColor(source: CalendarSource) {
           />
         </div>
         <button v-if="!showAuth" type="button" class="text-xs text-ink-faint hover:text-ink" @click="showAuth = true">Needs a password?</button>
-        <button type="submit" class="ml-auto rounded-lg bg-ink px-3 py-1.5 text-sm text-surface disabled:opacity-40" :disabled="!form.url.trim() || busy.has('new')">
+        <button type="submit" class="ml-auto" :class="mainButton" :disabled="!form.url.trim() || busy.has('new')">
           {{ busy.has('new') ? 'Adding…' : 'Add' }}
         </button>
       </div>

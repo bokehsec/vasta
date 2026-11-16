@@ -1,26 +1,43 @@
 <script setup lang="ts">
-// The bar at the bottom of a phone: places to go, as iPhone apps have (Home: what the space opens
-// on; Tasks: the type's last picked view; Inbox; Calendar; Search), with Capture as a round button
-// above it on the right. The sidebar stays behind the menu at the top left. Hidden while the
-// keyboard is up or a full-screen surface (a whiteboard) is open; dialogs cover it; while rows are
-// selected the bulk bar takes its place. Its z-index (20) is below the sidebar drawer's (30).
+// The bar at the bottom of a phone: places chosen in Settings, with Capture as a round button
+// above it on the right. The sidebar stays behind the menu at the top left (and Menu here, if
+// chosen). Hidden while the keyboard is up or a full-screen surface (a whiteboard) is open; dialogs
+// cover it; while rows are selected the bulk bar takes its place. Its z-index (20) is below the
+// sidebar drawer's (30).
 import { computed } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { isTodayRoute, sidebarItemPath } from '../lib/actions.ts'
+import { phonePlacePath, visiblePhonePlaces, type PhonePlace } from '../lib/phone-places.ts'
 import { selecting } from '../lib/selection.ts'
-import { lastError, notice, systemType, ui, workspace } from '../lib/state.ts'
+import { lastError, notice, ui, workspace } from '../lib/state.ts'
 import { keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 
 const route = useRoute()
-const taskType = computed(() => systemType('task'))
-/** Where Home lands: the page the space opens on, when it is one (else "/" decides). */
-const homePath = computed(() => (workspace.space?.opensOn?.kind === 'object' ? `/o/${workspace.space.opensOn.id}` : '/'))
-const tabs = computed(() => [
-  { label: 'Home', icon: 'ph:house', to: '/', active: route.path === '/' || route.path === homePath.value },
-  ...(taskType.value ? [{ label: 'Tasks', icon: 'ph:check-circle', to: `/t/${taskType.value.id}`, active: route.path === `/t/${taskType.value.id}` }] : []),
-  { label: 'Inbox', icon: 'ph:tray', to: '/inbox', active: route.path === '/inbox' },
-  { label: 'Calendar', icon: 'ph:calendar-blank', to: '/calendar', active: route.path === '/calendar' || route.path.startsWith('/day/') },
-])
+const router = useRouter()
+/** Where Home lands ("/" opens it, views/HomeView.vue): the page the space opens on, else its first sidebar item. */
+const homePath = computed(() => {
+  const space = workspace.space
+  if (space?.opensOn?.kind === 'object') return `/o/${space.opensOn.id}`
+  const first = space?.opensOn?.kind === 'today' ? undefined : space?.sidebar[0]?.items[0]
+  return first ? sidebarItemPath(first) : '/'
+})
+function active(place: PhonePlace) {
+  if (place.id === 'home') return route.path === '/' || route.path === homePath.value || (workspace.space?.opensOn?.kind === 'today' && isTodayRoute(route))
+  if (place.id === 'today') return isTodayRoute(route)
+  if (place.id === 'calendar') return (route.path === '/calendar' || route.path.startsWith('/day/')) && !(visiblePhonePlaces.value.some((item) => item.id === 'today') && isTodayRoute(route))
+  return !!place.to && route.path === place.to
+}
+/**
+ * The place showing tapped again goes back to its start (the calendar to today) or, already there,
+ * to its top, as on an iPhone; neither adds a step for Back.
+ */
+function again(event: MouseEvent, place: PhonePlace) {
+  event.preventDefault()
+  const path = phonePlacePath(place)!
+  if (place.id !== 'home' && route.fullPath !== path) void router.replace(path)
+  else document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })
+}
 const hidden = computed(() => keyboardInset.value > 80 || ui.surfaceFull)
 </script>
 
@@ -42,20 +59,24 @@ const hidden = computed(() => keyboardInset.value > 80 || ui.surfaceFull)
       aria-label="Places"
       data-tab-bar
     >
-      <RouterLink
-        v-for="tab in tabs"
-        :key="tab.label"
-        :to="tab.to"
-        class="flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px]"
-        :class="tab.active ? 'text-accent' : 'text-ink-soft'"
-        :aria-current="tab.active ? 'page' : undefined"
-        :data-tab="tab.label"
-      >
-        <AppIcon :fallback="tab.icon" :size="22" />{{ tab.label }}
-      </RouterLink>
-      <button class="flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] text-ink-soft" data-tab="Search" @click="ui.paletteOpen = true">
-        <AppIcon fallback="ph:magnifying-glass" :size="22" />Search
-      </button>
+      <template v-for="tab in visiblePhonePlaces" :key="tab.id">
+        <RouterLink v-if="phonePlacePath(tab)" v-slot="{ href, navigate }" :to="phonePlacePath(tab)!" custom>
+          <a
+            :href="href"
+            class="flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[11px]"
+            :class="active(tab) ? 'text-accent' : 'text-ink-soft'"
+            :aria-current="active(tab) ? 'page' : undefined"
+            :aria-label="tab.label"
+            :data-tab="tab.label"
+            @click="active(tab) ? again($event, tab) : navigate($event)"
+          >
+            <AppIcon :icon="tab.icon" :fallback="tab.fallback" :size="22" /><span class="w-full truncate text-center">{{ tab.label }}</span>
+          </a>
+        </RouterLink>
+        <button v-else class="flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] text-ink-soft" :data-tab="tab.label" @click="tab.id === 'menu' ? (ui.sidebarOpen = true) : (ui.paletteOpen = true)">
+          <AppIcon :fallback="tab.fallback" :size="22" />{{ tab.label }}
+        </button>
+      </template>
     </nav>
   </template>
 </template>

@@ -8,6 +8,7 @@ import type { OccurrenceEdit } from '@vasta/core/calendar'
 import type { CaptureAnswer } from '@vasta/core/client'
 import { noteNetworkError, noteResponse } from './network.ts'
 import { callStore, syncNow, useReplica } from './replica.ts'
+import { observeObjectSave } from './object-saves.ts'
 
 let onUnauthorized: (() => void) | undefined
 
@@ -317,7 +318,7 @@ const http = {
   /** With `line`, the title and properties are read from it, e.g. `Dune author:"Frank Herbert"` (core's capture-line.ts). */
   createObject: (data: Partial<ObjectRecord> & { typeId: Id }, line?: string) => request<ObjectRecord>('POST', '/api/objects', line === undefined ? data : { ...data, line }),
   /** `base`: the copy the caller started editing from; only what changed since it is written. */
-  saveObject: (object: ObjectRecord, base?: ObjectRecord) => request<ObjectRecord>('PUT', `/api/objects/${object.id}`, base ? { ...object, base } : object),
+  saveObject: (object: ObjectRecord, base?: ObjectRecord) => observeObjectSave(object, base, () => request<ObjectRecord>('PUT', `/api/objects/${object.id}`, base ? { ...object, base } : object)),
   /** Save a URL as a weblink, or get the one saved before for it. */
   saveWeblink: (spaceId: Id, url: string) => request<ObjectRecord>('POST', `/api/spaces/${spaceId}/weblinks`, { url }),
   setWeblinkUrl: (id: Id, url: string) => request<ObjectRecord>('PUT', `/api/objects/${id}/weblink`, { url }),
@@ -489,7 +490,7 @@ const local: Partial<Api> = {
     return id
   },
   createObject: (data, line) => callStore('createObject', data, now(), line === undefined ? undefined : { text: line, context: { today: dayIn(now(), timeZone()), timeZone: timeZone() } }),
-  saveObject: (object, base) => callStore('saveObject', object, now(), base),
+  saveObject: (object, base) => observeObjectSave(object, base, () => callStore('saveObject', object, now(), base)),
   changeOccurrence: (edit, timeZone) => callStore('changeOccurrence', edit, timeZone, now()),
   createQuote: (sourceId, input) => callStore('createQuote', sourceId, input, now()),
   setNutrition: (spaceId, enabled) => callStore('setNutrition', spaceId, enabled, now()),

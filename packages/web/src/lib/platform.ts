@@ -230,7 +230,7 @@ async function suggestForPanel(request: { text: string; cursor: number; seq: num
     problem = line.problem ?? null
   } else if (typed) {
     const line = previewLine(typed.type, typed.rest, dayKey(), space.id === workspace.space?.id ? people.list : [], meId())
-    preview = `New ${typed.type.name}${line.title ? ` “${line.title}”` : ''}${line.parts.length ? ` · ${line.parts.join(', ')}` : ''}, in today’s note in ${space.name}.`
+    preview = `New ${typed.type.name}${line.title ? ` “${line.title}”` : ''}${line.parts.length ? ` · ${line.parts.join(', ')}` : ''}, in ${ui.captureDaily ? `today’s note in ${space.name}` : space.name}.`
     if (line.errors.length) problem = `Cannot read ${line.errors.join('; ')}; it stays in the title.`
     else if (!line.parts.length && line.properties.length) preview += ` name:value sets ${line.properties.join(', ')}.`
   }

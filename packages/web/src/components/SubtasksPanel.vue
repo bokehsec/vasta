@@ -4,16 +4,20 @@
 // and keeps the cursor for the next; several pasted lines make one each. A new step takes the
 // parent's selects, relations, people and tags (lib/subtasks.ts). The checkbox and "done" follow
 // the type's status select (core statusProperty, as the progress does), so any type with one has
-// them and a type without one shows no checkbox. Once every step is closed and
+// them and a type without one shows no checkbox. Marking a step done offers an Undo, and its
+// checkbox undoes it too, both putting the exact status back. Once every step is closed and
 // the parent is open, a line says so with a button for the type's first quick action (Done); the
 // parent is never closed by itself.
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ObjectRecord, ObjectSummary, ObjectType, QuickActionDef } from '@vasta/core'
 import { DUE_PROPERTY_ID, isClosedTask, quickActionsOf, statusProperty, subtaskProgress } from '@vasta/core'
+import { mainButton, tintedButton } from '../lib/buttons.ts'
 import { setProperties } from '../lib/actions.ts'
 import { displayTitle, formatDateShort } from '../lib/format.ts'
+import { createCompletionFeedback } from '../lib/completion-feedback.ts'
+import { onObjectSave } from '../lib/object-saves.ts'
 import { runQuickAction, type QuickSave } from '../lib/quick-actions.ts'
-import { lastError } from '../lib/state.ts'
+import { lastError, notice } from '../lib/state.ts'
 import { addSubtask, loadSubtasks, subtasksOf } from '../lib/subtasks.ts'
 import { isTouch } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
@@ -34,14 +38,46 @@ const dueOf = (step: ObjectSummary) => {
 
 const saveStep: QuickSave = (id, values) => setProperties(id, values).then(() => loadSubtasks(props.type.id, true))
 
-/** Closes a step with the status option meaning done, or reopens it with the one meaning to do (else the first that is not done). */
+// Completion feedback (lib/completion-feedback.ts), as on type pages: a step marked Done here
+// saves and stays in place (steps always are), and its checkbox or the notice's Undo puts its
+// exact status back. Only a step completed elsewhere, which the panel never watched close, falls
+// back to the first status meaning to do.
+function replaceStep(saved: ObjectRecord | ObjectSummary) {
+  const index = steps.value.findIndex((step) => step.id === saved.id)
+  if (index >= 0) steps.value[index] = { ...saved, preview: steps.value[index]!.preview } as ObjectSummary
+}
+const completion = createCompletionFeedback({
+  type: () => props.type,
+  rows: () => steps.value,
+  replace: replaceStep,
+  save: setProperties,
+  failed: (retry) => {
+    notice.value = { message: 'The subtask was not saved. Try again.', action: { label: 'Retry', run: () => retry().catch(() => {}) } }
+  },
+})
+const stopSaves = onObjectSave((object) => completion.observe(object))
+onBeforeUnmount(stopSaves)
+watch(steps, (list) => completion.prune(new Set(list.map((step) => step.id))))
+
+/** Closes a step with the status option meaning done (its notice offers Undo), or reopens it with the one it had, else the first meaning to do. */
 async function toggle(step: ObjectSummary) {
+  if (completion.entries.has(step.id)) return void completion.undo(step.id)
   const def = statusDef.value
   const options = def?.options ?? []
   const option = closed(step) ? (options.find((o) => o.status === 'todo') ?? options.find((o) => o.status !== 'done')) : options.find((o) => o.status === 'done')
   if (!def || !option) return
   try {
-    await saveStep(step.id, { [def.id]: { kind: 'select', value: [option.id] } })
+    if (closed(step)) await saveStep(step.id, { [def.id]: { kind: 'select', value: [option.id] } })
+    else {
+      // The type's Done action, so the notice says what closed and offers an Undo of the exact status.
+      const action: QuickActionDef = {
+        id: 'done',
+        name: 'Done',
+        icon: { kind: 'icon', value: 'ph:check-circle' },
+        changes: [{ field: def.id, value: { kind: 'value', value: { kind: 'select', value: [option.id] } } }],
+      }
+      await runQuickAction(props.type, step, action, { save: saveStep })
+    }
   } catch (error) {
     lastError.value = (error as Error).message
   }
@@ -108,9 +144,10 @@ function swipes(step: ObjectSummary): { right?: SwipeAction; left: SwipeAction[]
         <div class="flex items-start gap-2 px-1 py-1.5 max-md:py-2.5" data-subtask>
           <button
             v-if="statusDef"
-            class="relative mt-px shrink-0 rounded-full [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3 [@media(hover:none)]:after:content-['']"
+            class="relative mt-px shrink-0 rounded-full disabled:opacity-60 [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3 [@media(hover:none)]:after:content-['']"
             :class="closed(step) ? 'text-[var(--color-flow-done)]' : 'text-ink-soft hover:text-ink'"
             :title="closed(step) ? 'Mark as to do' : 'Mark as done'"
+            :disabled="completion.busy(step.id)"
             data-subtask-check
             @click="toggle(step)"
           >
@@ -132,15 +169,17 @@ function swipes(step: ObjectSummary): { right?: SwipeAction; left: SwipeAction[]
           aria-label="Add subtask"
           :disabled="adding"
           data-add-subtask
+          enterkeyhint="enter"
           @paste="onPaste"
           @keydown.escape="title = ''"
         />
+        <button v-if="isTouch" type="submit" :class="mainButton" :disabled="adding || !title.trim()" data-add-subtask-button>Add</button>
       </form>
     </div>
     <div v-if="progress.readyToClose && parentOpen" class="mt-2 flex items-center gap-2 rounded-lg border border-line px-3 py-1.5 text-sm" data-ready-to-close>
       <AppIcon fallback="ph:check-circle" :size="16" class="shrink-0 text-[var(--color-flow-done)]" />
       <span class="flex-1">All subtasks done</span>
-      <button v-if="closeAction" class="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1 text-ink-soft hover:bg-hover hover:text-ink max-md:py-2" data-close-parent @click="closeParent">
+      <button v-if="closeAction" :class="tintedButton" data-close-parent @click="closeParent">
         <AppIcon :icon="closeAction.icon" fallback="ph:check-circle" :size="15" /> {{ closeAction.name }}
       </button>
     </div>

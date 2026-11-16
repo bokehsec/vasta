@@ -9,7 +9,7 @@
 // field). Changes naming a property the type no longer has, or a value that does not fit it, are
 // left out.
 import { DUE_PROPERTY_ID, REVIEWED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
-import type { Filter, FilterGroup, Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActionValue, SelectOption, TextPropertyDef, ViewDef } from './model.ts'
+import type { Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActionValue, SelectOption, TextPropertyDef } from './model.ts'
 import { statusProperty } from './metrics.ts'
 import { addDays } from './time.ts'
 
@@ -51,7 +51,7 @@ export function nextStepFieldOf(type: ObjectType | undefined): TextPropertyDef |
 
 const setStatus = (option: SelectOption): QuickActionChange => ({ field: STATUS_PROPERTY_ID, value: { kind: 'value', value: { kind: 'select', value: [option.id] } } })
 
-/** Done, Defer, Drop and Next step, as the type's settings and properties allow. */
+/** Mark done, Defer, Drop and Next step, as the type's settings and properties allow. */
 export function defaultQuickActions(type: ObjectType): QuickActionDef[] {
   const settings = type.quickActions ?? {}
   const options = statusOptions(type)
@@ -68,7 +68,7 @@ export function defaultQuickActions(type: ObjectType): QuickActionDef[] {
   const deferStatus = option(settings.deferStatus)
   const nextStep = nextStepFieldOf(type)
   const actions: QuickActionDef[] = []
-  if (done) actions.push({ id: 'done', name: done.label, icon: { kind: 'icon', value: 'ph:check-circle' }, changes: [setStatus(done)] })
+  if (done) actions.push({ id: 'done', name: `Mark ${done.label.toLowerCase()}`, icon: { kind: 'icon', value: 'ph:check-circle' }, changes: [setStatus(done)] })
   if (deferField) actions.push({ id: 'defer', name: 'Defer', icon: { kind: 'icon', value: 'ph:clock-clockwise' }, changes: [{ field: deferField.id, value: { kind: 'ask' } }, ...(deferStatus ? [setStatus(deferStatus)] : [])] })
   if (drop) actions.push({ id: 'drop', name: 'Drop', icon: { kind: 'icon', value: 'ph:x-circle' }, changes: [setStatus(drop)] })
   if (nextStep) actions.push({ id: 'next-step', name: nextStep.name, icon: { kind: 'icon', value: 'ph:pencil-simple-line' }, changes: [{ field: nextStep.id, value: { kind: 'ask' } }] })
@@ -115,26 +115,6 @@ export function isClosedTask(type: ObjectType | undefined, object: Pick<ObjectRe
   const value = object.props[def.id]
   const ids = value?.kind === 'select' ? value.value : []
   return def.options.some((o) => o.status === 'done' && ids.includes(o.id))
-}
-
-/**
- * The condition a view of a type with a status adds to its filter to leave closed objects out (a
- * task's Done, Dropped), as views do unless they show them (`showClosed`). A view whose own filter
- * asks for a closed status (a view of what is done) and a board in status columns (its Done column)
- * are left as they are; one that only leaves some out ("not Done") still loses the others.
- */
-export function closedFilterOf(type: ObjectType | undefined, view: Pick<ViewDef, 'filter' | 'showClosed'>, columns?: string): Filter | undefined {
-  const def = statusProperty(type)
-  const closed = def?.options.filter((o) => o.status === 'done').map((o) => o.id) ?? []
-  if (!def || !closed.length || view.showClosed || columns === def.id || asksFor(view.filter, def.id, closed)) return undefined
-  return { kind: 'filter', field: def.id, operator: 'not-contains', value: { kind: 'literal', value: closed } }
-}
-
-function asksFor(filter: Filter | FilterGroup | undefined, field: string, ids: Id[]): boolean {
-  if (!filter) return false
-  if (filter.kind === 'group') return filter.items.some((item) => asksFor(item, field, ids))
-  const value = filter.value?.kind === 'literal' && Array.isArray(filter.value.value) ? filter.value.value : []
-  return filter.field === field && (filter.operator === 'is' || filter.operator === 'contains') && value.some((id) => ids.includes(id))
 }
 
 export interface QuickActionContext {
@@ -274,6 +254,11 @@ function dayOfValue(value: PropertyValue | undefined, dayOfTime: (iso: string) =
  * number of objects when there are several, a day set past one object's due date, and how many
  * failed to save.
  */
+/** An action's name said once it is done, in notices and counts: "Mark done" is "Done". */
+export function quickActionDoneName(name: string): string {
+  return name.replace(/^mark\s+(\S)/i, (_, c: string) => c.toUpperCase())
+}
+
 export function quickActionMessage(
   type: ObjectType,
   action: QuickActionDef,
@@ -293,7 +278,7 @@ export function quickActionMessage(
         return day && def ? [{ field, day, name: def.name }] : []
       })
     : []
-  const parts = [action.name, ...days.map((d) => `${d.name} ${options.longDay(d.day)}`)]
+  const parts = [quickActionDoneName(action.name), ...days.map((d) => `${d.name} ${options.longDay(d.day)}`)]
   if (edits.length > 1) parts.push(options.noun ? options.noun(edits.length) : `${edits.length} tasks`)
   let message = parts.join(' · ')
   const due = edits.length === 1 && !movedDue ? dayOfValue(options.due, options.dayOfTime) : undefined

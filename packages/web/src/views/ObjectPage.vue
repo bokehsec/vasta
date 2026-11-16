@@ -39,6 +39,7 @@ import WhiteboardCanvas from '../components/whiteboard/WhiteboardCanvas.vue'
 import DocEditor from '../editor/DocEditor.vue'
 import { addSelectOption, dayKey, deleteForeverFlow, deleteObjectFlow, isInSidebar, openDay, pinItems, restoreObjectFlow, tagFromPath } from '../lib/actions.ts'
 import { api, mediaUrl, serverApi } from '../lib/api.ts'
+import { mainButton } from '../lib/buttons.ts'
 import { onChange } from '../lib/events.ts'
 import { offline } from '../lib/network.ts'
 import { openText, useReplica, type TextSession } from '../lib/replica.ts'
@@ -57,6 +58,7 @@ import { clearOtherDefaults, deleteTemplate, loadTemplates, previewTemplate, rem
 import DocPreview from '../components/DocPreview.ts'
 import ModalDialog from '../components/ModalDialog.vue'
 import { writeContent, type JsonDoc } from '@vasta/editor-schema/yjs'
+import { pageWidthClass } from '../lib/page-width.ts'
 
 /**
  * `variant`: 'page' (its own page), 'pane' (the side pane next to another page: no comments or
@@ -74,6 +76,7 @@ const props = defineProps<{
   block?: string | undefined
   backlinksTitle?: string
 }>()
+const emit = defineEmits<{ columns: [has: boolean] }>()
 const router = useRouter()
 const embedded = computed(() => props.variant === 'embedded')
 const inPane = computed(() => props.variant === 'pane')
@@ -110,7 +113,9 @@ const showAllFields = ref(false)
 const reverseCount = ref(0)
 const hiddenCount = computed(() => valueFields.value.length - visibleFields.value.length)
 /** Dashboards built with columns need room; everything else reads better at text width. */
-const wide = computed(() => isWhiteboard.value || Object.values(object.value?.content ?? {}).some((doc) => doc.content.some((node) => node.type === 'columns')))
+const hasColumns = computed(() => Object.values(object.value?.content ?? {}).some((doc) => doc.content.some((node) => node.type === 'columns')))
+// An embedded page has no wrapper of its own: the one around it (the day) follows this.
+watch(hasColumns, (has) => { if (embedded.value) emit('columns', has) }, { immediate: true })
 
 let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -827,7 +832,7 @@ async function startFrom(template: ObjectRecord) {
     <input ref="coverInput" type="file" accept="image/*" class="hidden" @change="uploadCover" />
 
     <Teleport defer :to="`#${detailsSlot}`" :disabled="!boardLayout">
-    <div class="relative" :class="boardLayout ? 'px-5 pt-4' : embedded ? '' : inPane ? ['px-6', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-4') : 'pt-5'] : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon && !isStartPage ? '-mt-10' : 'pt-6') : isWhiteboard ? 'pt-4 md:pt-6' : 'pt-8 md:pt-14', wide ? 'max-w-6xl' : 'max-w-3xl']">
+    <div class="relative" :class="boardLayout ? 'px-5 pt-4' : embedded ? '' : inPane ? ['px-6', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-4') : 'pt-5'] : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon && !isStartPage ? '-mt-10' : 'pt-6') : isWhiteboard ? 'pt-4 md:pt-6' : 'pt-8 md:pt-14', isWhiteboard ? 'max-w-6xl' : pageWidthClass(hasColumns)]">
       <template v-if="!embedded">
       <button
         v-if="object.icon && !isStartPage"
@@ -1079,7 +1084,7 @@ async function startFrom(template: ObjectRecord) {
             placeholder="{Price} * {Quantity}"
             @keydown.enter.prevent="addProperty"
           />
-          <button class="mt-1 w-full rounded-lg bg-ink px-2.5 py-1.5 text-sm text-surface disabled:opacity-40" :disabled="!newProperty.name.trim()" @click="addProperty">
+          <button :class="mainButton" class="mt-1 w-full" :disabled="!newProperty.name.trim()" @click="addProperty">
             Add property
           </button>
         </PopoverMenu>

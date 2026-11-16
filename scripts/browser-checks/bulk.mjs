@@ -26,11 +26,13 @@ const phone = { viewport: { width: 390, height: 844 }, hasTouch: true, ...(engin
 const browser = engine === 'webkit' ? await webkit.launch() : await chromium.launch()
 // A persistent WebKit context is not the browser's: it keeps the process alive until it is closed itself.
 const opened = []
-async function newContext(options, touch) {
+// Playwright's WebKit shares OPFS between contexts (navigator.locks does not span them): two open at
+// once with the replica on corrupt its database, so a context that only needs the API runs without it.
+async function newContext(options, touch, replica = true) {
   // WebKit keeps the replica (OPFS) only in a persistent profile.
   const context = engine === 'webkit' ? await webkit.launchPersistentContext(mkdtempSync(path.join(tmpdir(), 'vasta-bulk-')), options) : await browser.newContext(options)
   opened.push(context)
-  if (process.env.MODE === 'json') await context.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))
+  if (process.env.MODE === 'json' || !replica) await context.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))
   if (touch && engine === 'webkit') {
     await context.addInitScript(() => {
       const original = window.matchMedia.bind(window)
@@ -340,7 +342,7 @@ try {
   if (await page.locator('[data-process-action]').count()) throw new Error('review still shows individual action buttons')
   await page.locator('[data-process-more]').waitFor()
   const doneTitle = (await page.locator('[data-process-title]').innerText()).trim()
-  await reviewAction('Done')
+  await reviewAction('Mark done')
   await until(async () => (await pos.innerText()).startsWith('3 of'), 'Done moved on')
   const phoneDone = tasks.find((t) => t.title === doneTitle)
   await until(async () => (await statusOf(phoneDone.id)) === doneId, 'Done saved')
@@ -374,11 +376,14 @@ try {
 
   step('phone: Close keeps the place, also over a reload; Open details and Back return to the same task')
   await tap(page.locator('[data-process-close]'))
-  const resume = page.locator('[data-process-resume]')
-  await until(async () => (await resume.count()) === 1 && /4 of 5/.test(await resume.innerText()), 'Resume review · 4 of 5')
+  // A phone's one Triage & review button says the paused place; the chooser resumes it.
+  const workflows = page.locator('[data-workflows]')
+  const pausedAt = async (at) => (await workflows.count()) === 1 && new RegExp(`Resume\\s+${at}`).test(await workflows.innerText())
+  await until(() => pausedAt('4 of 5'), 'Resume 4 of 5')
   await openView()
-  await until(async () => (await resume.count()) === 1 && /4 of 5/.test(await resume.innerText()), 'Resume after a reload')
-  await tap(resume)
+  await until(() => pausedAt('4 of 5'), 'Resume after a reload')
+  await tap(workflows)
+  await tap(page.locator('[data-workflow-paused] [data-process-resume]'))
   await until(async () => (await pos.innerText()).startsWith('4 of 5'), 'resumed at 4 of 5')
   const openedTitle = (await page.locator('[data-process-title]').innerText()).trim()
   await tap(page.locator('[data-process-open]'))
@@ -400,7 +405,7 @@ try {
   await page.locator('[data-workflows]').click()
   await tap(page.locator('[data-process-end-session]'))
   await page.getByRole('button', { name: 'End session', exact: true }).click()
-  await until(async () => (await resume.count()) === 0, 'End forgot the review')
+  await until(async () => (await page.locator('[data-workflow-paused]').count()) === 0 && !/Resume/.test(await workflows.innerText()), 'End forgot the review')
   await phoneContext.close()
 
   if (problems.length) throw new Error(problems.join('\n'))
@@ -414,7 +419,7 @@ try {
   process.exitCode = 1
 } finally {
   try {
-    const cleanup = await newContext(desktop)
+    const cleanup = await newContext(desktop, false, false)
     page = await login(cleanup)
     for (const t of tasks) await page.request.delete(`${base}/api/objects/${t.id}`, { headers })
     const now = await get(`/api/types/${taskType.id}`)

@@ -11,7 +11,7 @@
   --color-line-strong: #d6d3cc;
   --color-ink: #1f1e1c;
   --color-ink-soft: #5f5c57;
-  --color-ink-faint: #9a968f;
+  --color-ink-faint: #6f6b64;
   --color-accent: #2f6fea;
   --color-hover: #efede8;
   /* Charts (components/BarChart.vue): the series and a value past its target. Checked with the
@@ -45,7 +45,7 @@
   --color-line-strong: #3b4047;
   --color-ink: #e9e7e3;
   --color-ink-soft: #b1ada6;
-  --color-ink-faint: #7c7973;
+  --color-ink-faint: #97938c;
   --color-accent: #6b9bff;
   --color-hover: #292d32;
   --color-chart-over: #c47a0c;

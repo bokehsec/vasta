@@ -4,7 +4,7 @@ import type { CalendarEntry, DateValue, Id, ObjectType, PropertyDef } from '@vas
 import { addDays, daysBetween } from '@vasta/core'
 import type { OccurrenceScope } from '@vasta/core/calendar'
 import { api } from './api.ts'
-import { dayKey } from './actions.ts'
+import { dayKey, setProperties } from './actions.ts'
 import { choiceDialog } from './overlays.ts'
 import { primeFromObject } from './state.ts'
 
@@ -338,14 +338,25 @@ export function isDone(type: ObjectType | undefined, statusIds: Id[] | undefined
   return def?.kind === 'select' && !!statusIds?.some((id) => def.options.find((o) => o.id === id)?.status === 'done')
 }
 
+const taskSaves = new Set<Id>()
+
 export async function setTaskDone(objectId: Id, type: ObjectType | undefined, done: boolean) {
   const option = statusOption(type, done ? 'done' : 'todo')
-  if (!option) return undefined
-  const object = await api.object(objectId)
-  object.props.status = { kind: 'select', value: [option] }
-  const saved = await api.saveObject(object)
-  primeFromObject(saved)
-  return saved
+  if (!type || !option || taskSaves.has(objectId)) return undefined
+  taskSaves.add(objectId)
+  try {
+    const object = await api.object(objectId)
+    const { runQuickAction } = await import('./quick-actions.ts')
+    let saved: Awaited<ReturnType<typeof setProperties>> | undefined
+    await runQuickAction(type, object, {
+      id: done ? 'done' : 'reopen',
+      name: done ? 'Done' : 'Reopened',
+      changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: [option] } } }],
+    }, { save: async (id, values) => { saved = await setProperties(id, values) } })
+    return saved
+  } finally {
+    taskSaves.delete(objectId)
+  }
 }
 
 /** What a day holds, for the dots of the small month calendar. */

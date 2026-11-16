@@ -13,6 +13,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { foodCommand, type ObjectSummary, type ObjectType, type TemplateAsk } from '@vasta/core'
 import { captureAsks, captureSpace, captureText, completionSource, dayKey, openCapture, typesOf } from '../lib/actions.ts'
+import { greyButton, mainButton } from '../lib/buttons.ts'
 import { foodSourcesOf, previewFoodLine } from '../lib/nutrition.ts'
 import { clearDraft, readDraft, withType, writeDraft, writtenText } from '../lib/capture-draft.ts'
 import { isDesktop } from '../lib/platform.ts'
@@ -22,7 +23,7 @@ import { notice, ui } from '../lib/state.ts'
 import { offered, previewLine, typedLine, type Completion } from '../lib/typed-line.ts'
 import { templates } from '../lib/templates.ts'
 import { useCompletions } from '../lib/use-completions.ts'
-import { isPhone } from '../lib/viewport.ts'
+import { isPhone, isTouch } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import ModalDialog from './ModalDialog.vue'
 
@@ -36,6 +37,10 @@ const cursor = ref(0)
 const close = () => (ui.captureOpen = false)
 
 const space = computed(captureSpace)
+// The desktop app's captures go where Settings › Desktop app says (both off by default: the
+// object alone, or a Page for plain text); the others always go to today's note.
+const toDaily = computed(() => !isDesktop || ui.captureDaily)
+const where = computed(() => (toDaily.value ? `today’s note in ${space.value?.name}` : space.value?.name))
 
 // A phone keeps what was not saved: put back here, kept again by `leave`, dropped once saved.
 const draftRestored = ref(false)
@@ -89,7 +94,7 @@ const pickable = computed(() => types.value.filter(offered))
 const destination = computed(() => {
   const name = space.value?.name ?? ''
   if (eaten.value !== undefined) return `Food log · ${name}`
-  return typed.value ? `${typed.value.type.name} in ${name}` : `Today’s note · ${name}`
+  return typed.value ? `${typed.value.type.name} in ${name}` : toDaily.value ? `Today’s note · ${name}` : `Page in ${name}`
 })
 const hasText = computed(() => !!writtenText(types.value, text.value) || (eaten.value !== undefined && !!text.value.trim()))
 
@@ -225,9 +230,9 @@ function onKey(event: KeyboardEvent) {
     <template #icon><AppIcon fallback="ph:lightning" class="text-ink-soft" /></template>
     <template v-if="isPhone && !asks">
       <p class="text-sm text-ink-soft" data-testid="capture-destination">{{ destination }}</p>
-      <div class="-mx-4 mt-2 flex gap-1.5 overflow-x-auto px-4 pb-1" role="radiogroup" aria-label="Save as" data-testid="capture-types">
+      <div class="mt-2 flex max-h-28 flex-wrap gap-1.5 overflow-y-auto" role="radiogroup" aria-label="Save as" data-testid="capture-types">
         <button
-          class="min-h-11 shrink-0 rounded-lg border px-3 text-sm"
+          class="min-h-11 rounded-lg border px-3 text-sm"
           role="radio"
           :aria-checked="!typed"
           :class="!typed ? 'border-line-strong bg-hover text-ink' : 'border-line text-ink-soft'"
@@ -238,7 +243,7 @@ function onKey(event: KeyboardEvent) {
         <button
           v-for="type in pickable"
           :key="type.id"
-          class="min-h-11 shrink-0 rounded-lg border px-3 text-sm"
+          class="min-h-11 rounded-lg border px-3 text-sm"
           role="radio"
           :aria-checked="typed?.type.id === type.id"
           :class="typed?.type.id === type.id ? 'border-line-strong bg-hover text-ink' : 'border-line text-ink-soft'"
@@ -273,7 +278,7 @@ function onKey(event: KeyboardEvent) {
         </div>
         <input v-else v-model="answers[item.label]" class="w-full rounded-xl border border-line bg-raised px-3 py-2 text-sm outline-none focus:border-line-strong" />
       </div>
-      <p class="text-xs text-ink-faint">Enter saves, Ctrl+Enter saves and opens it, Esc goes back to the text.</p>
+      <p v-if="!isTouch" class="text-xs text-ink-faint">Enter saves, Ctrl+Enter saves and opens it, Esc goes back to the text.</p>
     </div>
     <textarea
       v-else
@@ -314,29 +319,29 @@ function onKey(event: KeyboardEvent) {
         <template v-if="preview.title"> “{{ preview.title }}”</template>
         <template v-if="preview.template"> · from {{ preview.template }}</template>
         <template v-if="preview.parts.length"> · {{ preview.parts.join(', ') }}</template>
-        <span>, in today’s note in {{ space?.name }}.</span>
-        <span v-if="!isPhone"> Ctrl+Enter saves and opens it.</span>
+        <span>, in {{ where }}.</span>
+        <span v-if="!isPhone && !isTouch"> Ctrl+Enter saves and opens it.</span>
       </p>
       <p v-if="preview.errors.length" class="text-amber-700 dark:text-amber-400">Cannot read {{ preview.errors.join('; ') }}; it stays in the title.</p>
       <p v-else-if="!preview.parts.length && preview.properties.length">name:value sets {{ preview.properties.join(', ') }}.</p>
     </div>
-    <p v-else-if="!isPhone" class="mt-2 text-xs text-ink-faint">Goes to today’s note in {{ space?.name }}. Enter saves, Ctrl+Enter saves and opens it, Shift+Enter adds a line.</p>
+    <p v-else-if="!isPhone" class="mt-2 text-xs text-ink-faint">{{ toDaily ? `Goes to today’s note in ${space?.name}` : ui.captureInbox ? `Goes to the inbox of ${space?.name}` : `Saved as a page in ${space?.name}` }}.<template v-if="!isTouch"> Enter saves, Ctrl+Enter saves and opens it, Shift+Enter adds a line.</template></p>
     <template v-if="isPhone" #footer>
       <div class="flex w-full flex-col gap-1">
         <p v-if="error" class="text-sm text-red-600 dark:text-red-400" role="alert">{{ error }}</p>
-        <button class="min-h-11 w-full rounded-lg bg-ink px-3 text-sm font-medium text-surface disabled:opacity-50" :disabled="!hasText || saving" @click="save()">
+        <button class="w-full" :class="mainButton" :disabled="!hasText || saving" @click="save()">
           {{ saving ? 'Saving…' : 'Save capture' }}
         </button>
         <div class="flex gap-2">
-          <button v-if="asks" class="min-h-11 flex-1 rounded-lg px-3 text-sm hover:bg-hover" @click="backToText">Back</button>
-          <button class="min-h-11 flex-1 rounded-lg px-3 text-sm hover:bg-hover" @click="leave">Cancel</button>
+          <button v-if="asks" class="flex-1" :class="greyButton" @click="backToText">Back</button>
+          <button class="flex-1" :class="greyButton" @click="leave">Cancel</button>
         </div>
       </div>
     </template>
     <template v-else #footer>
-      <button v-if="asks" class="rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="backToText">Back</button>
-      <button class="ml-auto rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="leave">Cancel</button>
-      <button class="rounded-lg bg-ink px-3 py-1.5 text-sm text-surface disabled:opacity-50" :disabled="!text.trim() || saving" @click="save()">Capture</button>
+      <button v-if="asks" :class="greyButton" @click="backToText">Back</button>
+      <button class="ml-auto" :class="greyButton" @click="leave">Cancel</button>
+      <button :class="mainButton" :disabled="!text.trim() || saving" @click="save()">Capture</button>
     </template>
   </ModalDialog>
 </template>

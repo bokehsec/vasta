@@ -2,6 +2,7 @@
 // Renders the active prompt/confirm dialog from lib/overlays.ts.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { closesOnBack } from '../lib/back.ts'
+import { confirmDeleteButton, greyButton, mainButton } from '../lib/buttons.ts'
 import { activeDialog } from '../lib/overlays.ts'
 
 const text = ref('')
@@ -111,13 +112,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           autocomplete="off"
         />
         <div class="mt-5 flex justify-end gap-2">
-          <button type="button" class="rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="cancel">Cancel</button>
+          <button type="button" :class="greyButton" @click="cancel">Cancel</button>
           <button
             v-if="activeDialog.kind !== 'choice'"
             ref="confirmButton"
             type="submit"
-            class="rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-40"
-            :class="activeDialog.kind === 'confirm' && activeDialog.danger ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-ink text-surface hover:opacity-90'"
+            :class="activeDialog.kind === 'confirm' && activeDialog.danger ? confirmDeleteButton : mainButton"
             :disabled="blocked"
           >
             {{ activeDialog.confirmLabel }}

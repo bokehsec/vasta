@@ -3,6 +3,7 @@
 // property; the date goes into that property. Tasks use their due date.
 import { computed, onMounted, ref } from 'vue'
 import type { DateValue, ObjectType } from '@vasta/core'
+import { greyButton, mainButton } from '../../lib/buttons.ts'
 import { createObject } from '../../lib/actions.ts'
 import { dateProperties, formatClock, formatDayShort, instantAt } from '../../lib/calendar.ts'
 import { iconTextClasses } from '../../lib/colors.ts'
@@ -86,8 +87,8 @@ onMounted(() => input.value?.focus())
     <p v-if="type && dateProperties(type).length > 1" class="text-xs text-ink-faint">Goes into “{{ dateProperties(type)[0]!.name }}”.</p>
     <p v-if="error" class="text-xs text-red-600">{{ error }}</p>
     <div class="flex gap-1.5">
-      <button class="flex-1 rounded-lg bg-ink px-2.5 py-1.5 text-surface disabled:opacity-40" :disabled="!type || busy" @click="create(false)">Create</button>
-      <button class="rounded-lg bg-hover px-2.5 py-1.5 text-ink-soft hover:text-ink disabled:opacity-40" :disabled="!type || busy" title="Create and open (⌘↩)" @click="create(true)">
+      <button class="flex-1" :class="mainButton" :disabled="!type || busy" @click="create(false)">Create</button>
+      <button :class="greyButton" :disabled="!type || busy" title="Create and open (⌘↩)" @click="create(true)">
         Open
       </button>
     </div>

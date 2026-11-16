@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { newId } from '@vasta/core'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, closedFilterOf, dueForReview, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
+import { RANK_PROPERTY_ID, closedStatusIds, defaultViewFilter, dueForReview, hidesClosed, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
 import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -21,6 +21,7 @@ import PopoverMenu from '../components/PopoverMenu.vue'
 import TypeSettings from '../components/TypeSettings.vue'
 import { dayKey, deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu, removeFromSidebar, setProperties, viewItem } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
+import { greyButton, tintedButton } from '../lib/buttons.ts'
 import { onChange } from '../lib/events.ts'
 import { clone } from '../lib/clone.ts'
 import { listFields, quickActionsColumnShown, rowFieldsFromTable, tableColumns, toggleQuickActionsColumn } from '../lib/columns.ts'
@@ -40,6 +41,9 @@ import { quickActionMenuItems } from '../lib/quick-actions.ts'
 import { subtaskMenuItems } from '../lib/subtasks.ts'
 import { selectMenuItem } from '../lib/selection.ts'
 import { isPhone } from '../lib/viewport.ts'
+import { COMPLETION_FEEDBACK, createCompletionFeedback } from '../lib/completion-feedback.ts'
+import { onObjectSave } from '../lib/object-saves.ts'
+import { notice } from '../lib/state.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -53,6 +57,7 @@ const activeViewId = ref<string>('')
 
 async function loadObjects() {
   objects.value = await api.objectsOfType(props.id)
+  completion.prune(new Set(objects.value.map((object) => object.id)))
   primeSummaries(objects.value)
   loading.value = false
 }
@@ -152,7 +157,13 @@ watch(type, (t) => {
   if (activeViewId.value !== fixed?.id && !metrics && !progress && !t.views.some((v) => v.id === activeViewId.value)) activeViewId.value = t.views[0]?.id ?? ''
 }, { immediate: true })
 
-const view = computed<ViewDef>(() => type.value?.views.find((v) => v.id === activeViewId.value) ?? { id: 'default', name: 'All', layout: 'list' })
+// A type without views shows one as a new view starts: closed objects left out (defaultViewFilter).
+const view = computed<ViewDef>(() => {
+  const found = type.value?.views.find((v) => v.id === activeViewId.value)
+  if (found) return found
+  const filter = defaultViewFilter(type.value, { layout: 'list' })
+  return { id: 'default', name: 'All', layout: 'list', ...(filter ? { filter } : {}) }
+})
 
 // View settings are saved on the type, debounced. Until the save answers, the edited copy is the
 // type (unsavedTypes): a change event reloading the stored one meanwhile would undo the edit.
@@ -192,7 +203,8 @@ async function addView() {
   const name = await promptDialog({ title: 'New view', value: 'New view', confirmLabel: 'Create' })
   if (!name || !type.value) return
   const next = clone(type.value)
-  next.views.push({ id, name, layout: view.value.layout })
+  const filter = defaultViewFilter(next, { layout: view.value.layout })
+  next.views.push({ id, name, layout: view.value.layout, ...(filter ? { filter } : {}) })
   replaceType(next)
   pickView(id)
   void api.saveType(next).then(replaceType)
@@ -296,7 +308,7 @@ const processOpen = ref(false)
 const hasQuickActions = computed(() => quickActionsOf(type.value).length > 0)
 const taskWorkflows = computed(() => type.value?.system === 'task')
 const reviewable = computed(() => !fixedActive.value && !agendaActive.value && (hasQuickActions.value || !!reviewFieldOf(type.value)))
-const openList = computed(() => visible.value.filter((o) => !isClosedTask(type.value, o)))
+const openList = computed(() => visible.value.filter((o) => !completion.entries.has(o.id) && !isClosedTask(type.value, o)))
 const processList = computed(() => openList.value.filter((o) => dueForReview(type.value, o, dayKey())))
 const queues = computed(() => taskWorkflowQueues(type.value, [...objects.value].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)), dayKey()))
 const viewScope = computed(() => `${view.value.name}${showMine.value && mineOnly.value ? ' · Mine' : ''}${filterText.value.trim() ? ` · Search: “${filterText.value.trim()}”` : ''}`)
@@ -335,6 +347,21 @@ async function startProcess(kind: WorkflowKind, scope: 'space' | 'view', all = f
   workflowOpen.value = false
   processOpen.value = true
 }
+// Triage and Review in the header (DESIGN_SYSTEM.md › Buttons): tinted with the count while
+// something waits, grey without; the one with a paused session resumes it. A press starts the
+// queue; an empty one opens the chooser, which says why. A phone has room for one button, the
+// chooser's, beside its view picker.
+const sessionAt = computed(() => review.value ? `${Math.min(review.value.index + 1, review.value.ids.length)} of ${review.value.ids.length}` : '')
+function pressWorkflow(kind: WorkflowKind, anchor: HTMLElement) {
+  if (review.value?.kind === kind) resumeReview()
+  else if (queues.value[kind].length) void startProcess(kind, 'space')
+  else chooseWorkflow('tasks', anchor)
+}
+const phoneWorkflow = computed(() =>
+  review.value ? { label: 'Resume', count: sessionAt.value, icon: 'ph:play', waiting: true }
+  : queues.value.triage.length ? { label: 'Triage', count: String(queues.value.triage.length), icon: 'ph:tray', waiting: true }
+  : queues.value.review.length ? { label: 'Review', count: String(queues.value.review.length), icon: 'ph:arrows-clockwise', waiting: true }
+  : { label: 'Triage', count: '', icon: 'ph:tray', waiting: false })
 function resumeReview() {
   if (!review.value) return
   clearSelection()
@@ -387,7 +414,7 @@ watch(() => [props.id, workspace.space?.id, session.user?.id], () => {
 
 /** An open task's quick actions, in its menu (a long press on a phone). */
 function quickItems(object: ObjectSummary): MenuItem[] {
-  const items = [...selectMenuItem(object.id), ...quickActionMenuItems(type.value, object, { save: async (id, values) => moved(await setProperties(id, values)) }), ...subtaskMenuItems(type.value, object, moved)]
+  const items = [...selectMenuItem(object.id), ...(completion.entries.has(object.id) ? [] : quickActionMenuItems(type.value, object, { save: async (id, values) => moved(await setProperties(id, values)) })), ...subtaskMenuItems(type.value, object, moved)]
   return items.length ? [{ kind: 'separator' }, ...items] : []
 }
 
@@ -460,54 +487,60 @@ const groupField = computed(() => {
   if (view.value.layout === 'kanban') return view.value.groupBy?.[0]?.field ?? selectProps.value[0]?.id ?? 'tags'
   return view.value.groupBy?.[0]?.field ?? ''
 })
-// Closed tasks (Done, Dropped) are left out unless the view shows them (closedFilterOf); a switch
-// in its filters turns them on, saved on the view.
-const columnsField = computed(() => (view.value.layout === 'kanban' ? groupField.value : undefined))
-const closedFilter = computed(() => closedFilterOf(type.value, view.value, columnsField.value))
-const viewFilter = computed<FilterGroup | undefined>(() =>
-  closedFilter.value ? { kind: 'group', operator: 'and', items: [...(view.value.filter ? [view.value.filter] : []), closedFilter.value] } : view.value.filter
-)
-const canShowClosed = computed(() => !!closedFilterOf(type.value, { ...view.value, showClosed: false }, columnsField.value))
+// Closed tasks (Done, Dropped) are left out by a filter of the view's own, "Status is not Done,
+// Dropped", that new views start with (closed-filter.ts). The switch in its filters adds or removes
+// it; filter counts and Clear leave it out, as the view's resting state.
+const viewFilter = computed(() => view.value.filter)
+const canShowClosed = computed(() => closedStatusIds(type.value).length > 0)
+const closedHidden = computed(() => hidesClosed(type.value, view.value.filter))
 const closedLabel = computed(() => {
   const names = (statusProperty(type.value)?.options ?? []).filter((o) => o.status === 'done').map((o) => o.label.toLowerCase())
   return `Show ${new Intl.ListFormat('en', { type: 'conjunction' }).format(names)}`
 })
-const toggleClosed = () => updateView({ showClosed: view.value.showClosed ? undefined : true })
-// A task closed while the view is open stays on it (struck through, its Undo at hand) until the
-// view is left: whatever was open here is kept.
-const keptOpen = new Set<string>()
-let keptFor = ''
-watch(
-  [() => [...objects.value], () => `${props.id}/${activeViewId.value}`, type],
-  ([list, key, t]) => {
-    if (key !== keptFor) (keptOpen.clear(), (keptFor = key))
-    if (t) for (const o of list) if (!isClosedTask(t, o)) keptOpen.add(o.id)
+const toggleClosed = () => updateView({ filter: closedHidden.value ? withClosedShown(type.value, view.value.filter) : withClosedHidden(type.value, view.value.filter) })
+const completion = createCompletionFeedback({
+  type: () => type.value,
+  rows: () => visible.value,
+  replace: moved,
+  save: setProperties,
+  failed: (retry) => {
+    notice.value = { message: 'The task was not saved. Try again.', action: { label: 'Retry', run: () => retry().catch(() => {}) } }
   },
-  { immediate: true, flush: 'sync' }
+})
+provide(COMPLETION_FEEDBACK, completion)
+const stopSaves = onObjectSave((object) => agendaActive.value ? undefined : completion.observe(object))
+onBeforeUnmount(stopSaves)
+watch(
+  () => JSON.stringify([props.id, activeViewId.value, view.value.filter, sort.value, groupField.value, view.value.layout, view.value.agenda, view.value.flat, view.value.list, view.value.table, view.value.board?.swimlanes, mineOnly.value]),
+  () => completion.clear(),
+  { flush: 'sync' }
 )
 
 const visible = computed(() => {
-  const q = filterText.value.trim().toLowerCase()
   const context = queryContext()
   const list = objects.value.filter(
-    (o) => matchesFilter(o, keptOpen.has(o.id) ? view.value.filter : viewFilter.value, context) && (!showMine.value || !mineOnly.value || isMine(o)) && (!q || displayTitle(o, type.value).toLowerCase().includes(q) || o.preview.toLowerCase().includes(q))
+    (o) => completion.entries.has(o.id) || (matchesFilter(o, viewFilter.value, context) && (!showMine.value || !mineOnly.value || isMine(o)))
   )
   const { field, direction } = sort.value
   const factor = direction === 'asc' ? 1 : -1
   // Keys are read once per object (a formula would otherwise run at every comparison); titles
   // sort as shown, so daily notes and untitled objects take their place.
   // The board puts ranked cards in order itself; the others come by when they changed.
-  if (field === RANK_PROPERTY_ID) return [...list].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+  const searched = (rows: ObjectSummary[]) => {
+    const q = filterText.value.trim().toLowerCase()
+    return completion.pin(rows).filter((object) => !q || displayTitle(object, type.value).toLowerCase().includes(q) || object.preview.toLowerCase().includes(q))
+  }
+  if (field === RANK_PROPERTY_ID) return searched([...list].sort((a, b) => (completion.placement(a).updatedAt < completion.placement(b).updatedAt ? 1 : -1)))
   const keyOf = (o: ObjectSummary) => (field === 'title' ? displayTitle(o, type.value).toLowerCase() : fieldSortKey(o, field, context))
-  return list
-    .map((object) => ({ object, key: keyOf(object) }))
+  return searched(list
+    .map((object) => ({ object, key: keyOf(completion.placement(object)) }))
     .sort((a, b) => {
       if (a.key === b.key) return 0
       if (a.key === '') return 1
       if (b.key === '') return -1
       return a.key < b.key ? -factor : factor
     })
-    .map((k) => k.object)
+    .map((k) => k.object))
 })
 
 function created(object: ObjectRecord) {
@@ -534,16 +567,20 @@ function setSwimlanes(field: string) {
   updateView({ board: Object.keys(next).length ? next : undefined })
 }
 
-function moved(saved: ObjectRecord) {
+function moved(saved: ObjectRecord | ObjectSummary) {
   const index = objects.value.findIndex((o) => o.id === saved.id)
-  if (index >= 0) objects.value[index] = { ...saved, preview: objects.value[index]!.preview } as ObjectSummary
+  if (index >= 0) {
+    const summary = { ...saved, preview: objects.value[index]!.preview } as ObjectSummary
+    objects.value[index] = summary
+    primeSummaries([summary])
+  }
 }
 
 // Filter: saved on the view, applied with the same engine as queries.
 const filterAnchor = ref<HTMLElement | null>(null)
 const filterOpen = ref(false)
 const filterGroup = computed<FilterGroup>(() => view.value.filter ?? { kind: 'group', operator: 'and', items: [] })
-const filterCount = computed(() => filterGroup.value.items.length)
+const filterCount = computed(() => filterGroup.value.items.length - Number(closedHidden.value))
 const setFilter = (group: FilterGroup) => updateView({ filter: group.items.length ? group : undefined })
 
 // ---------------------------------------------------------------------------
@@ -609,7 +646,7 @@ const activeFilterCount = computed(() => Number(searching.value) + Number(mineOn
 function clearFilters() {
   filterText.value = ''
   if (mineOnly.value) toggleMine()
-  if (!fixedActive.value && filterCount.value) setFilter({ ...filterGroup.value, items: [] })
+  if (!fixedActive.value && filterCount.value) updateView({ filter: closedHidden.value ? withClosedHidden(type.value, undefined) : undefined })
 }
 const arrangeRows = computed(() => {
   const layout = view.value.layout
@@ -677,14 +714,30 @@ async function newMenu(event: MouseEvent) {
       </button>
       <h1 class="min-w-0 text-2xl font-bold tracking-tight max-md:break-words md:truncate">{{ type.pluralName }}</h1>
       <span class="text-sm text-ink-faint max-md:hidden">{{ objects.length }}</span>
-      <button ref="menuAnchor" class="ml-auto rounded-lg p-2 text-ink-soft hover:bg-hover hover:text-ink max-md:p-3.5" title="More" @click="menuOpen = !menuOpen">
+      <span class="flex-1" />
+      <template v-if="!loading && taskWorkflows && !isPhone">
+        <button :class="review?.kind === 'triage' || queues.triage.length ? tintedButton : greyButton" data-workflow-triage @click="pressWorkflow('triage', $event.currentTarget as HTMLElement)">
+          <AppIcon fallback="ph:tray" />
+          <template v-if="review?.kind === 'triage'">Resume triage <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
+          <template v-else>Triage <span v-if="queues.triage.length" class="tabular-nums">{{ queues.triage.length }}</span></template>
+        </button>
+        <button :class="review?.kind === 'review' || queues.review.length ? tintedButton : greyButton" data-workflow-review @click="pressWorkflow('review', $event.currentTarget as HTMLElement)">
+          <AppIcon fallback="ph:arrows-clockwise" />
+          <template v-if="review?.kind === 'review'">Resume {{ review.scope === 'space' ? 'review' : `review of ${review.viewName}` }} <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
+          <template v-else>Review <span v-if="queues.review.length" class="tabular-nums">{{ queues.review.length }}</span></template>
+        </button>
+      </template>
+      <button v-else-if="!loading && review && !taskWorkflows" :class="tintedButton" class="min-w-0" data-process-resume @click="resumeReview">
+        <AppIcon fallback="ph:play" /> <span class="truncate">{{ isPhone ? 'Resume' : `Resume review of ${review.viewName}` }}</span> <span class="tabular-nums">{{ sessionAt }}</span>
+      </button>
+      <button ref="menuAnchor" class="rounded-lg p-2 text-ink-soft hover:bg-hover hover:text-ink max-md:p-3.5" title="More" @click="menuOpen = !menuOpen">
         <AppIcon fallback="ph:dots-three" :size="18" />
       </button>
       <div class="flex shrink-0 items-stretch rounded-lg bg-ink text-sm font-medium text-surface max-md:min-h-11" data-new-split>
         <button class="flex items-center gap-1.5 rounded-l-lg px-3 py-1.5 hover:opacity-90" :title="defaultTemplate ? `New ${type.name} from “${defaultTemplate.template!.name}”` : `New ${type.name}`" @click="createNew">
-          <AppIcon fallback="ph:plus" /> <span class="max-sm:hidden">New {{ type.name }}</span>
+          <AppIcon fallback="ph:plus" /> <span :class="taskWorkflows ? 'max-lg:hidden' : 'max-sm:hidden'">New {{ type.name }}</span>
         </button>
-        <button class="grid place-items-center rounded-r-lg border-l border-surface/25 px-1.5 hover:opacity-90" title="Templates" aria-label="New from a template" @click="newMenu">
+        <button class="grid place-items-center rounded-r-lg border-l border-surface/25 px-1.5 hover:opacity-90 max-md:min-w-11" title="Templates" aria-label="New from a template" @click="newMenu">
           <AppIcon fallback="ph:caret-down" :size="13" />
         </button>
       </div>
@@ -696,6 +749,10 @@ async function newMenu(event: MouseEvent) {
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="pinFrom">
         <AppIcon fallback="ph:push-pin" class="text-ink-soft" /> {{ pinned ? 'Pinned in sidebar' : 'Pin to sidebar' }}
         <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
+      </button>
+      <!-- The chooser behind the header's buttons: what each queue holds, and End session. -->
+      <button v-if="taskWorkflows && !isPhone" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" data-workflows @click="chooseWorkflow('tasks', menuAnchor)">
+        <AppIcon fallback="ph:tray" class="text-ink-soft" /> Triage &amp; review…
       </button>
       <button v-if="isPhone && collection?.canSelect" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" data-select-mode @click="selectFromMenu">
         <AppIcon fallback="ph:check-square" class="text-ink-soft" /> Select {{ type.pluralName.toLowerCase() }}
@@ -737,7 +794,7 @@ async function newMenu(event: MouseEvent) {
     <div class="mt-6 flex flex-wrap items-center gap-1 border-b border-line pb-2">
       <!-- A phone: one button for the view, its list in a sheet (the tabs would take rows of the screen). -->
       <template v-if="isPhone">
-        <button ref="viewPickerAnchor" class="flex h-10 items-center gap-1.5 rounded-lg border border-line px-3 text-[15px] font-medium" data-view-picker @click="viewPickerOpen = true">
+        <button ref="viewPickerAnchor" :class="greyButton" data-view-picker @click="viewPickerOpen = true">
           {{ currentViewLabel }} <AppIcon fallback="ph:caret-down" :size="14" class="text-ink-faint" />
         </button>
         <PopoverMenu v-model:open="viewPickerOpen" :anchor="viewPickerAnchor">
@@ -766,13 +823,16 @@ async function newMenu(event: MouseEvent) {
         <button
           v-if="!metricsActive"
           ref="filtersAnchor"
-          class="flex h-10 items-center gap-1.5 rounded-lg border border-line px-3 text-[15px] font-medium"
-          :class="activeFilterCount ? 'text-accent' : ''"
+          :class="activeFilterCount ? tintedButton : greyButton"
           data-filters-button
           @click="filtersOpen = true"
         >
           <AppIcon fallback="ph:funnel" :size="16" /> Filters
           <span v-if="activeFilterCount" class="grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-semibold text-white" data-filters-count>{{ activeFilterCount }}</span>
+        </button>
+        <!-- Triage & review sits here on a phone: the header has no room beside the title. -->
+        <button v-if="!loading && taskWorkflows" :class="[phoneWorkflow.waiting ? tintedButton : greyButton, 'ml-auto']" data-workflows @click="chooseWorkflow('tasks', $event.currentTarget as HTMLElement)">
+          <AppIcon :fallback="phoneWorkflow.icon" /> {{ phoneWorkflow.label }} <span v-if="phoneWorkflow.count" class="tabular-nums">{{ phoneWorkflow.count }}</span>
         </button>
         <PopoverMenu v-model:open="filtersOpen" :anchor="filtersAnchor" label="Search and filter">
           <!-- Changes apply as they are made: the count says what they leave, Done closes the sheet. -->
@@ -792,9 +852,9 @@ async function newMenu(event: MouseEvent) {
             <AppIcon fallback="ph:user-circle" :size="16" class="text-ink-soft" /> Mine
             <AppIcon :fallback="mineOnly ? 'ph:check-square-fill' : 'ph:square'" :class="mineOnly ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
           </button>
-          <button v-if="canShowClosed && !fixedActive" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" :aria-pressed="!!view.showClosed" data-show-closed @click="toggleClosed">
+          <button v-if="canShowClosed && !fixedActive" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" :aria-pressed="!closedHidden" data-show-closed @click="toggleClosed">
             <AppIcon fallback="ph:check-circle" :size="16" class="text-ink-soft" /> {{ closedLabel }}
-            <AppIcon :fallback="view.showClosed ? 'ph:check-square-fill' : 'ph:square'" :class="view.showClosed ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
+            <AppIcon :fallback="!closedHidden ? 'ph:check-square-fill' : 'ph:square'" :class="!closedHidden ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
           </button>
           <template v-if="!fixedActive">
             <div class="px-2.5 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Filters</div>
@@ -916,9 +976,9 @@ async function newMenu(event: MouseEvent) {
         </template>
       </div>
       <PopoverMenu v-model:open="filterOpen" :anchor="filterAnchor" placement="bottom-end" width="34rem">
-        <button v-if="canShowClosed" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" :aria-pressed="!!view.showClosed" data-show-closed @click="toggleClosed">
+        <button v-if="canShowClosed" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" :aria-pressed="!closedHidden" data-show-closed @click="toggleClosed">
           <AppIcon fallback="ph:check-circle" class="text-ink-soft" /> {{ closedLabel }}
-          <AppIcon :fallback="view.showClosed ? 'ph:check-square-fill' : 'ph:square'" :class="view.showClosed ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
+          <AppIcon :fallback="!closedHidden ? 'ph:check-square-fill' : 'ph:square'" :class="!closedHidden ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
         </button>
         <div class="p-1.5">
           <FilterGroupEditor :group="filterGroup" :type-ids="[id]" @update="setFilter" />
@@ -1019,15 +1079,6 @@ async function newMenu(event: MouseEvent) {
           </button>
         </template>
       </PopoverMenu>
-    </div>
-    <div v-if="!loading && (taskWorkflows || review)" class="mt-2 flex flex-wrap items-center gap-x-3 text-sm" data-workflow-entry>
-      <button v-if="taskWorkflows" class="flex min-h-11 items-center gap-2 rounded-lg px-2 font-medium text-ink-soft hover:bg-hover hover:text-ink" data-workflows @click="chooseWorkflow('tasks', $event.currentTarget as HTMLElement)">
-        <AppIcon fallback="ph:tray" :size="17" /> Triage &amp; review
-      </button>
-      <button v-if="review" class="min-h-11 min-w-0 rounded-lg px-2 text-left text-accent hover:bg-hover" data-process-resume @click="resumeReview">
-        <!-- A phone says it shorter, so it fits on the line beside Triage & review. -->
-        Resume {{ isPhone ? (review.kind === 'triage' ? 'triage' : 'review') : review.scope === 'space' ? workflowTitle(review).toLowerCase() : `review of ${review.viewName}` }} · {{ Math.min(review.index + 1, review.ids.length) }} of {{ review.ids.length }}
-      </button>
     </div>
     <WorkflowChooser v-model:open="workflowOpen" :type="type" :anchor="workflowAnchor" :mode="workflowMode" :space-name="workspace.space?.name ?? ''" :view-scope="viewScope"
       :triage-count="queues.triage.length" :review-count="queues.review.length" :view-count="processList.length" :view-all-count="openList.length" :session="review"

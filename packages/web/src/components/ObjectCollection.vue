@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board,
 // agenda), optionally grouped. Used by type pages, query pages and queries embedded in documents.
-import { computed, nextTick, onBeforeUnmount, provide, ref, watch, type Directive } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, provide, ref, watch, type Directive } from 'vue'
 import type { AgendaSettings, BoardSettings, FilterGroup, Id, ListSettings, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { newId, isClosedTask, nextStepFieldOf, outlineRows, parentFieldOf, parentIdOf, quickActionsOf, subtaskProgress, type OutlineRow, type QuickActionDef } from '@vasta/core'
 import { addSelectOption, setProperties, setProperty } from '../lib/actions.ts'
-import { isDone, setTaskDone } from '../lib/calendar.ts'
+import { isDone } from '../lib/calendar.ts'
+import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, listFields, MIN_COLUMN_WIDTH, QUICK_ACTIONS_COLUMN, rowFields, rowFieldsFromTable, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatDateShort, formatRelative } from '../lib/format.ts'
@@ -29,6 +30,8 @@ import PropertyValueEditor from './PropertyValueEditor.vue'
 import ObjectLink from './ObjectLink.vue'
 import SwipeRow, { type SwipeAction } from './SwipeRow.vue'
 import TaskQuickActions from './TaskQuickActions.vue'
+import TaskCompletionCheck from './TaskCompletionCheck.vue'
+import TaskCompletionNote from './TaskCompletionNote.vue'
 import { VIEW_OPENS } from '../lib/open.ts'
 
 const props = defineProps<{
@@ -79,7 +82,12 @@ const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
 // Where links inside open, for every link, card and relation chip (lib/open.ts, VIEW_OPENS): the
 // view's choice, else the type's of the object linked, else its page.
 provide(VIEW_OPENS, (id) => props.openIn ?? typesById.value.get(summaryOf(id)?.typeId ?? '')?.openIn)
-const groups = computed<Group[]>(() => groupObjects(props.objects, props.groupField, types.value))
+const completion = inject(COMPLETION_FEEDBACK, undefined)
+const groups = computed<Group[]>(() => {
+  const actual = new Map(props.objects.map((object) => [object.id, object]))
+  return groupObjects(props.objects.map((object) => completion?.placement(object) ?? object), props.groupField, types.value)
+    .map((group) => ({ ...group, items: group.items.map((object) => actual.get(object.id)!) }))
+})
 
 // A group shows its first STEP objects, and more as the page scrolls to its end: drawing a type's
 // thousands of objects at once takes seconds. Sorting, grouping and filters still see them all.
@@ -167,7 +175,7 @@ const nextStepOf = (object: ObjectSummary) => {
 // buttons; a tablet keeps both.
 /** The type whose swipes this row has on touch, selecting or not. */
 const swipeable = (object: ObjectSummary) => {
-  const type = isTouch.value ? actionType(object) : undefined
+  const type = isTouch.value && !completion?.entries.has(object.id) ? actionType(object) : undefined
   return type && !isClosedTask(type, object) ? type : undefined
 }
 /** Swipes are off while selecting here (a tap picks the row). */
@@ -209,7 +217,7 @@ const owner: SelectionOwner = {
   all: () => props.objects,
   pickable: (object) => {
     const type = actionType(object)
-    return !type || !isClosedTask(type, object)
+    return !type || (!completion?.entries.has(object.id) && !isClosedTask(type, object))
   },
   moved: (object) => emit('moved', object),
   trashed: (ids) => emit('trashed', ids),
@@ -244,7 +252,7 @@ watch([() => props.objects, () => props.objects.length], () => selection.key ===
 watch(canSelect, (can) => !can && selection.key === selKey && clearSelection())
 
 /** On a phone the row's own buttons give way to swipes, also while selecting (the rows keep their height). */
-const rowButtons = (object: ObjectSummary) => !!quickType(object) && !(isPhone.value && swipeable(object))
+const rowButtons = (object: ObjectSummary) => !!quickType(object) && !(isPhone.value && (swipeable(object) || completion?.entries.has(object.id)))
 /** Shown once per device over the first list with swipeable rows on a phone. */
 const swipeTip = computed(() => {
   if (!isPhone.value || !asList.value || swipeTipHidden.value) return ''
@@ -351,16 +359,8 @@ const fieldsOf = (object: ObjectSummary) => {
   const fields = rowFields(object, typeOf(object), listColumns.value ?? [])
   return phoneRows.value ? fields.slice(0, 4) : fields
 }
-const isDoneTask = (object: ObjectSummary) => isDone(typeOf(object), object.props.status?.kind === 'select' ? object.props.status.value : undefined)
-
-async function toggleDone(object: ObjectSummary) {
-  try {
-    const saved = await setTaskDone(object.id, typeOf(object), !isDoneTask(object))
-    if (saved) emit('moved', saved)
-  } catch (error) {
-    lastError.value = (error as Error).message
-  }
-}
+const isDoneTask = (object: ObjectSummary) => typeOf(object)?.system === 'task' && (completion?.done(object) ?? isDone(typeOf(object), object.props.status?.kind === 'select' ? object.props.status.value : undefined))
+const titleClass = (object: ObjectSummary) => ['task-title transition-colors duration-150 motion-reduce:transition-none', isDoneTask(object) ? 'task-title-done text-ink-faint line-through' : '']
 
 const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 'embed' ? 'wall' : props.layout === 'gallery' ? 'gallery' : 'grid'))
 
@@ -439,20 +439,10 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
             <!-- A phone keeps the width for the title: only a parent's caret takes room there. -->
             <span v-else-if="outlined(group) && !isPhone" class="-mx-1 w-5 shrink-0" aria-hidden="true" />
             <!-- On touch the checkbox's tap area reaches 44px around it. -->
-            <button
-              v-if="listColumns && typeOf(object)?.system === 'task'"
-              class="relative shrink-0 rounded-full text-ink-soft enabled:hover:text-ink [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3 [@media(hover:none)]:after:content-['']"
-              :class="isDoneTask(object) ? 'text-accent' : ''"
-              :disabled="readonly"
-              :title="isDoneTask(object) ? 'Mark as to do' : 'Mark as done'"
-              data-task-check
-              @click.prevent.stop="toggleDone(object)"
-            >
-              <AppIcon :fallback="isDoneTask(object) ? 'ph:check-circle-fill' : 'ph:circle'" :size="18" />
-            </button>
+            <TaskCompletionCheck v-if="typeOf(object)?.system === 'task' && !readonly && (listColumns || completion)" :object="object" :type="typeOf(object)" @moved="emit('moved', $event)" />
             <TypeIcon v-else :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
             <span v-if="quickType(object)" class="min-w-0 flex-1">
-              <span class="block font-medium max-md:text-base max-md:leading-snug" :class="list?.wrap || isPhone ? 'break-words' : 'truncate'">{{ displayTitle(object, typeOf(object)) }}</span>
+              <span class="block font-medium max-md:text-base max-md:leading-snug" :class="[list?.wrap || isPhone ? 'break-words' : 'truncate', titleClass(object)]">{{ displayTitle(object, typeOf(object)) }}</span>
               <span v-if="nextStepOf(object)" class="mt-0.5 flex items-center gap-1 text-xs text-ink-soft max-md:text-[13px]" data-next-step-line>
                 <AppIcon fallback="ph:arrow-right" :size="11" class="shrink-0 text-ink-faint" /><span class="truncate">{{ nextStepOf(object) }}</span>
               </span>
@@ -460,8 +450,9 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
             <span
               v-else
               class="min-w-0 flex-1 font-medium max-md:text-base max-md:leading-snug"
-              :class="[list?.wrap || isPhone ? 'break-words' : 'truncate', listColumns && typeOf(object)?.system === 'task' && isDoneTask(object) ? 'text-ink-faint line-through' : '']"
+              :class="[list?.wrap || isPhone ? 'break-words' : 'truncate', titleClass(object)]"
             >{{ displayTitle(object, typeOf(object)) }}</span>
+            <TaskCompletionNote :object="object" class="order-last w-full pl-[30px]" />
             <span v-if="progressOf(object)" class="shrink-0 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
               {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
             </span>
@@ -558,9 +549,11 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                   >
                     <AppIcon v-if="picked(object)" fallback="ph:check-bold" :size="11" />
                   </button>
+                  <TaskCompletionCheck v-if="typeOf(object)?.system === 'task' && !readonly && completion" :object="object" :type="typeOf(object)" class="mr-2 inline-grid align-middle" @moved="emit('moved', $event)" />
                   <ObjectLink :id="object.id" class="font-medium hover:underline" @click="rowClick($event, object)">
-                    <AppIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" :class="canSelect && (selectingHere || !isTouch) ? (selectingHere ? 'invisible' : 'group-hover/row:invisible') : ''" />{{ displayTitle(object, typeOf(object)) }}
+                    <AppIcon v-if="typeOf(object)?.system !== 'task'" :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" :class="canSelect && (selectingHere || !isTouch) ? (selectingHere ? 'invisible' : 'group-hover/row:invisible') : ''" /><span :class="titleClass(object)">{{ displayTitle(object, typeOf(object)) }}</span>
                   </ObjectLink>
+                  <TaskCompletionNote :object="object" class="mt-1" />
                   <span v-if="progressOf(object)" class="ml-2 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
                     {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
                   </span>
@@ -615,12 +608,12 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
 
       <!-- Wall: masonry columns -->
       <div v-else-if="cardVariant === 'wall'" class="columns-1 gap-3 @lg:columns-2 @4xl:columns-3 @7xl:columns-4">
-        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" variant="wall" @contextmenu="emit('menu', $event, object)" />
+        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" variant="wall" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
       </div>
 
       <!-- Grid and gallery -->
       <div v-else class="grid gap-3" :class="cardVariant === 'gallery' ? 'grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]'">
-        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" :variant="cardVariant" @contextmenu="emit('menu', $event, object)" />
+        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" :variant="cardVariant" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
       </div>
 
       <button

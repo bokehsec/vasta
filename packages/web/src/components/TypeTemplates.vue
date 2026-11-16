@@ -3,6 +3,7 @@
 // the snippets that apply to the type (made in Settings › Snippets).
 import { scopeHolds, type ObjectRecord, type ObjectType } from '@vasta/core'
 import { computed, onMounted } from 'vue'
+import { greyButton } from '../lib/buttons.ts'
 import { dayKey } from '../lib/actions.ts'
 import { typesById } from '../lib/state.ts'
 import { deleteTemplate, loadTemplates, newTemplate, setDefaultTemplate, snippets, templatesOf } from '../lib/templates.ts'
@@ -45,7 +46,7 @@ const open = (t: ObjectRecord) => emit('leave', objectPath(t.id))
         </button>
       </div>
     </div>
-    <button class="mt-2 flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-hover" @click="create">
+    <button class="mt-2" :class="greyButton" @click="create">
       <AppIcon fallback="ph:plus" :size="14" /> New template
     </button>
     <p class="mt-2 text-xs text-ink-faint">Or open any {{ type.name.toLowerCase() }} and choose “Save as template…” in its ⋯ menu.</p>

@@ -8,6 +8,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { DUE_PROPERTY_ID, addDays } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
+import { greyButton, mainButton } from '../lib/buttons.ts'
 import { nextWeekStart } from '../lib/calendar.ts'
 import { longDay, textAnswer, textProblem, type QuickAsk } from '../lib/quick-actions.ts'
 import AppIcon from './AppIcon.vue'
@@ -74,8 +75,8 @@ const presetClass = (day: string) => [
   'flex-1 rounded-lg px-2.5 py-1.5 max-md:py-3 max-md:text-base',
   picked.value === day ? 'bg-ink text-surface' : 'bg-hover hover:bg-line',
 ]
-const cancelClass = 'flex-1 rounded-lg bg-hover px-3 py-1.5 hover:bg-line disabled:opacity-50 max-md:min-h-12 max-md:text-base'
-const saveClass = 'flex-1 rounded-lg bg-ink px-3 py-1.5 font-medium text-surface disabled:opacity-40 max-md:min-h-12 max-md:text-base'
+const cancelClass = [greyButton, 'flex-1']
+const saveClass = [mainButton, 'flex-1']
 </script>
 
 <template>

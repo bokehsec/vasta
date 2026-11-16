@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // Light, dark or the system's, and how type icons look, on this device; and the keyboard shortcuts.
+import { pageWidth, PAGE_WIDTH_OPTIONS } from '../../lib/page-width.ts'
 import { keysOf } from '../../lib/shortcuts.ts'
 import { ui } from '../../lib/state.ts'
 import { blockSpacing, iconStyle, theme, THEME_ICONS, type IconStyle, type Theme } from '../../lib/theme.ts'
@@ -7,6 +8,7 @@ import TypeIcon from '../TypeIcon.vue'
 import { iconBoxClasses, iconTextClasses } from '../../lib/colors.ts'
 import AppIcon from '../AppIcon.vue'
 import SettingsSection from './SettingsSection.vue'
+import PhoneMenuSettings from './PhoneMenuSettings.vue'
 import { label, secondary } from './styles.ts'
 
 const ICON_STYLES: { value: IconStyle; label: string }[] = [
@@ -54,6 +56,22 @@ const OPTIONS: { value: Theme; label: string }[] = [
         </select>
       </label>
       <div>
+        <span :class="label">Page width, on this device</span>
+        <div class="mt-1.5 inline-flex max-w-full rounded-lg bg-hover p-0.5" role="radiogroup" aria-label="Page width">
+          <button
+            v-for="option in PAGE_WIDTH_OPTIONS"
+            :key="option.value"
+            role="radio"
+            :aria-checked="pageWidth === option.value"
+            class="rounded-md px-3 py-1.5 text-sm max-md:py-2"
+            :class="pageWidth === option.value ? 'bg-surface font-medium text-ink shadow-sm' : 'text-ink-soft hover:text-ink'"
+            @click="pageWidth = option.value"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+      </div>
+      <div>
         <span :class="label">Type icons</span>
         <div class="mt-1.5 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Type icons">
           <button
@@ -76,6 +94,7 @@ const OPTIONS: { value: Theme; label: string }[] = [
           </button>
         </div>
       </div>
+      <PhoneMenuSettings />
       <div class="flex flex-wrap items-center gap-3 max-md:hidden">
         <button :class="secondary" class="flex items-center gap-2" @click="ui.shortcutsOpen = true">
           <AppIcon fallback="ph:keyboard" :size="15" /> Keyboard shortcuts

@@ -17,6 +17,30 @@ GitHub release page.
   per week and a row per habit with its goal. Paused habits are listed but left out of the total;
   the range is remembered on the device. It works offline. The agent tools' `list_habits` can add
   the same numbers (`weeks`).
+- **Menu in the phone bottom menu.** Settings › Appearance › Bottom menu can now include **Menu**,
+  which opens the side menu from within reach of your thumb. The ☰ button at the top left still
+  opens it too.
+
+- **Choose your phone bottom menu.** On a phone, Settings › Appearance › Bottom menu lets you pick one
+  to five places (including Today, Settings and your object types), reorder them with arrows, or
+  reset to the original menu. Changes appear immediately, stay on this device, and are the same in
+  every space; a type shows in each space that has a type of that name.
+
+- **A task you mark Done stays where it was until you leave.** On a type's page (Tasks views, in
+  every layout: list, table, phone rows, cards and board, plus the Done button, swipe, menu and
+  bulk Done), a completed task keeps its place, shows a checked circle and a muted, struck-through
+  title, and counts as done. It only leaves when you reload, leave the page, switch views or change
+  the filters, sort or layout; searching keeps matching rows. Uncheck it, or press Undo, to put back
+  exactly the status it had (a Next task returns to Next). A repeating task says "Done this time ·
+  Next: <date>". A failed save puts the task back with a Retry. On a board, the card stays in its
+  column; dragging it to Done still moves it. On a phone, opening a task, marking it Done and going
+  Back shows the list fresh, without it.
+
+- **Choose your page width.** Settings › Appearance has Standard, Wide and Full width, remembered
+  on this device for all object pages and daily notes. Standard keeps the reading width and gives
+  pages with columns more room; daily notes with columns now get that same room. Full width uses
+  the available content area while keeping the page margins.
+
 - **Triage and review as two steps of one routine.** A task type's page has one **Triage & review**
   button instead of a Review button on every view. It offers two queues across the whole space,
   whatever view or filters you are on: **Triage incoming** (tasks with no status or an incoming one,
@@ -138,17 +162,46 @@ GitHub release page.
   a hairline between rows, and Edit query shows when you point at it (always on touch). The same
   table on a whiteboard card loses its inner box. Tables everywhere drop the shaded header row, and
   a row's select box now appears over its icon instead of pushing every title to the right.
-- **Done stands out on a task's page.** Done is the one filled button; Defer, Drop and Next step stay
-  quiet beside it. On a phone these buttons, the page's ⋯ and the Undo and close buttons on a notice
+- **Buttons that look like buttons, and Triage you can see.** Buttons now come in a few
+  consistent kinds: the main action in dark ink (New Task, Save), a light blue one for a way into a
+  feature or the action a page leads with (Triage, Mark done), and grey for everyday actions
+  (Cancel, Defer…, Drop, Sync now). Settings' outlined buttons and dialogs' plain Cancel are grey
+  now. On the Tasks page, **Triage** and **Review** sit beside New Task with how many tasks are
+  waiting; a press starts that queue at once, a paused one reads "Resume triage 4 of 12", and with
+  nothing waiting they turn grey. **Triage & review…** in the ⋯ menu still explains both queues and
+  ends a paused session. On a phone one button sits beside the view picker: Triage, else Review,
+  else Resume, with its count; the view picker and Filters are grey buttons. The same kinds now
+  run through review mode, Quick capture, comments, type settings and templates, sprints,
+  subtasks, the calendar's quick create and event details, food logging and the Nutrition page,
+  Trash (Empty trash and Delete in red, Restore grey), Settings, password and login, and a notice's
+  Undo.
+- **Done tasks stay put in agendas, and subtasks can be undone.** A task marked done in an agenda
+  (a Tasks view or a list in a page laid out as days) stays on its day, checked and struck through,
+  until you leave or reload; a repeating one says "Done this time · Next: …". Its checkbox undoes it,
+  back to its exact status. Marking a subtask done shows a notice with Undo, and the subtask's
+  checkbox also puts back the status it had. The Calendar page already kept done tasks in view.
+- **Done tasks stay put in lists inside pages too.** A task marked done in a list embedded in a page
+  (Home's Today, a project page, a dashboard) stays where it was, checked and struck through, until
+  you leave or reload the page; Undo puts back its exact status. A list whose last open task you
+  complete keeps that task in view instead of saying nothing matches.
+
+- **A task's page buttons look like buttons.** They are raised buttons named with verbs: **Mark
+  done** (tinted, so it stands out), **Defer…** and **Drop**. New task types name the first one Mark
+  done; an existing type keeps its names (Type settings › Quick actions). None is filled, so none
+  looks like the task's current status. On a phone these buttons, the page's ⋯ and the Undo and close buttons on a notice
   are full finger size, and a notice with Undo stays while your finger or pointer is on it.
 - **Defer from a list says which task.** The Defer sheet opened from a row names the task, picks no
   day until you do (today is only marked as today), has larger days and month arrows on a phone,
   and keeps Cancel and Save in reach when the sheet has to scroll on a small screen.
-- **Done and dropped tasks are hidden in every view.** A task list shows what is still open, so the
-  rows you can swipe come first. Turn on **Show done and dropped** in a view's filters (Filters on a
-  phone, Filter on a desktop) to list them again, saved with that view. A task you finish stays on
-  screen, crossed out, until you leave the view, so Undo is still in reach. A view that asks for a
-  closed status ("Status is Done") and a board with a Done column show them as before.
+- **Done and dropped tasks are hidden in every view, the calendar and embedded queries.** A task
+  list shows what is still open, so the rows you can swipe come first. Views hide them with a filter
+  you can see, **Status is not Done, Dropped**: new views and new queries of tasks start with it,
+  and your existing views and embedded queries got it once. Remove it, or turn on **Show done and
+  dropped** in a view's filters (Filters on a phone, Filter on a desktop), to list them again; the
+  filter count and **Clear** leave it alone. On the Calendar page, tick **Done and dropped tasks** in
+  the Filter menu to show them (remembered on this device). A task you finish stays on screen,
+  crossed out, until you leave the view, so Undo is still in reach. A view that asks for a closed
+  status ("Status is Done") and a board with a Done column show them as before.
 - **The phone's Filters sheet has a Done button** and says how many tasks the filters leave, since
   changes apply as you make them. A filter's choices (a status's Inbox, Next, Done…) get a line of
   their own and are big enough to tap.
@@ -188,6 +241,28 @@ GitHub release page.
   view, also after the views are reordered.
 
 ### Fixed
+
+- **Swiping back on an iPhone goes back.** A swipe from the screen's left edge could leave you on
+  the same page: it also started opening the side menu, and Back then closed that menu instead of
+  leaving. The edge swipe now only goes back; the side menu opens from the ☰ button (or Menu in the
+  bottom menu) and still closes with a swipe left. Going back to a list returns to where you had
+  scrolled, and a page you open starts at its top. Tapping the bottom-menu place you are already on
+  no longer adds a step to Back: it scrolls to the top (Calendar goes back to today).
+
+- **Enter in ⌘K always takes the top row of what you just typed.** Opening the palette again after
+  picking a lower row could make Enter do nothing, so a line like `/food 300 kcal at snack` was not
+  logged and the palette stayed open.
+
+- **The desktop app's quick capture says where a capture goes.** With "Add quick captures to the
+  daily note" off (the default), the capture box and the capture panel no longer promise "in
+  today's note": they name the space, or the inbox when only that is on.
+
+- **Phone controls and failed bulk saves are easier to use.** View, Filters, template choices and
+  filter-building buttons have full-height touch targets. Failed bulk changes offer Retry for only
+  the unsaved tasks, keeping one Undo for the whole action. Capture types wrap in a bounded picker
+  without keyboard-only hints; subtasks have a visible Add button. Lists scroll clear of Capture,
+  including while a notice shows; Triage fills the status-bar area and says Saving only during a
+  save. Faint text and placeholders are more readable in both themes.
 
 - **Quick capture saves with no connection.** On a phone or computer that could not reach
   the server (Tailscale off, no signal), Save capture showed "null is not an object" and saved

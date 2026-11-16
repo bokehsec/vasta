@@ -5,7 +5,7 @@
 // Columns fold and can have a WIP limit; both are the view's settings (`board`). On a phone (without
 // swimlanes) a column is most of the screen wide and the board snaps from one to the next, with a
 // strip of the columns' names and counts above that jumps to one.
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, ref } from 'vue'
 import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef } from '@vasta/core'
 import { RANK_PROPERTY_ID, byRank, rankOf, rankBetween } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
@@ -15,6 +15,7 @@ import { openMenuAt, promptDialog } from '../lib/overlays.ts'
 import { groupObjects, movableField, NO_VALUE, placeInGroup, typesOf, type Group } from '../lib/query.ts'
 import { lastError, typesById } from '../lib/state.ts'
 import { isPhone } from '../lib/viewport.ts'
+import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectCard from './ObjectCard.vue'
 import ObjectChip from './ObjectChip.vue'
@@ -41,14 +42,22 @@ const types = computed(() => typesOf(props.typeIds))
 const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
 const laneField = computed(() => (props.board?.swimlanes && props.board.swimlanes !== props.groupField ? props.board.swimlanes : ''))
 
-const columns = computed<Group[]>(() => groupObjects(props.objects, props.groupField, types.value, true))
-const lanes = computed<Group[]>(() => (laneField.value ? groupObjects(props.objects, laneField.value, types.value, false) : [{ key: '', label: '', items: props.objects }]))
+const completion = inject(COMPLETION_FEEDBACK, undefined)
+function placedGroups(field: string, keepEmpty: boolean) {
+  const actual = new Map(props.objects.map((object) => [object.id, object]))
+  return groupObjects(props.objects.map((object) => completion?.placement(object) ?? object), field, types.value, keepEmpty)
+    .map((group) => ({ ...group, items: group.items.map((object) => actual.get(object.id)!) }))
+}
+const columns = computed<Group[]>(() => placedGroups(props.groupField, true))
+const lanes = computed<Group[]>(() => (laneField.value ? placedGroups(laneField.value, false) : [{ key: '', label: '', items: props.objects }]))
 
 /** The cards of a column in a lane, in the board's order. */
 function cell(column: Group, lane: Group): ObjectSummary[] {
   const inLane = new Set(lane.items.map((o) => o.id))
   const items = laneField.value ? column.items.filter((o) => inLane.has(o.id)) : column.items
-  return props.manual ? byRank(items) : items
+  if (!props.manual) return items
+  const actual = new Map(items.map((object) => [object.id, object]))
+  return byRank(items.map((object) => completion?.placement(object) ?? object)).map((object) => actual.get(object.id)!)
 }
 
 // A phone: one column at a time --------------------------------------------------
@@ -146,7 +155,8 @@ async function drop(cardId: Id, target: CardTarget) {
   // Reordering a column only makes sense in the manual order.
   if (sameCell && !props.manual) emit('manual')
   try {
-    const saved = await moveCard(card, target, columnAxis.value, laneAxis.value, cells)
+    const move = () => moveCard(card, target, columnAxis.value, laneAxis.value, cells)
+    const saved = await (completion ? completion.moving(card.id, move) : move())
     for (const object of saved) emit('moved', object)
   } catch (error) {
     lastError.value = (error as Error).message
@@ -296,7 +306,7 @@ async function addCard(column: Group, lane: Group) {
                     @contextmenu="onContextMenu($event, object)"
                     @dragstart.prevent
                   >
-                    <ObjectCard :object="object" :type="typeOf(object)" variant="kanban" :fields="cardFields" :hide="hiddenFields" />
+                    <ObjectCard :object="object" :type="typeOf(object)" variant="kanban" :fields="cardFields" :hide="hiddenFields" @moved="emit('moved', $event)" />
                   </div>
                 </template>
                 <div v-if="landing(column, lane) >= 0 && landing(column, lane) >= placed(column, lane).filter((p) => p.place >= 0).length" class="h-1 rounded-full bg-accent" />

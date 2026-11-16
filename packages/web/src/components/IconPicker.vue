@@ -3,6 +3,7 @@
 import { computed, onMounted, ref } from 'vue'
 import type { Icon } from '@vasta/core'
 import { loadPhosphor } from '../lib/icons.ts'
+import { mainButton } from '../lib/buttons.ts'
 import AppIcon from './AppIcon.vue'
 
 const props = defineProps<{ icon?: Icon | undefined; allowRemove?: boolean }>()
@@ -78,7 +79,7 @@ onMounted(() => {
       </div>
       <form class="mt-2 flex gap-1.5" @submit.prevent="custom.trim() && emit('pick', { kind: 'emoji', value: custom.trim() })">
         <input v-model="custom" class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint" placeholder="Paste any emoji (⌃⌘Space)" />
-        <button class="rounded-lg bg-ink px-3 text-sm text-surface disabled:opacity-40" :disabled="!custom.trim()">Use</button>
+        <button :class="mainButton" :disabled="!custom.trim()">Use</button>
       </form>
     </template>
   </div>

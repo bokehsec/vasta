@@ -2,15 +2,17 @@
 // One calendar entry: a compact chip (month cells, all-day row), a timed block (day columns) or a
 // row (the agenda layout: its time, empty all day, then its title, wrapped, and where it comes from).
 // Objects open on click; occurrences of repeating dates and external events emit `details`;
-// tasks get a checkbox. Entries the page allows move by dragging (after a long press on touch
+// tasks get a checkbox (one the agenda kept after a completion undoes it, exact status back).
+// Entries the page allows move by dragging (after a long press on touch
 // screens), and timed blocks resize by their bottom edge (lib/calendar-drag.ts). Pressing the
 // checkbox stays out of a page editor around an agenda, which would select the embed first.
 import { computed, inject } from 'vue'
 import type { CalendarEntry, CalendarSource } from '@vasta/core'
 import { entryTime, formatClock, isDone, setTaskDone } from '../../lib/calendar.ts'
 import { ENTRY_DRAGGING, drag, pressEntry } from '../../lib/calendar-drag.ts'
+import { ENTRY_COMPLETION } from '../../lib/completion-feedback.ts'
 import { blockTextClasses, chip } from '../../lib/colors.ts'
-import { displayTitle } from '../../lib/format.ts'
+import { displayTitle, formatDateShort } from '../../lib/format.ts'
 import { summaryOf, typesById } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
 import ObjectLink from '../ObjectLink.vue'
@@ -29,13 +31,23 @@ const emit = defineEmits<{ details: [entry: CalendarEntry, element: HTMLElement]
 const dragging = inject(ENTRY_DRAGGING, undefined)
 const movable = computed(() => !!dragging?.movable(props.entry))
 const resizable = computed(() => props.variant === 'block' && !!dragging?.resizable(props.entry))
+// The agenda keeps an entry whose task was completed (lib/completion-feedback.ts): it stays
+// checked and struck, and its checkbox undoes the completion instead of reopening the task.
+const kept = inject(ENTRY_COMPLETION, undefined)
 
 const summary = computed(() => (props.entry.objectId ? summaryOf(props.entry.objectId) : undefined))
 const type = computed(() => typesById.value.get(summary.value?.typeId ?? ''))
 const isTask = computed(() => type.value?.system === 'task' && props.entry.field === 'due')
 // A repeating task is done one occurrence at a time, the one it is at (completeRepeat): the others have no checkbox.
 const checkable = computed(() => isTask.value && (!props.entry.recurring || !!props.entry.current))
-const done = computed(() => isTask.value && isDone(type.value, summary.value?.props.status?.kind === 'select' ? summary.value.props.status.value : undefined))
+/** The completion this entry is kept for, when the view kept it (another occurrence is not it). */
+const retained = computed(() => (props.entry.objectId ? kept?.retained(props.entry) : undefined))
+const done = computed(() => isTask.value && (!!retained.value || isDone(type.value, summary.value?.props.status?.kind === 'select' ? summary.value.props.status.value : undefined)))
+/** A kept repeating task's note: the next occurrence's day, from the due date the completion moved it to. */
+const nextDue = computed(() => {
+  const value = retained.value?.repeat ? summary.value?.props.due : undefined
+  return value?.kind === 'date' ? value.value : undefined
+})
 const title = computed(() => (props.entry.kind === 'external' ? (props.entry.title ?? '') : displayTitle(summary.value, type.value)))
 const color = computed(() => (props.entry.kind === 'external' ? (props.source?.color ?? 'sky') : (type.value?.color ?? 'gray')))
 const fieldName = computed(() => (props.entry.field && props.entry.field !== 'date' ? type.value?.properties.find((p) => p.id === props.entry.field)?.name : undefined))
@@ -48,7 +60,9 @@ const tooltip = computed(() =>
 const lifted = computed(() => drag.active && drag.entry?.key === props.entry.key)
 
 function toggleDone() {
-  if (props.entry.objectId) void setTaskDone(props.entry.objectId, type.value, !done.value)
+  if (!props.entry.objectId) return
+  if (retained.value) kept!.undo(props.entry.objectId)
+  else void setTaskDone(props.entry.objectId, type.value, !done.value)
 }
 
 /** Single dates of objects open the object; the rest show details. */
@@ -114,7 +128,8 @@ function onContextMenu(event: MouseEvent) {
       <span v-if="variant === 'chip' && time && !continued" class="shrink-0 tabular-nums opacity-70">{{ time.split(' – ')[0] }}</span>
       <span v-if="variant === 'row'" class="min-w-0 break-words"
         ><span class="font-medium" :class="done ? 'line-through' : ''">{{ title }}</span
-        ><span v-if="origin" class="text-xs text-ink-faint"> · {{ origin }}</span></span
+        ><span v-if="origin" class="text-xs text-ink-faint"> · {{ origin }}</span
+        ><span v-if="nextDue" data-completion-note class="block text-xs text-ink-soft">Done this time · Next: {{ formatDateShort(nextDue) }}</span></span
       >
       <span v-else class="truncate font-medium" :class="done ? 'line-through' : ''">{{ title }}</span>
       <AppIcon v-if="entry.recurring" fallback="ph:repeat" :size="11" class="shrink-0 opacity-60" />

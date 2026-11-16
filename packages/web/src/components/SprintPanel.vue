@@ -6,6 +6,7 @@ import type { ObjectRecord, ObjectSummary, SelectPropertyDef } from '@vasta/core
 import { SPRINT_DATES_PROPERTY_ID, SPRINT_PROPERTY_ID, builtinTypeId, daysBetween, followingSprintDays, nextSprint, sprintDays } from '@vasta/core'
 import { createObject, dayKey } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
+import { greyButton } from '../lib/buttons.ts'
 import { onChange } from '../lib/events.ts'
 import { confirmDialog } from '../lib/overlays.ts'
 import { runServerQuery } from '../lib/query.ts'
@@ -107,10 +108,10 @@ async function planNext() {
       <div class="bg-blue-500" :style="{ width: share(counts.doing) }" />
     </div>
     <div class="mt-3 flex flex-wrap gap-2">
-      <button class="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-hover" @click="finish">
+      <button :class="greyButton" @click="finish">
         <AppIcon fallback="ph:flag-checkered" :size="14" /> Finish {{ word.toLowerCase() }}…
       </button>
-      <button v-if="!next" class="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-hover" @click="planNext">
+      <button v-if="!next" :class="greyButton" @click="planNext">
         <AppIcon fallback="ph:plus" :size="14" /> Next {{ word.toLowerCase() }}
       </button>
       <RouterLink v-if="taskType" :to="`/t/${taskType.id}`" class="ml-auto self-center text-sm text-accent hover:underline">Tasks</RouterLink>

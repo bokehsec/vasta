@@ -10,7 +10,7 @@ const openRows = new Set<() => void>()
 // or another row opening. Where a swipe ends is judged by distance and speed (lib/swipe.ts), so a
 // short deliberate swipe does not spring back. The direction is decided after 10px; a mostly
 // vertical move leaves it to the page's scrolling (touch-action: pan-y), and a touch starting at
-// the screen's left edge belongs to the sidebar drawer. After a swipe the finger lifting does not
+// the screen's left edge is left to the browser's Back swipe. After a swipe the finger lifting does not
 // also open the row.
 import { computed, onBeforeUnmount, ref } from 'vue'
 import type { Icon } from '@vasta/core'

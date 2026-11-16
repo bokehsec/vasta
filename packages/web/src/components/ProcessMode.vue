@@ -4,8 +4,9 @@
 // queue, Undo, explicit save, and reading position across interruptions.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Doc, ObjectSummary, ObjectType, QuickActionDef } from '@vasta/core'
-import { askOf, docToPlainText, holdAction, isClosedTask, nextStepFieldOf, parentFieldOf, quickActionsOf, reviewedAction, withReviewed, settlesTriage, triageDispositionActions, needsTriage } from '@vasta/core'
+import { askOf, docToPlainText, quickActionDoneName, holdAction, isClosedTask, nextStepFieldOf, parentFieldOf, quickActionsOf, reviewedAction, withReviewed, settlesTriage, triageDispositionActions, needsTriage } from '@vasta/core'
 import { api } from '../lib/api.ts'
+import { greyButton, mainButton } from '../lib/buttons.ts'
 import { rowFields, type ListField } from '../lib/columns.ts'
 import { onChange } from '../lib/events.ts'
 import { displayTitle } from '../lib/format.ts'
@@ -101,6 +102,7 @@ const textPreview = computed(() => shownTexts.value.length ? docToPlainText(show
 const stays = (action: QuickActionDef) => askOf(props.type, action)?.def.kind === 'text' || (triaging.value && !settlesTriage(props.type, action))
 
 const busy = ref(false)
+const saving = computed(() => busy.value && (!quickAsk.value || quickAsk.value.state.saving))
 async function act(action: QuickActionDef, anchor: HTMLElement | null) {
   const object = current.value
   if (!object || busy.value || addingStep.value) return
@@ -358,21 +360,21 @@ onBeforeUnmount(() => {
 })
 
 const summary = computed(() => summarize(props.session))
-const actionButton = 'flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-line px-3 py-2 text-[15px] font-medium text-ink hover:bg-hover disabled:opacity-50'
+const largeButton = 'min-h-12 min-w-0 max-md:min-h-12'
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-40 grid bg-black/30" :style="isPhone && keyboardInset ? { bottom: `${keyboardInset}px` } : undefined" :class="isPhone ? '' : 'place-items-center p-6'" data-process-mode>
+    <div class="fixed inset-0 z-40 grid" :style="isPhone && keyboardInset ? { bottom: `${keyboardInset}px` } : undefined" :class="isPhone ? 'bg-surface pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]' : 'place-items-center bg-black/30 p-6'" data-process-mode>
       <section
         ref="panel"
         tabindex="-1"
         aria-modal="true"
         class="flex min-h-0 w-full flex-col overflow-hidden bg-surface outline-none"
-        :class="isPhone ? 'h-full pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]' : 'max-h-[85vh] max-w-xl rounded-2xl border border-line shadow-2xl shadow-black/20'"
+        :class="isPhone ? 'h-full' : 'max-h-[85vh] max-w-xl rounded-2xl border border-line shadow-2xl shadow-black/20'"
         role="dialog"
         :aria-label="title"
-        :aria-busy="busy || undefined"
+        :aria-busy="saving || undefined"
       >
         <header class="flex shrink-0 items-start gap-2 px-4 pt-3">
           <div class="min-w-0 flex-1 py-1">
@@ -383,7 +385,7 @@ const actionButton = 'flex min-h-12 min-w-0 items-center justify-center gap-2 ro
         </header>
         <div class="flex shrink-0 items-center justify-between px-4 pt-1 text-xs text-ink-soft">
           <span>{{ triaging ? 'Decide what happens next' : 'Confirm or change the plan' }}</span>
-          <span class="tabular-nums" aria-live="polite" data-process-position>{{ busy ? 'Saving…' : `${done ? total : index + 1} of ${total}` }}</span>
+          <span class="tabular-nums" aria-live="polite" data-process-position>{{ saving ? 'Saving…' : `${done ? total : index + 1} of ${total}` }}</span>
         </div>
         <div class="mx-4 mt-2 h-[3px] shrink-0 rounded-full bg-line" aria-hidden="true">
           <div class="h-full rounded-full bg-ink-soft transition-[width] duration-200" :style="{ width: `${total ? (Math.min(index, total) / total) * 100 : 0}%` }" />
@@ -395,14 +397,14 @@ const actionButton = 'flex min-h-12 min-w-0 items-center justify-center gap-2 ro
           <p class="text-lg font-semibold">{{ triaging ? 'Triage session finished' : 'Review session finished' }}</p>
           <p class="text-sm text-ink-soft" data-process-summary>
             <template v-if="summary.outcomes.length || summary.skipped">
-              {{ [...summary.outcomes.map((o) => `${o.name} ${o.count}`), ...(summary.skipped ? [`${summary.skipped} left for later`] : [])].join(' · ') }}
+              {{ [...summary.outcomes.map((o) => `${quickActionDoneName(o.name)} ${o.count}`), ...(summary.skipped ? [`${summary.skipped} left for later`] : [])].join(' · ') }}
             </template>
             <template v-else>Nothing changed</template>
           </p>
           <div class="mt-2 flex flex-wrap justify-center gap-2">
-            <button class="h-11 rounded-lg border border-line px-3 text-sm text-ink-soft hover:bg-hover" data-process-back @click="move(-1)">Back</button>
-            <button v-if="summary.skipped" class="h-11 rounded-lg border border-line px-3 text-sm text-ink hover:bg-hover" data-process-review-skipped @click="reviewSkipped">{{ triaging ? 'Triage' : 'Review' }} {{ summary.skipped }} skipped</button>
-            <button class="h-11 rounded-lg bg-ink px-4 text-sm font-medium text-surface" data-process-finish @click="emit('end')">Back to {{ session.viewName }}</button>
+            <button :class="greyButton" data-process-back @click="move(-1)">Back</button>
+            <button v-if="summary.skipped" :class="greyButton" data-process-review-skipped @click="reviewSkipped">{{ triaging ? 'Triage' : 'Review' }} {{ summary.skipped }} skipped</button>
+            <button :class="mainButton" data-process-finish @click="emit('end')">Back to {{ session.viewName }}</button>
           </div>
         </div>
 
@@ -445,8 +447,8 @@ const actionButton = 'flex min-h-12 min-w-0 items-center justify-center gap-2 ro
                   <input ref="stepInput" v-model="stepTitle" class="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-ink-faint max-md:text-base" placeholder="A step" aria-label="New step" data-process-step />
                 </div>
                 <div class="flex justify-end gap-2">
-                  <button type="button" class="h-10 rounded-lg px-3 text-sm text-ink-soft hover:bg-hover" data-process-step-done @click="breakingDown = false">Done adding</button>
-                  <button type="submit" class="h-10 rounded-lg bg-ink px-4 text-sm font-medium text-surface disabled:opacity-50" :disabled="!stepTitle.trim() || addingStep" data-process-step-add>{{ addingStep ? 'Adding…' : 'Add step' }}</button>
+                  <button type="button" :class="greyButton" data-process-step-done @click="breakingDown = false">Done adding</button>
+                  <button type="submit" :class="mainButton" :disabled="!stepTitle.trim() || addingStep" data-process-step-add>{{ addingStep ? 'Adding…' : 'Add step' }}</button>
                 </div>
               </form>
             </template>
@@ -455,14 +457,13 @@ const actionButton = 'flex min-h-12 min-w-0 items-center justify-center gap-2 ro
           <!-- Two choices, followed by quiet navigation. Full-size targets leave room to read. -->
           <div ref="buttonBlock" class="shrink-0 border-t border-line px-4 pb-2 pt-3">
             <div v-if="current" class="grid grid-cols-2 gap-2">
-              <button v-if="reviewed" ref="reviewedButton" class="flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-xl bg-ink px-3 py-2 text-[15px] font-medium text-surface hover:opacity-90 disabled:opacity-50"
-                :class="!moreItems.length ? 'col-span-full' : ''" :disabled="blocked" data-process-reviewed @click="act(reviewed, $event.currentTarget as HTMLElement)">
+              <button v-if="reviewed" ref="reviewedButton" :class="[mainButton, largeButton, !moreItems.length ? 'col-span-full' : '']" :disabled="blocked" data-process-reviewed @click="act(reviewed, $event.currentTarget as HTMLElement)">
                 <span>{{ outcome ? 'Next task' : 'Keep as is & next' }}</span>
               </button>
-              <button v-if="triaging && nextStepAction" :class="actionButton" :disabled="blocked" :data-process-action="nextStepAction.id" @click="act(nextStepAction, $event.currentTarget as HTMLElement)">
+              <button v-if="triaging && nextStepAction" :class="[greyButton, largeButton]" :disabled="blocked" :data-process-action="nextStepAction.id" @click="act(nextStepAction, $event.currentTarget as HTMLElement)">
                 <AppIcon fallback="ph:pencil-simple-line" :size="18" class="shrink-0" /><span>{{ label(nextStepAction) }}</span>
               </button>
-              <button v-if="moreItems.length" ref="moreButton" :class="[actionButton, triaging ? 'bg-ink !text-surface hover:!bg-ink/90' : '', !reviewed && !(triaging && nextStepAction) ? 'col-span-full' : '']" :disabled="blocked" aria-haspopup="menu" data-process-more @click="openMore">
+              <button v-if="moreItems.length" ref="moreButton" :class="[triaging ? mainButton : greyButton, largeButton, !reviewed && !(triaging && nextStepAction) ? 'col-span-full' : '']" :disabled="blocked" aria-haspopup="menu" data-process-more @click="openMore">
                 {{ triaging ? 'Decide…' : 'Change plan…' }}<AppIcon fallback="ph:caret-down" :size="14" class="shrink-0" />
               </button>
               <p v-if="triaging && !outcome && !needsTriage(type, current)" class="col-span-full text-xs text-ink-soft">This task has already been organised. Skip it or choose a new plan.</p>

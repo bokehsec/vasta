@@ -5,6 +5,7 @@
 import { computed, ref } from 'vue'
 import type { CalendarEntry, DateValue } from '@vasta/core'
 import { dayKey } from '../../lib/actions.ts'
+import { deleteButton, greyButton, mainButton } from '../../lib/buttons.ts'
 import { changeEntryTimes, describeRepeat, entryTime, formatDayShort } from '../../lib/calendar.ts'
 import { displayTitle } from '../../lib/format.ts'
 import { lastError, summaryOf, typesById } from '../../lib/state.ts'
@@ -96,19 +97,19 @@ function save() {
         <input v-model="endTime" type="time" aria-label="End time" class="min-w-0 flex-1 rounded-lg bg-hover px-2 py-1 outline-none" />
       </div>
       <div class="flex justify-end gap-1.5">
-        <button type="button" class="rounded-md px-2 py-1 text-xs hover:bg-hover" @click="editing = false">Cancel</button>
-        <button type="submit" class="rounded-md bg-ink px-2 py-1 text-xs font-medium text-surface hover:opacity-90 disabled:opacity-40" :disabled="busy">Save</button>
+        <button type="button" :class="greyButton" @click="editing = false">Cancel</button>
+        <button type="submit" :class="mainButton" :disabled="busy">Save</button>
       </div>
     </form>
 
     <div v-else class="flex items-center gap-1.5 border-t border-line pt-2 text-xs">
-      <ObjectLink :id="entry.objectId!" class="flex items-center gap-1 rounded-md bg-hover px-2 py-1 text-ink-soft hover:text-ink" @click="emit('done')">
+      <ObjectLink :id="entry.objectId!" :class="greyButton" @click="emit('done')">
         <AppIcon fallback="ph:arrow-square-out" :size="13" /> Open
       </ObjectLink>
-      <button class="flex items-center gap-1 rounded-md bg-hover px-2 py-1 text-ink-soft hover:text-ink" @click="editing = true">
+      <button :class="greyButton" @click="editing = true">
         <AppIcon fallback="ph:clock" :size="13" /> Change time
       </button>
-      <button class="ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-red-600 hover:bg-hover disabled:opacity-40" :disabled="busy" @click="run({ cancelled: true })">
+      <button class="ml-auto" :class="deleteButton" :disabled="busy" @click="run({ cancelled: true })">
         <AppIcon fallback="ph:trash" :size="13" /> Delete
       </button>
     </div>

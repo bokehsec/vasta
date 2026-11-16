@@ -69,7 +69,7 @@ const original = {
 }
 await put(`/api/types/${taskType.id}`, {
   ...original,
-  views: [{ id: listId, name: 'Steps', layout: 'list', filter: filterOn(tag), showClosed: true }, { id: childId, name: 'StepChildren', layout: 'list', filter: filterOn(`Child one ${tag}`), showClosed: true }, ...original.views],
+  views: [{ id: listId, name: 'Steps', layout: 'list', filter: filterOn(tag) }, { id: childId, name: 'StepChildren', layout: 'list', filter: filterOn(`Child one ${tag}`) }, ...original.views],
 })
 await sleep(1500)
 

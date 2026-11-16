@@ -5,6 +5,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { openToday, sidebarItemPath, todayRoute } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
+import { greyButton } from '../lib/buttons.ts'
 import { startPage } from '../lib/start-page.ts'
 import { typesById, ui, workspace } from '../lib/state.ts'
 import AppIcon from '../components/AppIcon.vue'
@@ -34,10 +35,10 @@ function open(page: ReturnType<typeof startPage>) {
   <div v-if="!looking" class="mx-auto max-w-xl px-8 py-24 text-center">
     <h1 class="text-2xl font-semibold">{{ workspace.space?.name }}</h1>
     <div class="mt-6 flex justify-center gap-2 text-sm">
-      <button class="flex items-center gap-2 rounded-lg border border-line px-3 py-2 hover:bg-hover" @click="openToday">
+      <button :class="greyButton" @click="openToday">
         <AppIcon fallback="ph:calendar-check" /> Today
       </button>
-      <button class="flex items-center gap-2 rounded-lg border border-line px-3 py-2 hover:bg-hover" @click="ui.paletteOpen = true">
+      <button :class="greyButton" @click="ui.paletteOpen = true">
         <AppIcon fallback="ph:magnifying-glass" /> Search
       </button>
     </div>

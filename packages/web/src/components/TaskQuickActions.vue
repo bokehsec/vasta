@@ -5,12 +5,14 @@
 // under the button first. Closed tasks show none. The page or list applies the values; Undo in the
 // notice puts the previous ones back, saving them itself once this is gone (the next task opened in
 // the side pane, a row the list no longer shows).
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, inject, onBeforeUnmount, ref } from 'vue'
 import type { Id, ObjectRecord, ObjectType, PropertyValue, QuickActionDef } from '@vasta/core'
-import { STATUS_PROPERTY_ID, isClosedTask, quickActionsOf } from '@vasta/core'
+import { STATUS_PROPERTY_ID, askOf, isClosedTask, quickActionsOf } from '@vasta/core'
 import { setProperties } from '../lib/actions.ts'
+import { greyButton, tintedButton } from '../lib/buttons.ts'
 import { quickAsk, runQuickAction } from '../lib/quick-actions.ts'
 import AppIcon from './AppIcon.vue'
+import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
 
 /** `note`: said in the notice after an action instead of the runner's own (subtasks still open). */
 const props = defineProps<{
@@ -27,8 +29,13 @@ const props = defineProps<{
 
 const row = computed(() => props.variant === 'row')
 const actions = computed(() => quickActionsOf(props.type))
-const shown = computed(() => actions.value.length > 0 && !isClosedTask(props.type, props.object))
-/** On the page, the action that marks the task done (the first status that closes it as done) is the main one: filled, the rest quiet. */
+const completion = inject(COMPLETION_FEEDBACK, undefined)
+const retained = computed(() => completion?.entries.has(props.object.id) ?? false)
+const shown = computed(() => actions.value.length > 0 && (!isClosedTask(props.type, props.object) || retained.value))
+/**
+ * On the page, the action that marks the task done (the first status that closes it as done) is the
+ * main one: tinted, not filled, so it never reads as the task's current status.
+ */
 const mainId = computed(() => {
   const status = props.type.properties.find((p) => p.id === STATUS_PROPERTY_ID)
   const done = status?.kind === 'select' ? status.options.find((o) => o.status === 'done') : undefined
@@ -37,6 +44,8 @@ const mainId = computed(() => {
     action.changes.some((c) => c.field === STATUS_PROPERTY_ID && c.value.kind === 'value' && c.value.value.kind === 'select' && c.value.value.value.includes(done.id))
   return actions.value.find(setsDone)?.id
 })
+/** An action that asks for a value first says so, as in menus (Defer…). */
+const label = (action: QuickActionDef) => (askOf(props.type, action) ? `${action.name}…` : action.name)
 
 let mounted = true
 onBeforeUnmount(() => (mounted = false))
@@ -45,6 +54,7 @@ onBeforeUnmount(() => (mounted = false))
 const save = (id: Id, values: Record<Id, PropertyValue | undefined>) => (mounted && props.onSet && props.object.id === id ? props.onSet(values) : setProperties(id, values))
 
 function press(event: MouseEvent, action: QuickActionDef) {
+  if (retained.value) return
   // On its page the task's title is right there; a row's question names the task.
   void runQuickAction(props.type, props.object, action, { anchor: event.currentTarget as HTMLElement, save, note: props.note, ...(row.value ? {} : { scope: '' }) })
 }
@@ -55,10 +65,8 @@ const askingId = computed(() => {
   return ask?.anchor && root.value?.contains(ask.anchor) ? ask.action.id : undefined
 })
 
-// 44px tall on a phone (the design system's tap size).
-const pageButton = 'flex items-center gap-1.5 rounded-lg border px-2.5 py-1 max-md:min-h-11 max-md:px-3.5'
-const pageQuiet = 'border-line text-ink-soft hover:bg-hover hover:text-ink'
-const pageMain = 'border-ink bg-ink font-medium text-surface hover:opacity-90'
+// On the page buttons named with verbs: the main action tinted, the rest grey; none filled, so
+// none reads as the task's current state (lib/buttons.ts).
 const rowButton = 'grid h-7 w-7 place-items-center rounded-md text-ink-faint hover:bg-hover hover:text-ink max-md:h-9 max-md:w-9'
 </script>
 
@@ -68,13 +76,14 @@ const rowButton = 'grid h-7 w-7 place-items-center rounded-md text-ink-faint hov
     <button
       v-for="action in actions"
       :key="action.id"
-      :class="row ? rowButton : [pageButton, action.id === mainId ? pageMain : pageQuiet]"
+      :class="[row ? rowButton : action.id === mainId ? tintedButton : greyButton, retained ? 'opacity-40' : '']"
       :title="row ? action.name : undefined"
       :aria-expanded="askingId === action.id || undefined"
+      :aria-disabled="retained || undefined"
       :data-action="action.id"
       @click="press($event, action)"
     >
-      <AppIcon :icon="action.icon" fallback="ph:lightning" :size="row ? 17 : 15" /><template v-if="!row"> {{ action.name }}</template>
+      <AppIcon :icon="action.icon" fallback="ph:lightning" :size="row ? 17 : 15" /><template v-if="!row"> {{ label(action) }}</template>
     </button>
   </div>
 </template>

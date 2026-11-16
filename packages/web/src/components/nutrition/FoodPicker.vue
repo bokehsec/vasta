@@ -26,6 +26,7 @@ import {
   type PropertyValue,
 } from '@vasta/core'
 import { createObject, dayKey } from '../../lib/actions.ts'
+import { greyButton, mainButton } from '../../lib/buttons.ts'
 import { dailyNotesBetween, entryTime, formatGrams, formatKcal, logEntry, meals, nutritionTypeId, writeEntries } from '../../lib/nutrition.ts'
 import { lastError } from '../../lib/state.ts'
 import { isTouch } from '../../lib/viewport.ts'
@@ -251,8 +252,8 @@ const small = 'w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 tex
         <input v-model="form.portionGrams" :class="small" class="w-20" inputmode="decimal" placeholder="g" aria-label="Portion grams" /> g
       </div>
       <div class="flex gap-2">
-        <button type="submit" class="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-40" :disabled="busy || !form.name.trim()">Create food</button>
-        <button type="button" class="rounded-lg px-3 py-1.5 text-sm text-ink-soft hover:bg-hover" @click="creating = false">Cancel</button>
+        <button type="submit" :class="mainButton" :disabled="busy || !form.name.trim()">Create food</button>
+        <button type="button" :class="greyButton" @click="creating = false">Cancel</button>
       </div>
       <p class="text-xs text-ink-faint">Without kcal it is logged as "needs nutrition data"; fill it in on the food's page later.</p>
     </form>
@@ -287,7 +288,7 @@ const small = 'w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 tex
         </button>
       </div>
       <div class="flex items-center gap-3">
-        <button type="submit" class="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-40 max-md:px-4 max-md:py-2" :disabled="busy || !amount.trim() || preview.error">Log</button>
+        <button type="submit" :class="mainButton" :disabled="busy || !amount.trim() || preview.error">Log</button>
         <span class="text-sm" :class="preview.error ? 'text-red-600 dark:text-red-400' : 'tabular-nums text-ink-soft'">{{ preview.text }}</span>
       </div>
     </form>

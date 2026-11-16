@@ -5,6 +5,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import type { Id, ObjectRecord } from '@vasta/core'
 import { addComment, commentsOf, deleteComment, editComment } from '@vasta/core'
+import { greyButton, mainButton } from '../lib/buttons.ts'
 import { api } from '../lib/api.ts'
 import { formatRelative } from '../lib/format.ts'
 import { meId, people, personName, sharedSpace } from '../lib/people.ts'
@@ -175,8 +176,8 @@ function pieces(text: string): Piece[] {
               @keydown.esc="editing = null"
             />
             <div class="mt-1 flex gap-2 text-sm">
-              <button type="submit" class="rounded-lg bg-ink px-2.5 py-1 font-medium text-surface">Save</button>
-              <button type="button" class="rounded-lg px-2.5 py-1 text-ink-soft hover:bg-hover" @click="editing = null">Cancel</button>
+              <button type="submit" :class="mainButton">Save</button>
+              <button type="button" :class="greyButton" @click="editing = null">Cancel</button>
             </div>
           </form>
           <p v-else class="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink"><template v-for="(piece, i) in pieces(comment.text)" :key="i"><a v-if="piece.kind === 'link'" :href="piece.text" target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">{{ piece.text }}</a><span v-else-if="piece.kind === 'mention'" class="rounded bg-accent/10 px-0.5 font-medium text-accent">{{ piece.text }}</span><template v-else>{{ piece.text }}</template></template></p>
@@ -211,7 +212,7 @@ function pieces(text: string): Piece[] {
           </li>
         </ul>
         <div v-if="draft.trim()" class="mt-1.5 flex items-center gap-2">
-          <button type="submit" class="rounded-lg bg-ink px-3 py-1 text-sm font-medium text-surface disabled:opacity-40" :disabled="sending">Comment</button>
+          <button type="submit" :class="mainButton" :disabled="sending">Comment</button>
           <span class="text-xs text-ink-faint">⌘ Enter</span>
         </div>
       </div>
