@@ -1,7 +1,7 @@
 // Habit progress in the test env: a daily habit, one on Mon/Wed/Fri, one 3 times a week and a paused
 // one, with check-ins over the last weeks; then the Habits page: the weekly habit's "x of 3 this
 // week" on Today, a day off faded in the Tracker, the Progress tab's headline and rows (checked
-// against core's habitReport), the range switch kept on reload, and (on 5184, the built app) the
+// against core's habitReport), the range switch kept on reload, its chart choice and each habit's weeks, and (on 5184, the built app) the
 // same numbers after reloading offline. SHOTS=<dir> saves light and dark screenshots; PHONE=1 a 390px width (Today left out).
 // The Tracker's own progress is checked too: where it shows (above, beside, off), the charts and
 // the range are picked in Type settings (kept on the type, so they survive a reload).
@@ -204,7 +204,8 @@ async function checkNumbers(weeks, known) {
   for (const row of report.habits) {
     const title = habits.find((h) => h.id === row.id)?.title
     if (!title) continue
-    const want = `${row.total.done} of ${row.total.expected} ${pct(row.total)}`
+    // A phone leaves out the "x of y" column (room for each habit's weeks): just the percent.
+    const want = process.env.PHONE ? ` ${pct(row.total)}` : `${row.total.done} of ${row.total.expected} ${pct(row.total)}`
     await until(async () => (await text(main.locator('[data-progress-row]', { hasText: title }))).endsWith(want), `${title}: ${want}`)
   }
   if (report.total.done !== report.habits.filter((r) => !r.paused).reduce((s, r) => s + r.total.done, 0)) throw new Error('paused habit in the total')
@@ -225,6 +226,19 @@ await until(async () => (await get(`/api/types/${habitType.id}`)).habits?.weeks 
 await page.reload()
 await until(async () => (await page.locator('[data-range="13"]').getAttribute('aria-pressed').catch(() => null)) === 'true', '13 weeks kept')
 await checkNumbers(13)
+
+step('Progress: the chart is picked on the tab and saved on the type')
+if (!(await main.locator('[data-progress-row] [data-habit-weeks] rect').count())) throw new Error('no weeks column')
+for (const chart of ['line', 'calendar', 'counts', 'weeks']) {
+  if (process.env.PHONE) {
+    await page.locator('[data-report-chart-button]').click()
+    await page.locator(`[data-chart-picker="report"] [data-chart="${chart}"]`).click()
+  } else await page.locator(`[data-chart-picker="report"] [data-chart="${chart}"]`).click()
+  await until(async () => (await main.locator(`[data-report-chart][data-chart="${chart}"]`).count()) === 1, `report chart ${chart}`)
+  await until(async () => (await get(`/api/types/${habitType.id}`)).habits?.report === chart, `report ${chart} saved on the type`)
+  if (process.env.SHOTS && chart !== 'weeks') await main.locator('[data-habit-progress]').screenshot({ path: path.join(process.env.SHOTS, `habits-report-${chart}${process.env.PHONE ? '-phone' : ''}.png`) })
+}
+if (await page.getByText('did not take').count()) throw new Error('the server refused a change')
 
 if (process.env.SHOTS) {
   await page.screenshot({ path: path.join(process.env.SHOTS, `habits-progress${process.env.PHONE ? '-phone' : ''}-light.png`), fullPage: true })

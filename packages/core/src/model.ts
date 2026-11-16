@@ -105,7 +105,7 @@ export interface SubtaskSettings {
 /**
  * A habit type's progress on the Habits Tracker (Type settings › Progress): where it shows (off, a
  * strip above the habits, or a panel beside them; below them on a phone), what the strip and panel
- * draw, and over how many weeks. Kept on the type, so every device shows the same; unset parts fall
+ * draw, the Progress tab's chart, and over how many weeks. Kept on the type, so every device shows the same; unset parts fall
  * back to `HABIT_PROGRESS_DEFAULT`.
  */
 export type HabitProgressPlace = 'off' | 'above' | 'beside'
@@ -115,6 +115,8 @@ export interface HabitTypeSettings {
   place: HabitProgressPlace
   strip: HabitStripChart
   panel: HabitPanelChart
+  /** The Progress tab's chart (the same four as the panel, drawn larger). */
+  report: HabitPanelChart
   weeks: 4 | 8 | 13
 }
 
