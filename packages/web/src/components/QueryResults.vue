@@ -16,7 +16,8 @@ import { subtaskMenuItems } from '../lib/subtasks.ts'
 import { selectMenuItem } from '../lib/selection.ts'
 
 /** `readonly`: property cells of a table do not edit (a whiteboard card, a page that cannot be edited). */
-const props = defineProps<{ query: QueryDef; parentId?: Id; limit?: number; readonly?: boolean }>()
+/** `bare`: drawn inside something that frames it already (ObjectCollection). */
+const props = defineProps<{ query: QueryDef; parentId?: Id; limit?: number; readonly?: boolean; bare?: boolean }>()
 const emit = defineEmits<{ table: [table: TableSettings]; board: [board: BoardSettings] }>()
 
 const results = ref<ObjectSummary[]>([])
@@ -119,6 +120,7 @@ defineExpose({ count: computed(() => results.value.length), empty })
         :quick-actions="query.quickActions"
         :flat="query.flat"
         :readonly="readonly"
+        :bare="bare"
         @table="emit('table', $event)"
         @board="emit('board', $event)"
         @moved="moved({ ...$event, preview: '' })"

@@ -2,7 +2,7 @@
 // The Habits page's Tracker view: one row per habit, the last two weeks (one on phones) to check
 // off, and each habit's streak and last-30-days rate. Paused habits sit at the bottom, faded.
 import { computed, toRef } from 'vue'
-import { addDays, habitStats, habitTarget, habitUnit, isHabitDone, isHabitPaused, isHabitScheduled, type ObjectSummary } from '@vasta/core'
+import { addDays, habitStats, habitTarget, habitUnit, isHabitDone, isHabitDue, isHabitPaused, type ObjectSummary } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { habitColor, useFoodHabits } from '../lib/habits.ts'
@@ -41,7 +41,7 @@ const rows = computed(() => {
             <div class="tabular-nums" :class="day === today ? 'font-semibold' : ''">{{ Number(day.slice(8)) }}</div>
           </th>
           <th class="w-16 pb-2 pl-3 text-right font-medium">Streak</th>
-          <th class="w-16 pb-2 pl-3 text-right font-medium max-sm:hidden">30 days</th>
+          <th class="w-16 pb-2 pl-3 text-right font-medium max-sm:hidden" title="Weekly habits: this week and the four before">30 days</th>
         </tr>
       </thead>
       <tbody>
@@ -55,10 +55,10 @@ const rows = computed(() => {
             </ObjectLink>
           </td>
           <td v-for="day in days" :key="day" class="border-t border-line/70 py-1.5 text-center">
-            <HabitCheck :habit="row.habit" :day="day" :size="24" square class="mx-auto" :class="isHabitScheduled(row.habit, day) || isHabitDone(row.habit, day) ? '' : 'opacity-40'" />
+            <HabitCheck :habit="row.habit" :day="day" :size="24" square class="mx-auto" :class="isHabitDue(row.habit, day) || isHabitDone(row.habit, day) ? '' : 'opacity-40'" />
           </td>
           <td class="border-t border-line/70 py-1.5 pl-3 text-right tabular-nums">
-            <span v-if="row.stats.current" class="inline-flex items-center gap-0.5 text-orange-600 dark:text-orange-400"><AppIcon fallback="ph:fire-fill" :size="12" />{{ row.stats.current }}</span>
+            <span v-if="row.stats.current" class="inline-flex items-center gap-0.5 text-orange-600 dark:text-orange-400"><AppIcon fallback="ph:fire-fill" :size="12" />{{ row.stats.current }}<template v-if="row.stats.streakUnit === 'week'">&nbsp;wk</template></span>
             <span v-else class="text-ink-faint">0</span>
           </td>
           <td class="border-t border-line/70 py-1.5 pl-3 text-right tabular-nums text-ink-soft max-sm:hidden">{{ Math.round(row.stats.rate30 * 100) }}%</td>

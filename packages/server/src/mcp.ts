@@ -79,7 +79,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     {
       title: 'List habits',
       description:
-        "The space's habits: whether each is done on a day (today by default; for habits with a daily goal, the amount), the weekdays it repeats on, streaks, this week's and the last 30 days' rates, and the last days (recent, 7 by default).",
+        "The space's habits: whether each is done on a day (today by default; for habits with a daily goal, the amount), the weekdays it repeats on (or timesPerWeek for a habit counted by the week: any days, streaks in weeks, thisWeek as days done/times a week, last5Weeks instead of last30Days), streaks, this week's and the last 30 days' rates, and the last days (recent, 7 by default).",
       inputSchema: { space, day: z.string().optional().describe('YYYY-MM-DD; today by default'), recent: z.number().int().min(0).max(60).optional().describe('How many past days to list (0–60)') },
       annotations: READ,
     },

@@ -357,8 +357,8 @@ function embedDisplays(view: EditorView, pos: number, node: PMNode): MenuItem[] 
 }
 
 /**
- * "Show as" for an embedded query: the full frame (header bar and border) or compact (just the
- * results). Compact has no header, so its Edit query and Open query live here; they reach the
+ * "Show as" for an embedded query: full (its title line over the results, no frame) or compact
+ * (just the results). Compact has no header, so its Edit query and Open query live here; they reach the
  * embed as an event on its DOM node (QueryEmbed listens), which keeps the router out of the editor.
  */
 function queryDisplays(view: EditorView, pos: number, node: PMNode): MenuItem[] {

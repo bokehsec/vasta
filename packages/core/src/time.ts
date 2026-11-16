@@ -25,6 +25,12 @@ export function addDays(day: string, days: number): string {
   return date.toISOString().slice(0, 10)
 }
 
+/** The Monday of a day's week. */
+export function mondayOf(day: string): string {
+  const weekday = new Date(`${day}T00:00:00Z`).getUTCDay()
+  return addDays(day, -((weekday + 6) % 7))
+}
+
 /** Whole days from one day to another (negative when `to` is earlier). */
 export function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`)) / 86_400_000)

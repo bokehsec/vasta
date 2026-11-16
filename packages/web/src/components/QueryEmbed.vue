@@ -3,7 +3,7 @@
 // here changes the query object itself, so every page embedding it follows. Compact shows only the
 // results: no header or border, and Edit query comes from the block menu (blocks.ts). A compact
 // one whose query found nothing is hidden (data-empty, as a compact block's; style.css), while its
-// settings are open or the query failed it is not.
+// settings are open or the query failed it is not. Neither draws a frame: the page is the frame.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Id, QueryDef } from '@vasta/core'
 import { api } from '../lib/api.ts'
@@ -63,19 +63,21 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="root" class="vasta-ui" :class="compact ? '' : 'rounded-xl border border-line bg-surface'" :data-empty="hidden ? '' : undefined">
-    <header v-if="!compact" class="flex items-center gap-2 px-3 py-2" data-drag-handle>
+  <!-- Frameless: the title reads as a small heading in the page, the results sit under it with
+       no box of their own, and Edit query shows on hover (always on touch) or while editing. -->
+  <div ref="root" class="vasta-ui group/query" :data-empty="hidden ? '' : undefined">
+    <header v-if="!compact" class="flex min-h-8 items-center gap-2 pb-1" data-drag-handle>
       <AppIcon :icon="summary?.icon ?? type?.icon" fallback="ph:funnel" class="text-ink-soft" />
       <ObjectLink :id="objectId" class="truncate text-sm font-semibold hover:underline">{{ displayTitle(summary, type) }}</ObjectLink>
       <button
         class="ml-auto flex items-center gap-1 rounded-md px-1.5 py-1 text-xs"
-        :class="editing ? 'bg-hover text-ink' : 'text-ink-faint hover:bg-hover hover:text-ink'"
+        :class="editing ? 'bg-hover text-ink' : 'text-ink-faint opacity-0 hover:bg-hover hover:text-ink focus-visible:opacity-100 group-hover/query:opacity-100 [@media(hover:none)]:opacity-100'"
         @click="editing = !editing"
       >
         <AppIcon fallback="ph:sliders-horizontal" :size="13" /> {{ editing ? 'Done' : 'Edit query' }}
       </button>
     </header>
-    <div v-if="editing && !(compact && readonly)" :class="compact ? 'mb-2 rounded-xl border border-line bg-surface px-3 py-3' : 'border-t border-line px-3 py-3'">
+    <div v-if="editing && !(compact && readonly)" class="mb-2 rounded-xl border border-line bg-surface px-3 py-3">
       <!-- Compact has no header, so the settings carry their own Done -->
       <div v-if="compact" class="mb-2 flex justify-end">
         <button class="flex items-center gap-1 rounded-md bg-hover px-1.5 py-1 text-xs text-ink" @click="editing = false">
@@ -84,8 +86,8 @@ onBeforeUnmount(() => {
       </div>
       <QueryEditor :query="query" @update="edit" />
     </div>
-    <div v-show="!hidden" :class="compact ? '' : 'border-t border-line px-3 py-3'">
-      <QueryResults ref="results" :query="query" :parent-id="parentId" :limit="24" :readonly="readonly" @table="edit({ ...query, table: $event })" @board="edit({ ...query, board: $event })" />
+    <div v-show="!hidden">
+      <QueryResults ref="results" :query="query" :parent-id="parentId" :limit="24" :readonly="readonly" bare @table="edit({ ...query, table: $event })" @board="edit({ ...query, board: $event })" />
     </div>
   </div>
 </template>

@@ -32,6 +32,8 @@ export const SPRINT_PROPERTY_ID = 'sprint'
 /** A habit's weekdays ("Repeat on"; none means every day) and whether it is paused. */
 export const HABIT_DAYS_PROPERTY_ID = 'days'
 export const HABIT_PAUSED_PROPERTY_ID = 'paused'
+/** Times a week (1 to 7): set, the habit counts by the week, on any days ("3 a week"). */
+export const HABIT_PER_WEEK_PROPERTY_ID = 'perweek'
 /** A numeric goal per day ("8", with the unit "glasses"); none means done or not done. */
 export const HABIT_TARGET_PROPERTY_ID = 'target'
 export const HABIT_UNIT_PROPERTY_ID = 'unit'
@@ -150,6 +152,7 @@ const specs: Record<SystemTypeKey, BuiltinSpec> = {
     icon: 'ph:target',
     properties: [
       { id: HABIT_DAYS_PROPERTY_ID, kind: 'select', name: 'Repeat on', multiple: true, options: weekdays.map(([id, label]) => ({ id, label, color: 'gray' })) },
+      { id: HABIT_PER_WEEK_PROPERTY_ID, kind: 'number', name: 'Times a week' },
       { id: HABIT_TARGET_PROPERTY_ID, kind: 'number', name: 'Daily goal' },
       { id: HABIT_UNIT_PROPERTY_ID, kind: 'text', name: 'Unit' },
       { id: HABIT_REMIND_PROPERTY_ID, kind: 'text', name: 'Remind at' },
@@ -261,6 +264,7 @@ export const ADDED_BUILTIN_PROPERTIES: { key: string; system: SystemTypeKey; ids
   { key: 'task-assignee-2026-10-21', system: 'task', ids: [ASSIGNEE_PROPERTY_ID], after: 'due' },
   { key: 'task-blocked-2026-10-21', system: 'task', ids: [BLOCKED_PROPERTY_ID], after: 'priority' },
   { key: 'task-reviewed-2026-11-14', system: 'task', ids: [REVIEWED_PROPERTY_ID], after: BLOCKED_PROPERTY_ID },
+  { key: 'habit-per-week-2026-11-15', system: 'habit', ids: [HABIT_PER_WEEK_PROPERTY_ID], after: HABIT_DAYS_PROPERTY_ID },
 ]
 
 /** A built-in type's property as it is made today, to add to an older copy of the type. */

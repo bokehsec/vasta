@@ -8,6 +8,10 @@ GitHub release page.
 
 ### Added
 
+- **Habits by the week.** A habit has a new field, **Times a week**: set it to 3 and the habit counts
+  by the week (Monday to Sunday), on any days. Today's list, the Tracker, the habit's page,
+  reminders and the agent tools say "2 of 3 this week", count streaks in weeks, and stop asking
+  once the week's goal is met. A space that already had a field with this id keeps its own.
 - **Triage and review as two steps of one routine.** A task type's page has one **Triage & review**
   button instead of a Review button on every view. It offers two queues across the whole space,
   whatever view or filters you are on: **Triage incoming** (tasks with no status or an incoming one,

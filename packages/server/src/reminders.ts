@@ -20,7 +20,7 @@ import {
   habitStats,
   isHabitDone,
   isHabitPaused,
-  isHabitScheduled,
+  isHabitDue,
   instantOf,
   isNutritionOn,
   nutritionDays,
@@ -292,13 +292,14 @@ export class ReminderService {
           for (const day of days) {
             const [year, month, date] = day.split('-').map(Number) as [number, number, number]
             const at = instantOf({ year, month, day: date, hour, minute, second: 0 }, timeZone)
-            if (!inWindow(at) || !isHabitScheduled(habit, day) || isHabitDone(habit, day)) continue
-            const streak = habitStats(habit, day).current
+            if (!inWindow(at) || !isHabitDue(habit, day) || isHabitDone(habit, day)) continue
+            const stats = habitStats(habit, day)
+            const streak = stats.current
             const amount = habitAmountText(habit, day)
             reminders.push({
               key: `habit:${habit.id}:${day}`,
               title: habit.title || 'A habit',
-              message: [amount ? `${amount} so far today` : 'Not done yet today', streak ? `${streak} in a row` : ''].filter(Boolean).join(' · '),
+              message: [amount ? `${amount} so far today` : 'Not done yet today', stats.weekly ? `${stats.weekDone} of ${stats.weekly} this week` : '', streak ? (stats.streakUnit === 'week' ? `${streak} ${streak === 1 ? 'week' : 'weeks'} in a row` : `${streak} in a row`) : ''].filter(Boolean).join(' · '),
               tag: 'alarm_clock',
               kind: 'habits',
               ...this.link(habit.id),

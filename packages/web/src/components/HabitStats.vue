@@ -3,7 +3,7 @@
 // year), one square per day in the habit's color, fainter for a goal partly reached. A click marks
 // a day (a goal: adds 1); a right click asks for the amount.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { addDays, habitFoodRule, habitProgress, habitStats, habitTarget, habitUnit, habitValue, isHabitDone, isHabitScheduled, type ObjectRecord } from '@vasta/core'
+import { addDays, habitFoodRule, habitProgress, habitStats, habitTarget, habitUnit, habitValue, isHabitDone, isHabitDue, isHabitScheduled, type ObjectRecord } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { askHabitAmount, formatAmount, habitAmountLabel, habitColor, setHabitAmount, stepHabit, useFoodHabits } from '../lib/habits.ts'
@@ -62,7 +62,7 @@ const monthLabels = computed(() => {
 /** A square: the habit's color fills it from the bottom as far as the day got (all of it once done). */
 function cellClass(day: string) {
   if (day > today) return 'invisible'
-  if (day < stats.value.since || !isHabitScheduled(habit.value, day)) return 'bg-hover/50 hover:ring-1 hover:ring-line'
+  if (day < stats.value.since || !isHabitDue(habit.value, day)) return 'bg-hover/50 hover:ring-1 hover:ring-line'
   return 'bg-hover hover:ring-1 hover:ring-line-strong'
 }
 
@@ -85,6 +85,8 @@ const details = computed(() => {
       ? 'Before this habit began'
       : !isHabitScheduled(habit.value, day)
         ? 'Day off'
+        : !isHabitDue(habit.value, day)
+          ? 'Week’s goal met'
         : progress > 0
           ? `${Math.round(progress * 100)}% of the goal`
           : day === today
@@ -93,11 +95,14 @@ const details = computed(() => {
   return { date: longDay.format(utc(day)), status, amount: target.value ? habitAmountLabel(habit.value, day) : '', done: isHabitDone(habit.value, day) }
 })
 
+/** A streak, in weeks for a habit counted by the week. */
+const streak = (count: number) => (stats.value.streakUnit === 'week' ? `${count} wk` : count)
+
 const cards = computed(() => [
-  { label: 'Current streak', value: stats.value.current, icon: 'ph:fire', tint: 'text-orange-500' },
-  { label: 'Best streak', value: stats.value.best, icon: 'ph:trophy', tint: 'text-amber-500' },
+  { label: 'Current streak', value: streak(stats.value.current), icon: 'ph:fire', tint: 'text-orange-500' },
+  { label: 'Best streak', value: streak(stats.value.best), icon: 'ph:trophy', tint: 'text-amber-500' },
   { label: 'This week', value: `${stats.value.weekDone}/${stats.value.weekScheduled}`, icon: 'ph:calendar-check', tint: 'text-sky-500' },
-  { label: 'Last 30 days', value: `${Math.round(stats.value.rate30 * 100)}%`, icon: 'ph:chart-line-up', tint: 'text-emerald-500' },
+  { label: stats.value.weekly ? 'Last 5 weeks' : 'Last 30 days', value: `${Math.round(stats.value.rate30 * 100)}%`, icon: 'ph:chart-line-up', tint: 'text-emerald-500' },
   target.value
     ? { label: 'Average a day', value: `${formatAmount(stats.value.average30)}${unit.value ? ` ${unit.value}` : ''}`, icon: 'ph:gauge', tint: 'text-violet-500' }
     : { label: 'Times done', value: stats.value.total, icon: 'ph:check-circle', tint: 'text-violet-500' },
@@ -123,7 +128,9 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
           </button>
         </div>
       </div>
-      <span v-if="!isHabitScheduled(habit, today)" class="text-xs text-ink-faint">Today is a day off for this habit.</span>
+      <span v-if="stats.weekly && !isHabitDue(habit, today)" class="text-xs text-ink-faint">This week’s goal is met.</span>
+      <span v-else-if="!isHabitScheduled(habit, today)" class="text-xs text-ink-faint">Today is a day off for this habit.</span>
+      <span v-else-if="stats.weekly" class="text-xs text-ink-faint">{{ stats.weekly }} a week, on any days.</span>
       <span v-if="fromFood" class="flex items-center gap-1 text-xs text-ink-faint" data-habit-from-food><AppIcon fallback="ph:bowl-food" :size="13" /> Done from what you log in Food</span>
     </div>
 

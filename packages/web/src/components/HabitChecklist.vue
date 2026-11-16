@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // The habits of a day, to check off: a column beside the calendar's day (Today), or a row of pills
-// in a daily note. Days a habit does not repeat on show it faded; paused habits are left out.
+// in a daily note. Days a habit does not repeat on show it faded (a weekly habit: once its week is
+// full); paused habits are left out.
 import { computed } from 'vue'
-import { habitStats, isHabitDone, isHabitPaused, isHabitScheduled } from '@vasta/core'
+import { habitStats, isHabitDone, isHabitDue, isHabitPaused } from '@vasta/core'
 import { createObject, dayKey } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
 import { askHabitAmount, habitAmountLabel, habitColor, stepHabit, useHabits } from '../lib/habits.ts'
@@ -18,13 +19,18 @@ const { habits, loaded, load } = useHabits()
 const rows = computed(() =>
   habits.value
     .filter((h) => !isHabitPaused(h))
-    .map((habit) => ({
-      habit,
-      scheduled: isHabitScheduled(habit, props.day),
-      done: isHabitDone(habit, props.day),
-      amount: habitAmountLabel(habit, props.day),
-      streak: habitStats(habit, dayKey()).current,
-    }))
+    .map((habit) => {
+      const week = habitStats(habit, props.day)
+      return {
+        habit,
+        scheduled: isHabitDue(habit, props.day),
+        done: isHabitDone(habit, props.day),
+        amount: habitAmountLabel(habit, props.day),
+        streak: habitStats(habit, dayKey()).current,
+        // A weekly habit: "2 of 3 this week" where a daily one shows its streak.
+        week: week.weekly ? `${week.weekDone} of ${week.weekly} this week` : '',
+      }
+    })
     .sort((a, b) => Number(b.scheduled) - Number(a.scheduled))
 )
 const doneCount = computed(() => rows.value.filter((r) => r.scheduled && r.done).length)
@@ -63,7 +69,8 @@ async function newHabit() {
           {{ row.habit.title || 'Untitled' }}
         </ObjectLink>
         <span v-if="row.amount" class="shrink-0 text-[11px] tabular-nums text-ink-faint">{{ row.amount }}</span>
-        <span v-if="!row.scheduled" class="text-[11px] text-ink-faint">day off</span>
+        <span v-if="row.week" class="shrink-0 text-[11px] tabular-nums text-ink-faint">{{ row.week }}</span>
+        <span v-else-if="!row.scheduled" class="text-[11px] text-ink-faint">day off</span>
         <span v-else-if="row.streak > 1" class="flex items-center gap-0.5 text-[11px] tabular-nums text-orange-600 dark:text-orange-400" :title="`${row.streak} in a row`">
           <AppIcon fallback="ph:fire-fill" :size="11" />{{ row.streak }}
         </span>
@@ -86,7 +93,8 @@ async function newHabit() {
         <AppIcon :fallback="row.done ? 'ph:check-circle-fill' : 'ph:circle'" :size="15" />
         {{ row.habit.title || 'Untitled' }}
         <span v-if="row.amount" class="text-xs tabular-nums opacity-70">{{ row.amount }}</span>
-        <span v-if="row.scheduled && row.streak > 1" class="flex items-center text-[11px] tabular-nums opacity-70"><AppIcon fallback="ph:fire-fill" :size="10" />{{ row.streak }}</span>
+        <span v-if="row.week" class="text-[11px] tabular-nums opacity-70">{{ row.week }}</span>
+        <span v-else-if="row.scheduled && row.streak > 1" class="flex items-center text-[11px] tabular-nums opacity-70"><AppIcon fallback="ph:fire-fill" :size="10" />{{ row.streak }}</span>
       </button>
     </div>
 

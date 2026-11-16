@@ -34,9 +34,10 @@ import {
   habitUnit,
   habitValue,
   habitWeekdays,
+  habitWeeklyTarget,
   isHabitDone,
   isHabitPaused,
-  isHabitScheduled,
+  isHabitDue,
   newObject,
   parseProperties,
   querySpace,
@@ -997,21 +998,23 @@ export class AgentTools {
     const stats = habitStats(habit, this.captures.today())
     const target = habitTarget(habit)
     const weekdays = habitWeekdays(habit)
+    const weekly = habitWeeklyTarget(habit)
     return {
       id: habit.id,
       title: habit.title,
       url: this.url(habit.id),
-      ...(weekdays.length ? { repeatsOn: weekdays } : { repeatsOn: 'every day' }),
+      ...(weekly ? { timesPerWeek: weekly } : weekdays.length ? { repeatsOn: weekdays } : { repeatsOn: 'every day' }),
       ...(target ? { dailyGoal: target, unit: habitUnit(habit) || undefined } : {}),
       ...(habitFoodRule(habit) ? { fromFood: habitFoodRule(habit) } : {}),
       ...(habitRemindAt(habit) ? { remindAt: habitRemindAt(habit) } : {}),
       ...(isHabitPaused(habit) ? { paused: true } : {}),
-      day: { day, scheduled: isHabitScheduled(habit, day), done: isHabitDone(habit, day), ...(target ? { amount: habitValue(habit, day) } : {}) },
+      day: { day, scheduled: isHabitDue(habit, day), done: isHabitDone(habit, day), ...(target ? { amount: habitValue(habit, day) } : {}) },
       stats: {
         currentStreak: stats.current,
         bestStreak: stats.best,
+        streakUnit: stats.streakUnit,
         thisWeek: `${stats.weekDone}/${stats.weekScheduled}`,
-        last30Days: `${Math.round(stats.rate30 * 100)}%`,
+        ...(weekly ? { last5Weeks: `${Math.round(stats.rate30 * 100)}%` } : { last30Days: `${Math.round(stats.rate30 * 100)}%` }),
         timesDone: stats.total,
         ...(target ? { averagePerDay: Math.round(stats.average30 * 10) / 10 } : {}),
       },

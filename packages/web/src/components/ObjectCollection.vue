@@ -59,6 +59,9 @@ const props = defineProps<{
   phoneTable?: boolean
   /** Steps listed flat, not nested under their parent (types with subtasks). */
   flat?: boolean
+  /** Sits inside something that already frames it (a query embedded in a page, a whiteboard card):
+   * the table draws no box of its own and its first column lines up with the text around it. */
+  bare?: boolean
 }>()
 const emit = defineEmits<{
   menu: [event: MouseEvent, object: ObjectSummary]
@@ -508,15 +511,15 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
       </div>
 
       <!-- Table: fixed column widths; the last, empty column takes the space left. -->
-      <div v-else-if="layout === 'table'" class="overflow-x-auto rounded-xl border border-line">
+      <div v-else-if="layout === 'table'" class="overflow-x-auto" :class="bare ? '' : 'rounded-xl border border-line'">
         <table class="table-fixed text-sm" :style="{ width: `max(100%, ${tableWidth}px)` }">
           <colgroup>
             <col v-for="column in columns" :key="column.field" :style="{ width: `${widthOf(column)}px` }" />
             <col />
           </colgroup>
-          <thead class="bg-raised text-left text-xs text-ink-faint">
+          <thead class="text-left text-xs text-ink-faint">
             <tr>
-              <th v-for="column in columns" :key="column.field" class="relative px-3 py-2 font-medium" :data-column="column.field">
+              <th v-for="column in columns" :key="column.field" class="relative px-3 py-2 font-medium" :class="bare ? 'first:pl-0' : ''" :data-column="column.field">
                 <span class="block truncate">{{ column.field === 'title' ? 'Title' : column.label }}</span>
                 <span
                   class="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize touch-none hover:bg-accent/30"
@@ -540,13 +543,13 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                 v-for="column in columns"
                 :key="column.field"
                 class="overflow-hidden px-3 py-2 align-top"
-                :class="column.wrap ? 'break-words' : 'whitespace-nowrap text-ellipsis'"
+                :class="[column.wrap ? 'break-words' : 'whitespace-nowrap text-ellipsis', bare ? 'first:pl-0' : '', column.field === 'title' ? 'relative' : '']"
               >
                 <template v-if="column.field === 'title'">
                   <button
                     v-if="canSelect && (selectingHere || !isTouch)"
-                    class="relative -ml-1 mr-2 inline-grid h-4 w-4 place-items-center rounded border align-[-3px] text-white"
-                    :class="[picked(object) ? 'border-accent bg-accent' : 'border-line-strong bg-surface', selectingHere ? '' : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100']"
+                    class="absolute top-2.5 z-[1] grid h-4 w-4 place-items-center rounded border text-white"
+                    :class="[picked(object) ? 'border-accent bg-accent' : 'border-line-strong bg-surface', selectingHere ? '' : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100', bare && columns[0]?.field === 'title' ? 'left-0' : 'left-3']"
                     role="checkbox"
                     :aria-checked="picked(object)"
                     :aria-label="`Select ${displayTitle(object, typeOf(object))}`"
@@ -556,7 +559,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                     <AppIcon v-if="picked(object)" fallback="ph:check-bold" :size="11" />
                   </button>
                   <ObjectLink :id="object.id" class="font-medium hover:underline" @click="rowClick($event, object)">
-                    <AppIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" />{{ displayTitle(object, typeOf(object)) }}
+                    <AppIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" :class="canSelect && (selectingHere || !isTouch) ? (selectingHere ? 'invisible' : 'group-hover/row:invisible') : ''" />{{ displayTitle(object, typeOf(object)) }}
                   </ObjectLink>
                   <span v-if="progressOf(object)" class="ml-2 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
                     {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>

@@ -422,6 +422,6 @@ describe('habits done from food', () => {
     const names = () => store.getType(builtinTypeId('s', 'habit'))!.properties.map((p) => p.id)
     expect(names()).not.toContain('food')
     setNutritionEnabled(store, 's', true, AT)
-    expect(names()).toEqual(['days', 'target', 'unit', 'remind', 'paused', 'food', 'body'])
+    expect(names()).toEqual(['days', 'perweek', 'target', 'unit', 'remind', 'paused', 'food', 'body'])
   })
 })

@@ -8,7 +8,7 @@
 // from what is left (its first status change says where it started; without one, where it is now).
 import type { ActivityEntry } from './activity.ts'
 import type { Id, IsoDateTime, ObjectSummary, ObjectType, SelectPropertyDef } from './model.ts'
-import { addDays, dayIn } from './time.ts'
+import { addDays, dayIn, mondayOf } from './time.ts'
 
 export type StatusCategory = 'todo' | 'doing' | 'done'
 export const STATUS_CATEGORIES: StatusCategory[] = ['todo', 'doing', 'done']
@@ -65,12 +65,6 @@ function summarize(values: number[]): Summary {
   const sorted = [...values].sort((a, b) => a - b)
   const at = (q: number) => sorted[Math.min(sorted.length - 1, Math.ceil(q * sorted.length) - 1)]!
   return { count: values.length, median: at(0.5), p85: at(0.85), average: values.reduce((a, b) => a + b, 0) / values.length }
-}
-
-/** The Monday of a day's week. */
-export function mondayOf(day: string): string {
-  const weekday = new Date(`${day}T00:00:00Z`).getUTCDay()
-  return addDays(day, -((weekday + 6) % 7))
 }
 
 /**
