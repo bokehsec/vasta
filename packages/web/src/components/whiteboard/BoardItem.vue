@@ -124,7 +124,7 @@ function onInput(event: Event) {
           <AppIcon :icon="summary.icon ?? type?.icon" fallback="ph:file-text" :class="type?.color ? iconTextClasses[type.color] : 'text-ink-soft'" />
           <span class="truncate font-medium">{{ displayTitle(summary, type) }}</span>
         </div>
-        <BoardCardEmbed v-else-if="element.view === 'embed'" :object="summary" :type="type" :board-id="boardId" class="pointer-events-none" />
+        <BoardCardEmbed v-else-if="element.view === 'embed'" :element-id="element.id" :object="summary" :type="type" :board-id="boardId" class="pointer-events-none" />
         <BoardCardProperties v-else-if="element.view === 'properties'" :object="summary" :type="type" :fields="element.fields" class="pointer-events-none" />
         <ObjectCard v-else :object="summary" :type="type" variant="grid" class="pointer-events-none h-full" />
       </template>

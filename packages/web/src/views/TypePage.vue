@@ -1129,6 +1129,7 @@ async function newMenu(event: MouseEvent) {
       :objects="visible"
       :layout="view.layout"
       :group-field="groupField"
+      :fold-scope="JSON.stringify(['type', id, view.id])"
       :type-ids="[id]"
       :table="view.table"
       :board="view.board"

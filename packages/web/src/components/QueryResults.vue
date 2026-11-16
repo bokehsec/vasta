@@ -18,7 +18,7 @@ import { onObjectSave } from '../lib/object-saves.ts'
 
 /** `readonly`: property cells of a table do not edit (a whiteboard card, a page that cannot be edited). */
 /** `bare`: drawn inside something that frames it already (ObjectCollection). */
-const props = defineProps<{ query: QueryDef; parentId?: Id; limit?: number; readonly?: boolean; bare?: boolean }>()
+const props = defineProps<{ query: QueryDef; foldScope?: string; parentId?: Id; limit?: number; readonly?: boolean; bare?: boolean }>()
 const emit = defineEmits<{ table: [table: TableSettings]; board: [board: BoardSettings] }>()
 
 const results = ref<ObjectSummary[]>([])
@@ -71,7 +71,8 @@ onBeforeUnmount(() => {
   clearTimeout(timer)
 })
 
-const shown = computed(() => (props.limit && !showAll.value ? display.value.slice(0, props.limit) : display.value))
+// Group before limiting a preview, so every group header has its full matching count.
+const grouped = computed(() => !!props.query.groupBy?.[0]?.field && !['kanban', 'agenda'].includes(props.query.layout ?? 'list'))
 
 function moved(saved: ObjectSummary) {
   const index = results.value.findIndex((o) => o.id === saved.id)
@@ -152,9 +153,11 @@ defineExpose({ count: computed(() => display.value.length), empty })
     <p v-else-if="!display.length && !isAgenda" class="py-3 text-sm text-ink-faint">No objects match this query.</p>
     <template v-else>
       <ObjectCollection
-        :objects="shown"
+        :objects="!grouped && limit && !showAll ? display.slice(0, limit) : display"
+        :initial-limit="grouped && !showAll ? limit : undefined"
         :layout="query.layout ?? 'list'"
         :group-field="query.groupBy?.[0]?.field ?? ''"
+        :fold-scope="foldScope"
         :type-ids="query.typeIds"
         :table="query.table"
         :board="query.board"

@@ -114,6 +114,17 @@ line "All subtasks done" with the type's first quick action as a button.
 and quick actions operate on that object only. Lists and tables have no row multiselect or bulk
 action mode, on desktop or phone.
 
+**Grouped collections**: `GroupHeading` uses the standard Quiet button and 13px Phosphor
+caret-down/right, beside the existing colour chip and full matching count. Plain group labels
+fold with the button; tag, relation and person chips remain independent links beside the caret.
+Group controls above the collection are Quiet Collapse all / Expand all buttons, disabled when
+already in that state. A table retains one shared header, column widths and scroll area, without
+frames around groups. Folded bodies (including Show more) are not drawn. On phones the standard
+44px button targets apply and a table's row layout keeps the same folds. Choices stay personal
+per account, space, view/query instance and grouping field on this device; new scopes start open.
+Folding changes visibility only, not filters, task state or Review scope. Subtask and kanban
+folding remain independent. Grouped query previews limit rows per group, keeping full counts.
+
 **Embedded queries** have no frame: the page is the frame. The title line (icon, name, Edit query on
 hover) reads as a small heading; a table inside one, or inside a whiteboard card, draws no box or
 header fill of its own (`bare`) and its first column lines up with the text around it. Never nest

@@ -8,6 +8,12 @@ GitHub release page.
 
 ### Added
 
+- **Fold grouped views.** Use the chevron beside a group to hide or show its items, or Collapse all
+  and Expand all above the groups. Its name and matching count stay visible; tables keep one
+  shared header. Works in lists, tables and cards, including embedded queries and phone rows.
+  Folds are remembered for this view on this device and account, without changing filters or
+  what Review covers. Embedded group counts include matches beyond the preview.
+
 - **Habits from SparkyFitness.** Connect a space to your SparkyFitness server with a read-only
   API key, choose how much history to bring in, then preview seven days before linking a habit.
   Steps, water and sleep fill its daily amount; named workouts and calories on target mark it

@@ -67,7 +67,7 @@ const player = computed(() => (display.value === 'embed' && type.value?.system =
     </figure>
 
     <!-- Queries show their live results; any display but "compact" (including ones an older build wrote) is the full frame -->
-    <QueryEmbed v-else-if="isQuery" :object-id="objectId" :parent-id="pageId" :readonly="!editor.isEditable" :compact="display === 'compact'" />
+    <QueryEmbed v-else-if="isQuery" :instance-id="node.attrs.id ?? undefined" :object-id="objectId" :parent-id="pageId" :readonly="!editor.isEditable" :compact="display === 'compact'" />
 
     <!-- Weblink player, with a line that opens the weblink -->
     <div v-else-if="player" class="max-w-2xl">

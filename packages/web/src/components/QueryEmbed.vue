@@ -17,7 +17,7 @@ import QueryResults from './QueryResults.vue'
 import ObjectLink from './ObjectLink.vue'
 
 /** `readonly`: in a page that cannot be edited, the results' table cells do not edit either. */
-const props = defineProps<{ objectId: Id; parentId?: Id; readonly?: boolean; compact?: boolean }>()
+const props = defineProps<{ objectId: Id; instanceId?: string; parentId?: Id; readonly?: boolean; compact?: boolean }>()
 
 const summary = computed(() => summaryOf(props.objectId))
 const type = computed(() => typesById.value.get(summary.value?.typeId ?? ''))
@@ -88,7 +88,7 @@ onBeforeUnmount(() => {
       <QueryEditor :query="query" @update="edit" />
     </div>
     <div v-show="!hidden">
-      <QueryResults ref="results" :query="query" :parent-id="parentId" :limit="24" :readonly="readonly" bare @table="edit({ ...query, table: $event })" @board="edit({ ...query, board: $event })" />
+      <QueryResults ref="results" :fold-scope="parentId && instanceId ? JSON.stringify(['embed', parentId, instanceId, objectId]) : undefined" :query="query" :parent-id="parentId" :limit="24" :readonly="readonly" bare @table="edit({ ...query, table: $event })" @board="edit({ ...query, board: $event })" />
     </div>
   </div>
 </template>

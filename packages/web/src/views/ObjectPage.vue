@@ -1116,7 +1116,7 @@ async function startFrom(template: ObjectRecord) {
             <QueryEditor :query="object.query ?? { typeIds: [] }" @update="setQuery" />
           </div>
         </div>
-        <QueryResults class="mt-4" :query="object.query ?? { typeIds: [] }" :parent-id="object.id" @table="setQuery({ ...(object.query ?? { typeIds: [] }), table: $event })" @board="setQuery({ ...(object.query ?? { typeIds: [] }), board: $event })" />
+        <QueryResults :fold-scope="JSON.stringify(['query', object.id])" class="mt-4" :query="object.query ?? { typeIds: [] }" :parent-id="object.id" @table="setQuery({ ...(object.query ?? { typeIds: [] }), table: $event })" @board="setQuery({ ...(object.query ?? { typeIds: [] }), board: $event })" />
       </section>
 
       <Teleport v-if="isWhiteboard && !embedded" defer :to="`#${boardSlot}`" :disabled="!boardLayout">

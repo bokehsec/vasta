@@ -10,20 +10,23 @@ import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, listFields, MIN_COLUMN_WIDTH, QUICK_ACTIONS_COLUMN, rowFields, rowFieldsFromTable, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatDateShort, formatRelative } from '../lib/format.ts'
-import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
-import { lastError, summaryOf, typesById } from '../lib/state.ts'
+import { groupObjects, typesOf, type Group } from '../lib/query.ts'
+import { lastError, summaryOf, typesById, workspace } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import { runQuickAction } from '../lib/quick-actions.ts'
+import { session } from '../lib/session.ts'
+import { groupFoldKey, useGroupFolds } from '../lib/group-folds.ts'
+import { quietButton } from '../lib/buttons.ts'
 import { foldedSteps as folded, subtasksOf } from '../lib/subtasks.ts'
 import { hideSwipeTip, swipeTipHidden } from '../lib/tips.ts'
 import { isPhone, isTouch } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
+import GroupHeading from './GroupHeading.vue'
 import AgendaView from './AgendaView.vue'
 import BoardView from './BoardView.vue'
 import TypeIcon from './TypeIcon.vue'
 import ObjectCard from './ObjectCard.vue'
 import ObjectChip from './ObjectChip.vue'
-import PersonChip from './PersonChip.vue'
 import PropertyDisplay from './PropertyDisplay.vue'
 import PropertyValueEditor from './PropertyValueEditor.vue'
 import ObjectLink from './ObjectLink.vue'
@@ -38,6 +41,10 @@ const props = defineProps<{
   layout: ViewLayout
   /** Field to group by; '' for no grouping. */
   groupField: string
+  /** Stable identity of this view or query instance, for personal group folds on this device. */
+  foldScope?: string
+  /** Preview rows per group; grouping and its counts still see every result. */
+  initialLimit?: number
   /** Types the objects come from (empty = any); decides table columns and group labels. */
   typeIds: Id[]
   /** Columns of the table layout, as saved on the view or query. */
@@ -86,12 +93,20 @@ const groups = computed<Group[]>(() => {
     .map((group) => ({ ...group, items: group.items.map((object) => actual.get(object.id)!) }))
 })
 
+const { folded: foldedGroups, toggle: toggleGroup, collapseAll, expandAll } = useGroupFolds(() =>
+  groupFoldKey(session.user?.id, workspace.space?.id, props.foldScope, props.groupField))
+const groupCollapsed = (group: Group) => !!props.groupField && foldedGroups.value.has(group.key)
+const hasExpanded = computed(() => groups.value.some((group) => !groupCollapsed(group)))
+const hasCollapsed = computed(() => groups.value.some(groupCollapsed))
+watch(() => props.groupField, () => { if (!props.foldScope) expandAll() })
+
 // A group shows its first STEP objects, and more as the page scrolls to its end: drawing a type's
 // thousands of objects at once takes seconds. Sorting, grouping and filters still see them all.
 const STEP = 200
 const drawn = ref<Record<string, number>>({})
-watch([() => props.typeIds.join(), () => props.groupField], () => (drawn.value = {}))
-const shown = (group: Group) => group.items.slice(0, drawn.value[group.key] ?? STEP)
+watch([() => props.typeIds.join(), () => props.groupField, () => props.foldScope, () => props.initialLimit], () => (drawn.value = {}))
+const drawLimit = (group: Group) => drawn.value[group.key] ?? props.initialLimit ?? STEP
+const shown = (group: Group) => group.items.slice(0, drawLimit(group))
 
 // Subtasks (core subtasks.ts): in a list, a step follows its parent, indented (four levels at most),
 // and a parent's caret folds its steps (for the session). Any object with steps shows how many are
@@ -108,7 +123,7 @@ function rowsOf(group: Group): OutlineRow<ObjectSummary>[] {
     foldedAt = row.hasChildren && folded.has(row.object.id) ? row.depth : Infinity
     rows.push(row)
   }
-  return rows.slice(0, drawn.value[group.key] ?? STEP)
+  return rows.slice(0, drawLimit(group))
 }
 const outlined = (group: Group) => nests.value && group.items.some((o) => parentIdFor(o) && group.items.some((p) => p.id === parentIdFor(o)))
 /** How far an object's steps are, when it has any. */
@@ -125,7 +140,7 @@ function absentParent(object: ObjectSummary): string {
   const parent = summaryOf(id)
   return parent ? displayTitle(parent, typeOf(parent)) : ''
 }
-const drawMore = (group: Group) => (drawn.value = { ...drawn.value, [group.key]: (drawn.value[group.key] ?? STEP) + STEP })
+const drawMore = (group: Group) => (drawn.value = { ...drawn.value, [group.key]: drawLimit(group) + STEP })
 /** Calls its value when the element comes near the viewport (it is keyed, so it asks again after each step). */
 const vNear: Directive<HTMLElement & { near?: IntersectionObserver }, () => void> = {
   mounted(el, binding) {
@@ -347,6 +362,10 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
 
   <!-- Container queries: the same view sits in a full page or in a narrow document column. -->
   <div v-else ref="container" class="@container">
+    <div v-if="groupField && groups.length" class="mb-2 flex flex-wrap justify-end gap-1" aria-label="Group display" data-group-controls>
+      <button type="button" :class="quietButton" :disabled="!hasExpanded" @click="collapseAll(groups.map((group) => group.key))">Collapse all</button>
+      <button type="button" :class="quietButton" :disabled="!hasCollapsed" @click="expandAll">Expand all</button>
+    </div>
     <p v-if="swipeTip" class="mb-3 flex items-center gap-2 rounded-lg border border-line bg-raised py-1 pl-3 text-[13px] text-ink-soft" data-swipe-tip>
       <AppIcon fallback="ph:hand-swipe-right" :size="16" class="shrink-0" /><span class="flex-1">{{ swipeTip }}</span>
       <button class="grid h-11 w-11 shrink-0 place-items-center text-ink-faint hover:text-ink" aria-label="Hide this tip" @click="hideSwipeTip"><AppIcon fallback="ph:x" :size="14" /></button>
@@ -374,211 +393,205 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
         <tbody v-for="(group, index) in groups" :key="group.key">
           <tr v-if="groupField">
             <th :colspan="columns.length + 1" scope="rowgroup" class="pb-3 text-left font-normal" :class="index ? 'pt-6' : 'pt-3'">
-              <div class="flex items-center gap-2 text-sm">
-                <span v-if="group.objectId"><ObjectChip :id="group.objectId" :tag="groupField === 'tags'" /></span>
-                <PersonChip v-else-if="group.personId" :id="group.personId" />
-                <span v-else class="rounded-md px-2 py-0.5 font-medium" :class="group.key === NO_VALUE ? 'text-ink-faint' : chip(group.color as never)">{{ group.label }}</span>
-                <span class="text-xs text-ink-faint">{{ group.items.length }}</span>
-              </div>
+              <GroupHeading :group="group" :field="groupField" :collapsed="groupCollapsed(group)" @toggle="toggleGroup(group.key)" />
             </th>
           </tr>
-          <tr
-            v-for="object in shown(group)"
-            :key="object.id"
-            class="group/row border-t border-line hover:bg-hover/60"
-            @contextmenu="rowMenu($event, object)"
-          >
-            <td
-              v-for="column in columns"
-              :key="column.field"
-              class="overflow-hidden px-3 py-2 align-top"
-              :class="[column.wrap ? 'break-words' : 'whitespace-nowrap text-ellipsis', bare ? 'first:pl-0' : '']"
+          <template v-if="!groupCollapsed(group)">
+            <tr
+              v-for="object in shown(group)"
+              :key="object.id"
+              class="group/row border-t border-line hover:bg-hover/60"
+              @contextmenu="rowMenu($event, object)"
             >
-              <template v-if="column.field === 'title'">
-                <TaskCompletionCheck v-if="typeOf(object)?.system === 'task' && !readonly && completion" :object="object" :type="typeOf(object)" class="mr-2 inline-grid align-middle" @moved="emit('moved', $event)" />
-                <ObjectLink :id="object.id" class="font-medium hover:underline">
-                  <AppIcon v-if="typeOf(object)?.system !== 'task'" :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" /><span :class="titleClass(object)">{{ displayTitle(object, typeOf(object)) }}</span>
-                </ObjectLink>
-                <TaskCompletionNote :object="object" class="mt-1" />
-                <span v-if="progressOf(object)" class="ml-2 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
-                  {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
+              <td
+                v-for="column in columns"
+                :key="column.field"
+                class="overflow-hidden px-3 py-2 align-top"
+                :class="[column.wrap ? 'break-words' : 'whitespace-nowrap text-ellipsis', bare ? 'first:pl-0' : '']"
+              >
+                <template v-if="column.field === 'title'">
+                  <TaskCompletionCheck v-if="typeOf(object)?.system === 'task' && !readonly && completion" :object="object" :type="typeOf(object)" class="mr-2 inline-grid align-middle" @moved="emit('moved', $event)" />
+                  <ObjectLink :id="object.id" class="font-medium hover:underline">
+                    <AppIcon v-if="typeOf(object)?.system !== 'task'" :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" /><span :class="titleClass(object)">{{ displayTitle(object, typeOf(object)) }}</span>
+                  </ObjectLink>
+                  <TaskCompletionNote :object="object" class="mt-1" />
+                  <span v-if="progressOf(object)" class="ml-2 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
+                    {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
+                  </span>
+                  <TaskQuickActions v-if="actionsUnderTitle && actionType(object)" :type="actionType(object)!" :object="object" variant="row" class="-mb-1 mt-0.5 -ml-1.5" @set="saveQuick(object, $event)" />
+                </template>
+                <span v-else-if="column.field === 'tags' || column.field === 'collections'" class="flex gap-1" :class="column.wrap ? 'flex-wrap' : 'overflow-hidden'">
+                  <ObjectChip v-for="id in column.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="column.field === 'tags'" />
                 </span>
-                <TaskQuickActions v-if="actionsUnderTitle && actionType(object)" :type="actionType(object)!" :object="object" variant="row" class="-mb-1 mt-0.5 -ml-1.5" @set="saveQuick(object, $event)" />
-              </template>
-              <span v-else-if="column.field === 'tags' || column.field === 'collections'" class="flex gap-1" :class="column.wrap ? 'flex-wrap' : 'overflow-hidden'">
-                <ObjectChip v-for="id in column.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="column.field === 'tags'" />
-              </span>
-              <span v-else-if="column.field === 'type'" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs" :class="chip(typeOf(object)?.color)">
-                <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object)?.name }}
-              </span>
-              <span v-else-if="column.field === 'createdAt' || column.field === 'updatedAt'" class="text-xs text-ink-faint">{{ formatRelative(object[column.field]) }}</span>
-              <span v-else-if="column.field === 'date'">{{ object.date ? formatDate(object.date) : '' }}</span>
-              <span v-else-if="column.field === 'host'">{{ object.media?.host?.replace(/^www\./, '') }}</span>
-              <template v-else-if="column.field === QUICK_ACTIONS_COLUMN">
-                <TaskQuickActions v-if="actionType(object)" :type="actionType(object)!" :object="object" variant="row" class="-my-1.5 -ml-1.5" @set="saveQuick(object, $event)" />
-              </template>
-              <PropertyValueEditor
-                v-else-if="column.def && editing === cellKey(object, column)"
-                :def="column.def"
-                :value="valueOf(object, column)"
-                autofocus
-                class="-mx-2 -my-1.5"
-                @update="saveCell(object, column, $event)"
-                @add-option="addOption(object, column, $event)"
-                @close="endEdit(cellKey(object, column))"
-                @mousedown.stop
-              />
-              <div
-                v-else-if="column.def && editable(column)"
-                role="button"
-                tabindex="0"
-                class="-mx-1.5 -my-0.5 min-h-6 cursor-pointer rounded-md px-1.5 py-0.5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/50"
-                :class="column.wrap ? '' : 'overflow-hidden'"
-                :aria-label="`${column.label}: edit`"
-                :data-edit="column.field"
-                :data-cell="cellKey(object, column)"
-                @mousedown.stop
-                @click.capture="cellClick($event, object, column)"
-                @keydown.enter.self.prevent="startEdit(object, column)"
-                @keydown.space.self.prevent="startEdit(object, column)"
-              >
-                <PropertyDisplay :def="column.def" :value="valueOf(object, column)" :object="object" :wrap="column.wrap" />
-              </div>
-              <PropertyDisplay v-else-if="column.def" :def="column.def" :value="object.props[column.field]" :object="object" :wrap="column.wrap" />
-            </td>
-            <td />
-          </tr>
-          <tr v-if="group.items.length > shown(group).length">
-            <td :colspan="columns.length + 1">
-              <button
-                :key="shown(group).length"
-                v-near="() => drawMore(group)"
-                class="mt-2 w-full rounded-lg py-2 text-center text-xs text-ink-faint hover:bg-hover hover:text-ink"
-                @click="drawMore(group)"
-              >
-                {{ shown(group).length.toLocaleString() }} of {{ group.items.length.toLocaleString() }} · Show more
-              </button>
-            </td>
-          </tr>
+                <span v-else-if="column.field === 'type'" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs" :class="chip(typeOf(object)?.color)">
+                  <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object)?.name }}
+                </span>
+                <span v-else-if="column.field === 'createdAt' || column.field === 'updatedAt'" class="text-xs text-ink-faint">{{ formatRelative(object[column.field]) }}</span>
+                <span v-else-if="column.field === 'date'">{{ object.date ? formatDate(object.date) : '' }}</span>
+                <span v-else-if="column.field === 'host'">{{ object.media?.host?.replace(/^www\./, '') }}</span>
+                <template v-else-if="column.field === QUICK_ACTIONS_COLUMN">
+                  <TaskQuickActions v-if="actionType(object)" :type="actionType(object)!" :object="object" variant="row" class="-my-1.5 -ml-1.5" @set="saveQuick(object, $event)" />
+                </template>
+                <PropertyValueEditor
+                  v-else-if="column.def && editing === cellKey(object, column)"
+                  :def="column.def"
+                  :value="valueOf(object, column)"
+                  autofocus
+                  class="-mx-2 -my-1.5"
+                  @update="saveCell(object, column, $event)"
+                  @add-option="addOption(object, column, $event)"
+                  @close="endEdit(cellKey(object, column))"
+                  @mousedown.stop
+                />
+                <div
+                  v-else-if="column.def && editable(column)"
+                  role="button"
+                  tabindex="0"
+                  class="-mx-1.5 -my-0.5 min-h-6 cursor-pointer rounded-md px-1.5 py-0.5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/50"
+                  :class="column.wrap ? '' : 'overflow-hidden'"
+                  :aria-label="`${column.label}: edit`"
+                  :data-edit="column.field"
+                  :data-cell="cellKey(object, column)"
+                  @mousedown.stop
+                  @click.capture="cellClick($event, object, column)"
+                  @keydown.enter.self.prevent="startEdit(object, column)"
+                  @keydown.space.self.prevent="startEdit(object, column)"
+                >
+                  <PropertyDisplay :def="column.def" :value="valueOf(object, column)" :object="object" :wrap="column.wrap" />
+                </div>
+                <PropertyDisplay v-else-if="column.def" :def="column.def" :value="object.props[column.field]" :object="object" :wrap="column.wrap" />
+              </td>
+              <td />
+            </tr>
+            <tr v-if="group.items.length > shown(group).length">
+              <td :colspan="columns.length + 1">
+                <button
+                  :key="shown(group).length"
+                  v-near="() => { if (!initialLimit) drawMore(group) }"
+                  class="mt-2 w-full rounded-lg py-2 text-center text-xs text-ink-faint hover:bg-hover hover:text-ink"
+                  @click="drawMore(group)"
+                >
+                  {{ shown(group).length.toLocaleString() }} of {{ group.items.length.toLocaleString() }} · Show more
+                </button>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
     </div>
 
     <template v-else>
       <section v-for="group in groups" :key="group.key" class="mt-4 first:mt-0">
-        <header v-if="groupField" class="mb-3 flex items-center gap-2 text-sm">
-          <span v-if="group.objectId"><ObjectChip :id="group.objectId" :tag="groupField === 'tags'" /></span>
-          <PersonChip v-else-if="group.personId" :id="group.personId" />
-          <span v-else class="rounded-md px-2 py-0.5 font-medium" :class="group.key === NO_VALUE ? 'text-ink-faint' : chip(group.color as never)">{{ group.label }}</span>
-          <span class="text-xs text-ink-faint">{{ group.items.length }}</span>
-        </header>
+        <GroupHeading v-if="groupField" class="mb-3" :group="group" :field="groupField" :collapsed="groupCollapsed(group)" @toggle="toggleGroup(group.key)" />
 
-        <!-- List; on a phone a table too. -->
-        <div v-if="asList" class="divide-y divide-line/70" :data-phone-rows="phoneRows || undefined">
-          <SwipeRow v-for="{ object, depth, hasChildren } in rowsOf(group)" :key="object.id" :enabled="!!swipeType(object)" :right="swipeRight(object)" :left="swipeLeft(object)">
-            <ObjectLink
-              :id="object.id"
-              class="group/row flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover max-md:py-2.5"
-              :class="[listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : absentParent(object) ? 'flex-wrap gap-y-0.5' : '']"
-              :style="depth ? { paddingLeft: `${0.5 + Math.min(depth, 4) * 1.5}rem` } : undefined"
-              :data-depth="nests ? depth : undefined"
-              @contextmenu="rowMenu($event, object)"
-            >
-              <!-- A parent's caret folds its steps; rows of an outline keep its place free. -->
-              <button
-                v-if="hasChildren"
-                class="relative -mx-1 grid h-5 w-5 shrink-0 place-items-center rounded text-ink-faint hover:bg-line hover:text-ink [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3 [@media(hover:none)]:after:content-['']"
-                :aria-expanded="!folded.has(object.id)"
-                :title="folded.has(object.id) ? 'Show subtasks' : 'Hide subtasks'"
-                data-fold-steps
-                @click.prevent.stop="folded.has(object.id) ? folded.delete(object.id) : folded.add(object.id)"
+        <template v-if="!groupCollapsed(group)">
+          <!-- List; on a phone a table too. -->
+          <div v-if="asList" class="divide-y divide-line/70" :data-phone-rows="phoneRows || undefined">
+            <SwipeRow v-for="{ object, depth, hasChildren } in rowsOf(group)" :key="object.id" :enabled="!!swipeType(object)" :right="swipeRight(object)" :left="swipeLeft(object)">
+              <ObjectLink
+                :id="object.id"
+                class="group/row flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover max-md:py-2.5"
+                :class="[listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : absentParent(object) ? 'flex-wrap gap-y-0.5' : '']"
+                :style="depth ? { paddingLeft: `${0.5 + Math.min(depth, 4) * 1.5}rem` } : undefined"
+                :data-depth="nests ? depth : undefined"
+                @contextmenu="rowMenu($event, object)"
               >
-                <AppIcon :fallback="folded.has(object.id) ? 'ph:caret-right' : 'ph:caret-down'" :size="13" />
-              </button>
-              <!-- A phone keeps the width for the title: only a parent's caret takes room there. -->
-              <span v-else-if="outlined(group) && !isPhone" class="-mx-1 w-5 shrink-0" aria-hidden="true" />
-              <!-- On touch the checkbox's tap area reaches 44px around it. -->
-              <TaskCompletionCheck v-if="typeOf(object)?.system === 'task' && !readonly && (listColumns || completion)" :object="object" :type="typeOf(object)" @moved="emit('moved', $event)" />
-              <TypeIcon v-else :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
-              <span v-if="quickType(object)" class="min-w-0 flex-1">
-                <span class="block font-medium max-md:text-base max-md:leading-snug" :class="[list?.wrap || isPhone ? 'break-words' : 'truncate', titleClass(object)]">{{ displayTitle(object, typeOf(object)) }}</span>
-                <span v-if="nextStepOf(object)" class="mt-0.5 flex items-center gap-1 text-xs text-ink-soft max-md:text-[13px]" data-next-step-line>
-                  <AppIcon fallback="ph:arrow-right" :size="11" class="shrink-0 text-ink-faint" /><span class="truncate">{{ nextStepOf(object) }}</span>
+                <!-- A parent's caret folds its steps; rows of an outline keep its place free. -->
+                <button
+                  v-if="hasChildren"
+                  class="relative -mx-1 grid h-5 w-5 shrink-0 place-items-center rounded text-ink-faint hover:bg-line hover:text-ink [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3 [@media(hover:none)]:after:content-['']"
+                  :aria-expanded="!folded.has(object.id)"
+                  :title="folded.has(object.id) ? 'Show subtasks' : 'Hide subtasks'"
+                  data-fold-steps
+                  @click.prevent.stop="folded.has(object.id) ? folded.delete(object.id) : folded.add(object.id)"
+                >
+                  <AppIcon :fallback="folded.has(object.id) ? 'ph:caret-right' : 'ph:caret-down'" :size="13" />
+                </button>
+                <!-- A phone keeps the width for the title: only a parent's caret takes room there. -->
+                <span v-else-if="outlined(group) && !isPhone" class="-mx-1 w-5 shrink-0" aria-hidden="true" />
+                <!-- On touch the checkbox's tap area reaches 44px around it. -->
+                <TaskCompletionCheck v-if="typeOf(object)?.system === 'task' && !readonly && (listColumns || completion)" :object="object" :type="typeOf(object)" @moved="emit('moved', $event)" />
+                <TypeIcon v-else :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
+                <span v-if="quickType(object)" class="min-w-0 flex-1">
+                  <span class="block font-medium max-md:text-base max-md:leading-snug" :class="[list?.wrap || isPhone ? 'break-words' : 'truncate', titleClass(object)]">{{ displayTitle(object, typeOf(object)) }}</span>
+                  <span v-if="nextStepOf(object)" class="mt-0.5 flex items-center gap-1 text-xs text-ink-soft max-md:text-[13px]" data-next-step-line>
+                    <AppIcon fallback="ph:arrow-right" :size="11" class="shrink-0 text-ink-faint" /><span class="truncate">{{ nextStepOf(object) }}</span>
+                  </span>
                 </span>
-              </span>
-              <span
-                v-else
-                class="min-w-0 flex-1 font-medium max-md:text-base max-md:leading-snug"
-                :class="[list?.wrap || isPhone ? 'break-words' : 'truncate', titleClass(object)]"
-              >{{ displayTitle(object, typeOf(object)) }}</span>
-              <TaskCompletionNote :object="object" class="order-last w-full pl-[30px]" />
-              <span v-if="progressOf(object)" class="shrink-0 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
-                {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
-              </span>
-              <span v-if="absentParent(object)" class="order-last w-full truncate pl-[30px] text-xs text-ink-faint max-md:text-[13px]" data-absent-parent>in {{ absentParent(object) }}</span>
-              <span v-if="listColumns" class="flex min-w-0 shrink-0 items-center gap-2 text-xs max-md:text-[13px] @max-2xl:order-last @max-2xl:w-full @max-2xl:flex-wrap @max-2xl:pl-[30px]" data-row-fields @click.prevent>
-                <template v-for="field in fieldsOf(object)" :key="field.field">
-                  <span v-if="field.field === 'tags' || field.field === 'collections'" class="flex gap-1">
-                    <ObjectChip v-for="id in field.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="field.field === 'tags'" />
+                <span
+                  v-else
+                  class="min-w-0 flex-1 font-medium max-md:text-base max-md:leading-snug"
+                  :class="[list?.wrap || isPhone ? 'break-words' : 'truncate', titleClass(object)]"
+                >{{ displayTitle(object, typeOf(object)) }}</span>
+                <TaskCompletionNote :object="object" class="order-last w-full pl-[30px]" />
+                <span v-if="progressOf(object)" class="shrink-0 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
+                  {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
+                </span>
+                <span v-if="absentParent(object)" class="order-last w-full truncate pl-[30px] text-xs text-ink-faint max-md:text-[13px]" data-absent-parent>in {{ absentParent(object) }}</span>
+                <span v-if="listColumns" class="flex min-w-0 shrink-0 items-center gap-2 text-xs max-md:text-[13px] @max-2xl:order-last @max-2xl:w-full @max-2xl:flex-wrap @max-2xl:pl-[30px]" data-row-fields @click.prevent>
+                  <template v-for="field in fieldsOf(object)" :key="field.field">
+                    <span v-if="field.field === 'tags' || field.field === 'collections'" class="flex gap-1">
+                      <ObjectChip v-for="id in field.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="field.field === 'tags'" />
+                    </span>
+                    <span v-else-if="field.field === 'type'" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5" :class="chip(typeOf(object)?.color)">
+                      <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object)?.name }}
+                    </span>
+                    <span v-else-if="field.field === 'createdAt' || field.field === 'updatedAt'" class="whitespace-nowrap text-ink-faint">{{ formatRelative(object[field.field]) }}</span>
+                    <span v-else-if="field.field === 'date'" class="whitespace-nowrap">{{ object.date ? formatDateShort(object.date) : '' }}</span>
+                    <span v-else-if="field.field === 'host'" class="whitespace-nowrap">{{ object.media?.host?.replace(/^www\./, '') }}</span>
+                    <PropertyDisplay v-else-if="field.def" :def="field.def" :value="object.props[field.field]" :object="object" :wrap="false" short />
+                  </template>
+                </span>
+                <template v-else>
+                  <span class="hidden gap-1 md:flex" @click.prevent>
+                    <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
                   </span>
-                  <span v-else-if="field.field === 'type'" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5" :class="chip(typeOf(object)?.color)">
-                    <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object)?.name }}
-                  </span>
-                  <span v-else-if="field.field === 'createdAt' || field.field === 'updatedAt'" class="whitespace-nowrap text-ink-faint">{{ formatRelative(object[field.field]) }}</span>
-                  <span v-else-if="field.field === 'date'" class="whitespace-nowrap">{{ object.date ? formatDateShort(object.date) : '' }}</span>
-                  <span v-else-if="field.field === 'host'" class="whitespace-nowrap">{{ object.media?.host?.replace(/^www\./, '') }}</span>
-                  <PropertyDisplay v-else-if="field.def" :def="field.def" :value="object.props[field.field]" :object="object" :wrap="false" short />
+                  <!-- A phone leaves out when a task was last changed: the title needs the room more. -->
+                  <span v-if="!quickType(object) && !(isPhone && typeOf(object)?.system === 'task')" class="w-24 shrink-0 text-right text-xs text-ink-faint max-md:w-auto">{{ formatRelative(object.updatedAt) }}</span>
                 </template>
-              </span>
-              <template v-else>
-                <span class="hidden gap-1 md:flex" @click.prevent>
-                  <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
-                </span>
-                <!-- A phone leaves out when a task was last changed: the title needs the room more. -->
-                <span v-if="!quickType(object) && !(isPhone && typeOf(object)?.system === 'task')" class="w-24 shrink-0 text-right text-xs text-ink-faint max-md:w-auto">{{ formatRelative(object.updatedAt) }}</span>
-              </template>
-              <!-- In a narrow column the actions take a line of their own under the title; on a phone swipes replace them. -->
-              <TaskQuickActions
-                v-if="rowButtons(object)"
-                :type="quickType(object)!"
-                :object="object"
-                variant="row"
-                class="@max-md:order-last @max-md:w-full @max-md:pl-6"
-                @set="saveQuick(object, $event)"
-              />
-              <!-- A phone: a visible way to the row's menu, 44px to touch (a long press is not found by looking). -->
-              <button
-                v-if="isPhone && !readonly && actionType(object)"
-                class="-my-2.5 -mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ink-soft active:bg-hover"
-                :aria-label="`More actions for ${displayTitle(object, typeOf(object))}`"
-                data-row-more
-                @click.prevent.stop="rowMore($event, object)"
-              >
-                <AppIcon fallback="ph:dots-three" :size="20" />
-              </button>
-            </ObjectLink>
-          </SwipeRow>
-        </div>
+                <!-- In a narrow column the actions take a line of their own under the title; on a phone swipes replace them. -->
+                <TaskQuickActions
+                  v-if="rowButtons(object)"
+                  :type="quickType(object)!"
+                  :object="object"
+                  variant="row"
+                  class="@max-md:order-last @max-md:w-full @max-md:pl-6"
+                  @set="saveQuick(object, $event)"
+                />
+                <!-- A phone: a visible way to the row's menu, 44px to touch (a long press is not found by looking). -->
+                <button
+                  v-if="isPhone && !readonly && actionType(object)"
+                  class="-my-2.5 -mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ink-soft active:bg-hover"
+                  :aria-label="`More actions for ${displayTitle(object, typeOf(object))}`"
+                  data-row-more
+                  @click.prevent.stop="rowMore($event, object)"
+                >
+                  <AppIcon fallback="ph:dots-three" :size="20" />
+                </button>
+              </ObjectLink>
+            </SwipeRow>
+          </div>
 
-        <!-- Wall: masonry columns -->
-        <div v-else-if="cardVariant === 'wall'" class="columns-1 gap-3 @lg:columns-2 @4xl:columns-3 @7xl:columns-4">
-          <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" variant="wall" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
-        </div>
+          <!-- Wall: masonry columns -->
+          <div v-else-if="cardVariant === 'wall'" class="columns-1 gap-3 @lg:columns-2 @4xl:columns-3 @7xl:columns-4">
+            <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" variant="wall" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
+          </div>
 
-        <!-- Grid and gallery -->
-        <div v-else class="grid gap-3" :class="cardVariant === 'gallery' ? 'grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]'">
-          <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" :variant="cardVariant" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
-        </div>
+          <!-- Grid and gallery -->
+          <div v-else class="grid gap-3" :class="cardVariant === 'gallery' ? 'grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]'">
+            <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" :variant="cardVariant" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
+          </div>
 
-        <button
-          v-if="group.items.length > shown(group).length"
-          :key="shown(group).length"
-          v-near="() => drawMore(group)"
-          class="mt-2 w-full rounded-lg py-2 text-center text-xs text-ink-faint hover:bg-hover hover:text-ink"
-          @click="drawMore(group)"
-        >
-          {{ shown(group).length.toLocaleString() }} of {{ group.items.length.toLocaleString() }} · Show more
-        </button>
+          <button
+            v-if="group.items.length > shown(group).length"
+            :key="shown(group).length"
+            v-near="() => { if (!initialLimit) drawMore(group) }"
+            class="mt-2 w-full rounded-lg py-2 text-center text-xs text-ink-faint hover:bg-hover hover:text-ink"
+            @click="drawMore(group)"
+          >
+            {{ shown(group).length.toLocaleString() }} of {{ group.items.length.toLocaleString() }} · Show more
+          </button>
+        </template>
       </section>
     </template>
   </div>
