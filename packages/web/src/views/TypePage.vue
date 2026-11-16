@@ -3,7 +3,7 @@ import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, PropertyValue, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, closedStatusIds, defaultViewFilter, dueForReview, fillFromFilter, hidesClosed, isClosedTask, matchesFilter, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
+import { RANK_PROPERTY_ID, closedStatusIds, defaultViewFilter, dueForReview, fillFromFilter, hidesClosed, isClosedTask, matchesFilter, needsTriage, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
 import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -317,8 +317,8 @@ const viewPickerOpen = ref(false)
 const viewPickerAnchor = ref<HTMLElement | null>(null)
 const currentViewLabel = computed(() => (metricsActive.value ? 'Metrics' : progressActive.value ? 'Progress' : trackerActive.value && fixedView.value ? fixedView.value.label : view.value.name))
 
-// Global workflows have stable, explicit queues independent of the list's filters. A targeted
-// review remains in More. The session snapshots its scope/order/fields, with one paused on device.
+// Review starts with this view's matching tasks. A whole-space sweep stays explicit in More.
+// Both snapshot their scope/order/fields, with one paused session on this device.
 const processOpen = ref(false)
 const hasQuickActions = computed(() => quickActionsOf(type.value).length > 0)
 const taskWorkflows = computed(() => type.value?.system === 'task')
@@ -326,7 +326,14 @@ const reviewable = computed(() => !fixedActive.value && !agendaActive.value && (
 const openList = computed(() => visible.value.filter((o) => !completion.entries.has(o.id) && !isClosedTask(type.value, o)))
 const processList = computed(() => openList.value.filter((o) => dueForReview(type.value, o, dayKey())))
 const queues = computed(() => taskWorkflowQueues(type.value, [...objects.value].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)), dayKey()))
+const viewQueues = computed(() => taskWorkflowQueues(type.value, openList.value, dayKey()))
+// Metrics and the calendar-fed agenda do not use `visible`: offer an explicitly named full sweep.
+const primaryScope = computed(() => reviewable.value ? 'view' as const : 'space' as const)
+const primaryQueues = computed(() => primaryScope.value === 'view' ? viewQueues.value : queues.value)
+const chooserQueues = computed(() => workflowMode.value === 'view' ? viewQueues.value : queues.value)
 const viewScope = computed(() => `${view.value.name}${showMine.value && mineOnly.value ? ' · Mine' : ''}${filterText.value.trim() ? ` · Search: “${filterText.value.trim()}”` : ''}`)
+const spaceScope = computed(() => `All tasks in ${workspace.space?.name ?? ''}`)
+const primaryScopeLabel = computed(() => primaryScope.value === 'view' ? viewScope.value : spaceScope.value)
 const review = ref<ReviewSession | null>(null)
 const currentFields = computed(() => view.value.layout === 'table' ? rowFieldsFromTable(tableColumns(view.value.table, [props.id])) : view.value.list?.fields ? listFields(view.value.list, [props.id]) : [])
 const processFields = computed(() => review.value?.fieldIds ? listFields({ fields: review.value.fieldIds }, [props.id]) : currentFields.value)
@@ -347,7 +354,10 @@ async function startProcess(kind: WorkflowKind, scope: 'space' | 'view', all = f
   if (scope === 'space' ? !taskWorkflows.value : !reviewable.value) return
   if (!session.user || !workspace.space) return
   if (review.value && !(await confirmDialog({ title: 'Start a new session?', message: `This replaces your paused ${workflowTitle(review.value).toLowerCase()} position. Changes to tasks stay saved.`, confirmLabel: 'Start new session' }))) return
-  const list = scope === 'view' ? (all ? openList.value : processList.value) : kind === 'tasks' ? [...queues.value.triage, ...queues.value.review] : queues.value[kind]
+  const selectedQueues = scope === 'view' ? viewQueues.value : queues.value
+  const list = kind === 'tasks'
+    ? [...selectedQueues.triage, ...(all && scope === 'view' ? openList.value.filter((o) => !needsTriage(type.value, o)) : selectedQueues.review)]
+    : scope === 'view' ? (all ? openList.value : processList.value) : selectedQueues[kind]
   if (!list.length || !session.user || !workspace.space) return
   clearSelection()
   const fields = scope === 'space'
@@ -356,22 +366,29 @@ async function startProcess(kind: WorkflowKind, scope: 'space' | 'view', all = f
   setReview(startSession({
     userId: session.user.id, spaceId: workspace.space.id, typeId: props.id,
     viewId: view.value.id, viewName: view.value.name, kind, scope,
-    scopeLabel: scope === 'space' ? `All tasks in ${workspace.space.name}` : viewScope.value,
+    scopeLabel: scope === 'space' ? spaceScope.value : viewScope.value,
     fieldIds: [...new Set(fields)],
-    ...(kind === 'tasks' ? { newCount: queues.value.triage.length } : {}),
+    ...(kind === 'tasks' ? { newCount: selectedQueues.triage.length } : {}),
   }, list.map((o) => o.id)))
   workflowOpen.value = false
+  menuOpen.value = false
   processOpen.value = true
 }
 // Review tasks, one button in the header (beside the view picker on a phone; DESIGN_SYSTEM.md ›
 // Buttons): tinted with the count while something waits (new tasks and check-ins together), grey
 // without. A press resumes the paused session, else starts one; with nothing to review it opens the
-// chooser, which says why. The chooser (More › Review tasks…) also ends a paused session.
+// chooser, which says why and offers the whole space. Paused reviews keep their original scope.
 const sessionAt = computed(() => review.value ? `${Math.min(review.value.index + 1, review.value.ids.length)} of ${review.value.ids.length}` : '')
-const toReview = computed(() => queues.value.triage.length + queues.value.review.length)
+const pausedScope = computed(() => review.value?.scopeLabel ?? review.value?.viewName ?? '')
+const toReview = computed(() => primaryQueues.value.triage.length + primaryQueues.value.review.length)
+const spaceToReview = computed(() => queues.value.triage.length + queues.value.review.length)
 function pressReview(anchor: HTMLElement) {
   if (review.value) resumeReview()
-  else if (toReview.value) void startProcess('tasks', 'space')
+  else if (toReview.value) void startProcess('tasks', primaryScope.value)
+  else chooseWorkflow(primaryScope.value === 'view' ? 'view' : 'tasks', anchor)
+}
+function reviewSpace(anchor: HTMLElement | null) {
+  if (spaceToReview.value) void startProcess('tasks', 'space')
   else chooseWorkflow('tasks', anchor)
 }
 function resumeReview() {
@@ -419,7 +436,7 @@ function loadReview() {
   if (typeof forward === 'string' && forward.startsWith(`/o/${opened}`)) processOpen.value = true
 }
 onMounted(loadReview)
-watch(() => [props.id, workspace.space?.id, session.user?.id], () => {
+watch([() => props.id, () => workspace.space?.id, () => session.user?.id], () => {
   processOpen.value = false
   loadReview()
 })
@@ -730,9 +747,9 @@ async function newMenu(event: MouseEvent) {
       <h1 class="min-w-0 text-2xl font-bold tracking-tight max-md:break-words md:truncate">{{ type.pluralName }}</h1>
       <span class="text-sm text-ink-faint max-md:hidden">{{ objects.length }}</span>
       <span class="flex-1" />
-      <button v-if="!loading && taskWorkflows && !isPhone" :class="review || toReview ? tintedButton : greyButton" class="min-w-0" data-review-tasks @click="pressReview($event.currentTarget as HTMLElement)">
-        <template v-if="review"><AppIcon fallback="ph:play" /><span class="truncate">Resume {{ review.scope === 'space' ? 'review' : `review of ${review.viewName}` }}</span> <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
-        <template v-else><AppIcon fallback="ph:arrows-clockwise" />Review <span v-if="toReview" class="tabular-nums">{{ toReview }}</span></template>
+      <button v-if="!loading && taskWorkflows && !isPhone" :class="review || toReview ? tintedButton : greyButton" class="min-w-0" :title="review ? `Resume ${pausedScope}` : primaryScopeLabel" data-review-tasks @click="pressReview($event.currentTarget as HTMLElement)">
+        <template v-if="review"><AppIcon fallback="ph:play" /><span class="truncate">Resume review</span> <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
+        <template v-else><AppIcon fallback="ph:arrows-clockwise" />{{ primaryScope === 'view' ? 'Review' : 'Review all' }} <span v-if="toReview" class="tabular-nums">{{ toReview }}</span></template>
       </button>
       <button v-else-if="!loading && review && !taskWorkflows" :class="tintedButton" class="min-w-0" data-process-resume @click="resumeReview">
         <AppIcon fallback="ph:play" /> <span class="truncate">{{ isPhone ? 'Resume' : `Resume review of ${review.viewName}` }}</span> <span class="tabular-nums">{{ sessionAt }}</span>
@@ -757,9 +774,18 @@ async function newMenu(event: MouseEvent) {
         <AppIcon fallback="ph:push-pin" class="text-ink-soft" /> {{ pinned ? 'Pinned in sidebar' : 'Pin to sidebar' }}
         <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
       </button>
-      <!-- The chooser behind the Review button: what it holds, and End session. -->
-      <button v-if="taskWorkflows" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover max-md:min-h-11" data-workflows @click="chooseWorkflow('tasks', menuAnchor)">
-        <AppIcon fallback="ph:arrows-clockwise" class="text-ink-soft" /> Review tasks…
+      <button v-if="taskWorkflows && reviewable" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-hover max-md:min-h-11" data-workflows data-review-view @click="chooseWorkflow('view', menuAnchor)">
+        <AppIcon fallback="ph:arrows-clockwise" class="shrink-0 text-ink-soft" />
+        <span class="min-w-0 flex-1"><span class="block">Review this view…</span><span class="block break-words text-xs text-ink-faint">{{ viewScope }}</span></span>
+        <span class="tabular-nums text-ink-soft">{{ viewQueues.triage.length + viewQueues.review.length }}</span>
+      </button>
+      <button v-if="taskWorkflows && !reviewable && review" class="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-hover" data-workflows @click="chooseWorkflow('tasks', menuAnchor)">
+        <AppIcon fallback="ph:play" class="shrink-0 text-ink-soft" /><span class="min-w-0 break-words">Paused review: {{ pausedScope }}…</span>
+      </button>
+      <button v-if="taskWorkflows" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-hover max-md:min-h-11" data-review-all @click="reviewSpace(menuAnchor)">
+        <AppIcon fallback="ph:globe" class="shrink-0 text-ink-soft" />
+        <span class="min-w-0 flex-1"><span class="block">Review all tasks in {{ workspace.space?.name }}</span><span class="block text-xs text-ink-faint">Across all views · filters don’t apply</span></span>
+        <span class="tabular-nums text-ink-soft">{{ spaceToReview }}</span>
       </button>
       <button v-if="isPhone && collection?.canSelect" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" data-select-mode @click="selectFromMenu">
         <AppIcon fallback="ph:check-square" class="text-ink-soft" /> Select {{ type.pluralName.toLowerCase() }}
@@ -767,7 +793,7 @@ async function newMenu(event: MouseEvent) {
       <div class="my-1 border-t border-line" />
       <template v-if="!fixedActive">
       <div class="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">View “{{ view.name }}”</div>
-      <button v-if="reviewable" class="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" data-review-view @click="chooseWorkflow('view', menuAnchor)">
+      <button v-if="reviewable && !taskWorkflows" class="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" data-review-view @click="chooseWorkflow('view', menuAnchor)">
         <AppIcon fallback="ph:play" class="text-ink-soft" /> Review this view…
       </button>
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="renameView">
@@ -839,9 +865,9 @@ async function newMenu(event: MouseEvent) {
         </button>
         <HabitProgressMenu v-if="trackerActive && type.system === 'habit'" :type="type" />
         <!-- Review sits here on a phone: the header has no room beside the title. -->
-        <button v-if="!loading && taskWorkflows" :class="[review || toReview ? tintedButton : greyButton, 'ml-auto']" data-review-tasks @click="pressReview($event.currentTarget as HTMLElement)">
+        <button v-if="!loading && taskWorkflows" :class="[review || toReview ? tintedButton : greyButton, 'ml-auto']" :title="review ? `Resume ${pausedScope}` : primaryScopeLabel" data-review-tasks @click="pressReview($event.currentTarget as HTMLElement)">
           <template v-if="review"><AppIcon fallback="ph:play" /> Resume <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
-          <template v-else><AppIcon fallback="ph:arrows-clockwise" /> Review <span v-if="toReview" class="tabular-nums">{{ toReview }}</span></template>
+          <template v-else><AppIcon fallback="ph:arrows-clockwise" /> {{ primaryScope === 'view' ? 'Review' : 'Review all' }} <span v-if="toReview" class="tabular-nums">{{ toReview }}</span></template>
         </button>
         <PopoverMenu v-model:open="filtersOpen" :anchor="filtersAnchor" label="Search and filter">
           <!-- Changes apply as they are made: the count says what they leave, Done closes the sheet. -->
@@ -1090,8 +1116,15 @@ async function newMenu(event: MouseEvent) {
         </template>
       </PopoverMenu>
     </div>
+    <div v-if="isPhone && taskWorkflows && mineOn" class="mt-3 flex flex-wrap gap-2">
+      <button class="flex min-h-11 items-center gap-2 rounded-lg bg-hover px-3 text-sm text-ink-soft" aria-label="Remove Mine filter" data-review-mine @click="toggleMine">Mine <AppIcon fallback="ph:x" :size="12" /></button>
+    </div>
+    <div v-if="!loading && taskWorkflows" class="border-b border-line py-3 text-xs text-ink-soft" aria-live="polite" data-review-scope>
+      <template v-if="review"><p class="break-words">Paused review: <span class="font-medium text-ink">{{ pausedScope }}</span></p><p class="mt-1 tabular-nums">{{ sessionAt }}</p></template>
+      <template v-else><p class="break-words">Review scope: <span class="font-medium text-ink">{{ primaryScopeLabel }}</span></p><p class="mt-1" data-review-counts>{{ toReview ? `${primaryQueues.triage.length} new · ${primaryQueues.review.length} ${primaryQueues.review.length === 1 ? 'check-in' : 'check-ins'}` : `Nothing to review in ${primaryScope === 'view' ? viewScope : workspace.space?.name}.` }}</p></template>
+    </div>
     <WorkflowChooser v-model:open="workflowOpen" :type="type" :anchor="workflowAnchor" :mode="workflowMode" :space-name="workspace.space?.name ?? ''" :view-scope="viewScope"
-      :new-count="queues.triage.length" :check-in-count="queues.review.length" :view-count="processList.length" :view-all-count="openList.length" :session="review"
+      :new-count="chooserQueues.triage.length" :check-in-count="chooserQueues.review.length" :space-count="spaceToReview" :view-count="processList.length" :view-all-count="openList.length" :session="review"
       @start="startProcess" @resume="resumeReview" @end="discardReview" />
 
     <p v-if="loading" class="py-10 text-sm text-ink-faint">Loading…</p>

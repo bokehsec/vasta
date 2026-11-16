@@ -22,7 +22,7 @@ export function needsTriage(type: ObjectType | undefined, object: Pick<ObjectRec
   return !ids.length || triageOptionsOf(type).some((o) => ids.includes(o.id))
 }
 
-/** Global sister queues: all incoming tasks, or established commitments due for review. */
+/** Sister queues within the supplied tasks: incoming work, then commitments due for review. */
 export function taskWorkflowQueues<T extends Pick<ObjectRecord, 'props'>>(type: ObjectType | undefined, objects: readonly T[], today: string): { triage: T[]; review: T[] } {
   const triage: T[] = []
   const review: T[] = []

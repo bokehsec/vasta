@@ -27,8 +27,11 @@ text (grey in a page, quiet in a menu), solid red only to confirm in the "Are yo
 32px tall on a desktop, 44px and 15px text on a phone; size never tells kinds apart. Each has hover,
 pressed, disabled and keyboard-focus states. Settings' `primary`/`secondary` are Main and Grey.
 Review on the Tasks page is tinted while work waits and grey when it doesn't; a press starts the
-review (new tasks, then check-ins), the paused one says "Resume review 4 of 12". On a phone it sits
-beside the view picker. Inside a review, at most four buttons and never the status the task already
+review of the current view, search and Mine (new tasks, then check-ins), the paused one says
+"Resume review 4 of 12". A quiet line names the scope and counts; a paused review names its original
+scope. On a phone it sits beside the view picker, with a removable Mine chip below. More offers
+"Review all tasks in Main" (using the space’s name) for a whole-space sweep. Metrics and Agenda explicitly say Review all.
+Inside a review, at most four buttons and never the status the task already
 has: Keep in that status is Main (the one highlighted; a new task has none), Schedule…, Done and
 Drop are bordered, other statuses are underlined links, Decide later quiet. On a big screen they are
 centred under the task, the plan in a column beside it; on a phone a 2×2 tray at the bottom. Navigation (sidebar, tab bar, calendar grids), segmented controls,

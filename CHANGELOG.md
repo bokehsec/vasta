@@ -74,7 +74,7 @@ GitHub release page.
 
 - **Review tasks: one routine, few clear choices.** A task type's page has one **Review**
   button (with how many are waiting) instead of separate Triage and Review buttons on every view. It
-  goes through the whole space, whatever view or filters you are on: **new** tasks first (no status,
+  goes through the current view, including search and Mine: **new** tasks first (no status,
   or an incoming one such as Inbox), then **check-ins** (open tasks not reviewed for 7 days, including
   ones on hold). The review shows the task in full (all its notes, Claude's take, its steps with
   their dates) and **the plan now**: status, due date, do date, priority, project and next step,
@@ -87,8 +87,7 @@ GitHub release page.
   on a computer: K keep, N next, S schedule, D done, X drop, 1–9 the links. On a big screen the
   buttons are centred under the task with the plan beside it; on a phone they are a tray at the
   bottom. Type settings › Quick actions sets how often a task comes back for a check-in and which
-  statuses count as new. Reviewing just the current view stays in the page's ⋯ menu as **Review
-  this view…**.
+  statuses count as new. The page's ⋯ menu offers **Review all tasks in this space** for a full sweep.
 - **Search and filters in one place on a phone.** A type's page (Tasks and the rest) shows the view
   and a Filters button on one row, with a count of what is on, instead of a toolbar that scrolled
   sideways. Filters opens a sheet with Search this view, Mine, the view's filters and Arrange (sort,
@@ -194,6 +193,13 @@ GitHub release page.
 - **"Next week" in date pickers**, beside Today and Tomorrow.
 
 ### Changed
+
+- **Review the tasks you are looking at.** Review uses the current task view's filters, search and
+  Mine, with its scope and counts visible; new tasks still come before check-ins. On a phone, Mine
+  also has a visible chip to remove it. **Review all tasks in Main** (using your space’s name) in ⋯ ignores those filters,
+  even when nothing waits in this view. Paused sessions keep and name their original scope. Metrics
+  and Agenda explicitly offer **Review all** for the whole space. Background space updates no longer
+  pause an active review.
 
 - **Grouped tables read as one table.** Column headings appear once above all groups, with aligned
   columns and a shared horizontal scroll. Group labels and counts stay, without a box around each group.

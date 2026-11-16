@@ -130,7 +130,7 @@ const meta = computed(() => {
   if (!object) return { kind: '', detail: '' }
   const added = `added ${formatDateShort({ start: object.createdAt, resolution: 'day' })}`
   if (isNew.value) return { kind: 'New', detail: [currentStatus.value ? `in ${currentStatus.value.label}` : 'no status yet', added].join(' · ') }
-  if (props.session.scope === 'view') return { kind: '', detail: added }
+  if (props.session.scope === 'view' && props.session.kind !== 'tasks') return { kind: '', detail: added }
   const last = lastReviewedDay(props.type, object)
   const ago = last ? daysBetween(last, dayKey()) : undefined
   const reviewedText = ago === undefined ? 'never reviewed' : ago <= 0 ? 'reviewed today' : ago === 1 ? 'reviewed yesterday' : `reviewed ${ago} days ago`
@@ -453,6 +453,7 @@ const kbd = 'rounded border border-line-strong px-1.5 py-0.5 text-[11px] leading
             <span class="text-sm tabular-nums text-ink-soft" aria-live="polite" data-process-position>{{ saving ? 'Saving…' : position }}</span>
             <button class="-mr-2 min-h-11 shrink-0 rounded-lg px-3 text-sm text-ink-soft hover:bg-hover disabled:opacity-50" :disabled="blocked" :aria-label="`Pause ${title.toLowerCase()} (resume later)`" data-process-close @click="pause">{{ done ? 'Close' : 'Pause' }}</button>
           </div>
+          <p class="mt-1 break-words text-xs text-ink-soft md:hidden" data-process-scope>{{ session.scopeLabel ?? session.viewName }}</p>
           <div class="mt-2 flex items-center gap-1.5" aria-hidden="true">
             <template v-for="part in parts" :key="part.label">
               <span v-if="part.label && wide" class="whitespace-nowrap pr-1 text-xs tabular-nums text-ink-soft">{{ part.label }} {{ part.at }}/{{ part.size }}</span>

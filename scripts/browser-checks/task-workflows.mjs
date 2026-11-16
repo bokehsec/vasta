@@ -54,7 +54,7 @@ try {
       { id: 'done', label: 'Done', status: 'done' }, { id: 'drop', label: 'Dropped', status: 'done' },
     ] } : p).concat([{ id: 'nextstep', name: 'Next step', kind: 'text' }, { id: 'do', name: 'Do date', kind: 'date' }]),
     quickActions: { nextStepField: 'nextstep', deferField: 'do', deferStatus: 'scheduled', reviewEvery: 7, triageStatuses: ['inbox'] },
-    views: [{ id: 'all', name: 'All tasks', layout: 'list' }, { id: viewId, name: 'On hold — due for review', layout: 'list', filter: { kind: 'group', operator: 'and', items: [
+    views: [{ id: 'all', name: 'All tasks', layout: 'list', sort: [{ field: 'createdAt', direction: 'asc' }] }, { id: viewId, name: 'On hold — due for review', layout: 'list', filter: { kind: 'group', operator: 'and', items: [
       { kind: 'filter', field: 'status', operator: 'is', value: { kind: 'literal', value: ['hold'] } }, { kind: 'filter', field: 'reviewDue', operator: 'is-checked' },
     ] } }],
   })
@@ -71,7 +71,7 @@ try {
   await make('F finished', 'done')
   await page.goto(base, { waitUntil: 'networkidle' })
   await page.locator('main').waitFor()
-  await page.evaluate(({ spaceId, typeId, viewId }) => { localStorage.setItem('vasta.space', spaceId); localStorage.setItem(`vasta.view.${typeId}`, viewId) }, { spaceId: space.id, typeId: type.id, viewId })
+  await page.evaluate(({ spaceId, typeId, viewId }) => { localStorage.setItem('vasta.space', spaceId); localStorage.setItem(`vasta.view.${typeId}`, viewId) }, { spaceId: space.id, typeId: type.id, viewId: 'all' })
   // The replica pulls the new space in the background: reopen the page until it has the type.
   await until(async () => {
     await page.goto(`${base}/t/${type.id}`)
@@ -235,20 +235,22 @@ try {
   assert.match(await page.locator('[data-process-summary]').innerText(), /^Dropped 1 · 1 left for later$/)
   await click('[data-process-finish]')
 
-  step('view review stays in ⋯ with exact view scope and review-all; its Keep and plan field work')
+  step('view review uses the same incoming/check-in routine with exact scope; its Keep and plan field work')
+  await click('[data-view-picker]')
+  await page.locator('[data-view-option]', { hasText: /^\s*On hold — due for review\s*$/ }).click()
   await page.locator('main header button[title="More"]').click()
   await click('[data-review-view]')
   assert.match(await page.locator('[data-workflow-chooser]').innerText(), /On hold — due for review/)
   assert.match(await page.locator('[data-process]').innerText(), /Review 1 task/)
   await click('[data-process]')
   await page.locator('[data-process-mode]').waitFor()
-  assert.match(await page.locator('[data-process-heading]').innerText(), /Review this view/)
-  assert.equal((await position.innerText()).trim(), '1 of 1')
+  assert.match(await page.locator('[data-process-heading]').innerText(), /Review tasks/)
+  assert.equal((await position.innerText()).trim(), 'Check-in 1 of 1')
   await until(async () => (await currentTitle()) === d.title, 'targeted queue matches view')
   await page.locator('[data-process-plan] div').filter({ has: page.locator('p', { hasText: /^Next step$/ }) }).locator('input, textarea').first().fill('Revisit the plan')
   await page.locator('[data-process-plan] div').filter({ has: page.locator('p', { hasText: /^Next step$/ }) }).locator('input, textarea').first().press('Enter')
   await until(async () => (await propsOf(d.id)).nextstep?.value === 'Revisit the plan', 'review edit saved')
-  assert.equal((await position.innerText()).trim(), '1 of 1')
+  assert.equal((await position.innerText()).trim(), 'Check-in 1 of 1')
   await click('[data-process-reviewed]')
   await page.locator('[data-process-end]').waitFor()
   await click('[data-process-finish]')
@@ -268,6 +270,7 @@ try {
   await page.locator('[data-workflow-chooser]').waitFor({ state: 'detached' })
   // A check-in (long unreviewed) and a new task wait: tinted, counted, a press starts the review.
   // Made through the API as new tasks: the replica pulls them, and nothing it holds is overwritten.
+  await page.locator('main [role=button]', { hasText: /^\s*All tasks\s*$/ }).click()
   const g = await make('G newest incoming')
   const h = await make('H old commitment', 'next', '2020-01-01')
   await until(async () => /^Review\s+2$/.test((await reviewButton.innerText()).trim()), 'Review 2')
