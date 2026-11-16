@@ -1,6 +1,6 @@
 // Back on a phone (390×844, touch) with something open over the page: the row menu (a submenu
 // first steps back to the menu), a quick action's question (Defer), the Filters sheet, the side
-// menu, Triage & review and its chooser, and Quick capture (its text kept as the draft) each close, and the page
+// menu, Review tasks and its chooser, and Quick capture (its text kept as the draft) each close, and the page
 // and its address stay; with nothing open Back leaves the page as before. A sheet's grabber pulled
 // down closes it, a small pull springs back. Quick capture saves with no connection (the replica
 // takes it; not in MODE=json, where it needs the server).
@@ -157,17 +157,27 @@ try {
   await gone('[data-drawer-backdrop]', 'Back closes the side menu')
   if ((await where()) !== list) throw new Error(`Back with the side menu open left the list: ${await where()}`)
 
-  step('Triage & review: Back closes its chooser, then Triage itself (paused); the list stays')
-  await page.locator('[data-workflows]').click()
-  await page.locator('[data-start-triage]').waitFor()
+  step('Review tasks: Back closes its chooser (from ⋯), then the review itself (paused, the button says Resume); the list stays')
+  const chooser = async () => {
+    await page.locator('main header button[title="More"]').click()
+    await page.locator('[data-workflows]').click()
+    await page.locator('[data-start-review]').waitFor()
+  }
+  await chooser()
   await back()
-  await gone('[data-start-triage]', 'Back closes the Triage & review chooser')
-  await page.locator('[data-workflows]').click()
-  await page.locator('[data-start-triage]').click()
+  await gone('[data-start-review]', 'Back closes the Review tasks chooser')
+  if ((await where()) !== list) throw new Error(`Back with the chooser open left the list: ${await where()}`)
+  await chooser()
+  await page.locator('[data-start-review]').click()
   await page.locator('[data-process-mode]').waitFor()
   await back()
-  await gone('[data-process-mode]', 'Back closes Triage')
-  if ((await where()) !== list) throw new Error(`Back in Triage left the list: ${await where()}`)
+  await gone('[data-process-mode]', 'Back closes the review')
+  if ((await where()) !== list) throw new Error(`Back in the review left the list: ${await where()}`)
+  await until(async () => /Resume/.test(await page.locator('[data-review-tasks]').innerText()), 'the Review button offers Resume')
+  await page.locator('[data-review-tasks]').click()
+  await page.locator('[data-process-mode]').waitFor()
+  await back()
+  await gone('[data-process-mode]', 'Back closes the resumed review')
 
   step('Back with Quick capture open closes it and keeps the text as the draft')
   await page.locator('[data-capture-button]').click()

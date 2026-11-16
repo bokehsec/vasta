@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes } from '../src/builtin-types.ts'
 import type { ObjectType, PropertyValue, QuickActionDef } from '../src/model.ts'
-import { needsTriage, settlesTriage, taskWorkflowQueues, triageDispositionActions, triageOptionsOf } from '../src/task-workflows.ts'
+import { needsTriage, reviewChoices, settlesTriage, taskWorkflowQueues, triageDispositionActions, triageOptionsOf } from '../src/task-workflows.ts'
 
 const base = createBuiltinTypes('s', '2026-11-14T12:00:00Z').find((t) => t.system === 'task')!
 const task: ObjectType = {
@@ -68,5 +68,24 @@ describe('sister task workflows', () => {
     expect(schedule.changes).toContainEqual({ field: 'due', value: { kind: 'ask' } })
     expect(choices.some((a) => a.id === 'triage-status:next')).toBe(false)
     expect(settlesTriage(configured, schedule)).toBe(true)
+  })
+
+  it('offers every status that is not incoming as a review choice, open first, reusing actions that only place the task', () => {
+    const configured: ObjectType = { ...task, quickActions: { deferField: 'due', deferStatus: 'wait', holdStatus: 'hold', actions: [
+      { id: 'done', name: 'Mark done', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['done'] } } }] },
+      { id: 'defer', name: 'Defer', changes: [{ field: 'due', value: { kind: 'ask' } }, { field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['wait'] } } }] },
+      { id: 'start', name: 'Start now', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['next'] } } }, { field: 'priority', value: { kind: 'value', value: { kind: 'select', value: ['high'] } } }] },
+    ] } }
+    const choices = reviewChoices(configured)
+    expect(choices.map((c) => c.option.id)).toEqual(['next', 'wait', 'hold', 'done', 'drop'])
+    expect(choices.map((c) => c.action.name)).toEqual(['Next', 'Waiting', 'On Hold', 'Done', 'Dropped'])
+    // Waiting keeps Defer's date question; Next is not taken from an action that also sets a priority.
+    expect(choices[1]!.action.id).toBe('defer')
+    expect(choices[1]!.action.changes[0]!.value.kind).toBe('ask')
+    expect(choices[0]!.action.id).toBe('status:next')
+    expect(choices[2]!.action.id).toBe('hold')
+    expect(choices[3]!.action.id).toBe('done')
+    expect(choices[4]!.action.icon).toEqual({ kind: 'icon', value: 'ph:x-circle' })
+    expect(reviewChoices({ ...task, system: undefined })).toEqual([])
   })
 })

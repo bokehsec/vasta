@@ -19,16 +19,18 @@ footer).
 **Buttons** (`lib/buttons.ts`): five kinds, each with one job, the same on every screen (after Apple's
 filled, tinted, grey and plain styles). **Main**, ink fill: the one most likely action of a place
 (New Task, Save, a dialog's confirm). **Tinted**, the accent at 12% with accent text: a way into a
-feature, with its count inside ("Triage 12"), or the action a page leads with when it isn't a save
+feature, with its count inside ("Review 12"), or the action a page leads with when it isn't a save
 (Mark done). **Grey**, the hover grey filled: ordinary actions (Cancel, Defer…, Drop, Sync now, a
 phone's view picker and Filters). **Quiet**, text or icon tinted only on hover: toolbars, menus,
 rows and icon buttons, where controls are expected; never a way into a feature. **Delete**: red
 text (grey in a page, quiet in a menu), solid red only to confirm in the "Are you sure?" dialog.
 32px tall on a desktop, 44px and 15px text on a phone; size never tells kinds apart. Each has hover,
 pressed, disabled and keyboard-focus states. Settings' `primary`/`secondary` are Main and Grey.
-Triage and Review on the Tasks page are tinted while work waits and grey when it doesn't; a press
-starts the queue, the paused one says "Resume triage 4 of 12". On a phone, one button beside the
-view picker opens the chooser. Navigation (sidebar, tab bar, calendar grids), segmented controls,
+Review on the Tasks page is tinted while work waits and grey when it doesn't; a press starts the
+review (new tasks, then check-ins), the paused one says "Resume review 4 of 12". On a phone it sits
+beside the view picker. Inside a review, Keep is Main, every status a choice button on screen (never
+in a menu), Decide later quiet; on a big screen the choices take a column beside the task, on a phone
+a tray at the bottom. Navigation (sidebar, tab bar, calendar grids), segmented controls,
 chips, menu rows and the whiteboard keep their own looks; they are not buttons of these kinds.
 
 **The shell**: the sidebar runs the full height with the space switcher on top; the top bar holds

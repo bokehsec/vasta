@@ -161,10 +161,10 @@ try {
   await page.keyboard.press('Escape')
 
   console.log('Review asks without falsely announcing Saving')
-  await page.locator('[data-workflows]').click()
-  await page.locator('[data-start-triage]').click()
-  await page.locator('[data-process-more]').click()
-  await page.locator('[data-menu-sheet] button', { hasText: /^\s*Defer/ }).click()
+  // The 18 test tasks have no status: they are new, and Review starts with them. Defer (no Scheduled status here) asks a date.
+  await page.locator('[data-review-tasks]').click()
+  await page.locator('[data-process-mode]').waitFor()
+  await page.locator('[data-process-action="defer"]').click()
   await page.locator('[data-ask-save]').waitFor()
   assert(!/Saving/.test(await page.locator('[data-process-position]').innerText()))
   assert.equal(await page.locator('[data-process-mode] [role=dialog]').getAttribute('aria-busy'), null)

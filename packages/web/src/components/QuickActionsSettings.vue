@@ -273,11 +273,11 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
       <span class="text-ink-soft">Review each {{ type.name.toLowerCase() }} every</span>
       <input :value="reviewEveryOf(type)" type="number" min="0" step="1" inputmode="numeric" :class="[control, 'w-16']" data-review-every @change="setReviewEvery(($event.target as HTMLInputElement).value)" />
       <span class="text-ink-soft">days</span>
-      <span class="w-full text-xs text-ink-faint">Review commitments shows organised, open tasks not reviewed in that time (0: every time). Incoming tasks go to Triage.</span>
+      <span class="w-full text-xs text-ink-faint">Review tasks brings back each placed, open task for a check-in once it has not been reviewed for this many days (0: every time). Keep marks it reviewed. New tasks always come first.</span>
     </label>
     <fieldset v-if="type.system === 'task'" class="mt-4 space-y-1 text-sm" data-triage-settings>
-      <legend class="font-medium">Incoming statuses for Triage</legend>
-      <p class="text-xs text-ink-soft">Tasks with no status always need triage. A recent review or a next step does not remove them.</p>
+      <legend class="font-medium">Statuses that count as new</legend>
+      <p class="text-xs text-ink-soft">Tasks with no status are always new. Review tasks shows new tasks first, whatever their review date or next step.</p>
       <label v-for="option in openStatuses" :key="option.id" class="flex min-h-11 items-center gap-2">
         <input type="checkbox" class="h-5 w-5 accent-[var(--color-accent)]" :checked="triageOptionsOf(type).some((o) => o.id === option.id)" @change="toggleIncoming(option.id)" />
         {{ option.label }}
