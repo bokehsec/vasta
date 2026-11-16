@@ -1,13 +1,15 @@
 <script setup lang="ts">
 // One focused session: Review tasks (new tasks first, then those due for a check-in), or a review
 // of one view. Everything about the task is on screen (its text in full, steps, the plan's fields,
-// editable in place) and so is every choice: the statuses it can go to, and for a task already
-// placed, Keep (the plan is right: reviewed today, back in `reviewEvery` days) or Later (nothing
-// recorded; it stays in the queue). A new task has no Keep: it needs a place. The queue is stable,
-// with Undo, explicit save, and the reading position kept across interruptions.
+// editable in place) and so are its choices, few and never the status it already has
+// (reviewButtons): a task already placed has Keep in that status, highlighted (reviewed today, back
+// in `reviewEvery` days); a new task has Next, Schedule…, Done and Drop, none highlighted. Other
+// statuses are links under them; Later records nothing and keeps it in the queue. On a big screen
+// the choices sit under the task, the plan beside it; on a phone they are a tray at the bottom.
+// The queue is stable, with Undo, explicit save, and the reading position kept across interruptions.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Doc, ObjectSummary, ObjectType, PropertyDef, PropertyValue, QuickActionDef, SelectOption } from '@vasta/core'
-import { DUE_PROPERTY_ID, STATUS_PROPERTY_ID, askOf, daysBetween, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, quickActionsOf, reviewChoices, reviewEveryOf, reviewedAction, settlesTriage, statusProperty, withReviewed } from '@vasta/core'
+import { DUE_PROPERTY_ID, STATUS_PROPERTY_ID, askOf, daysBetween, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, quickActionsOf, reviewButtons, reviewEveryOf, reviewedAction, settlesTriage, statusProperty, withReviewed, type ReviewButton } from '@vasta/core'
 import { addSelectOption, dayKey } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { greyButton, mainButton } from '../lib/buttons.ts'
@@ -81,33 +83,42 @@ const position = computed(() => {
   return index.value < newCount.value ? `New ${index.value + 1} of ${newCount.value}` : `Check-in ${index.value - newCount.value + 1} of ${total.value - newCount.value}`
 })
 
-// The choices. A task type: its statuses (reviewChoices), the current one marked, then any other
-// quick actions of its own. Another type (a view's review): its quick actions.
+// The choices. A task type: its review buttons and links (reviewButtons), then any other quick
+// actions of its own as links. Another type (a view's review): its quick actions as the buttons.
 const actions = computed(() => quickActionsOf(props.type))
 const status = computed(() => statusProperty(props.type))
-// A choice's notice and the end's totals say where tasks went: "Moved to Next", "Done".
-const choices = computed(() => reviewChoices(props.type).map((c) => ({ option: c.option, action: { ...c.action, name: c.option.status === 'done' ? c.option.label : `Moved to ${c.option.label}` } })))
-const choiceLabel = (choice: { option: SelectOption; action: QuickActionDef }) => askOf(props.type, choice.action) ? `${choice.option.label}…` : choice.option.label
 const currentStatus = computed<SelectOption | undefined>(() => {
   const value = status.value && current.value ? current.value.props[status.value.id] : undefined
   const id = value?.kind === 'select' ? value.value[0] : undefined
   return id ? status.value?.options.find((o) => o.id === id) : undefined
 })
+const buttons = computed(() => reviewButtons(props.type, currentStatus.value?.id, isNew.value))
 const nextStepField = computed(() => nextStepFieldOf(props.type))
 const extras = computed(() => {
-  const used = new Set(choices.value.map((c) => c.action.id))
-  return actions.value.filter((a) => !used.has(a.id) && !(askOf(props.type, a)?.def.id === nextStepField.value?.id && plan.value.some((d) => d.id === nextStepField.value?.id)))
+  const covered = new Set(buttons.value.covered)
+  return actions.value.filter((a) => !covered.has(a.id) && !(askOf(props.type, a)?.def.id === nextStepField.value?.id && plan.value.some((d) => d.id === nextStepField.value?.id)))
 })
+const asButton = (action: QuickActionDef): ReviewButton => ({ role: 'move', label: action.name, action })
+/** The main row (after Keep) and the links under it. */
+const mainButtons = computed(() => buttons.value.main.length ? buttons.value.main : extras.value.map(asButton))
+const links = computed(() => buttons.value.main.length ? [...buttons.value.more, ...extras.value.map(asButton)] : [])
 const reviewed = computed(() => (isNew.value ? undefined : reviewedAction(props.type)))
-/** Keys 1–9: the choices, then the others. */
-const keyed = computed(() => [...choices.value.map((c) => c.action), ...extras.value])
-const keyOf = (action: QuickActionDef) => {
-  const key = keyed.value.findIndex((a) => a.id === action.id) + 1
-  return key > 0 && key <= 9 ? String(key) : ''
-}
-const rightAction = computed(() => actions.value.find((a) => a.id === 'defer'))
-const label = (action: QuickActionDef) => (askOf(props.type, action) ? `${action.name}…` : action.name)
-const tone = (option: SelectOption) => option.status !== 'done' ? '' : choices.value.find((c) => c.option.status === 'done')?.option.id === option.id ? 'text-[var(--color-flow-done)]' : 'text-red-600 dark:text-red-400'
+const label = (button: ReviewButton) => (askOf(props.type, button.action) ? `${button.label}…` : button.label)
+const icon = (button: ReviewButton) => button.role === 'schedule' ? 'ph:calendar-blank' : button.role === 'done' ? 'ph:check-circle' : button.role === 'drop' ? 'ph:x-circle' : button.action.icon?.value ?? 'ph:arrow-right'
+const tone = (button: ReviewButton) => button.role === 'done' ? 'text-[var(--color-flow-done)]' : button.role === 'drop' ? 'text-red-600 dark:text-red-400' : ''
+// Keys: K (or R) keeps; the main buttons by letter (S schedule, D done, X drop, a new task's first
+// status by its initial); the links 1–9.
+const keys = computed(() => {
+  const map = new Map<string, ReviewButton>()
+  for (const button of mainButtons.value) {
+    const key = button.role === 'schedule' ? 's' : button.role === 'done' ? 'd' : button.role === 'drop' ? 'x' : button.label.trim()[0]?.toLowerCase()
+    if (key && !'kr'.includes(key) && !map.has(key)) map.set(key, button)
+  }
+  links.value.slice(0, 9).forEach((button, i) => map.set(String(i + 1), button))
+  return map
+})
+const keyOf = (button: ReviewButton) => [...keys.value].find(([, b]) => b === button)?.[0]?.toUpperCase() ?? ''
+const rightAction = computed(() => buttons.value.main.find((b) => b.role === 'schedule')?.action ?? actions.value.find((a) => a.id === 'defer'))
 const every = computed(() => reviewEveryOf(props.type))
 const keepLabel = computed(() => outcome.value ? `Next ${noun.value}` : currentStatus.value ? `Keep in ${currentStatus.value.label}` : 'Keep as it is')
 const keepHint = computed(() => outcome.value ? 'Decided. Go on to the next one.' : every.value ? `Marks it reviewed today. It comes back in ${every.value} ${every.value === 1 ? 'day' : 'days'}.` : 'Marks it reviewed today.')
@@ -136,7 +147,7 @@ const plan = computed<PropertyDef[]>(() => {
   return ids.flatMap((id) => props.type.properties.find((p) => p.id === id && p.kind !== 'rich-text') ?? [])
     .filter((d) => d.id !== 'assignee' || current.value?.props[d.id])
 })
-const editable = (def: PropertyDef) => def.kind !== 'formula' && !(def.id === STATUS_PROPERTY_ID && choices.value.length)
+const editable = (def: PropertyDef) => def.kind !== 'formula' && !(def.id === STATUS_PROPERTY_ID && buttons.value.main.length)
 async function setField(def: PropertyDef, value: PropertyValue | undefined) {
   const object = current.value
   if (!object) return
@@ -199,11 +210,6 @@ async function act(action: QuickActionDef, anchor: HTMLElement | null) {
   } finally {
     busy.value = false
   }
-}
-/** A status choice. The status it already has, on a task already placed, is Keep. */
-function choose(action: QuickActionDef, option: SelectOption, anchor: HTMLElement | null) {
-  if (reviewed.value && option.id === currentStatus.value?.id && !askOf(props.type, action)) return act(reviewed.value, anchor)
-  return act(action, anchor)
 }
 function move(delta: number) {
   if (busy.value || addingStep.value) return
@@ -313,8 +319,8 @@ onBeforeUnmount(() => {
   })
 })
 
-// Keys, while no question or text box has them: K (or R) keeps, 1–9 choose, → later, ← back,
-// Enter opens the page, Escape pauses.
+// Keys, while no question or text box has them: K (or R) keeps, letters and 1–9 choose (keys), →
+// later, ← back, Enter opens the page, Escape pauses.
 function onKey(event: KeyboardEvent) {
   if (event.defaultPrevented || quickAsk.value || contextMenu.open || event.metaKey || event.ctrlKey || event.altKey) return
   if ((event.target as Element | null)?.closest('[data-overlay]')) return
@@ -335,13 +341,10 @@ function onKey(event: KeyboardEvent) {
     void act(reviewed.value, keepButton.value)
     return
   }
-  const number = Number(event.key)
-  const action = number >= 1 && number <= 9 ? keyed.value[number - 1] : undefined
-  if (action && !done.value) {
+  const button = keys.value.get(event.key.toLowerCase())
+  if (button && !done.value) {
     event.preventDefault()
-    const choice = choices.value.find((c) => c.action.id === action.id)
-    const anchor = panel.value?.querySelector<HTMLElement>(`[data-key="${number}"]`) ?? null
-    void (choice ? choose(action, choice.option, anchor) : act(action, anchor))
+    void act(button.action, panel.value?.querySelector<HTMLElement>(`[data-key="${keyOf(button)}"]`) ?? null)
   } else if (event.key === 'ArrowRight' || event.key === ' ') {
     event.preventDefault()
     skip()
@@ -404,11 +407,11 @@ function onTouchEnd() {
   else if (end < 0) skip()
 }
 
-// On a phone the buttons are where notices show: the notice (Undo) sits just above them instead.
+// The buttons are at the bottom, where notices show: the notice (Undo) sits just above them instead.
 const buttonBlock = ref<HTMLElement | null>(null)
 let blockSize: ResizeObserver | undefined
 function liftNotices() {
-  ui.noticeLift = isPhone.value && buttonBlock.value ? Math.max(0, Math.round(window.innerHeight - buttonBlock.value.getBoundingClientRect().top)) : 0
+  ui.noticeLift = buttonBlock.value ? Math.max(0, Math.round(window.innerHeight - buttonBlock.value.getBoundingClientRect().top)) : 0
 }
 watch([buttonBlock, isPhone], ([block]) => {
   blockSize?.disconnect()
@@ -423,10 +426,10 @@ onBeforeUnmount(() => {
 const summary = computed(() => summarize(props.session))
 const wide = computed(() => !isPhone.value)
 const sectionName = 'text-xs font-semibold text-ink-faint'
-const choiceButton = 'flex min-h-11 min-w-0 items-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-left text-sm hover:bg-hover disabled:opacity-50 aria-pressed:border-line-strong aria-pressed:bg-hover'
-const phoneChoice = 'flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-line bg-surface px-1 text-[13px] active:bg-hover disabled:opacity-50 aria-pressed:border-line-strong aria-pressed:bg-hover'
+const choiceButton = 'flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 text-[15px] hover:bg-hover active:bg-line disabled:opacity-50'
 const quiet = 'flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm text-ink-soft hover:bg-hover hover:text-ink disabled:opacity-40'
-const kbd = 'ml-auto rounded border border-line-strong px-1.5 py-0.5 text-[11px] leading-none text-ink-faint'
+const link = 'min-h-11 rounded-md px-1.5 text-sm text-ink underline decoration-line-strong underline-offset-[3px] hover:bg-hover hover:decoration-ink-soft disabled:opacity-40'
+const kbd = 'rounded border border-line-strong px-1.5 py-0.5 text-[11px] leading-none text-ink-faint'
 </script>
 
 <template>
@@ -445,6 +448,7 @@ const kbd = 'ml-auto rounded border border-line-strong px-1.5 py-0.5 text-[11px]
         <!-- Which review, where in it (new and check-ins apart), and Pause. -->
         <header class="shrink-0 border-b border-line px-4 pb-3 pt-3 md:px-6">
           <div class="flex items-center gap-2">
+            <button v-if="isPhone && !done" class="-ml-2 grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg text-ink-soft hover:bg-hover disabled:opacity-40" :disabled="index === 0 || blocked" aria-label="Back to the previous task" data-process-back @click="move(-1)"><AppIcon fallback="ph:caret-left" :size="18" /></button>
             <h2 class="min-w-0 flex-1 truncate font-semibold" data-process-heading>{{ title }}<span class="font-normal text-ink-soft max-md:hidden"> · {{ session.scopeLabel ?? session.viewName }}</span></h2>
             <span class="text-sm tabular-nums text-ink-soft" aria-live="polite" data-process-position>{{ saving ? 'Saving…' : position }}</span>
             <button class="-mr-2 min-h-11 shrink-0 rounded-lg px-3 text-sm text-ink-soft hover:bg-hover disabled:opacity-50" :disabled="blocked" :aria-label="`Pause ${title.toLowerCase()} (resume later)`" data-process-close @click="pause">{{ done ? 'Close' : 'Pause' }}</button>
@@ -474,157 +478,124 @@ const kbd = 'ml-auto rounded border border-line-strong px-1.5 py-0.5 text-[11px]
           </div>
         </div>
 
-        <div v-else class="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)]">
-          <!-- The task: what it is, the plan (a phone), its text in full, its steps. -->
-          <div
-            ref="card"
-            class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-5 md:px-10 md:pt-7"
-            :class="springing ? 'transition-[transform,opacity] duration-250 ease-[cubic-bezier(0.25,1,0.5,1)]' : ''"
-            :style="shift ? { transform: `translateX(${shift}px)`, opacity: String(1 - Math.min(Math.abs(shift) / 400, 0.5)) } : undefined"
-            data-process-card
-            @touchstart.passive="onTouchStart"
-            @touchmove.passive="onTouchMove"
-            @touchend="onTouchEnd"
-            @touchcancel="onTouchCancel"
-          >
-            <p v-if="missing" class="text-sm text-ink-soft" data-process-missing>This {{ noun }} is no longer here (deleted or moved since the review started). Choose Later to go on.</p>
-            <template v-else-if="current">
-              <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-soft md:text-sm" data-process-meta>
-                <span v-if="meta.kind" class="rounded-md px-1.5 py-0.5 font-semibold" :class="isNew ? 'bg-accent/12 text-accent' : 'bg-hover text-ink'">{{ meta.kind }}</span>
-                <span>{{ meta.detail }}</span>
-              </p>
-              <h2 class="mt-2 max-w-[34ch] break-words text-[1.4rem] font-semibold leading-tight tracking-[-0.01em] md:text-[1.75rem]" data-process-title>{{ displayTitle(current, type) }}</h2>
-              <p v-if="outcome" class="mt-2 inline-flex items-center gap-1.5 rounded-md bg-hover px-2 py-0.5 text-xs text-ink-soft" data-process-outcome>
-                <AppIcon fallback="ph:check" :size="12" />{{ quickActionDoneName(outcome) }}
-              </p>
+        <div v-else class="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
+          <div class="flex min-h-0 flex-1 flex-col">
+            <!-- The task: what it is, the plan (a phone), its text in full, its steps. -->
+            <div
+              ref="card"
+              class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-5 md:px-10 md:pt-7"
+              :class="springing ? 'transition-[transform,opacity] duration-250 ease-[cubic-bezier(0.25,1,0.5,1)]' : ''"
+              :style="shift ? { transform: `translateX(${shift}px)`, opacity: String(1 - Math.min(Math.abs(shift) / 400, 0.5)) } : undefined"
+              data-process-card
+              @touchstart.passive="onTouchStart"
+              @touchmove.passive="onTouchMove"
+              @touchend="onTouchEnd"
+              @touchcancel="onTouchCancel"
+            >
+              <p v-if="missing" class="text-sm text-ink-soft" data-process-missing>This {{ noun }} is no longer here (deleted or moved since the review started). Choose Later to go on.</p>
+              <template v-else-if="current">
+                <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-soft md:text-sm" data-process-meta>
+                  <span v-if="meta.kind" class="rounded-md px-1.5 py-0.5 font-semibold" :class="isNew ? 'bg-accent/12 text-accent' : 'bg-hover text-ink'">{{ meta.kind }}</span>
+                  <span>{{ meta.detail }}</span>
+                </p>
+                <h2 class="mt-2 max-w-[34ch] break-words text-[1.4rem] font-semibold leading-tight tracking-[-0.01em] md:text-[1.75rem]" data-process-title>{{ displayTitle(current, type) }}</h2>
+                <p v-if="outcome" class="mt-2 inline-flex items-center gap-1.5 rounded-md bg-hover px-2 py-0.5 text-xs text-ink-soft" data-process-outcome>
+                  <AppIcon fallback="ph:check" :size="12" />{{ quickActionDoneName(outcome) }}
+                </p>
 
-              <!-- A phone: the plan here, two fields to a row; a wide screen has it beside the text. -->
-              <div v-if="isPhone && plan.length" class="mt-3 grid grid-cols-2 gap-x-3" data-process-plan>
-                <div v-for="def in plan" :key="def.id" class="min-w-0 border-b border-line py-1">
-                  <p class="text-xs text-ink-soft">{{ def.name }}</p>
-                  <PropertyValueEditor v-if="editable(def)" :def="def" :value="current.props[def.id]" class="-ml-2" @update="setField(def, $event)" @add-option="addOption(def, $event)" />
-                  <div v-else class="flex min-h-8 items-center"><PropertyDisplay :def="def" :value="current.props[def.id]" :object="current" short /></div>
+                <!-- A phone: the plan here, two fields to a row; a wide screen has it beside the text. -->
+                <div v-if="isPhone && plan.length" class="mt-3 grid grid-cols-2 gap-x-3" data-process-plan>
+                  <div v-for="def in plan" :key="def.id" class="min-w-0 border-b border-line py-1">
+                    <p class="text-xs text-ink-soft">{{ def.name }}</p>
+                    <PropertyValueEditor v-if="editable(def)" :def="def" :value="current.props[def.id]" class="-ml-2" @update="setField(def, $event)" @add-option="addOption(def, $event)" />
+                    <div v-else class="flex min-h-8 items-center"><PropertyDisplay :def="def" :value="current.props[def.id]" :object="current" short /></div>
+                  </div>
                 </div>
-              </div>
 
-              <div v-if="shownTexts.length" class="mt-5 space-y-5" data-process-text>
-                <section v-for="text in shownTexts" :key="text.field" class="max-w-[70ch]">
-                  <h3 :class="sectionName">{{ text.name }}</h3>
-                  <div class="vasta-doc mt-1 text-[15px] leading-relaxed [&_p+p]:mt-2.5"><DocPreview :content="text.doc.content" /></div>
+                <div v-if="shownTexts.length" class="mt-5 space-y-5" data-process-text>
+                  <section v-for="text in shownTexts" :key="text.field" class="max-w-[70ch]">
+                    <h3 :class="sectionName">{{ text.name }}</h3>
+                    <div class="vasta-doc mt-1 text-[15px] leading-relaxed [&_p+p]:mt-2.5"><DocPreview :content="text.doc.content" /></div>
+                  </section>
+                </div>
+                <p v-else-if="notes" class="mt-5 max-w-[70ch] whitespace-pre-line text-[15px] leading-relaxed">{{ notes }}</p>
+
+                <section v-if="steps.length || breakingDown" class="mt-6 max-w-[70ch]" data-process-steps>
+                  <h3 :class="sectionName">Steps · {{ steps.length }}</h3>
+                  <ul class="mt-1">
+                    <li v-for="step in steps" :key="step.id" class="border-b border-line">
+                      <button class="flex min-h-11 w-full items-center gap-2.5 text-left text-sm hover:text-accent" :disabled="blocked" @click="open(step.id)">
+                        <AppIcon :fallback="isClosedTask(type, step) ? 'ph:check-circle' : 'ph:circle'" :size="16" class="shrink-0" :class="isClosedTask(type, step) ? 'text-[var(--color-flow-done)]' : 'text-ink-faint'" />
+                        <span class="min-w-0 flex-1 truncate" :class="isClosedTask(type, step) ? 'text-ink-faint line-through' : ''">{{ displayTitle(step, type) }}</span>
+                        <span v-if="stepDate(step)" class="shrink-0 text-xs tabular-nums text-ink-soft">{{ stepDate(step) }}</span>
+                      </button>
+                    </li>
+                  </ul>
                 </section>
-              </div>
-              <p v-else-if="notes" class="mt-5 max-w-[70ch] whitespace-pre-line text-[15px] leading-relaxed">{{ notes }}</p>
+                <form v-if="breakingDown" class="mt-3 max-w-[70ch] space-y-2" @submit.prevent="addStep">
+                  <div class="flex items-center gap-2 rounded-lg border border-line px-2.5">
+                    <AppIcon fallback="ph:plus" :size="16" class="text-ink-faint" />
+                    <input ref="stepInput" v-model="stepTitle" class="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-ink-faint max-md:text-base" placeholder="A step" aria-label="New step" data-process-step />
+                  </div>
+                  <div class="flex justify-end gap-2">
+                    <button type="button" :class="greyButton" data-process-step-done @click="breakingDown = false">Done adding</button>
+                    <button type="submit" :class="mainButton" :disabled="!stepTitle.trim() || addingStep" data-process-step-add>{{ addingStep ? 'Adding…' : 'Add step' }}</button>
+                  </div>
+                </form>
 
-              <section v-if="steps.length || breakingDown" class="mt-6 max-w-[70ch]" data-process-steps>
-                <h3 :class="sectionName">Steps · {{ steps.length }}</h3>
-                <ul class="mt-1">
-                  <li v-for="step in steps" :key="step.id" class="border-b border-line">
-                    <button class="flex min-h-11 w-full items-center gap-2.5 text-left text-sm hover:text-accent" :disabled="blocked" @click="open(step.id)">
-                      <AppIcon :fallback="isClosedTask(type, step) ? 'ph:check-circle' : 'ph:circle'" :size="16" class="shrink-0" :class="isClosedTask(type, step) ? 'text-[var(--color-flow-done)]' : 'text-ink-faint'" />
-                      <span class="min-w-0 flex-1 truncate" :class="isClosedTask(type, step) ? 'text-ink-faint line-through' : ''">{{ displayTitle(step, type) }}</span>
-                      <span v-if="stepDate(step)" class="shrink-0 text-xs tabular-nums text-ink-soft">{{ stepDate(step) }}</span>
-                    </button>
-                  </li>
-                </ul>
-              </section>
-              <form v-if="breakingDown" class="mt-3 max-w-[70ch] space-y-2" @submit.prevent="addStep">
-                <div class="flex items-center gap-2 rounded-lg border border-line px-2.5">
-                  <AppIcon fallback="ph:plus" :size="16" class="text-ink-faint" />
-                  <input ref="stepInput" v-model="stepTitle" class="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-ink-faint max-md:text-base" placeholder="A step" aria-label="New step" data-process-step />
+                <div class="mt-4 flex flex-wrap gap-x-2" :class="isPhone ? '-ml-2' : 'md:hidden'">
+                  <button :class="quiet" :disabled="blocked" data-process-open @click="open()"><AppIcon fallback="ph:arrow-square-out" :size="16" />Open page</button>
+                  <button v-if="canBreakDown && !breakingDown" :class="quiet" :disabled="blocked" data-process-break @click="startBreakDown"><AppIcon fallback="ph:tree-structure" :size="16" />Break into steps</button>
                 </div>
-                <div class="flex justify-end gap-2">
-                  <button type="button" :class="greyButton" data-process-step-done @click="breakingDown = false">Done adding</button>
-                  <button type="submit" :class="mainButton" :disabled="!stepTitle.trim() || addingStep" data-process-step-add>{{ addingStep ? 'Adding…' : 'Add step' }}</button>
-                </div>
-              </form>
+              </template>
+            </div>
 
-              <div class="mt-4 flex flex-wrap gap-x-2" :class="isPhone ? '-ml-2' : 'md:hidden'">
-                <button :class="quiet" :disabled="blocked" data-process-open @click="open()"><AppIcon fallback="ph:arrow-square-out" :size="16" />Open page</button>
-                <button v-if="canBreakDown && !breakingDown" :class="quiet" :disabled="blocked" data-process-break @click="startBreakDown"><AppIcon fallback="ph:tree-structure" :size="16" />Break into steps</button>
-                <button v-for="action in isPhone && choices.length ? extras : []" :key="action.id" :class="quiet" :disabled="blocked" :data-process-action="action.id" @click="act(action, $event.currentTarget as HTMLElement)"><AppIcon :icon="action.icon" fallback="ph:lightning" :size="16" />{{ label(action) }}</button>
+            <!-- The decision, under the task: Keep (highlighted: the status it has), the main
+                 buttons, then the other statuses as links; Back and Decide later at the ends. A
+                 phone has them as a tray at the bottom, Back in the header. -->
+            <div ref="buttonBlock" class="shrink-0 border-t border-line bg-surface px-3.5 pt-2.5 md:px-6 md:pt-3.5" :class="isPhone ? 'pb-1' : 'pb-2'" data-process-choices>
+              <template v-if="current">
+                <div :class="isPhone ? 'grid grid-cols-2 gap-2' : 'flex flex-wrap justify-center gap-2'">
+                  <button v-if="reviewed" ref="keepButton" :class="[mainButton, 'min-h-11 min-w-0 px-4 text-[15px]', isPhone ? 'min-h-12' : '']" :disabled="blocked" :title="keepHint" data-process-reviewed @click="act(reviewed, $event.currentTarget as HTMLElement)">
+                    <AppIcon fallback="ph:check" :size="18" class="shrink-0" /><span class="truncate">{{ keepLabel }}</span><kbd v-if="wide && !outcome" class="ml-1 rounded border border-surface/35 px-1.5 py-0.5 text-[11px] leading-none text-surface/75">K</kbd>
+                  </button>
+                  <button v-for="button in mainButtons" :key="button.action.id" :class="[choiceButton, isPhone ? 'min-h-12' : '']" :disabled="blocked" :data-key="keyOf(button)" :data-process-choice="button.option?.id ?? button.role" :data-process-role="button.role" :data-process-action="button.option ? undefined : button.action.id" @click="act(button.action, $event.currentTarget as HTMLElement)">
+                    <AppIcon :icon="button.option ? undefined : button.action.icon" :fallback="icon(button)" :size="18" class="shrink-0" :class="tone(button)" /><span class="truncate">{{ label(button) }}</span><kbd v-if="wide && keyOf(button)" :class="[kbd, 'ml-1']">{{ keyOf(button) }}</kbd>
+                  </button>
+                </div>
+              </template>
+              <div class="mt-1 flex items-center gap-2" :class="wide ? 'grid grid-cols-[1fr_auto_1fr]' : 'justify-between'">
+                <button v-if="wide" :class="[quiet, 'justify-self-start']" :disabled="index === 0 || blocked" data-process-back @click="move(-1)"><AppIcon fallback="ph:caret-left" :size="14" />Back</button>
+                <p v-if="current && links.length" class="flex min-w-0 flex-wrap items-center text-sm text-ink-soft" :class="wide ? 'justify-center' : ''" data-process-links>
+                  <span class="pr-0.5">{{ buttons.main.length ? 'Move to' : 'Or' }}</span>
+                  <template v-for="(button, i) in links" :key="button.action.id">
+                    <span v-if="i" aria-hidden="true">·</span>
+                    <button :class="link" :disabled="blocked" :data-key="keyOf(button)" :title="wide && keyOf(button) ? `Key ${keyOf(button)}` : undefined" :data-process-choice="button.option?.id" :data-process-action="button.option ? undefined : button.action.id" @click="act(button.action, $event.currentTarget as HTMLElement)">{{ label(button) }}</button>
+                  </template>
+                </p>
+                <span v-else />
+                <button :class="[quiet, 'justify-self-end font-medium text-ink']" :disabled="blocked" :title="outcome ? undefined : laterHint" data-process-skip @click="skip">{{ outcome ? 'Next' : wide ? 'Decide later' : 'Later' }}<AppIcon fallback="ph:caret-right" :size="14" /></button>
               </div>
-            </template>
+            </div>
           </div>
 
-          <!-- A wide screen: the plan and every choice in a column beside the text. -->
-          <aside v-if="wide" ref="buttonBlock" class="flex min-h-0 flex-col overflow-y-auto border-line bg-raised px-5 pb-3 pt-5 max-md:border-t md:border-l" data-process-choices>
+          <!-- A wide screen: the plan beside the task. -->
+          <aside v-if="wide" class="flex min-h-0 flex-col overflow-y-auto border-l border-line bg-raised px-5 pb-3 pt-5" data-process-side>
             <template v-if="current">
               <h3 :class="sectionName">The plan now</h3>
-              <div class="mt-1 mb-5" data-process-plan>
-                <div v-for="def in plan" :key="def.id" class="flex min-h-9 items-center border-b border-line/70 text-sm">
+              <div class="mt-1" data-process-plan>
+                <div v-for="def in plan" :key="def.id" class="flex min-h-10 items-center border-b border-line/70 text-sm">
                   <span class="w-24 shrink-0 truncate text-ink-soft">{{ def.name }}</span>
                   <PropertyValueEditor v-if="editable(def)" :def="def" :value="current.props[def.id]" @update="setField(def, $event)" @add-option="addOption(def, $event)" />
                   <div v-else class="flex min-h-8 min-w-0 flex-1 items-center px-2"><PropertyDisplay :def="def" :value="current.props[def.id]" :object="current" short /></div>
                 </div>
-              </div>
-
-              <template v-if="reviewed">
-                <button ref="keepButton" :class="[mainButton, 'min-h-12 w-full justify-start px-3.5 text-[15px]']" :disabled="blocked" data-process-reviewed @click="act(reviewed, $event.currentTarget as HTMLElement)">
-                  <AppIcon fallback="ph:check" :size="18" class="shrink-0" /><span class="min-w-0 flex-1 truncate text-left">{{ keepLabel }}</span><kbd v-if="!outcome" class="rounded border border-surface/35 px-1.5 py-0.5 text-[11px] leading-none text-surface/75">K</kbd>
-                </button>
-                <p class="mb-4 mt-1.5 px-0.5 text-xs leading-snug text-ink-soft" data-process-keep-hint>{{ keepHint }}</p>
-              </template>
-              <h3 :class="[sectionName, 'mb-1.5']">{{ isNew ? 'Where does it go?' : reviewed ? 'Or change it' : 'Decide' }}</h3>
-              <div class="grid grid-cols-2 gap-1.5">
-                <button v-for="choice in choices" :key="choice.option.id" :class="choiceButton" :disabled="blocked" :aria-pressed="!isNew && choice.option.id === currentStatus?.id" :data-key="keyOf(choice.action)" :data-process-choice="choice.option.id" @click="choose(choice.action, choice.option, $event.currentTarget as HTMLElement)">
-                  <AppIcon :icon="choice.action.icon" fallback="ph:arrow-right" :size="17" class="shrink-0" :class="tone(choice.option)" />
-                  <span class="min-w-0 truncate">{{ choiceLabel(choice) }}</span>
-                  <span v-if="!isNew && choice.option.id === currentStatus?.id" class="ml-auto text-[11px] text-ink-faint">now</span>
-                  <kbd v-else-if="keyOf(choice.action)" :class="kbd">{{ keyOf(choice.action) }}</kbd>
-                </button>
-                <button v-for="action in extras" :key="action.id" :class="choiceButton" :disabled="blocked" :data-key="keyOf(action)" :data-process-action="action.id" @click="act(action, $event.currentTarget as HTMLElement)">
-                  <AppIcon :icon="action.icon" fallback="ph:lightning" :size="17" class="shrink-0" />
-                  <span class="min-w-0 truncate">{{ label(action) }}</span>
-                  <kbd v-if="keyOf(action)" :class="kbd">{{ keyOf(action) }}</kbd>
-                </button>
               </div>
               <div class="mt-3 flex flex-col items-start">
                 <button :class="quiet" :disabled="blocked" data-process-open @click="open()"><AppIcon fallback="ph:arrow-square-out" :size="16" />Open the full page</button>
                 <button v-if="canBreakDown && !breakingDown" :class="quiet" :disabled="blocked" data-process-break @click="startBreakDown"><AppIcon fallback="ph:tree-structure" :size="16" />Break into steps</button>
               </div>
             </template>
-            <div class="mt-auto flex items-start justify-between gap-2 border-t border-line pt-2">
-              <button :class="quiet" :disabled="index === 0 || blocked" data-process-back @click="move(-1)"><AppIcon fallback="ph:caret-left" :size="14" />Back</button>
-              <div class="text-right">
-                <button :class="[quiet, 'ml-auto font-medium text-ink']" :disabled="blocked" data-process-skip @click="skip">{{ outcome ? 'Next' : 'Decide later' }}<AppIcon fallback="ph:caret-right" :size="14" /></button>
-                <p v-if="!outcome" class="px-2 text-[11px] leading-snug text-ink-faint">{{ laterHint }}</p>
-              </div>
-            </div>
           </aside>
-
-          <!-- A phone: every choice in a tray within reach of the thumb. -->
-          <div v-else ref="buttonBlock" class="shrink-0 border-t border-line px-3.5 pb-2 pt-2.5" data-process-choices>
-            <template v-if="current">
-              <div v-if="reviewed" class="grid grid-cols-[minmax(0,1fr)_7rem] gap-2">
-                <button ref="keepButton" :class="[mainButton, 'min-h-12 min-w-0']" :disabled="blocked" data-process-reviewed @click="act(reviewed, $event.currentTarget as HTMLElement)">
-                  <AppIcon fallback="ph:check" :size="18" class="shrink-0" /><span class="truncate">{{ keepLabel }}</span>
-                </button>
-                <button :class="[greyButton, 'min-h-12']" :disabled="blocked" data-process-skip @click="skip">{{ outcome ? 'Next' : 'Later' }}<AppIcon fallback="ph:caret-right" :size="14" /></button>
-              </div>
-              <p class="py-1.5 text-center text-xs text-ink-soft" data-process-keep-hint>
-                <template v-if="reviewed && !outcome">Keep: reviewed, back in {{ every }} {{ every === 1 ? 'day' : 'days' }} · Later: stays in the queue</template>
-                <template v-else-if="reviewed">{{ keepHint }}</template>
-                <template v-else-if="isNew">Where does it go?</template>
-                <template v-else>Decide</template>
-              </p>
-              <div class="grid grid-cols-3 gap-1.5">
-                <button v-for="choice in choices" :key="choice.option.id" :class="phoneChoice" :disabled="blocked" :aria-pressed="!isNew && choice.option.id === currentStatus?.id" :data-process-choice="choice.option.id" @click="choose(choice.action, choice.option, $event.currentTarget as HTMLElement)">
-                  <AppIcon :icon="choice.action.icon" fallback="ph:arrow-right" :size="20" :class="tone(choice.option)" />
-                  <span class="max-w-full truncate">{{ choice.option.label }}</span>
-                </button>
-                <template v-if="!choices.length">
-                  <button v-for="action in extras" :key="action.id" :class="phoneChoice" :disabled="blocked" :data-process-action="action.id" @click="act(action, $event.currentTarget as HTMLElement)">
-                    <AppIcon :icon="action.icon" fallback="ph:lightning" :size="20" />
-                    <span class="max-w-full truncate">{{ action.name }}</span>
-                  </button>
-                </template>
-              </div>
-            </template>
-            <div class="mt-1 flex justify-between">
-              <button :class="quiet" :disabled="index === 0 || blocked" data-process-back @click="move(-1)"><AppIcon fallback="ph:caret-left" :size="14" />Back</button>
-              <button v-if="!reviewed" :class="quiet" :disabled="blocked" data-process-skip @click="skip">{{ outcome ? 'Next' : 'Later' }}<AppIcon fallback="ph:caret-right" :size="14" /></button>
-            </div>
-          </div>
         </div>
       </section>
     </div>

@@ -19,7 +19,7 @@ import { chromium, webkit } from 'playwright'
 
 const engine = process.argv[2] ?? 'chromium'
 const base = process.argv[3] ?? 'http://127.0.0.1:5183'
-if (!/^http:\/\/127\.0\.0\.1:518[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
+if (!/^http:\/\/127\.0\.0\.1:5[12]8[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
 
 const desktop = { viewport: { width: 1300, height: 900 }, locale: 'en-US', timezoneId: 'America/Toronto' }
 const phone = { viewport: { width: 390, height: 844 }, hasTouch: true, ...(engine === 'webkit' ? {} : { isMobile: true }), locale: 'en-US', timezoneId: 'America/Toronto' }
@@ -210,21 +210,21 @@ try {
   const titleNow = async () => (await page.locator('[data-process-title]').innerText()).trim()
   await until(async () => (await position.innerText()).startsWith('1 of 5'), '1 of 5')
   const firstTitle = await titleNow()
-  await page.keyboard.press('3')
+  await page.keyboard.press('d')
   await until(async () => (await position.innerText()).startsWith('2 of 5'), 'Done moved on')
   const doneTask = tasks.find((t) => t.title === firstTitle)
-  await until(async () => (await statusOf(doneTask.id)) === doneId, 'key 3 ran Done')
+  await until(async () => (await statusOf(doneTask.id)) === doneId, 'key D ran Done')
   await page.keyboard.press('ArrowRight')
   await until(async () => (await position.innerText()).startsWith('3 of 5'), '→ skipped')
   await page.keyboard.press('ArrowLeft')
   await until(async () => (await position.innerText()).startsWith('2 of 5'), '← went back')
   const deferTitle = await titleNow()
-  await page.keyboard.press('2')
+  await page.keyboard.press('s')
   await page.locator('[data-defer-menu]').waitFor()
   await page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }).click()
   await page.locator('[data-defer-menu] [data-ask-save]').click()
   await until(async () => (await position.innerText()).startsWith('3 of 5'), 'Scheduled moved on')
-  await until(async () => (await dodateOf(tasks.find((t) => t.title === deferTitle).id)) === days.tomorrow, 'key 2 scheduled it for tomorrow')
+  await until(async () => (await dodateOf(tasks.find((t) => t.title === deferTitle).id)) === days.tomorrow, 'key S scheduled it for tomorrow')
   for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight')
   await page.locator('[data-process-end]').waitFor()
   const summary = await page.locator('[data-process-summary]').innerText()
@@ -335,9 +335,11 @@ try {
   const card = await page.locator('[data-process-card]').boundingBox()
   await touchAt(card.x + card.width - 40, card.y + 80, -260, 0, 8)
   await until(async () => (await pos.innerText()).startsWith('2 of'), 'a swipe left skipped')
-  // Every status is a button in the tray, within reach of the thumb; no menu.
+  // Keep (the status it has, To do), Schedule… and Done as buttons in the tray, In progress a link; no menu.
   const choices = await page.locator('[data-process-choice]').all()
-  if (choices.length !== 3) throw new Error(`review choices: ${choices.length}`)
+  const roles = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole).join())
+  if (roles !== 'schedule,done' || choices.length !== 3) throw new Error(`review choices: ${roles}, ${choices.length}`)
+  if ((await page.locator('[data-process-links]').innerText()).replace(/\s+/g, ' ').trim() !== 'Move to In progress') throw new Error(`links: ${await page.locator('[data-process-links]').innerText()}`)
   for (const choice of choices) if ((await choice.boundingBox()).height < 44) throw new Error('a choice under 44px')
   if (await page.locator('[data-process-more]').count()) throw new Error('the review still has a menu')
   const doneTitle = (await page.locator('[data-process-title]').innerText()).trim()

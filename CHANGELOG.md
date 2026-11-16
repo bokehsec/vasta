@@ -51,20 +51,23 @@ GitHub release page.
   pages with columns more room; daily notes with columns now get that same room. Full width uses
   the available content area while keeping the page margins.
 
-- **Review tasks: one routine, every choice on screen.** A task type's page has one **Review**
+- **Review tasks: one routine, few clear choices.** A task type's page has one **Review**
   button (with how many are waiting) instead of separate Triage and Review buttons on every view. It
   goes through the whole space, whatever view or filters you are on: **new** tasks first (no status,
   or an incoming one such as Inbox), then **check-ins** (open tasks not reviewed for 7 days, including
   ones on hold). The review shows the task in full (all its notes, Claude's take, its steps with
   their dates) and **the plan now**: status, due date, do date, priority, project and next step,
-  each changeable in place. Every status is a button (Next, Scheduled…, Waiting, On hold, Done,
-  Dropped), with the current one marked; keys 1–6 on a computer. A task already placed has **Keep in
-  Next** (or its status), which marks it reviewed so it comes back after the review interval, and
-  **Decide later**, which records nothing and keeps it in the queue. A new task has no Keep: it needs
-  a place. On a big screen the task and the choices sit side by side; on a phone the choices are in
-  a tray at the bottom. Type settings › Quick actions sets how often a task comes back for a check-in
-  and which statuses count as new. Reviewing just the current view stays in the page's ⋯ menu as
-  **Review this view…**.
+  each changeable in place. Under the task are at most four buttons, and never the status it
+  already has: a task already placed has **Keep in Next** (or its status, highlighted), which marks
+  it reviewed so it comes back after the review interval, then **Schedule…** (a date, and the
+  Scheduled status: Defer and Scheduled are one choice), **Done** and **Drop**; a new task has
+  **Next**, Schedule…, Done and Drop, none highlighted. The other statuses are links under them
+  ("Move to Waiting · On hold"), and **Decide later** records nothing and keeps it in the queue. Keys
+  on a computer: K keep, N next, S schedule, D done, X drop, 1–9 the links. On a big screen the
+  buttons are centred under the task with the plan beside it; on a phone they are a tray at the
+  bottom. Type settings › Quick actions sets how often a task comes back for a check-in and which
+  statuses count as new. Reviewing just the current view stays in the page's ⋯ menu as **Review
+  this view…**.
 - **Search and filters in one place on a phone.** A type's page (Tasks and the rest) shows the view
   and a Filters button on one row, with a count of what is on, instead of a toolbar that scrolled
   sideways. Filters opens a sheet with Search this view, Mine, the view's filters and Arrange (sort,

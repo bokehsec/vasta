@@ -161,10 +161,10 @@ try {
   await page.keyboard.press('Escape')
 
   console.log('Review asks without falsely announcing Saving')
-  // The 18 test tasks have no status: they are new, and Review starts with them. Defer (no Scheduled status here) asks a date.
+  // The 18 test tasks have no status: they are new, and Review starts with them. Schedule… (Defer's date question) asks a date.
   await page.locator('[data-review-tasks]').click()
   await page.locator('[data-process-mode]').waitFor()
-  await page.locator('[data-process-action="defer"]').click()
+  await page.locator('[data-process-role="schedule"]').click()
   await page.locator('[data-ask-save]').waitFor()
   assert(!/Saving/.test(await page.locator('[data-process-position]').innerText()))
   assert.equal(await page.locator('[data-process-mode] [role=dialog]').getAttribute('aria-busy'), null)

@@ -28,9 +28,10 @@ text (grey in a page, quiet in a menu), solid red only to confirm in the "Are yo
 pressed, disabled and keyboard-focus states. Settings' `primary`/`secondary` are Main and Grey.
 Review on the Tasks page is tinted while work waits and grey when it doesn't; a press starts the
 review (new tasks, then check-ins), the paused one says "Resume review 4 of 12". On a phone it sits
-beside the view picker. Inside a review, Keep is Main, every status a choice button on screen (never
-in a menu), Decide later quiet; on a big screen the choices take a column beside the task, on a phone
-a tray at the bottom. Navigation (sidebar, tab bar, calendar grids), segmented controls,
+beside the view picker. Inside a review, at most four buttons and never the status the task already
+has: Keep in that status is Main (the one highlighted; a new task has none), Schedule…, Done and
+Drop are bordered, other statuses are underlined links, Decide later quiet. On a big screen they are
+centred under the task, the plan in a column beside it; on a phone a 2×2 tray at the bottom. Navigation (sidebar, tab bar, calendar grids), segmented controls,
 chips, menu rows and the whiteboard keep their own looks; they are not buttons of these kinds.
 
 **The shell**: the sidebar runs the full height with the space switcher on top; the top bar holds

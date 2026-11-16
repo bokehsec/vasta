@@ -9,7 +9,7 @@ import { chromium, webkit } from 'playwright'
 
 const engine = process.argv[2] ?? 'chromium'
 const base = process.argv[3] ?? 'http://127.0.0.1:5183'
-if (!/^http:\/\/127\.0\.0\.1:518[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
+if (!/^http:\/\/127\.0\.0\.1:5[12]8[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
 const options = { viewport: { width: 390, height: 844 }, hasTouch: true, locale: 'en-US', timezoneId: 'America/Toronto' }
 const browser = engine === 'webkit' ? null : await chromium.launch()
 const context = engine === 'webkit' ? await webkit.launchPersistentContext(mkdtempSync(path.join(tmpdir(), 'vasta-workflow-')), options) : await browser.newContext(options)
@@ -106,8 +106,10 @@ try {
   assert.equal((await position.innerText()).trim(), 'New 1 of 2')
   assert.equal(await page.locator('[data-process-reviewed]').count(), 0, 'a new task has no Keep')
   assert.equal(await page.locator('[data-process-more], [data-process-notes-toggle]').count(), 0)
-  assert.deepEqual(await page.locator('[data-process-choice]').evaluateAll((els) => els.map((el) => el.dataset.processChoice)), ['next', 'scheduled', 'hold', 'done', 'drop'], 'open statuses first, closing last, none incoming')
-  assert.equal(await page.locator('[data-process-choice][aria-pressed="true"]').count(), 0)
+  // Four buttons, none highlighted (a new task has no status of its own to keep); the rest are links.
+  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => `${el.dataset.processRole}:${el.dataset.processChoice}`)), ['next:next', 'schedule:scheduled', 'done:done', 'drop:drop'])
+  assert.deepEqual(await page.locator('[data-process-links] [data-process-choice]').evaluateAll((els) => els.map((el) => el.dataset.processChoice)), ['hold'])
+  assert.equal(new Set(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor))).size, 1, 'no button highlighted on a new task')
   assert.match(await page.locator('[data-process-skip]').innerText(), /Later/)
   assert.match(await page.locator('[data-process-text]').innerText(), /Context 18:/, 'the notes are shown in full')
   for (const width of [320, 375, 390, 430]) {
@@ -159,7 +161,11 @@ try {
   assert.equal((await position.innerText()).trim(), 'Check-in 1 of 2')
 
   step('a check-in: its status is pressed, Keep names it, Keep records Reviewed and leaves the plan')
-  assert.equal(await page.locator('[data-process-choice="next"]').getAttribute('aria-pressed'), 'true')
+  // The status it has is Keep (highlighted), never a button of its own; Next is not a link either.
+  assert.equal(await page.locator('[data-process-choice="next"]').count(), 0)
+  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole)), ['schedule', 'done', 'drop'])
+  assert.notEqual(await page.locator('[data-process-reviewed]').evaluate((el) => getComputedStyle(el).backgroundColor), await page.locator('[data-process-role="done"]').evaluate((el) => getComputedStyle(el).backgroundColor))
+  assert.match(await page.locator('[data-process-links]').innerText(), /Move to\s+On hold/)
   assert.match(await page.locator('[data-process-reviewed]').innerText(), /Keep in Next/)
   await page.screenshot({ path: path.join(tmpdir(), `vasta-workflow-${engine}-checkin.png`) })
   await click('[data-process-reviewed]')
@@ -270,20 +276,26 @@ try {
   await page.locator('[data-process-mode]').waitFor()
   assert.equal((await position.innerText()).trim(), 'New 1 of 1')
   assert.equal(await currentTitle(), g.title)
-  const aside = await page.locator('[data-process-choices]').boundingBox()
-  assert(aside.x > 600, 'choices sit beside the text on a wide screen')
-  assert.equal(await page.locator('[data-process-choice]').count(), 5)
+  // The choices sit under the task, centred; the plan beside it.
+  const choices = await page.locator('[data-process-choices]').boundingBox()
+  const side = await page.locator('[data-process-side]').boundingBox()
+  assert(choices.x + choices.width <= side.x + 1 && choices.y > 500, `choices under the task: ${JSON.stringify(choices)}`)
+  const row = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => [r.left, r.right]))
+  assert(Math.abs((row[0][0] - choices.x) - (choices.x + choices.width - row.at(-1)[1])) < 4, 'the row is centred')
+  assert.equal(await page.locator('[data-process-role]').count(), 4)
   assert.match(await page.locator('[data-process-plan]').innerText(), /Status/)
   assert.equal(await page.locator('[data-process-reviewed]').count(), 0)
   assert.match(await page.locator('[data-process-skip]').innerText(), /Decide later/)
   assert.equal(await page.locator('[data-process-mode]').evaluate((el) => el.scrollWidth > innerWidth), false)
 
-  step('desktop keys: 1 chooses the first status, ← goes back, → is later, Esc pauses, Resume on the button, K keeps')
-  await page.keyboard.press('1')
+  step('desktop keys: N for Next, ← goes back, → is later, Esc pauses, Resume on the button, K keeps; the notice clears the buttons')
+  await page.keyboard.press('n')
   await until(async () => (await propsOf(g.id)).status?.value[0] === 'next', 'key 1 placed it in Next')
   assert.equal((await position.innerText()).trim(), 'Check-in 1 of 1')
   assert.equal(await currentTitle(), h.title)
   assert.match(await page.locator('[data-process-reviewed]').innerText(), /Keep in Next/)
+  const notice = await page.locator('[role=status]').boundingBox()
+  assert(notice.y + notice.height <= (await page.locator('[data-process-choices]').boundingBox()).y + 1, 'Undo sits above the buttons')
   await page.keyboard.press('ArrowLeft')
   assert.match(await page.locator('[data-process-outcome]').innerText(), /Moved to Next/)
   await page.keyboard.press('ArrowRight')
