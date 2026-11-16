@@ -391,240 +391,264 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
       <AppIcon fallback="ph:hand-swipe-right" :size="16" class="shrink-0" /><span class="flex-1">{{ swipeTip }}</span>
       <button class="grid h-11 w-11 shrink-0 place-items-center text-ink-faint hover:text-ink" aria-label="Hide this tip" @click="hideSwipeTip"><AppIcon fallback="ph:x" :size="14" /></button>
     </p>
-    <section v-for="group in groups" :key="group.key" class="mt-4 first:mt-0">
-      <header v-if="groupField" class="mb-3 flex items-center gap-2 text-sm">
-        <span v-if="group.objectId"><ObjectChip :id="group.objectId" :tag="groupField === 'tags'" /></span>
-        <PersonChip v-else-if="group.personId" :id="group.personId" />
-        <span v-else class="rounded-md px-2 py-0.5 font-medium" :class="group.key === NO_VALUE ? 'text-ink-faint' : chip(group.color as never)">{{ group.label }}</span>
-        <span class="text-xs text-ink-faint">{{ group.items.length }}</span>
-      </header>
-
-      <!-- List; on a phone a table too. -->
-      <div v-if="asList" class="divide-y divide-line/70" :data-phone-rows="phoneRows || undefined">
-        <SwipeRow v-for="{ object, depth, hasChildren } in rowsOf(group)" :key="object.id" :enabled="!!swipeType(object)" :right="swipeRight(object)" :left="swipeLeft(object)">
-          <ObjectLink
-            :id="object.id"
-            class="group/row flex items-center gap-3 rounded-lg px-2 py-2 max-md:py-2.5"
-            :class="[listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : absentParent(object) ? 'flex-wrap gap-y-0.5' : '', picked(object) ? 'bg-accent/10' : 'hover:bg-hover']"
-            :style="depth ? { paddingLeft: `${0.5 + Math.min(depth, 4) * 1.5}rem` } : undefined"
-            :data-depth="nests ? depth : undefined"
+    <!-- Table: fixed column widths; the last, empty column takes the space left. -->
+    <div v-if="layout === 'table' && !asList" class="overflow-x-auto" :class="bare || groupField ? '' : 'rounded-xl border border-line'">
+      <table class="table-fixed text-sm" :style="{ width: `max(100%, ${tableWidth}px)` }">
+        <colgroup>
+          <col v-for="column in columns" :key="column.field" :style="{ width: `${widthOf(column)}px` }" />
+          <col />
+        </colgroup>
+        <thead class="text-left text-xs text-ink-faint">
+          <tr>
+            <th v-for="column in columns" scope="col" :key="column.field" class="relative px-3 py-2 font-medium" :class="bare ? 'first:pl-0' : ''" :data-column="column.field">
+              <span class="block truncate">{{ column.field === 'title' ? 'Title' : column.label }}</span>
+              <span
+                class="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize touch-none hover:bg-accent/30"
+                title="Drag to resize"
+                @pointerdown.prevent="startResize($event, column)"
+              />
+            </th>
+            <th />
+          </tr>
+        </thead>
+        <tbody v-for="(group, index) in groups" :key="group.key">
+          <tr v-if="groupField">
+            <th :colspan="columns.length + 1" scope="rowgroup" class="pb-3 text-left font-normal" :class="index ? 'pt-6' : 'pt-3'">
+              <div class="flex items-center gap-2 text-sm">
+                <span v-if="group.objectId"><ObjectChip :id="group.objectId" :tag="groupField === 'tags'" /></span>
+                <PersonChip v-else-if="group.personId" :id="group.personId" />
+                <span v-else class="rounded-md px-2 py-0.5 font-medium" :class="group.key === NO_VALUE ? 'text-ink-faint' : chip(group.color as never)">{{ group.label }}</span>
+                <span class="text-xs text-ink-faint">{{ group.items.length }}</span>
+              </div>
+            </th>
+          </tr>
+          <tr
+            v-for="object in shown(group)"
+            :key="object.id"
+            class="group/row border-t border-line"
+            :class="picked(object) ? 'bg-accent/10' : 'hover:bg-hover/60'"
             :data-selected="picked(object) || undefined"
-            @click="rowClick($event, object)"
             @contextmenu="rowMenu($event, object)"
           >
-            <!-- The selection box: on hover (a mouse), always while selecting here. -->
-            <button
-              v-if="canSelect && (selectingHere || !isTouch)"
-              class="relative -mr-1 grid h-4 w-4 shrink-0 place-items-center rounded border text-white [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3.5 [@media(hover:none)]:after:content-['']"
-              :class="[picked(object) ? 'border-accent bg-accent' : 'border-line-strong bg-surface', selectingHere ? '' : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100']"
-              role="checkbox"
-              :aria-checked="picked(object)"
-              :aria-label="`Select ${displayTitle(object, typeOf(object))}`"
-              data-select-row
-              @click.prevent.stop="pick($event, object)"
+            <td
+              v-for="column in columns"
+              :key="column.field"
+              class="overflow-hidden px-3 py-2 align-top"
+              :class="[column.wrap ? 'break-words' : 'whitespace-nowrap text-ellipsis', bare ? 'first:pl-0' : '', column.field === 'title' ? 'relative' : '']"
             >
-              <AppIcon v-if="picked(object)" fallback="ph:check-bold" :size="11" />
-            </button>
-            <!-- A parent's caret folds its steps; rows of an outline keep its place free. -->
-            <button
-              v-if="hasChildren"
-              class="relative -mx-1 grid h-5 w-5 shrink-0 place-items-center rounded text-ink-faint hover:bg-line hover:text-ink [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3 [@media(hover:none)]:after:content-['']"
-              :aria-expanded="!folded.has(object.id)"
-              :title="folded.has(object.id) ? 'Show subtasks' : 'Hide subtasks'"
-              data-fold-steps
-              @click.prevent.stop="folded.has(object.id) ? folded.delete(object.id) : folded.add(object.id)"
-            >
-              <AppIcon :fallback="folded.has(object.id) ? 'ph:caret-right' : 'ph:caret-down'" :size="13" />
-            </button>
-            <!-- A phone keeps the width for the title: only a parent's caret takes room there. -->
-            <span v-else-if="outlined(group) && !isPhone" class="-mx-1 w-5 shrink-0" aria-hidden="true" />
-            <!-- On touch the checkbox's tap area reaches 44px around it. -->
-            <TaskCompletionCheck v-if="typeOf(object)?.system === 'task' && !readonly && (listColumns || completion)" :object="object" :type="typeOf(object)" @moved="emit('moved', $event)" />
-            <TypeIcon v-else :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
-            <span v-if="quickType(object)" class="min-w-0 flex-1">
-              <span class="block font-medium max-md:text-base max-md:leading-snug" :class="[list?.wrap || isPhone ? 'break-words' : 'truncate', titleClass(object)]">{{ displayTitle(object, typeOf(object)) }}</span>
-              <span v-if="nextStepOf(object)" class="mt-0.5 flex items-center gap-1 text-xs text-ink-soft max-md:text-[13px]" data-next-step-line>
-                <AppIcon fallback="ph:arrow-right" :size="11" class="shrink-0 text-ink-faint" /><span class="truncate">{{ nextStepOf(object) }}</span>
-              </span>
-            </span>
-            <span
-              v-else
-              class="min-w-0 flex-1 font-medium max-md:text-base max-md:leading-snug"
-              :class="[list?.wrap || isPhone ? 'break-words' : 'truncate', titleClass(object)]"
-            >{{ displayTitle(object, typeOf(object)) }}</span>
-            <TaskCompletionNote :object="object" class="order-last w-full pl-[30px]" />
-            <span v-if="progressOf(object)" class="shrink-0 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
-              {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
-            </span>
-            <span v-if="absentParent(object)" class="order-last w-full truncate pl-[30px] text-xs text-ink-faint max-md:text-[13px]" data-absent-parent>in {{ absentParent(object) }}</span>
-            <span v-if="listColumns" class="flex min-w-0 shrink-0 items-center gap-2 text-xs max-md:text-[13px] @max-2xl:order-last @max-2xl:w-full @max-2xl:flex-wrap @max-2xl:pl-[30px]" data-row-fields @click.prevent>
-              <template v-for="field in fieldsOf(object)" :key="field.field">
-                <span v-if="field.field === 'tags' || field.field === 'collections'" class="flex gap-1">
-                  <ObjectChip v-for="id in field.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="field.field === 'tags'" />
+              <template v-if="column.field === 'title'">
+                <button
+                  v-if="canSelect && (selectingHere || !isTouch)"
+                  class="absolute top-2.5 z-[1] grid h-4 w-4 place-items-center rounded border text-white"
+                  :class="[picked(object) ? 'border-accent bg-accent' : 'border-line-strong bg-surface', selectingHere ? '' : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100', bare && columns[0]?.field === 'title' ? 'left-0' : 'left-3']"
+                  role="checkbox"
+                  :aria-checked="picked(object)"
+                  :aria-label="`Select ${displayTitle(object, typeOf(object))}`"
+                  data-select-row
+                  @click.prevent.stop="pick($event, object)"
+                >
+                  <AppIcon v-if="picked(object)" fallback="ph:check-bold" :size="11" />
+                </button>
+                <TaskCompletionCheck v-if="typeOf(object)?.system === 'task' && !readonly && completion" :object="object" :type="typeOf(object)" class="mr-2 inline-grid align-middle" @moved="emit('moved', $event)" />
+                <ObjectLink :id="object.id" class="font-medium hover:underline" @click="rowClick($event, object)">
+                  <AppIcon v-if="typeOf(object)?.system !== 'task'" :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" :class="canSelect && (selectingHere || !isTouch) ? (selectingHere ? 'invisible' : 'group-hover/row:invisible') : ''" /><span :class="titleClass(object)">{{ displayTitle(object, typeOf(object)) }}</span>
+                </ObjectLink>
+                <TaskCompletionNote :object="object" class="mt-1" />
+                <span v-if="progressOf(object)" class="ml-2 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
+                  {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
                 </span>
-                <span v-else-if="field.field === 'type'" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5" :class="chip(typeOf(object)?.color)">
-                  <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object)?.name }}
-                </span>
-                <span v-else-if="field.field === 'createdAt' || field.field === 'updatedAt'" class="whitespace-nowrap text-ink-faint">{{ formatRelative(object[field.field]) }}</span>
-                <span v-else-if="field.field === 'date'" class="whitespace-nowrap">{{ object.date ? formatDateShort(object.date) : '' }}</span>
-                <span v-else-if="field.field === 'host'" class="whitespace-nowrap">{{ object.media?.host?.replace(/^www\./, '') }}</span>
-                <PropertyDisplay v-else-if="field.def" :def="field.def" :value="object.props[field.field]" :object="object" :wrap="false" short />
+                <TaskQuickActions v-if="actionsUnderTitle && actionType(object)" :type="actionType(object)!" :object="object" variant="row" class="-mb-1 mt-0.5 -ml-1.5" @set="saveQuick(object, $event)" />
               </template>
-            </span>
-            <template v-else>
-              <span class="hidden gap-1 md:flex" @click.prevent>
-                <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
+              <span v-else-if="column.field === 'tags' || column.field === 'collections'" class="flex gap-1" :class="column.wrap ? 'flex-wrap' : 'overflow-hidden'">
+                <ObjectChip v-for="id in column.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="column.field === 'tags'" />
               </span>
-              <!-- A phone leaves out when a task was last changed: the title needs the room more. -->
-              <span v-if="!quickType(object) && !(isPhone && typeOf(object)?.system === 'task')" class="w-24 shrink-0 text-right text-xs text-ink-faint max-md:w-auto">{{ formatRelative(object.updatedAt) }}</span>
-            </template>
-            <!-- In a narrow column the actions take a line of their own under the title; on a phone swipes replace them. -->
-            <TaskQuickActions
-              v-if="rowButtons(object)"
-              :type="quickType(object)!"
-              :object="object"
-              variant="row"
-              class="@max-md:order-last @max-md:w-full @max-md:pl-6"
-              @set="saveQuick(object, $event)"
-            />
-            <!-- A phone: a visible way to the row's menu, 44px to touch (a long press is not found by looking). -->
-            <button
-              v-if="isPhone && !readonly && !selectingHere && actionType(object)"
-              class="-my-2.5 -mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ink-soft active:bg-hover"
-              :aria-label="`More actions for ${displayTitle(object, typeOf(object))}`"
-              data-row-more
-              @click.prevent.stop="rowMore($event, object)"
-            >
-              <AppIcon fallback="ph:dots-three" :size="20" />
-            </button>
-          </ObjectLink>
-        </SwipeRow>
-      </div>
+              <span v-else-if="column.field === 'type'" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs" :class="chip(typeOf(object)?.color)">
+                <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object)?.name }}
+              </span>
+              <span v-else-if="column.field === 'createdAt' || column.field === 'updatedAt'" class="text-xs text-ink-faint">{{ formatRelative(object[column.field]) }}</span>
+              <span v-else-if="column.field === 'date'">{{ object.date ? formatDate(object.date) : '' }}</span>
+              <span v-else-if="column.field === 'host'">{{ object.media?.host?.replace(/^www\./, '') }}</span>
+              <template v-else-if="column.field === QUICK_ACTIONS_COLUMN">
+                <TaskQuickActions v-if="actionType(object)" :type="actionType(object)!" :object="object" variant="row" class="-my-1.5 -ml-1.5" @set="saveQuick(object, $event)" />
+              </template>
+              <PropertyValueEditor
+                v-else-if="column.def && editing === cellKey(object, column)"
+                :def="column.def"
+                :value="valueOf(object, column)"
+                autofocus
+                class="-mx-2 -my-1.5"
+                @update="saveCell(object, column, $event)"
+                @add-option="addOption(object, column, $event)"
+                @close="endEdit(cellKey(object, column))"
+                @mousedown.stop
+              />
+              <div
+                v-else-if="column.def && editable(column)"
+                role="button"
+                tabindex="0"
+                class="-mx-1.5 -my-0.5 min-h-6 cursor-pointer rounded-md px-1.5 py-0.5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/50"
+                :class="column.wrap ? '' : 'overflow-hidden'"
+                :aria-label="`${column.label}: edit`"
+                :data-edit="column.field"
+                :data-cell="cellKey(object, column)"
+                @mousedown.stop
+                @click.capture="cellClick($event, object, column)"
+                @keydown.enter.self.prevent="startEdit(object, column)"
+                @keydown.space.self.prevent="startEdit(object, column)"
+              >
+                <PropertyDisplay :def="column.def" :value="valueOf(object, column)" :object="object" :wrap="column.wrap" />
+              </div>
+              <PropertyDisplay v-else-if="column.def" :def="column.def" :value="object.props[column.field]" :object="object" :wrap="column.wrap" />
+            </td>
+            <td />
+          </tr>
+          <tr v-if="group.items.length > shown(group).length">
+            <td :colspan="columns.length + 1">
+              <button
+                :key="shown(group).length"
+                v-near="() => drawMore(group)"
+                class="mt-2 w-full rounded-lg py-2 text-center text-xs text-ink-faint hover:bg-hover hover:text-ink"
+                @click="drawMore(group)"
+              >
+                {{ shown(group).length.toLocaleString() }} of {{ group.items.length.toLocaleString() }} · Show more
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-      <!-- Table: fixed column widths; the last, empty column takes the space left. -->
-      <div v-else-if="layout === 'table'" class="overflow-x-auto" :class="bare ? '' : 'rounded-xl border border-line'">
-        <table class="table-fixed text-sm" :style="{ width: `max(100%, ${tableWidth}px)` }">
-          <colgroup>
-            <col v-for="column in columns" :key="column.field" :style="{ width: `${widthOf(column)}px` }" />
-            <col />
-          </colgroup>
-          <thead class="text-left text-xs text-ink-faint">
-            <tr>
-              <th v-for="column in columns" :key="column.field" class="relative px-3 py-2 font-medium" :class="bare ? 'first:pl-0' : ''" :data-column="column.field">
-                <span class="block truncate">{{ column.field === 'title' ? 'Title' : column.label }}</span>
-                <span
-                  class="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize touch-none hover:bg-accent/30"
-                  title="Drag to resize"
-                  @pointerdown.prevent="startResize($event, column)"
-                />
-              </th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="object in shown(group)"
-              :key="object.id"
-              class="group/row border-t border-line"
-              :class="picked(object) ? 'bg-accent/10' : 'hover:bg-hover/60'"
+    <template v-else>
+      <section v-for="group in groups" :key="group.key" class="mt-4 first:mt-0">
+        <header v-if="groupField" class="mb-3 flex items-center gap-2 text-sm">
+          <span v-if="group.objectId"><ObjectChip :id="group.objectId" :tag="groupField === 'tags'" /></span>
+          <PersonChip v-else-if="group.personId" :id="group.personId" />
+          <span v-else class="rounded-md px-2 py-0.5 font-medium" :class="group.key === NO_VALUE ? 'text-ink-faint' : chip(group.color as never)">{{ group.label }}</span>
+          <span class="text-xs text-ink-faint">{{ group.items.length }}</span>
+        </header>
+
+        <!-- List; on a phone a table too. -->
+        <div v-if="asList" class="divide-y divide-line/70" :data-phone-rows="phoneRows || undefined">
+          <SwipeRow v-for="{ object, depth, hasChildren } in rowsOf(group)" :key="object.id" :enabled="!!swipeType(object)" :right="swipeRight(object)" :left="swipeLeft(object)">
+            <ObjectLink
+              :id="object.id"
+              class="group/row flex items-center gap-3 rounded-lg px-2 py-2 max-md:py-2.5"
+              :class="[listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : absentParent(object) ? 'flex-wrap gap-y-0.5' : '', picked(object) ? 'bg-accent/10' : 'hover:bg-hover']"
+              :style="depth ? { paddingLeft: `${0.5 + Math.min(depth, 4) * 1.5}rem` } : undefined"
+              :data-depth="nests ? depth : undefined"
               :data-selected="picked(object) || undefined"
+              @click="rowClick($event, object)"
               @contextmenu="rowMenu($event, object)"
             >
-              <td
-                v-for="column in columns"
-                :key="column.field"
-                class="overflow-hidden px-3 py-2 align-top"
-                :class="[column.wrap ? 'break-words' : 'whitespace-nowrap text-ellipsis', bare ? 'first:pl-0' : '', column.field === 'title' ? 'relative' : '']"
+              <!-- The selection box: on hover (a mouse), always while selecting here. -->
+              <button
+                v-if="canSelect && (selectingHere || !isTouch)"
+                class="relative -mr-1 grid h-4 w-4 shrink-0 place-items-center rounded border text-white [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3.5 [@media(hover:none)]:after:content-['']"
+                :class="[picked(object) ? 'border-accent bg-accent' : 'border-line-strong bg-surface', selectingHere ? '' : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100']"
+                role="checkbox"
+                :aria-checked="picked(object)"
+                :aria-label="`Select ${displayTitle(object, typeOf(object))}`"
+                data-select-row
+                @click.prevent.stop="pick($event, object)"
               >
-                <template v-if="column.field === 'title'">
-                  <button
-                    v-if="canSelect && (selectingHere || !isTouch)"
-                    class="absolute top-2.5 z-[1] grid h-4 w-4 place-items-center rounded border text-white"
-                    :class="[picked(object) ? 'border-accent bg-accent' : 'border-line-strong bg-surface', selectingHere ? '' : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100', bare && columns[0]?.field === 'title' ? 'left-0' : 'left-3']"
-                    role="checkbox"
-                    :aria-checked="picked(object)"
-                    :aria-label="`Select ${displayTitle(object, typeOf(object))}`"
-                    data-select-row
-                    @click.prevent.stop="pick($event, object)"
-                  >
-                    <AppIcon v-if="picked(object)" fallback="ph:check-bold" :size="11" />
-                  </button>
-                  <TaskCompletionCheck v-if="typeOf(object)?.system === 'task' && !readonly && completion" :object="object" :type="typeOf(object)" class="mr-2 inline-grid align-middle" @moved="emit('moved', $event)" />
-                  <ObjectLink :id="object.id" class="font-medium hover:underline" @click="rowClick($event, object)">
-                    <AppIcon v-if="typeOf(object)?.system !== 'task'" :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" :class="canSelect && (selectingHere || !isTouch) ? (selectingHere ? 'invisible' : 'group-hover/row:invisible') : ''" /><span :class="titleClass(object)">{{ displayTitle(object, typeOf(object)) }}</span>
-                  </ObjectLink>
-                  <TaskCompletionNote :object="object" class="mt-1" />
-                  <span v-if="progressOf(object)" class="ml-2 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
-                    {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
+                <AppIcon v-if="picked(object)" fallback="ph:check-bold" :size="11" />
+              </button>
+              <!-- A parent's caret folds its steps; rows of an outline keep its place free. -->
+              <button
+                v-if="hasChildren"
+                class="relative -mx-1 grid h-5 w-5 shrink-0 place-items-center rounded text-ink-faint hover:bg-line hover:text-ink [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3 [@media(hover:none)]:after:content-['']"
+                :aria-expanded="!folded.has(object.id)"
+                :title="folded.has(object.id) ? 'Show subtasks' : 'Hide subtasks'"
+                data-fold-steps
+                @click.prevent.stop="folded.has(object.id) ? folded.delete(object.id) : folded.add(object.id)"
+              >
+                <AppIcon :fallback="folded.has(object.id) ? 'ph:caret-right' : 'ph:caret-down'" :size="13" />
+              </button>
+              <!-- A phone keeps the width for the title: only a parent's caret takes room there. -->
+              <span v-else-if="outlined(group) && !isPhone" class="-mx-1 w-5 shrink-0" aria-hidden="true" />
+              <!-- On touch the checkbox's tap area reaches 44px around it. -->
+              <TaskCompletionCheck v-if="typeOf(object)?.system === 'task' && !readonly && (listColumns || completion)" :object="object" :type="typeOf(object)" @moved="emit('moved', $event)" />
+              <TypeIcon v-else :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
+              <span v-if="quickType(object)" class="min-w-0 flex-1">
+                <span class="block font-medium max-md:text-base max-md:leading-snug" :class="[list?.wrap || isPhone ? 'break-words' : 'truncate', titleClass(object)]">{{ displayTitle(object, typeOf(object)) }}</span>
+                <span v-if="nextStepOf(object)" class="mt-0.5 flex items-center gap-1 text-xs text-ink-soft max-md:text-[13px]" data-next-step-line>
+                  <AppIcon fallback="ph:arrow-right" :size="11" class="shrink-0 text-ink-faint" /><span class="truncate">{{ nextStepOf(object) }}</span>
+                </span>
+              </span>
+              <span
+                v-else
+                class="min-w-0 flex-1 font-medium max-md:text-base max-md:leading-snug"
+                :class="[list?.wrap || isPhone ? 'break-words' : 'truncate', titleClass(object)]"
+              >{{ displayTitle(object, typeOf(object)) }}</span>
+              <TaskCompletionNote :object="object" class="order-last w-full pl-[30px]" />
+              <span v-if="progressOf(object)" class="shrink-0 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
+                {{ progressOf(object)!.done }}/{{ progressOf(object)!.total }}<template v-if="progressOf(object)!.readyToClose"> · Ready to close</template>
+              </span>
+              <span v-if="absentParent(object)" class="order-last w-full truncate pl-[30px] text-xs text-ink-faint max-md:text-[13px]" data-absent-parent>in {{ absentParent(object) }}</span>
+              <span v-if="listColumns" class="flex min-w-0 shrink-0 items-center gap-2 text-xs max-md:text-[13px] @max-2xl:order-last @max-2xl:w-full @max-2xl:flex-wrap @max-2xl:pl-[30px]" data-row-fields @click.prevent>
+                <template v-for="field in fieldsOf(object)" :key="field.field">
+                  <span v-if="field.field === 'tags' || field.field === 'collections'" class="flex gap-1">
+                    <ObjectChip v-for="id in field.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="field.field === 'tags'" />
                   </span>
-                  <TaskQuickActions v-if="actionsUnderTitle && actionType(object)" :type="actionType(object)!" :object="object" variant="row" class="-mb-1 mt-0.5 -ml-1.5" @set="saveQuick(object, $event)" />
+                  <span v-else-if="field.field === 'type'" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5" :class="chip(typeOf(object)?.color)">
+                    <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object)?.name }}
+                  </span>
+                  <span v-else-if="field.field === 'createdAt' || field.field === 'updatedAt'" class="whitespace-nowrap text-ink-faint">{{ formatRelative(object[field.field]) }}</span>
+                  <span v-else-if="field.field === 'date'" class="whitespace-nowrap">{{ object.date ? formatDateShort(object.date) : '' }}</span>
+                  <span v-else-if="field.field === 'host'" class="whitespace-nowrap">{{ object.media?.host?.replace(/^www\./, '') }}</span>
+                  <PropertyDisplay v-else-if="field.def" :def="field.def" :value="object.props[field.field]" :object="object" :wrap="false" short />
                 </template>
-                <span v-else-if="column.field === 'tags' || column.field === 'collections'" class="flex gap-1" :class="column.wrap ? 'flex-wrap' : 'overflow-hidden'">
-                  <ObjectChip v-for="id in column.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="column.field === 'tags'" />
+              </span>
+              <template v-else>
+                <span class="hidden gap-1 md:flex" @click.prevent>
+                  <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
                 </span>
-                <span v-else-if="column.field === 'type'" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs" :class="chip(typeOf(object)?.color)">
-                  <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object)?.name }}
-                </span>
-                <span v-else-if="column.field === 'createdAt' || column.field === 'updatedAt'" class="text-xs text-ink-faint">{{ formatRelative(object[column.field]) }}</span>
-                <span v-else-if="column.field === 'date'">{{ object.date ? formatDate(object.date) : '' }}</span>
-                <span v-else-if="column.field === 'host'">{{ object.media?.host?.replace(/^www\./, '') }}</span>
-                <template v-else-if="column.field === QUICK_ACTIONS_COLUMN">
-                  <TaskQuickActions v-if="actionType(object)" :type="actionType(object)!" :object="object" variant="row" class="-my-1.5 -ml-1.5" @set="saveQuick(object, $event)" />
-                </template>
-                <PropertyValueEditor
-                  v-else-if="column.def && editing === cellKey(object, column)"
-                  :def="column.def"
-                  :value="valueOf(object, column)"
-                  autofocus
-                  class="-mx-2 -my-1.5"
-                  @update="saveCell(object, column, $event)"
-                  @add-option="addOption(object, column, $event)"
-                  @close="endEdit(cellKey(object, column))"
-                  @mousedown.stop
-                />
-                <div
-                  v-else-if="column.def && editable(column)"
-                  role="button"
-                  tabindex="0"
-                  class="-mx-1.5 -my-0.5 min-h-6 cursor-pointer rounded-md px-1.5 py-0.5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/50"
-                  :class="column.wrap ? '' : 'overflow-hidden'"
-                  :aria-label="`${column.label}: edit`"
-                  :data-edit="column.field"
-                  :data-cell="cellKey(object, column)"
-                  @mousedown.stop
-                  @click.capture="cellClick($event, object, column)"
-                  @keydown.enter.self.prevent="startEdit(object, column)"
-                  @keydown.space.self.prevent="startEdit(object, column)"
-                >
-                  <PropertyDisplay :def="column.def" :value="valueOf(object, column)" :object="object" :wrap="column.wrap" />
-                </div>
-                <PropertyDisplay v-else-if="column.def" :def="column.def" :value="object.props[column.field]" :object="object" :wrap="column.wrap" />
-              </td>
-              <td />
-            </tr>
-          </tbody>
-        </table>
-      </div>
+                <!-- A phone leaves out when a task was last changed: the title needs the room more. -->
+                <span v-if="!quickType(object) && !(isPhone && typeOf(object)?.system === 'task')" class="w-24 shrink-0 text-right text-xs text-ink-faint max-md:w-auto">{{ formatRelative(object.updatedAt) }}</span>
+              </template>
+              <!-- In a narrow column the actions take a line of their own under the title; on a phone swipes replace them. -->
+              <TaskQuickActions
+                v-if="rowButtons(object)"
+                :type="quickType(object)!"
+                :object="object"
+                variant="row"
+                class="@max-md:order-last @max-md:w-full @max-md:pl-6"
+                @set="saveQuick(object, $event)"
+              />
+              <!-- A phone: a visible way to the row's menu, 44px to touch (a long press is not found by looking). -->
+              <button
+                v-if="isPhone && !readonly && !selectingHere && actionType(object)"
+                class="-my-2.5 -mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ink-soft active:bg-hover"
+                :aria-label="`More actions for ${displayTitle(object, typeOf(object))}`"
+                data-row-more
+                @click.prevent.stop="rowMore($event, object)"
+              >
+                <AppIcon fallback="ph:dots-three" :size="20" />
+              </button>
+            </ObjectLink>
+          </SwipeRow>
+        </div>
 
-      <!-- Wall: masonry columns -->
-      <div v-else-if="cardVariant === 'wall'" class="columns-1 gap-3 @lg:columns-2 @4xl:columns-3 @7xl:columns-4">
-        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" variant="wall" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
-      </div>
+        <!-- Wall: masonry columns -->
+        <div v-else-if="cardVariant === 'wall'" class="columns-1 gap-3 @lg:columns-2 @4xl:columns-3 @7xl:columns-4">
+          <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" variant="wall" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
+        </div>
 
-      <!-- Grid and gallery -->
-      <div v-else class="grid gap-3" :class="cardVariant === 'gallery' ? 'grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]'">
-        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" :variant="cardVariant" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
-      </div>
+        <!-- Grid and gallery -->
+        <div v-else class="grid gap-3" :class="cardVariant === 'gallery' ? 'grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]'">
+          <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" :variant="cardVariant" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
+        </div>
 
-      <button
-        v-if="group.items.length > shown(group).length"
-        :key="shown(group).length"
-        v-near="() => drawMore(group)"
-        class="mt-2 w-full rounded-lg py-2 text-center text-xs text-ink-faint hover:bg-hover hover:text-ink"
-        @click="drawMore(group)"
-      >
-        {{ shown(group).length.toLocaleString() }} of {{ group.items.length.toLocaleString() }} · Show more
-      </button>
-    </section>
+        <button
+          v-if="group.items.length > shown(group).length"
+          :key="shown(group).length"
+          v-near="() => drawMore(group)"
+          class="mt-2 w-full rounded-lg py-2 text-center text-xs text-ink-faint hover:bg-hover hover:text-ink"
+          @click="drawMore(group)"
+        >
+          {{ shown(group).length.toLocaleString() }} of {{ group.items.length.toLocaleString() }} · Show more
+        </button>
+      </section>
+    </template>
   </div>
 </template>

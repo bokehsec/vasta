@@ -189,6 +189,9 @@ GitHub release page.
 
 ### Changed
 
+- **Grouped tables read as one table.** Column headings appear once above all groups, with aligned
+  columns and a shared horizontal scroll. Group labels and counts stay, without a box around each group.
+
 - **Queries in a page lose their boxes.** An embedded query is no longer a framed card holding a
   second framed table: its title sits in the page like a small heading, the results follow with only
   a hairline between rows, and Edit query shows when you point at it (always on touch). The same

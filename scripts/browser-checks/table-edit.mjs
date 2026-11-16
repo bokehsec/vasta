@@ -12,7 +12,7 @@ import { chromium, webkit } from 'playwright'
 
 const engine = process.argv[2] ?? 'chromium'
 const base = process.argv[3] ?? 'http://127.0.0.1:5183'
-if (!/^http:\/\/127\.0\.0\.1:518[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
+if (!/^http:\/\/127\.0\.0\.1:5[12]8[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
 const httpMode = process.env.MODE === 'json'
 
 const options = { viewport: { width: 1600, height: 900 }, locale: 'en-US', timezoneId: 'America/Sao_Paulo' }
@@ -48,7 +48,7 @@ const headers = { 'x-requested-with': 'vasta' }
 const get = async (url) => (await page.request.get(`${base}${url}`)).json()
 const post = async (url, data) => (await page.request.post(`${base}${url}`, { headers, data })).json()
 const put = async (url, data) => (await page.request.put(`${base}${url}`, { headers, data })).json()
-// Every table on a page has the same columns (a grouped view draws one per group).
+// Grouped rows share one table and its column headings.
 let columns = []
 const readColumns = async () => (columns = await page.locator('table').first().locator('thead th[data-column]').evaluateAll((ths) => ths.map((th) => th.dataset.column)))
 const row = (title, p = page) => p.locator('tbody tr', { has: p.locator('td:first-child', { hasText: title }) })
@@ -100,8 +100,8 @@ const chore = await put(`/api/types/${choreNew.id}`, {
     { id: 'details', kind: 'rich-text', name: 'Details' },
   ],
   views: [
-    { id: `${choreNew.id}:all`, name: 'All', layout: 'table', sort: [{ field: 'title', direction: 'asc' }] },
-    { id: `${choreNew.id}:grouped`, name: 'Grouped', layout: 'table', groupBy: [{ field: 'priority' }], sort: [{ field: 'title', direction: 'asc' }] },
+    { id: `${choreNew.id}:all`, name: 'All', layout: 'table', openIn: 'page', sort: [{ field: 'title', direction: 'asc' }] },
+    { id: `${choreNew.id}:grouped`, name: 'Grouped', layout: 'table', openIn: 'page', groupBy: [{ field: 'priority' }], sort: [{ field: 'title', direction: 'asc' }] },
   ],
 })
 const dishes = await post('/api/objects', { typeId: chore.id, title: `Dishes ${tag}`, props: { minutes: { kind: 'number', value: 10 } } })
@@ -217,7 +217,8 @@ try {
   step('F14 K3 read-only columns, the title still opens the object, the cell’s role and name')
   for (const field of ['double', 'details', 'updatedAt']) if (await edit(D, field).count()) throw new Error(`${field} is editable`)
   if ((await edit(D, 'priority').getAttribute('role')) !== 'button' || !(await edit(D, 'priority').getAttribute('aria-label')).startsWith('Priority')) throw new Error('cell has no button role or name')
-  await row(D).locator('td:first-child a').click()
+  await page.locator('table').locator('..').evaluate((el) => { el.scrollLeft = 0 })
+  await row(D).locator('td:first-child a .task-title').click()
   await until(() => page.url().includes(`/o/${dishes.id}`), 'the title opens the object')
   await page.goBack()
   await until(async () => (await page.locator('tbody tr').count()) === 2, 'back on the table')
@@ -275,15 +276,39 @@ try {
   }
 
   step('C2 a grouped table: changing the grouped field moves the row')
-  await page.locator('button', { hasText: /^\s*Grouped\s*$/ }).click()
-  await until(async () => (await page.locator('section header').count()) >= 2, 'groups shown')
+  await page.getByRole('button', { name: 'Grouped', exact: true }).click()
+  await until(async () => (await page.locator('tbody th[scope=rowgroup]').count()) >= 2, 'groups shown')
+  if (await page.locator('main table').count() !== 1 || await page.locator('main thead').count() !== 1) throw new Error('grouped rows repeat the table or headings')
+  const frame = page.locator('main table').locator('..')
+  if (await frame.evaluate((el) => getComputedStyle(el).borderTopWidth !== '0px' || getComputedStyle(el).borderRadius !== '0px')) throw new Error('grouped table still has a frame')
+  await frame.evaluate((el) => { el.scrollLeft = 0 })
+  const titleHeading = page.locator('thead th[data-column=title]')
+  const widthBefore = (await titleHeading.boundingBox()).width
+  const handle = await titleHeading.locator('[title="Drag to resize"]').boundingBox()
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(handle.x + handle.width / 2 + 60, handle.y + handle.height / 2, { steps: 5 })
+  await page.mouse.up()
+  await until(async () => (await titleHeading.boundingBox()).width >= widthBefore + 55, 'shared column resized')
+  const widths = await page.locator('tbody tr td:first-child').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width))
+  if (Math.max(...widths) - Math.min(...widths) > 1) throw new Error('group columns do not align')
+  await page.screenshot({ path: path.join(tmpdir(), `vasta-grouped-${engine}.png`) })
+  await page.setViewportSize({ width: 850, height: 900 })
+  if (!(await frame.evaluate((el) => el.scrollWidth > el.clientWidth))) throw new Error('wide grouped table does not scroll')
+  await frame.evaluate((el) => { el.scrollLeft = 200 })
+  if (await frame.evaluate((el) => el.scrollLeft) < 100) throw new Error('grouped table cannot scroll horizontally')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await until(async () => await page.locator('main table').count() === 0 && await page.locator('section header').count() >= 2, 'phone keeps grouped rows')
+  if (await page.locator('main').evaluate((el) => el.scrollWidth > el.clientWidth + 1)) throw new Error('phone rows overflow')
+  await page.setViewportSize(options.viewport)
+  await until(async () => await page.locator('main thead').count() === 1, 'desktop headings restored')
   await readColumns()
-  const groupOf = (title) => page.locator('section', { has: row(title) }).locator('header').first().textContent()
+  const groupOf = (title) => row(title).locator('..').locator('th[scope=rowgroup]').textContent()
   if (!(await groupOf(D)).includes('High')) throw new Error(`Dishes is in ${await groupOf(D)}`)
   await edit(D, 'priority').click()
   await option('Low').click()
   await until(async () => (await groupOf(D)).includes('Low'), 'Dishes moved to Low')
-  await page.locator('button', { hasText: /^\s*All\s*$/ }).click()
+  await page.getByRole('button', { name: 'All', exact: true }).click()
 
   step('C3 a query shown as a table')
   query = await post('/api/objects', { typeId: queryType.id, title: `Chores ${tag}`, query: { typeIds: [chore.id], layout: 'table', sort: [{ field: 'title', direction: 'asc' }] } })
