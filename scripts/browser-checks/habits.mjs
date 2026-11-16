@@ -3,7 +3,8 @@
 // week" on Today, a day off faded in the Tracker, the Progress tab's headline and rows (checked
 // against core's habitReport), the range switch kept on reload, and (on 5184, the built app) the
 // same numbers after reloading offline. SHOTS=<dir> saves light and dark screenshots; PHONE=1 a 390px width (Today left out).
-// The Tracker's own progress (strip or panel, every chart, Off, kept on reload) is checked too.
+// The Tracker's own progress is checked too: where it shows (above, beside, off), the charts and
+// the range are picked in Type settings (kept on the type, so they survive a reload).
 //   node habits.mjs [chromium|webkit] [base]
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -13,8 +14,10 @@ import { addDays, habitReport, mondayOf } from '../../packages/core/src/index.ts
 
 const engine = process.argv[2] ?? 'chromium'
 const base = process.argv[3] ?? 'http://127.0.0.1:5183'
-if (!/^http:\/\/127\.0\.0\.1:518[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
-const built = base.endsWith(':5184')
+// Any 518x loopback port is a test env (5183/5184 the standard one; another may hold them).
+if (!/^http:\/\/127\.0\.0\.1:518[3-9]$/.test(base)) throw new Error(`not the test env: ${base}`)
+// The built app is served by the API server itself; a dev one by Vite (its page loads /@vite/client).
+const built = !(await (await fetch(base)).text()).includes('/@vite/client')
 const timezoneId = 'America/Toronto'
 
 const options = { viewport: process.env.PHONE ? { width: 390, height: 844 } : { width: 1300, height: 1000 }, locale: 'en-US', timezoneId }
@@ -45,6 +48,7 @@ async function until(check, what, timeout = 10000) {
 const headers = { 'x-requested-with': 'vasta' }
 const get = async (url) => (await page.request.get(`${base}${url}`)).json()
 const post = async (url, data) => (await page.request.post(`${base}${url}`, { headers, data })).json()
+const put = async (url, data) => (await page.request.put(`${base}${url}`, { headers, data })).json()
 const text = async (locator) => ((await locator.innerText()) ?? '').replace(/\s+/g, ' ').trim()
 
 await page.goto(base)
@@ -64,6 +68,8 @@ const tag = `${engine}-${Date.now() % 100000}`
 const space = process.env.PHONE ? (await get('/api/spaces'))[0] : await post('/api/spaces', { name: `Habits ${tag}` })
 const habitType = (await get(`/api/spaces/${space.id}`)).types.find((t) => t.system === 'habit')
 if (!habitType.properties.some((p) => p.id === 'perweek' && p.name === 'Times a week')) throw new Error('no Times a week field')
+// A phone runs in the first space, where an earlier run may have left its charts on the habit type.
+await put(`/api/types/${habitType.id}`, { ...habitType, habits: undefined })
 const specs = [
   { title: 'Read', props: done([...week(2, 0, 1), ...week(1, 0, 1, 2, 3, 4, 5, 6)]) },
   { title: 'Stretch', props: { days: { kind: 'select', value: ['mon', 'wed', 'fri'] }, ...done(week(1, 0, 2)) } },
@@ -96,7 +102,10 @@ if (!process.env.PHONE) {
 }
 
 step('Tracker: a day off is faded (phone: a row per habit)')
-await page.evaluate(() => localStorage.removeItem('vasta.habit-progress.layout'))
+await page.evaluate(() => {
+  localStorage.removeItem('vasta.habit-progress.layout')
+  localStorage.removeItem('vasta.habit-progress.place')
+})
 await page.goto(`${base}/t/${habitType.id}`)
 if (process.env.PHONE) {
   await until(() => main.locator('[data-habit-row]', { hasText: 'Stretch' }).count(), 'the phone rows')
@@ -116,17 +125,24 @@ const report4 = habitReport(listed4, 4, today)
 const pct4 = report4.total.expected ? `${Math.round((report4.total.done / report4.total.expected) * 100)}%` : '—'
 await until(async () => (await main.locator('[data-progress-strip][data-chart="days"]').count()) === 1, 'the day strip')
 await until(async () => (await text(main.locator('[data-progress-strip] [data-progress-headline]'))).startsWith(`${pct4} over the last 4 weeks ${report4.total.done} of ${report4.total.expected} done`), `strip headline ${pct4}`)
-const menu = async (selector) => {
-  if (!(await page.locator('[data-progress-options]').isVisible().catch(() => false))) await main.locator('[data-progress-menu]').click()
-  await page.locator(`[data-progress-options] ${selector}`).click()
+// Where it shows, the charts and the range are all Type settings, saved on the type; the Tracker
+// itself has no progress button.
+if (await main.locator('[data-progress-menu]').count()) throw new Error('a progress button on the Tracker')
+const progressSettings = async (...selectors) => {
+  await page.goto(`${base}/t/${habitType.id}?settings=1`)
+  for (const selector of selectors) await page.locator(`[data-habit-progress-settings] ${selector}`).click()
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await until(async () => !(await page.locator('[data-habit-progress-settings]').count()), 'the settings saved')
 }
-for (const chart of ['weeks', 'meters', 'habits', 'days']) {
-  await menu(`[data-chart="${chart}"]`)
+for (const chart of ['weeks', 'line', 'meters', 'habits', 'days']) {
+  await progressSettings(`[data-chart-picker="strip"] [data-chart="${chart}"]`)
   await until(async () => (await main.locator(`[data-progress-strip][data-chart="${chart}"]`).count()) === 1, `strip ${chart}`)
+  if (process.env.SHOTS && chart === 'line') await page.screenshot({ path: path.join(process.env.SHOTS, `habits-strip-line${process.env.PHONE ? '-phone' : ''}.png`) })
 }
-await menu('[data-place="beside"]')
+await progressSettings('[data-place="beside"]')
+await until(async () => (await main.locator('[data-progress-panel][data-chart="calendar"]').count()) === 1, 'the panel')
 for (const chart of ['weeks', 'line', 'counts', 'calendar']) {
-  await menu(`[data-chart="${chart}"]`)
+  await progressSettings(`[data-chart-picker="panel"] [data-chart="${chart}"]`)
   await until(async () => (await main.locator(`[data-progress-panel][data-chart="${chart}"]`).count()) === 1, `panel ${chart}`)
 }
 if (await main.locator('[data-progress-strip]').count()) throw new Error('strip and panel both shown')
@@ -140,13 +156,25 @@ if (process.env.SHOTS) {
   }
   await page.evaluate(() => document.documentElement.classList.remove('dark'))
 }
+
+step('Tracker progress: the range is a Type setting too')
+const report8 = habitReport(listed4, 8, today)
+const pct8 = report8.total.expected ? `${Math.round((report8.total.done / report8.total.expected) * 100)}%` : '—'
+await progressSettings('[data-weeks="8"]')
+await until(async () => (await text(main.locator('[data-progress-panel] [data-progress-headline]'))) === pct8, `panel headline ${pct8}`)
+
 await page.reload()
 await until(async () => (await main.locator('[data-progress-panel][data-chart="calendar"]').count()) === 1, 'the panel kept on reload')
-await menu('[data-place="off"]')
+await progressSettings('[data-place="off"]')
 await until(async () => !(await main.locator('[data-progress-panel], [data-progress-strip]').count()), 'progress off')
-await menu('[data-place="above"]')
+await progressSettings('[data-place="above"]')
 await until(async () => (await main.locator('[data-progress-strip][data-chart="days"]').count()) === 1, 'back to the day strip')
-await page.keyboard.press('Escape')
+// What Type settings saved reached the server (synced to every device), with nothing refused.
+await until(async () => {
+  const saved = (await get(`/api/types/${habitType.id}`)).habits
+  return saved?.place === 'above' && saved?.strip === 'days' && saved?.panel === 'calendar' && saved?.weeks === 8
+}, 'the progress settings on the server')
+if (await page.getByText('did not take').count()) throw new Error('the server refused a change')
 if (process.env.SHOTS) {
   for (const theme of ['light', 'dark']) {
     await page.evaluate((dark) => document.documentElement.classList.toggle('dark', dark), theme === 'dark')
@@ -189,9 +217,11 @@ if (!process.env.PHONE && (!rows.at(-1).includes('Swim') || !rows.at(-1).include
 if (!process.env.PHONE && !rows.some((r) => r.includes('3 a week'))) throw new Error('no "3 a week" goal')
 await until(() => page.locator('svg[aria-label="Share done each week"] path').count(), 'the weekly bars')
 
-step('range: 13 weeks, kept on reload')
+step('range: 13 weeks, saved on the type, kept on reload')
 await page.locator('[data-range="13"]').click()
 await checkNumbers(13)
+// The switch is the Type settings range: saved on the type, for the Tracker and every device.
+await until(async () => (await get(`/api/types/${habitType.id}`)).habits?.weeks === 13, 'the range saved on the type')
 await page.reload()
 await until(async () => (await page.locator('[data-range="13"]').getAttribute('aria-pressed').catch(() => null)) === 'true', '13 weeks kept')
 await checkNumbers(13)

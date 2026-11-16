@@ -1,22 +1,18 @@
-// Habit progress beside the Tracker: where it shows (off, above the habits, or beside them; below
-// them on a phone), which chart, and over how many weeks. Kept per device, so a computer can show a
-// panel while a phone shows a strip. The numbers come from core's habitReport and habitDayTotals,
-// counted the same way as the Progress tab.
-import { computed, ref, type Ref } from 'vue'
-import { addDays, habitDayTotals, habitReport, habitWeekPlan, isHabitPaused, mondayOf, type HabitTally, type ObjectSummary } from '@vasta/core'
+// Habit progress beside the Tracker. Where it shows (off, above the habits, or beside them; below
+// them on a phone), which charts and over how many weeks are kept on the habit type (Type settings ›
+// Progress), so every device shows the same. The numbers come from core's habitReport and
+// habitDayTotals, counted the same way as the Progress tab.
+import { computed, type Ref } from 'vue'
+import { addDays, HABIT_PROGRESS_DEFAULT, HABIT_WEEKS_RANGES, habitDayTotals, habitReport, habitWeekPlan, isHabitPaused, mondayOf, type HabitPanelChart, type HabitProgressPlace, type HabitStripChart, type HabitTypeSettings, type HabitTally, type ObjectType, type ObjectSummary } from '@vasta/core'
 
-export type ProgressPlace = 'off' | 'above' | 'beside'
-export type StripChart = 'weeks' | 'days' | 'meters' | 'habits'
-export type PanelChart = 'weeks' | 'line' | 'calendar' | 'counts'
-export interface ProgressLayout {
-  place: ProgressPlace
-  strip: StripChart
-  panel: PanelChart
-  weeks: 4 | 8 | 13
-}
+export type ProgressPlace = HabitProgressPlace
+export type StripChart = HabitStripChart
+export type PanelChart = HabitPanelChart
 
+export const PROGRESS_PLACES: readonly ProgressPlace[] = ['off', 'above', 'beside']
 export const STRIP_CHARTS: { id: StripChart; label: string; hint: string }[] = [
   { id: 'weeks', label: 'Week columns', hint: 'Share done each week' },
+  { id: 'line', label: 'Trend line', hint: 'Share done each week, as one line' },
   { id: 'days', label: 'Day heat strip', hint: 'Every day, darker when more got done' },
   { id: 'meters', label: 'Week meters', hint: 'A bar per week' },
   { id: 'habits', label: 'Habit chips', hint: 'Each habit over the range' },
@@ -28,32 +24,46 @@ export const PANEL_CHARTS: { id: PanelChart; label: string; hint: string }[] = [
   { id: 'counts', label: 'Done and missed', hint: 'Counts each week, not percents' },
 ]
 
-const KEY = 'vasta.habit-progress.layout'
-const DEFAULT: ProgressLayout = { place: 'above', strip: 'days', panel: 'calendar', weeks: 4 }
+// Before all of it moved into Type settings, each device kept its own picks here (the place under
+// PLACE_KEY, the whole layout under OLD_LAYOUT_KEY). A device keeps seeing what it had picked for
+// any part the type doesn't set yet.
+const PLACE_KEY = 'vasta.habit-progress.place'
+const OLD_LAYOUT_KEY = 'vasta.habit-progress.layout'
 
-function read(): ProgressLayout {
+function readSaved(key: string): Record<string, unknown> {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<ProgressLayout> | null
-    if (!saved || typeof saved !== 'object') return { ...DEFAULT }
-    return {
-      place: (['off', 'above', 'beside'] as const).find((p) => p === saved.place) ?? DEFAULT.place,
-      strip: STRIP_CHARTS.find((c) => c.id === saved.strip)?.id ?? DEFAULT.strip,
-      panel: PANEL_CHARTS.find((c) => c.id === saved.panel)?.id ?? DEFAULT.panel,
-      weeks: ([4, 8, 13] as const).find((w) => w === saved.weeks) ?? DEFAULT.weeks,
-    }
+    const saved = JSON.parse(localStorage.getItem(key) ?? 'null') as unknown
+    return saved && typeof saved === 'object' ? (saved as Record<string, unknown>) : {}
   } catch {
-    return { ...DEFAULT }
+    return {}
   }
 }
 
-/** The layout on this device, shared by every component that shows it. */
-export const progressLayout = ref<ProgressLayout>(read())
+/** Fills each part of `saved` that isn't a known value from `fallback`. */
+function settle(saved: Partial<Record<keyof HabitTypeSettings, unknown>>, fallback: HabitTypeSettings): HabitTypeSettings {
+  return {
+    place: PROGRESS_PLACES.find((p) => p === saved.place) ?? fallback.place,
+    strip: STRIP_CHARTS.find((c) => c.id === saved.strip)?.id ?? fallback.strip,
+    panel: PANEL_CHARTS.find((c) => c.id === saved.panel)?.id ?? fallback.panel,
+    weeks: HABIT_WEEKS_RANGES.find((w) => w === saved.weeks) ?? fallback.weeks,
+  }
+}
 
-export function setProgressLayout(patch: Partial<ProgressLayout>) {
-  progressLayout.value = { ...progressLayout.value, ...patch }
-  try {
-    localStorage.setItem(KEY, JSON.stringify(progressLayout.value))
-  } catch {}
+/** What this device had picked before progress moved into Type settings, so it keeps seeing that. */
+export function deviceHabitProgress(): HabitTypeSettings {
+  const layout = readSaved(OLD_LAYOUT_KEY)
+  const place = readSaved(PLACE_KEY).place ?? layout.place
+  return settle({ ...layout, place }, HABIT_PROGRESS_DEFAULT)
+}
+
+/** A habit type's progress settings, any part it doesn't set filled from this device's old picks. */
+export function habitProgressOf(type: Pick<ObjectType, 'habits'> | undefined): HabitTypeSettings {
+  return settle(type?.habits ?? {}, deviceHabitProgress())
+}
+
+/** The type's progress (Type settings › Progress), shown on every device alike. */
+export function useTypeHabitProgress(type: Ref<ObjectType | undefined>) {
+  return computed<HabitTypeSettings>(() => habitProgressOf(type.value))
 }
 
 export const percentOf = (tally: Pick<HabitTally, 'done' | 'expected'> | undefined) => (tally?.expected ? Math.round((tally.done / tally.expected) * 100) : undefined)
@@ -69,8 +79,7 @@ export const dayLabel = (day: string) => short.format(new Date(`${day}T00:00:00Z
 export const longDayLabel = (day: string) => longDay.format(new Date(`${day}T00:00:00Z`))
 
 /** Everything the strips and panels draw, for `habits` (done-from-food days already filled in). */
-export function useHabitProgress(habits: Ref<ObjectSummary[]>, today: Ref<string>) {
-  const weeks = computed(() => progressLayout.value.weeks)
+export function useHabitProgress(habits: Ref<ObjectSummary[]>, today: Ref<string>, weeks: Ref<HabitTypeSettings['weeks']>) {
   const report = computed(() => habitReport(habits.value, weeks.value, today.value))
   /** Each week with its tally; this week also with what it still plans (for "still possible"). */
   const byWeek = computed(() => {
@@ -101,7 +110,7 @@ export function useHabitProgress(habits: Ref<ObjectSummary[]>, today: Ref<string
       .filter((r) => r.row)
       .sort((a, b) => Number(a.paused) - Number(b.paused) || (percentOf(b.row.total) ?? -1) - (percentOf(a.row.total) ?? -1) || a.habit.title.localeCompare(b.habit.title))
   })
-  return { weeks, report, byWeek, total, days, habitRows }
+  return { report, byWeek, total, days, habitRows }
 }
 
 /** A heat cell's fill for a share done (0 to 1); undefined: nothing counted that day. */

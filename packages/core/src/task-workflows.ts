@@ -3,7 +3,7 @@
 import { STATUS_PROPERTY_ID } from './builtin-types.ts'
 import type { ObjectRecord, ObjectType, QuickActionDef, SelectOption } from './model.ts'
 import { askOf, isClosedTask, quickActionsOf } from './task-actions.ts'
-import { dueForReview } from './task-review.ts'
+import { dueForReview, holdAction } from './task-review.ts'
 import { statusProperty } from './metrics.ts'
 
 export function triageOptionsOf(type: ObjectType | undefined): SelectOption[] {
@@ -62,4 +62,106 @@ export function triageDispositionActions(type: ObjectType): QuickActionDef[] {
     changes: [{ field: status.id, value: { kind: 'value', value: { kind: 'select', value: [o.id] } } }],
     }
   })
+}
+
+/** One of a review's choices: a status a task can be placed in, and the action that places it. */
+export interface ReviewChoice {
+  option: SelectOption
+  action: QuickActionDef
+}
+
+/**
+ * The statuses a review offers as buttons: each one that is not incoming, the open ones first and
+ * those that close the task last, in the status's own order. A status reuses an action already set
+ * up to place a task there and nothing else (Defer's date question, Mark done, Hold), so choosing
+ * Scheduled still asks for its date; any other status gets a plain one. The action is named after
+ * the status, which is what the review's totals count. None for a type without the built-in status.
+ */
+export function reviewChoices(type: ObjectType | undefined): ReviewChoice[] {
+  if (type?.system !== 'task') return []
+  const status = statusProperty(type)
+  if (!status || status.id !== STATUS_PROPERTY_ID) return []
+  const incoming = new Set(triageOptionsOf(type).map((o) => o.id))
+  const hold = holdAction(type)
+  const actions = [...quickActionsOf(type), ...(hold ? [hold] : [])]
+  const places = (action: QuickActionDef, option: SelectOption) => {
+    const change = action.changes.findLast((c) => c.field === status.id)
+    const sets = change?.value.kind === 'value' && change.value.value.kind === 'select' && change.value.value.value.length === 1 && change.value.value.value[0] === option.id
+    return sets && action.changes.every((c) => c.field === status.id || c.value.kind === 'ask')
+  }
+  const options = status.options.filter((o) => !incoming.has(o.id))
+  return [...options.filter((o) => o.status !== 'done'), ...options.filter((o) => o.status === 'done')].map((option) => {
+    const action = actions.find((a) => places(a, option)) ?? {
+      id: `status:${option.id}`,
+      name: option.label,
+      icon: { kind: 'icon', value: statusIcon(option, options) },
+      changes: [{ field: status.id, value: { kind: 'value', value: { kind: 'select', value: [option.id] } } }],
+    }
+    return { option, action: { ...action, name: option.label } }
+  })
+}
+
+/** An icon for a status without an action of its own: done, dropped, waiting, scheduled, on hold, or onward. */
+function statusIcon(option: SelectOption, options: readonly SelectOption[]): string {
+  if (option.status === 'done') return options.find((o) => o.status === 'done') === option ? 'ph:check-circle' : 'ph:x-circle'
+  const label = option.label.trim().toLowerCase()
+  if (/wait|delegat/.test(label)) return 'ph:hourglass-medium'
+  if (/sched|later|defer/.test(label)) return 'ph:calendar-blank'
+  if (/hold|someday|paus/.test(label)) return 'ph:pause-circle'
+  return 'ph:arrow-right'
+}
+
+/** A button of a review: where the task goes, as a main button or as a link under them. */
+export interface ReviewButton {
+  role: 'next' | 'schedule' | 'done' | 'drop' | 'move'
+  label: string
+  action: QuickActionDef
+  option?: SelectOption
+}
+
+/**
+ * A review's buttons for a task with status `current`: few, and never the status it already has (a
+ * task already placed has Keep for that). Main: for a new task the first open status ("Next"), then
+ * Schedule… (the date question with the scheduled status: Defer and Scheduled are one choice), Done
+ * and Drop. The other open statuses and any further closing ones are links (`more`). `covered`: the
+ * quick actions these stand for (Defer, folded into Schedule…). Actions are named for the review's
+ * notice and totals: "Moved to Waiting", "Done".
+ */
+export function reviewButtons(type: ObjectType | undefined, current: string | undefined, isNew: boolean): { main: ReviewButton[]; more: ReviewButton[]; covered: string[] } {
+  const choices = reviewChoices(type)
+  const status = statusProperty(type)
+  if (!type || !status || !choices.length) return { main: [], more: [], covered: [] }
+  const named = (action: QuickActionDef, option: SelectOption | undefined, id = action.id): QuickActionDef => ({ ...action, id, name: !option ? action.name : option.status === 'done' ? option.label : `Moved to ${option.label}` })
+  const button = (role: ReviewButton['role'], choice: ReviewChoice, label = choice.option.label): ReviewButton => ({ role, label, option: choice.option, action: named(choice.action, choice.option) })
+  const open = choices.filter((c) => c.option.status !== 'done')
+  const closing = choices.filter((c) => c.option.status === 'done')
+  const actions = quickActionsOf(type)
+  const covered = choices.map((c) => c.action.id)
+
+  // Schedule…: a status already set up with a date question, else Defer's question moving the task to
+  // the status that reads as scheduled (or Defer as it is, without one).
+  const asking = open.find((c) => askOf(type, c.action)?.def.kind === 'date')
+  const defer = asking ? undefined : actions.find((a) => a.id === 'defer') ?? actions.find((a) => askOf(type, a)?.def.kind === 'date')
+  const scheduled = asking ?? open.find((c) => /sched/i.test(c.option.label))
+  let schedule: ReviewButton | undefined
+  if (asking) schedule = { ...button('schedule', asking), label: 'Schedule' }
+  else if (defer) {
+    covered.push(defer.id)
+    const changes = [...defer.changes.filter((c) => c.field !== status.id), ...(scheduled ? [{ field: status.id, value: { kind: 'value' as const, value: { kind: 'select' as const, value: [scheduled.option.id] } } }] : [])]
+    schedule = { role: 'schedule', label: 'Schedule', option: scheduled?.option, action: named({ ...defer, changes }, scheduled?.option, 'schedule') }
+  }
+
+  const next = isNew ? open.find((c) => c !== scheduled) : undefined
+  const [done, drop, ...otherClosing] = closing
+  const main = [
+    ...(next ? [button('next', next)] : []),
+    ...(schedule ? [schedule] : []),
+    ...(done ? [button('done', done)] : []),
+    ...(drop ? [button('drop', drop, actions.find((a) => a.id === 'drop' && a.id === drop.action.id)?.name ?? drop.option.label)] : []),
+  ]
+  const more = [
+    ...open.filter((c) => c !== next && !(schedule && c === scheduled) && c.option.id !== current).map((c) => button('move', c)),
+    ...otherClosing.map((c) => button('move', c)),
+  ]
+  return { main, more, covered }
 }

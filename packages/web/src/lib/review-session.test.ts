@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { QuickActionDef } from '@vasta/core'
-import { REVIEW_KEY, currentId, isFinished, moveBy, readSession, recordOutcome, reviewActions, skipCurrent, skippedSession, startSession, summarize, undoOutcome, writeSession, type ReviewSession } from './review-session.ts'
+import { REVIEW_KEY, currentId, isFinished, moveBy, readSession, recordOutcome, skipCurrent, skippedSession, startSession, summarize, undoOutcome, writeSession, type ReviewSession } from './review-session.ts'
 
 const scope = { userId: 'u1', spaceId: 's1', typeId: 't', viewId: 'v', viewName: 'Open tasks' }
 const begin = (ids: string[] = ['a', 'b', 'c']) => startSession(scope, ids)
-const action = (id: string): QuickActionDef => ({ id, name: id, changes: [] })
-const idsOf = (actions: QuickActionDef[]) => actions.map((a) => a.id)
 
 function fakeStorage(initial?: string) {
   const items = new Map<string, string>(initial === undefined ? [] : [[REVIEW_KEY, initial]])
@@ -209,52 +206,19 @@ describe('review session', () => {
       expect(next.openedId).toBeUndefined()
     })
 
+    it('counts how many of the skipped were new, in a Review tasks session', () => {
+      let session = startSession({ ...scope, kind: 'tasks', newCount: 2 }, ['n1', 'n2', 'c1', 'c2'])
+      session = skipCurrent(session)
+      session = recordOutcome(session, 'n2', 'Next')
+      session = skipCurrent(skipCurrent(session))
+      const next = skippedSession(session)
+      expect(next.ids).toEqual(['n1', 'c1', 'c2'])
+      expect(next.newCount).toBe(1)
+      expect(next.kind).toBe('tasks')
+    })
+
     it('is empty when nothing was left skipped', () => {
       expect(skippedSession(begin()).ids).toEqual([])
-    })
-  })
-
-  describe('choosing the buttons', () => {
-    const stock = ['done', 'defer', 'drop', 'next-step'].map(action)
-
-    it('features Done, Defer and the next step, and puts Drop under More', () => {
-      const { featured, more } = reviewActions(stock)
-      expect(idsOf(featured)).toEqual(['done', 'defer', 'next-step'])
-      expect(idsOf(more)).toEqual(['drop'])
-    })
-
-    it('features Done, Defer and the next step in that order whatever the order set up', () => {
-      const { featured } = reviewActions(['next-step', 'drop', 'defer', 'done'].map(action))
-      expect(idsOf(featured)).toEqual(['done', 'defer', 'next-step'])
-    })
-
-    it('features the first three others of a type with its own actions, never Drop', () => {
-      const { featured, more } = reviewActions(['drop', 'a', 'b', 'c', 'd'].map(action))
-      expect(idsOf(featured)).toEqual(['a', 'b', 'c'])
-      expect(idsOf(more)).toEqual(['drop', 'd'])
-    })
-
-    it('features all there are when fewer than three, and still not Drop', () => {
-      const { featured, more } = reviewActions(['a', 'b', 'drop'].map(action))
-      expect(idsOf(featured)).toEqual(['a', 'b'])
-      expect(idsOf(more)).toEqual(['drop'])
-      expect(reviewActions(['a', 'b'].map(action))).toEqual({ featured: ['a', 'b'].map(action), more: [] })
-      expect(reviewActions([])).toEqual({ featured: [], more: [] })
-    })
-
-    it('adds a type\'s own actions after the known ones', () => {
-      const { featured, more } = reviewActions(['done', 'waiting', 'drop'].map(action))
-      expect(idsOf(featured)).toEqual(['done', 'waiting'])
-      expect(idsOf(more)).toEqual(['drop'])
-    })
-
-    it('leaves no action out, whichever the set', () => {
-      const sets = [stock, ['drop', 'a', 'b', 'c', 'd'].map(action), ['a', 'b', 'drop'].map(action), ['done', 'waiting', 'drop'].map(action), ['x', 'y', 'z', 'done', 'defer', 'next-step', 'drop'].map(action), []]
-      for (const set of sets) {
-        const { featured, more } = reviewActions(set)
-        expect(featured.length).toBeLessThanOrEqual(3)
-        expect([...idsOf(featured), ...idsOf(more)].sort()).toEqual(idsOf(set).sort())
-      }
     })
   })
 

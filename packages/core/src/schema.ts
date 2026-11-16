@@ -44,6 +44,8 @@ export const ADDED_COLUMNS: { table: string; column: string; definition: string 
   { table: 'types', column: 'quick_actions', definition: 'TEXT' },
   // JSON SubtaskSettings: the relation that makes an object a step of another (ObjectType.subtasks).
   { table: 'types', column: 'subtasks', definition: 'TEXT' },
+  // JSON HabitTypeSettings: the Tracker's progress (ObjectType.habits; habit types only).
+  { table: 'types', column: 'habits', definition: 'TEXT' },
 ]
 
 /** Indexes on added columns; run after ADDED_COLUMNS, since an older table may lack them before. */

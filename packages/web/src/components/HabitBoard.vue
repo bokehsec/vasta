@@ -2,29 +2,31 @@
 // The Habits page's Tracker view: one row per habit, the last two weeks (one beside a panel) to
 // check off, and each habit's streak and its last 4 weeks (counted as the Progress view counts
 // them); on a phone, rows as in the Habit Tracker app (HabitRows). Progress shows above the habits
-// or beside them (below on a phone), or not at all, as picked in its menu on this device.
-// Paused habits sit at the bottom, faded.
+// or beside them (below on a phone), or not at all; where, which chart and over how many weeks are
+// the type's own (Type settings › Progress). Paused habits sit at the bottom, faded.
 import { computed, toRef } from 'vue'
 import { useRoute } from 'vue-router'
-import { addDays, habitReport, habitStats, habitTarget, habitUnit, isHabitDone, isHabitDue, isHabitPaused, type HabitTally, type ObjectSummary } from '@vasta/core'
+import { addDays, habitReport, habitStats, habitTarget, habitUnit, isHabitDone, isHabitDue, isHabitPaused, type HabitTally, type ObjectType, type ObjectSummary } from '@vasta/core'
 import { swatchClasses } from '../lib/colors.ts'
 import { habitColor, useFoodHabits, useToday } from '../lib/habits.ts'
-import { progressLayout, useHabitProgress } from '../lib/habit-progress.ts'
+import { useHabitProgress, useTypeHabitProgress } from '../lib/habit-progress.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import HabitCheck from './HabitCheck.vue'
-import HabitProgressMenu from './HabitProgressMenu.vue'
 import HabitProgressPanel from './HabitProgressPanel.vue'
 import HabitProgressStrip from './HabitProgressStrip.vue'
 import HabitRows from './HabitRows.vue'
 import ObjectLink from './ObjectLink.vue'
 
-const props = defineProps<{ habits: ObjectSummary[]; filter?: string }>()
+const props = defineProps<{ habits: ObjectSummary[]; type?: ObjectType; filter?: string }>()
 const emit = defineEmits<{ menu: [event: MouseEvent, object: ObjectSummary] }>()
 
 const today = useToday()
-const place = computed(() => progressLayout.value.place)
+/** The type's progress (Type settings › Progress): where, which charts, the range; on every device alike. */
+const charts = useTypeHabitProgress(toRef(props, 'type'))
+const place = computed(() => charts.value.place)
 const beside = computed(() => place.value === 'beside')
+const weeks = computed(() => charts.value.weeks)
 /** Days to check off: two weeks, one beside a panel. */
 const days = computed(() => {
   const count = beside.value ? 7 : 14
@@ -50,28 +52,23 @@ const rows = computed(() => {
 })
 
 // Progress over the shown habits (the filter applies), and the link to the Progress tab.
-const progress = useHabitProgress(shown, today)
+const progress = useHabitProgress(shown, today, weeks)
 const route = useRoute()
 const progressLink = computed(() => `${route.path}?view=__progress`)
 </script>
 
 <template>
   <div class="mt-4 max-md:pb-24">
-    <div v-if="place === 'off' || !shown.length || (beside && isPhone)" class="mb-4 flex justify-end">
-      <HabitProgressMenu />
-    </div>
     <HabitProgressStrip
       v-if="place === 'above' && shown.length"
-      :chart="progressLayout.strip"
-      :weeks="progress.weeks.value"
+      :chart="charts.strip"
+      :weeks="weeks"
       :total="progress.total.value"
       :by-week="progress.byWeek.value"
       :days="progress.days.value"
       :habit-rows="progress.habitRows.value"
       :progress-link="progressLink"
-    >
-      <template #action><HabitProgressMenu /></template>
-    </HabitProgressStrip>
+    />
     <div :class="beside && !isPhone ? 'grid grid-cols-[minmax(0,1fr)_16.25rem] gap-7' : ''">
     <HabitRows v-if="isPhone" :habits="shown" :today="today" @menu="(event, object) => emit('menu', event, object)" />
     <div v-else class="min-w-0 overflow-x-auto">
@@ -113,16 +110,14 @@ const progressLink = computed(() => `${route.path}?view=__progress`)
     <HabitProgressPanel
       v-if="beside && shown.length"
       :class="isPhone ? 'mt-2 border-t border-line pt-5' : 'border-l border-line pl-6'"
-      :chart="progressLayout.panel"
-      :weeks="progress.weeks.value"
+      :chart="charts.panel"
+      :weeks="weeks"
       :total="progress.total.value"
       :by-week="progress.byWeek.value"
       :days="progress.days.value"
       :habit-rows="progress.habitRows.value"
       :progress-link="progressLink"
-    >
-      <template v-if="!isPhone" #action><HabitProgressMenu compact /></template>
-    </HabitProgressPanel>
+    />
     </div>
   </div>
 </template>

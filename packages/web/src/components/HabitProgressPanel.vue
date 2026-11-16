@@ -45,10 +45,7 @@ const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
 <template>
   <aside class="text-sm" data-progress-panel :data-chart="chart">
-    <div class="flex items-center justify-between gap-2">
-      <h3 class="text-[13px] font-semibold">Last {{ weeks }} weeks</h3>
-      <slot name="action" />
-    </div>
+    <h3 class="text-[13px] font-semibold">Last {{ weeks }} weeks</h3>
     <div class="mt-2 text-[26px] font-semibold leading-none tracking-tight tabular-nums" data-progress-headline>{{ percentText(total) }}</div>
     <p class="mt-1.5 text-xs text-ink-soft">
       <span class="tabular-nums">{{ total.done }} of {{ total.expected }} done</span> · using your current goals ·

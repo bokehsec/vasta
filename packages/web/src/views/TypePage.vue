@@ -334,7 +334,7 @@ async function startProcess(kind: WorkflowKind, scope: 'space' | 'view', all = f
   if (scope === 'space' ? !taskWorkflows.value : !reviewable.value) return
   if (!session.user || !workspace.space) return
   if (review.value && !(await confirmDialog({ title: 'Start a new session?', message: `This replaces your paused ${workflowTitle(review.value).toLowerCase()} position. Changes to tasks stay saved.`, confirmLabel: 'Start new session' }))) return
-  const list = scope === 'space' ? queues.value[kind] : all ? openList.value : processList.value
+  const list = scope === 'view' ? (all ? openList.value : processList.value) : kind === 'tasks' ? [...queues.value.triage, ...queues.value.review] : queues.value[kind]
   if (!list.length || !session.user || !workspace.space) return
   clearSelection()
   const fields = scope === 'space'
@@ -345,25 +345,22 @@ async function startProcess(kind: WorkflowKind, scope: 'space' | 'view', all = f
     viewId: view.value.id, viewName: view.value.name, kind, scope,
     scopeLabel: scope === 'space' ? `All tasks in ${workspace.space.name}` : viewScope.value,
     fieldIds: [...new Set(fields)],
+    ...(kind === 'tasks' ? { newCount: queues.value.triage.length } : {}),
   }, list.map((o) => o.id)))
   workflowOpen.value = false
   processOpen.value = true
 }
-// Triage and Review in the header (DESIGN_SYSTEM.md › Buttons): tinted with the count while
-// something waits, grey without; the one with a paused session resumes it. A press starts the
-// queue; an empty one opens the chooser, which says why. A phone has room for one button, the
-// chooser's, beside its view picker.
+// Review tasks, one button in the header (beside the view picker on a phone; DESIGN_SYSTEM.md ›
+// Buttons): tinted with the count while something waits (new tasks and check-ins together), grey
+// without. A press resumes the paused session, else starts one; with nothing to review it opens the
+// chooser, which says why. The chooser (More › Review tasks…) also ends a paused session.
 const sessionAt = computed(() => review.value ? `${Math.min(review.value.index + 1, review.value.ids.length)} of ${review.value.ids.length}` : '')
-function pressWorkflow(kind: WorkflowKind, anchor: HTMLElement) {
-  if (review.value?.kind === kind) resumeReview()
-  else if (queues.value[kind].length) void startProcess(kind, 'space')
+const toReview = computed(() => queues.value.triage.length + queues.value.review.length)
+function pressReview(anchor: HTMLElement) {
+  if (review.value) resumeReview()
+  else if (toReview.value) void startProcess('tasks', 'space')
   else chooseWorkflow('tasks', anchor)
 }
-const phoneWorkflow = computed(() =>
-  review.value ? { label: 'Resume', count: sessionAt.value, icon: 'ph:play', waiting: true }
-  : queues.value.triage.length ? { label: 'Triage', count: String(queues.value.triage.length), icon: 'ph:tray', waiting: true }
-  : queues.value.review.length ? { label: 'Review', count: String(queues.value.review.length), icon: 'ph:arrows-clockwise', waiting: true }
-  : { label: 'Triage', count: '', icon: 'ph:tray', waiting: false })
 function resumeReview() {
   if (!review.value) return
   clearSelection()
@@ -720,18 +717,10 @@ async function newMenu(event: MouseEvent) {
       <h1 class="min-w-0 text-2xl font-bold tracking-tight max-md:break-words md:truncate">{{ type.pluralName }}</h1>
       <span class="text-sm text-ink-faint max-md:hidden">{{ objects.length }}</span>
       <span class="flex-1" />
-      <template v-if="!loading && taskWorkflows && !isPhone">
-        <button :class="review?.kind === 'triage' || queues.triage.length ? tintedButton : greyButton" data-workflow-triage @click="pressWorkflow('triage', $event.currentTarget as HTMLElement)">
-          <AppIcon fallback="ph:tray" />
-          <template v-if="review?.kind === 'triage'">Resume triage <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
-          <template v-else>Triage <span v-if="queues.triage.length" class="tabular-nums">{{ queues.triage.length }}</span></template>
-        </button>
-        <button :class="review?.kind === 'review' || queues.review.length ? tintedButton : greyButton" data-workflow-review @click="pressWorkflow('review', $event.currentTarget as HTMLElement)">
-          <AppIcon fallback="ph:arrows-clockwise" />
-          <template v-if="review?.kind === 'review'">Resume {{ review.scope === 'space' ? 'review' : `review of ${review.viewName}` }} <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
-          <template v-else>Review <span v-if="queues.review.length" class="tabular-nums">{{ queues.review.length }}</span></template>
-        </button>
-      </template>
+      <button v-if="!loading && taskWorkflows && !isPhone" :class="review || toReview ? tintedButton : greyButton" class="min-w-0" data-review-tasks @click="pressReview($event.currentTarget as HTMLElement)">
+        <template v-if="review"><AppIcon fallback="ph:play" /><span class="truncate">Resume {{ review.scope === 'space' ? 'review' : `review of ${review.viewName}` }}</span> <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
+        <template v-else><AppIcon fallback="ph:arrows-clockwise" />Review <span v-if="toReview" class="tabular-nums">{{ toReview }}</span></template>
+      </button>
       <button v-else-if="!loading && review && !taskWorkflows" :class="tintedButton" class="min-w-0" data-process-resume @click="resumeReview">
         <AppIcon fallback="ph:play" /> <span class="truncate">{{ isPhone ? 'Resume' : `Resume review of ${review.viewName}` }}</span> <span class="tabular-nums">{{ sessionAt }}</span>
       </button>
@@ -755,9 +744,9 @@ async function newMenu(event: MouseEvent) {
         <AppIcon fallback="ph:push-pin" class="text-ink-soft" /> {{ pinned ? 'Pinned in sidebar' : 'Pin to sidebar' }}
         <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
       </button>
-      <!-- The chooser behind the header's buttons: what each queue holds, and End session. -->
-      <button v-if="taskWorkflows && !isPhone" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" data-workflows @click="chooseWorkflow('tasks', menuAnchor)">
-        <AppIcon fallback="ph:tray" class="text-ink-soft" /> Triage &amp; review…
+      <!-- The chooser behind the Review button: what it holds, and End session. -->
+      <button v-if="taskWorkflows" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover max-md:min-h-11" data-workflows @click="chooseWorkflow('tasks', menuAnchor)">
+        <AppIcon fallback="ph:arrows-clockwise" class="text-ink-soft" /> Review tasks…
       </button>
       <button v-if="isPhone && collection?.canSelect" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" data-select-mode @click="selectFromMenu">
         <AppIcon fallback="ph:check-square" class="text-ink-soft" /> Select {{ type.pluralName.toLowerCase() }}
@@ -835,9 +824,10 @@ async function newMenu(event: MouseEvent) {
           <AppIcon fallback="ph:funnel" :size="16" /> Filters
           <span v-if="activeFilterCount" class="grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-semibold text-white" data-filters-count>{{ activeFilterCount }}</span>
         </button>
-        <!-- Triage & review sits here on a phone: the header has no room beside the title. -->
-        <button v-if="!loading && taskWorkflows" :class="[phoneWorkflow.waiting ? tintedButton : greyButton, 'ml-auto']" data-workflows @click="chooseWorkflow('tasks', $event.currentTarget as HTMLElement)">
-          <AppIcon :fallback="phoneWorkflow.icon" /> {{ phoneWorkflow.label }} <span v-if="phoneWorkflow.count" class="tabular-nums">{{ phoneWorkflow.count }}</span>
+        <!-- Review sits here on a phone: the header has no room beside the title. -->
+        <button v-if="!loading && taskWorkflows" :class="[review || toReview ? tintedButton : greyButton, 'ml-auto']" data-review-tasks @click="pressReview($event.currentTarget as HTMLElement)">
+          <template v-if="review"><AppIcon fallback="ph:play" /> Resume <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
+          <template v-else><AppIcon fallback="ph:arrows-clockwise" /> Review <span v-if="toReview" class="tabular-nums">{{ toReview }}</span></template>
         </button>
         <PopoverMenu v-model:open="filtersOpen" :anchor="filtersAnchor" label="Search and filter">
           <!-- Changes apply as they are made: the count says what they leave, Done closes the sheet. -->
@@ -1086,7 +1076,7 @@ async function newMenu(event: MouseEvent) {
       </PopoverMenu>
     </div>
     <WorkflowChooser v-model:open="workflowOpen" :type="type" :anchor="workflowAnchor" :mode="workflowMode" :space-name="workspace.space?.name ?? ''" :view-scope="viewScope"
-      :triage-count="queues.triage.length" :review-count="queues.review.length" :view-count="processList.length" :view-all-count="openList.length" :session="review"
+      :new-count="queues.triage.length" :check-in-count="queues.review.length" :view-count="processList.length" :view-all-count="openList.length" :session="review"
       @start="startProcess" @resume="resumeReview" @end="discardReview" />
 
     <p v-if="loading" class="py-10 text-sm text-ink-faint">Loading…</p>
@@ -1097,9 +1087,9 @@ async function newMenu(event: MouseEvent) {
     </div>
 
     <FlowMetrics v-else-if="metricsActive" :type="type" />
-    <HabitProgress v-else-if="progressActive" :habits="objects" :filter="filterText" @menu="objectMenu" />
+    <HabitProgress v-else-if="progressActive" :type="type" :habits="objects" :filter="filterText" @menu="objectMenu" />
     <TagTree v-else-if="fixedActive && type.system === 'tag'" :tags="objects" :filter="filterText" @menu="objectMenu" />
-    <HabitBoard v-else-if="fixedActive && type.system === 'habit'" :habits="objects" :filter="filterText" @menu="objectMenu" />
+    <HabitBoard v-else-if="fixedActive && type.system === 'habit'" :type="type" :habits="objects" :filter="filterText" @menu="objectMenu" />
     <p v-else-if="!visible.length && !agendaActive" class="py-16 text-center text-sm text-ink-faint">No {{ type.pluralName.toLowerCase() }} match the filter.</p>
     <ObjectCollection
       v-else

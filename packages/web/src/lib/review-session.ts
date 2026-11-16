@@ -4,9 +4,10 @@
 // (localStorage, one at a time), so closing the review, opening an object and coming back, or a
 // reload, all return to the same object; it belongs to one user and space and is never offered to
 // another. Each object counts once in the end's totals: its last outcome, taken off again by Undo.
-import type { Id, QuickActionDef } from '@vasta/core'
+import type { Id } from '@vasta/core'
 
-export type WorkflowKind = 'triage' | 'review'
+/** `tasks`: Review tasks, new ones first and then those due for a check-in; `triage` and `review` are older sessions of one queue each. */
+export type WorkflowKind = 'tasks' | 'triage' | 'review'
 
 export interface ReviewSession {
   v: 1
@@ -31,19 +32,21 @@ export interface ReviewSession {
   scope?: 'space' | 'view'
   scopeLabel?: string
   fieldIds?: string[]
+  /** A `tasks` review: how many of the ids, at the start, were new when it began. */
+  newCount?: number
   /** Reading position and notes disclosure survive Pause and Open details. */
   cards?: Record<Id, { scrollTop: number; notesOpen: boolean }>
 }
 
 export const REVIEW_KEY = 'vasta.review'
 
-export type ReviewScope = Pick<ReviewSession, 'userId' | 'spaceId' | 'typeId' | 'viewId' | 'viewName' | 'kind' | 'scope' | 'scopeLabel' | 'fieldIds'>
+export type ReviewScope = Pick<ReviewSession, 'userId' | 'spaceId' | 'typeId' | 'viewId' | 'viewName' | 'kind' | 'scope' | 'scopeLabel' | 'fieldIds' | 'newCount'>
 
 export function startSession(scope: ReviewScope, ids: readonly Id[]): ReviewSession {
   return { v: 1, ...scope, ids: [...ids], index: 0, outcomes: {}, skipped: [] }
 }
 
-export const workflowTitle = (session: ReviewSession) => session.kind === 'triage' ? 'Triage incoming' : session.scope === 'space' ? 'Review commitments' : 'Review this view'
+export const workflowTitle = (session: ReviewSession) => session.kind === 'tasks' ? 'Review tasks' : session.kind === 'triage' ? 'Triage incoming' : session.scope === 'space' ? 'Review commitments' : 'Review this view'
 
 export const isFinished = (session: ReviewSession) => session.index >= session.ids.length
 export const currentId = (session: ReviewSession): Id | undefined => session.ids[session.index]
@@ -95,20 +98,9 @@ export function summarize(session: ReviewSession): { outcomes: { name: string; c
 /** A new review of the objects skipped in this one, in the same order. */
 export function skippedSession(session: ReviewSession): ReviewSession {
   const skipped = new Set(session.skipped.filter((id) => !session.outcomes[id]))
-  const { ids, index: _, outcomes: __, skipped: ___, openedId: ____, cards: _____, v: ______, ...scope } = session
-  return startSession(scope, ids.filter((id) => skipped.has(id)))
-}
-
-/**
- * The actions a review shows as buttons, and the rest (in More): Done, Defer and the next step where
- * the type has them (by their ids, with the names and changes set up for them), then others in their
- * order up to three. Drop, which ends a task without doing it, is never one of the three. No action
- * is left out or made up.
- */
-export function reviewActions(actions: readonly QuickActionDef[]): { featured: QuickActionDef[]; more: QuickActionDef[] } {
-  const known = ['done', 'defer', 'next-step'].flatMap((id) => actions.filter((a) => a.id === id))
-  const featured = [...known, ...actions.filter((a) => !known.includes(a) && a.id !== 'drop')].slice(0, 3)
-  return { featured, more: actions.filter((a) => !featured.includes(a)) }
+  const { ids, index: _, outcomes: __, skipped: ___, openedId: ____, cards: _____, v: ______, newCount, ...scope } = session
+  const left = ids.filter((id) => skipped.has(id))
+  return startSession(newCount === undefined ? scope : { ...scope, newCount: ids.slice(0, newCount).filter((id) => skipped.has(id)).length }, left)
 }
 
 /** The stored review, if it is this user's in this space; another user's is forgotten. */
@@ -145,7 +137,8 @@ function valid(data: unknown): ReviewSession | null {
   if (![s.userId, s.spaceId, s.typeId, s.viewId, s.viewName].every((x) => typeof x === 'string') || !strings(s.ids) || !strings(s.skipped)) return null
   if (typeof s.index !== 'number' || !Number.isInteger(s.index) || s.index < 0 || s.index > s.ids.length) return null
   if (!s.outcomes || typeof s.outcomes !== 'object' || Object.values(s.outcomes).some((x) => typeof x !== 'string')) return null
-  if (s.kind !== undefined && s.kind !== 'triage' && s.kind !== 'review') return null
+  if (s.kind !== undefined && s.kind !== 'tasks' && s.kind !== 'triage' && s.kind !== 'review') return null
+  if (s.newCount !== undefined && (!Number.isInteger(s.newCount) || s.newCount < 0 || s.newCount > s.ids.length)) return null
   if (s.scope !== undefined && s.scope !== 'space' && s.scope !== 'view') return null
   if (s.scopeLabel !== undefined && typeof s.scopeLabel !== 'string') return null
   if (s.fieldIds !== undefined && !strings(s.fieldIds)) return null

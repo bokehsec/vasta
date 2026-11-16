@@ -25,7 +25,7 @@ import { chromium, webkit } from 'playwright'
 
 const engine = process.argv[2] ?? 'chromium'
 const base = process.argv[3] ?? 'http://127.0.0.1:5183'
-if (!/^http:\/\/127\.0\.0\.1:518[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
+if (!/^http:\/\/127\.0\.0\.1:5[12]8[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
 
 const options = { viewport: { width: 1400, height: 900 }, locale: 'en-US', timezoneId: 'America/Sao_Paulo' }
 // WebKit has OPFS (the replica) only in a persistent profile.
@@ -755,7 +755,9 @@ if ((await page.locator('[data-process]').count()) !== 1) throw new Error('the P
 await page.locator('[data-process]').click()
 await page.locator('[data-process-mode]').waitFor()
 await until(async () => (await page.locator('[data-process-position]').innerText()).includes('of 2'), 'two pages to process')
-await page.keyboard.press('1')
+// A type without statuses: its own actions are the buttons, by their initial (V for Visited).
+await page.locator('[data-process-role]').filter({ hasText: 'Visited' }).waitFor()
+await page.keyboard.press('v')
 await until(async () => dayOf((await propsOf(visitPage.id)).nextvisit) === days.inWeek || dayOf((await propsOf(visitPage2.id)).nextvisit) === days.inWeek, 'the action ran from process mode')
 await page.keyboard.press('Escape')
 await until(async () => (await page.locator('[data-process-mode]').count()) === 0, 'Escape closed it')
