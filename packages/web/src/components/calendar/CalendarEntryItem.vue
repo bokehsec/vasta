@@ -8,15 +8,16 @@
 // checkbox stays out of a page editor around an agenda, which would select the embed first.
 import { computed, inject } from 'vue'
 import type { CalendarEntry, CalendarSource } from '@vasta/core'
-import { plannedDateFieldOf } from '@vasta/core'
-import { entryTime, formatClock, isDone, setTaskDone } from '../../lib/calendar.ts'
+import { closingOf, isClosedTask, plannedDateFieldOf } from '@vasta/core'
+import { entryTime, formatClock } from '../../lib/calendar.ts'
 import { ENTRY_DRAGGING, drag, pressEntry } from '../../lib/calendar-drag.ts'
 import { ENTRY_COMPLETION } from '../../lib/completion-feedback.ts'
 import { blockTextClasses, chip } from '../../lib/colors.ts'
 import { displayTitle, formatDateShort } from '../../lib/format.ts'
 import { lastError, summaryOf, typesById } from '../../lib/state.ts'
 import { dayKey } from '../../lib/actions.ts'
-import { taskClosing, taskDate, taskDateRole, taskEntryCheckable, type TaskDateRole } from '../../lib/calendar-tasks.ts'
+import { setTaskDone } from '../../lib/task-completion.ts'
+import { taskDate, taskDateRole, taskEntryCheckable, type TaskDateRole } from '../../lib/calendar-tasks.ts'
 import AppIcon from '../AppIcon.vue'
 import ObjectLink from '../ObjectLink.vue'
 
@@ -47,8 +48,8 @@ const isTask = computed(() => !!taskDateRole(type.value, props.entry.field))
 const checkable = computed(() => taskEntryCheckable(props.entry, type.value, summary.value))
 /** The completion this entry is kept for, when the view kept it (another occurrence is not it). */
 const retained = computed(() => (props.entry.objectId ? kept?.retained(props.entry) : undefined))
-const done = computed(() => isTask.value && (!!retained.value || isDone(type.value, summary.value?.props.status?.kind === 'select' ? summary.value.props.status.value : undefined)))
-const dropped = computed(() => taskClosing(type.value, summary.value) === 'dropped')
+const done = computed(() => isTask.value && (!!retained.value || (!!summary.value && isClosedTask(type.value, summary.value))))
+const dropped = computed(() => !!summary.value && closingOf(type.value, summary.value) === 'dropped')
 const plan = computed(() => taskDate(summary.value, plannedDateFieldOf(type.value)?.id))
 const due = computed(() => taskDate(summary.value, 'due'))
 const dateDay = (value: NonNullable<typeof due.value>) => value.resolution === 'day' ? value.start.slice(0, 10) : dayKey(new Date(value.start))

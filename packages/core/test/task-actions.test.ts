@@ -3,7 +3,8 @@ import { createBuiltinTypes } from '../src/builtin-types.ts'
 import type { ObjectType, PropertyDef, PropertyValue, QuickActionDef } from '../src/model.ts'
 import { completeRepeat } from '../src/calendar.ts'
 import type { ObjectRecord } from '../src/model.ts'
-import { askOf, defaultQuickActions, isClosedTask, nextStepFieldOf, quickActionChanges, quickActionEdits, quickActionMessage, quickActionsOf, withAskCleared } from '../src/task-actions.ts'
+import { isClosedTask } from '../src/task-status.ts'
+import { askOf, defaultQuickActions, nextStepFieldOf, quickActionChanges, quickActionEdits, quickActionMessage, quickActionsOf, withAskCleared } from '../src/task-actions.ts'
 
 const AT = '2026-11-13T12:00:00.000Z'
 const types = createBuiltinTypes('s', AT)

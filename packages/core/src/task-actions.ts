@@ -11,17 +11,13 @@
 import { DUE_PROPERTY_ID, REVIEWED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
 import type { DatePropertyDef, Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActionValue, SelectOption, TextPropertyDef } from './model.ts'
 import { statusProperty } from './metrics.ts'
+import { doneOptionOf, dropOptionOf, reopenOptionOf } from './task-status.ts'
 import { addDays } from './time.ts'
 
 /** Kinds of property whose value an action can ask for when pressed. */
 export const ASKABLE_KINDS: readonly PropertyDef['kind'][] = ['date', 'text', 'number', 'url']
 /** Kinds of property an action can change. */
 export const CHANGEABLE_KINDS: readonly PropertyDef['kind'][] = ['select', 'date', 'text', 'number', 'url', 'checkbox', 'person', 'relation']
-
-const statusOptions = (type: ObjectType): SelectOption[] => {
-  const def = type.properties.find((p) => p.id === STATUS_PROPERTY_ID)
-  return def?.kind === 'select' ? def.options : []
-}
 
 /** Whether a change's value fits the property it changes. */
 export function valueFits(def: PropertyDef, value: QuickActionValue): boolean {
@@ -49,28 +45,27 @@ export function nextStepFieldOf(type: ObjectType | undefined): TextPropertyDef |
   return def?.kind === 'text' ? def : undefined
 }
 
-const setStatus = (option: SelectOption): QuickActionChange => ({ field: STATUS_PROPERTY_ID, value: { kind: 'value', value: { kind: 'select', value: [option.id] } } })
+const setStatus = (option: SelectOption, field: Id = STATUS_PROPERTY_ID): QuickActionChange => ({ field, value: { kind: 'value', value: { kind: 'select', value: [option.id] } } })
 
 /** Mark done, Defer, Drop and Next step, as the type's settings and properties allow. */
 export function defaultQuickActions(type: ObjectType): QuickActionDef[] {
   const settings = type.quickActions ?? {}
-  const options = statusOptions(type)
+  // Only the task's own status select: its options are what the buttons set.
+  const options = statusProperty(type)?.id === STATUS_PROPERTY_ID ? statusProperty(type)!.options : []
   const option = (id: Id | undefined) => (id ? options.find((o) => o.id === id) : undefined)
   const dateField = (id: Id | undefined) => {
     const def = id ? type.properties.find((p) => p.id === id) : undefined
     return def?.kind === 'date' ? def : undefined
   }
-  const closing = options.filter((o) => o.status === 'done')
-  const done = closing[0]
-  const chosenDrop = option(settings.dropStatus)
-  const drop = chosenDrop && chosenDrop.id !== done?.id ? chosenDrop : closing[1]
+  const done = options.length ? doneOptionOf(type) : undefined
+  const drop = options.length ? dropOptionOf(type) : undefined
   const deferField = dateField(settings.deferField) ?? dateField(DUE_PROPERTY_ID)
   const deferStatus = option(settings.deferStatus)
   const nextStep = nextStepFieldOf(type)
   const actions: QuickActionDef[] = []
-  if (done) actions.push({ id: 'done', name: `Mark ${done.label.toLowerCase()}`, icon: { kind: 'icon', value: 'ph:check-circle' }, changes: [setStatus(done)] })
+  if (done) actions.push(plainStatusAction(type, done))
   if (deferField) actions.push({ id: 'defer', name: 'Defer', icon: { kind: 'icon', value: 'ph:clock-clockwise' }, changes: [{ field: deferField.id, value: { kind: 'ask' } }, ...(deferStatus ? [setStatus(deferStatus)] : [])] })
-  if (drop) actions.push({ id: 'drop', name: 'Drop', icon: { kind: 'icon', value: 'ph:x-circle' }, changes: [setStatus(drop)] })
+  if (drop) actions.push(plainStatusAction(type, drop))
   if (nextStep) actions.push({ id: 'next-step', name: nextStep.name, icon: { kind: 'icon', value: 'ph:pencil-simple-line' }, changes: [{ field: nextStep.id, value: { kind: 'ask' } }] })
   return actions
 }
@@ -114,17 +109,49 @@ export function plannedDateFieldOf(type: ObjectType | undefined): DatePropertyDe
   return asked?.kind === 'date' && asked.id !== DUE_PROPERTY_ID ? asked : undefined
 }
 
+/** Whether an action sets the status to this option (a change with it among its values). */
+export const actionSetsStatus = (type: ObjectType, action: QuickActionDef, option: SelectOption): boolean => {
+  const field = statusProperty(type)?.id
+  return action.changes.some((c) => c.field === field && c.value.kind === 'value' && c.value.value.kind === 'select' && c.value.value.value.includes(option.id))
+}
+
+/** A plain action setting just the status: Done and Drop as the defaults are named, any other option by its label. */
+export function plainStatusAction(type: ObjectType, option: SelectOption): QuickActionDef {
+  const done = option.id === doneOptionOf(type)?.id
+  const dropped = option.id === dropOptionOf(type)?.id
+  return {
+    id: done ? 'done' : dropped ? 'drop' : `status:${option.id}`,
+    name: done ? `Mark ${option.label.toLowerCase()}` : dropped ? 'Drop' : option.label,
+    icon: { kind: 'icon', value: done ? 'ph:check-circle' : option.status === 'done' ? 'ph:x-circle' : 'ph:arrow-right' },
+    changes: [setStatus(option, statusProperty(type)?.id)],
+  }
+}
+
 /**
- * Whether an object's status is one meaning done (done, dropped…): its quick actions are behind it.
- * The status is a task's own, or another type's select with status categories (a project's); a type
- * without one is never closed.
+ * The action that sets a status option: the type's own one that does (so a customised Done, with
+ * what else it changes, is the Done everywhere), else a plain one setting just the status.
  */
-export function isClosedTask(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>): boolean {
-  const def = statusProperty(type)
-  if (!def) return false
-  const value = object.props[def.id]
-  const ids = value?.kind === 'select' ? value.value : []
-  return def.options.some((o) => o.status === 'done' && ids.includes(o.id))
+export function statusActionOf(type: ObjectType, option: SelectOption): QuickActionDef {
+  return quickActionsOf(type).find((a) => actionSetsStatus(type, a, option)) ?? plainStatusAction(type, option)
+}
+
+/** The type's Done: its quick action that sets the Done option, else the built-in; none without a status meaning done. */
+export function doneActionOf(type: ObjectType | undefined): QuickActionDef | undefined {
+  const option = doneOptionOf(type)
+  return type && option ? statusActionOf(type, option) : undefined
+}
+
+/** The type's Drop: its quick action that sets the Drop option, else the built-in; none without a second option meaning done. */
+export function dropActionOf(type: ObjectType | undefined): QuickActionDef | undefined {
+  const option = dropOptionOf(type)
+  return type && option ? statusActionOf(type, option) : undefined
+}
+
+/** The action that reopens a closed task (`previous`: the status it had, when known); named for the notice. */
+export function reopenActionOf(type: ObjectType | undefined, previous?: PropertyValue): QuickActionDef | undefined {
+  const option = reopenOptionOf(type, previous)
+  const field = statusProperty(type)?.id
+  return option && field ? { id: 'reopen', name: 'Reopened', icon: { kind: 'icon', value: 'ph:arrow-counter-clockwise' }, changes: [setStatus(option, field)] } : undefined
 }
 
 export interface QuickActionContext {
@@ -245,12 +272,13 @@ export function quickActionEdits(
   })
 }
 
-/** Whether `values` close a task whose due date repeats: what completeRepeat rewrites when saved. */
-function endsRepeat(type: ObjectType, object: Pick<ObjectRecord, 'props'>, values: Record<Id, PropertyValue | undefined>): boolean {
+/** Whether `values` do a task whose due date repeats (Done, not Drop): what completeRepeat rewrites when saved, the task going on to its next occurrence. */
+export function endsRepeat(type: ObjectType, object: Pick<ObjectRecord, 'props'>, values: Record<Id, PropertyValue | undefined>): boolean {
   const due = object.props[DUE_PROPERTY_ID]
   const next = values[STATUS_PROPERTY_ID]
   if (type.system !== 'task' || due?.kind !== 'date' || !due.value.rrule || next?.kind !== 'select') return false
-  return statusOptions(type).some((o) => o.status === 'done' && next.value.includes(o.id))
+  const done = doneOptionOf(type)
+  return !!done && next.value.includes(done.id)
 }
 
 /** The day a date value falls on ("YYYY-MM-DD"); a timed one in the zone `dayOfTime` gives. */

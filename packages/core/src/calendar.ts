@@ -5,6 +5,7 @@ import { newId } from './ids.ts'
 import ICAL from 'ical.js'
 import type { CalendarEntry, DateException, DateValue, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType } from './model.ts'
 import { copyObject } from './operations.ts'
+import { doneOptionOf, reopenOptionOf } from './task-status.ts'
 import type { Store } from './store.ts'
 import { addDays, dayIn, daysBetween, instantOf, isValidTimeZone, wallTimeIn } from './time.ts'
 
@@ -324,7 +325,7 @@ function* nextOccurrences(value: DateValue, timeZone: string): Generator<IsoDate
  * A task done whose due date repeats is due next time instead, as reminders in other apps do: the
  * occurrence it is at (currentOccurrence, the one with a checkbox on the calendar) is done, its due
  * date becomes the series from the next one (splitSeries' rest of it, so a COUNT ends where it did)
- * and its status goes back to the to-do one it had (or the first to-do one). Done is the first
+ * and its status goes back to the to-do one it had (or the one that reopens a task, task-status.ts). Done is the first
  * option meaning done, the one checkboxes set; others (a "Dropped") end it, as does the last
  * occurrence done. `object` is the task being saved, `stored` the one it replaces and `base` the
  * copy the change was made to (when it was edited for a while); only a status changed by this save
@@ -339,9 +340,10 @@ export function completeRepeat(object: ObjectRecord, stored: ObjectRecord | unde
     return value?.kind === 'select' ? status.options.find((option) => option.id === value.value[0]) : undefined
   }
   const dueOf = (o: ObjectRecord | undefined) => (o?.props.due?.kind === 'date' ? o.props.due.value : undefined)
-  const done = status.options.find((option) => option.status === 'done')
+  const done = doneOptionOf(type)
   const before = optionOf(stored)
-  const todo = before?.status === 'todo' ? before : status.options.find((option) => option.status === 'todo')
+  // The next occurrence has not been started: back to the to-do status it had, else the one that reopens a task.
+  const todo = reopenOptionOf(type, before?.status === 'todo' ? stored?.props.status : undefined)
   const due = dueOf(object)
   if (!done || !todo || !due?.rrule || optionOf(object) !== done || before?.status === 'done') return object
   const upcoming = nextOccurrences(due, timeZone)

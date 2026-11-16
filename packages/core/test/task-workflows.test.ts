@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes } from '../src/builtin-types.ts'
 import type { ObjectType, PropertyValue, QuickActionDef } from '../src/model.ts'
-import { needsTriage, reviewButtons, reviewChoices, settlesTriage, taskWorkflowQueues, triageDispositionActions, triageOptionsOf } from '../src/task-workflows.ts'
+import { needsTriage, reviewButtons, reviewChoices, settlesTriage, taskWorkflowQueues, triageDispositionActions } from '../src/task-workflows.ts'
+import { triageOptionsOf } from '../src/task-status.ts'
 
 const base = createBuiltinTypes('s', '2026-11-14T12:00:00Z').find((t) => t.system === 'task')!
 const task: ObjectType = {
@@ -38,7 +39,10 @@ describe('sister task workflows', () => {
     expect(needsTriage({ ...task, quickActions: { triageStatuses: [] } }, object('a', 'in'))).toBe(false)
     expect(needsTriage({ ...task, quickActions: { triageStatuses: [] } }, object('a'))).toBe(true)
     expect(needsTriage(task, object('a', 'deleted-option'))).toBe(true)
-    expect(triageOptionsOf(base).map((o) => o.id)).toEqual(['todo'])
+    // Without an Inbox option nothing is incoming by status: To do is a commitment, only a task with no status is new.
+    expect(triageOptionsOf(base)).toEqual([])
+    expect(needsTriage(base, object('a', 'todo'))).toBe(false)
+    expect(needsTriage(base, object('a'))).toBe(true)
   })
 
   it('never treats note/date-only changes as a triage decision', () => {

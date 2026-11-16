@@ -207,6 +207,24 @@ describe('undo', () => {
     expect(Object.keys(save.mock.calls[0]![1])).toEqual(['status'])
   })
 
+  it('puts back every value the completion changed, as the notice’s Undo does', async () => {
+    const note: PropertyValue = { kind: 'text', value: 'call back' }
+    const row = { ...summary('a', 'doing'), props: { ...summary('a', 'doing').props, next: note } } as ObjectSummary
+    const { feedback, complete, save } = setup([row])
+    // A customised Done: sets the status, clears the next step and stamps a review.
+    complete('a', { status: status('done'), reviewed: day('2026-11-16') })!.saved!(asRecord(row, { status: status('done'), reviewed: day('2026-11-16') }))
+    await feedback.undo('a')
+    expect(save).toHaveBeenCalledWith('a', { status: status('doing'), next: note, reviewed: undefined })
+  })
+
+  it('takes what changed from the object as it was before the save, when the save knows it', async () => {
+    const { feedback, replace, rows } = setup([summary('a', 'todo')])
+    const base = asRecord(summary('a', 'doing'))
+    feedback.observe(asRecord(rows()[0]!, { status: status('done') }), base)
+    expect(replace).toHaveBeenCalledTimes(1)
+    expect(feedback.entries.get('a')!.restore).toEqual({ status: status('doing') })
+  })
+
   it('also writes the prior due date after a repeat', async () => {
     const { feedback, complete, save } = setup([summary('a', 'doing', day('2026-11-20', 'FREQ=WEEKLY'))])
     complete('a')!.saved!(asRecord(summary('a'), { status: status('todo'), due: day('2026-11-27', 'FREQ=WEEKLY') }))

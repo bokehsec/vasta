@@ -9,8 +9,10 @@ vi.mock('./calendar.ts', () => ({ nextWeekStart: () => '2026-11-15' }))
 vi.mock('./format.ts', () => ({ formatLongDay: (iso: string) => `<${iso.slice(0, 10)}>` }))
 vi.mock('./session.ts', () => ({ session: { user: { id: 'u1' } } }))
 vi.mock('./state.ts', () => ({ lastError: { value: '' }, notice: { value: null } }))
-const openStepsNote = vi.fn()
-vi.mock('./subtasks.ts', () => ({ openStepsNote: (...args: unknown[]) => openStepsNote(...args) }))
+const openStepsOf = vi.fn()
+vi.mock('./subtasks.ts', () => ({ openStepsOf: (...args: unknown[]) => openStepsOf(...args) }))
+const choiceDialog = vi.fn()
+vi.mock('./overlays.ts', () => ({ choiceDialog: (...args: unknown[]) => choiceDialog(...args) }))
 
 const { quickAsk, runQuickAction, textProblem, textAnswer } = await import('./quick-actions.ts')
 const { lastError, notice } = await import('./state.ts')
@@ -26,7 +28,9 @@ const message = () => (notice.value as { message: string; action?: { run: () => 
 
 beforeEach(() => {
   setProperties.mockReset()
-  openStepsNote.mockReset()
+  openStepsOf.mockReset()
+  openStepsOf.mockResolvedValue([])
+  choiceDialog.mockReset()
   lastError.value = ''
   notice.value = null
 })
@@ -196,20 +200,75 @@ describe('runQuickAction', () => {
     await running
   })
 
-  it('adds the runner’s own "subtasks still open" for the parents it closed, unless the caller words it', async () => {
-    openStepsNote.mockReturnValue('2 subtasks still open')
-    const save = vi.fn(async () => {})
-    const closing = [open('a'), open('b')]
-    await runQuickAction(task, closing, done, { save })
-    expect(message().message).toBe('Done · 2 tasks · 2 subtasks still open')
-    expect(openStepsNote.mock.calls[0]![1].map((o: { id: string }) => o.id)).toEqual(['a', 'b'])
-    // An action that closes nothing (Defer) asks about no parent.
-    const running = runQuickAction(task, [open('c')], defer, { save })
-    quickAsk.value!.answer(day('2026-11-20'))
-    await running
-    expect(openStepsNote.mock.calls[1]![1]).toEqual([])
-    await runQuickAction(task, [open('d')], done, { save, note: () => 'said by the page' })
-    expect(message().message).toBe('Done · said by the page')
+  describe('closing a task with open subtasks', () => {
+    const steps = [open('s1'), open('s2')]
+    const saveAll = () => {
+      const saved: [string, Record<string, PropertyValue | undefined>][] = []
+      setProperties.mockImplementation(async (id: string, values: Record<string, PropertyValue | undefined>) => void saved.push([id, values]))
+      return saved
+    }
+
+    it('asks once and closes them with the parent when told to; one Undo puts all back', async () => {
+      openStepsOf.mockResolvedValue(steps)
+      choiceDialog.mockResolvedValue('close')
+      const saved = saveAll()
+      const save = vi.fn(async () => {})
+      await runQuickAction(task, [open('p')], done, { save })
+      expect(choiceDialog).toHaveBeenCalledTimes(1)
+      expect(choiceDialog.mock.calls[0]![0].title).toBe('Close its 2 open subtasks too?')
+      expect(choiceDialog.mock.calls[0]![0].choices.map((c: { label: string }) => c.label)).toEqual(['Close them too', 'Leave open'])
+      expect(saved).toEqual([['s1', { status: status('done') }], ['s2', { status: status('done') }]])
+      expect(message().message).toBe('Done · 2 subtasks closed too')
+      saved.length = 0
+      await message().action!.run()
+      expect(save).toHaveBeenLastCalledWith('p', { status: status('todo') })
+      expect(saved).toEqual([['s1', { status: status('todo') }], ['s2', { status: status('todo') }]])
+    })
+
+    it('still asks when the page has already changed the object it ran on (the task page edits it in place)', async () => {
+      openStepsOf.mockResolvedValue(steps)
+      choiceDialog.mockResolvedValue('leave')
+      const parent = open('p')
+      await runQuickAction(task, [parent], done, { save: async (_id, values) => void Object.assign(parent.props, values) })
+      expect(choiceDialog).toHaveBeenCalledTimes(1)
+      expect(message().message).toBe('Done · 2 subtasks still open')
+    })
+
+    it('leaves them open when asked to, or when the question is dismissed, and says so', async () => {
+      openStepsOf.mockResolvedValue(steps)
+      const save = vi.fn(async () => {})
+      choiceDialog.mockResolvedValue('leave')
+      await runQuickAction(task, [open('p')], done, { save })
+      expect(message().message).toBe('Done · 2 subtasks still open')
+      choiceDialog.mockResolvedValue(null)
+      await runQuickAction(task, [open('q')], done, { save })
+      expect(message().message).toBe('Done · 2 subtasks still open')
+      expect(setProperties).not.toHaveBeenCalled()
+    })
+
+    it('closes the subtasks of a dropped parent by dropping them', async () => {
+      const withDrop = { ...task, properties: task.properties.map((p) => (p.id === 'status' && p.kind === 'select' ? { ...p, options: [...p.options, { id: 'dropped', label: 'Dropped', status: 'done' as const }] } : p)) }
+      const drop = quickActionsOf(withDrop).find((a) => a.id === 'drop')!
+      openStepsOf.mockResolvedValue([open('s1')])
+      choiceDialog.mockResolvedValue('close')
+      const saved = saveAll()
+      await runQuickAction(withDrop, [open('p')], drop, { save: async () => {} })
+      expect(choiceDialog.mock.calls[0]![0].title).toBe('Close its open subtask too?')
+      expect(saved).toEqual([['s1', { status: status('dropped') }]])
+    })
+
+    it('asks about nothing for an action that does not close, or a repeating task done, or no open subtasks', async () => {
+      openStepsOf.mockResolvedValue(steps)
+      const save = vi.fn(async () => {})
+      const running = runQuickAction(task, [open('c')], defer, { save })
+      quickAsk.value!.answer(day('2026-11-20'))
+      await running
+      await runQuickAction(task, [open('r', day('2026-11-20', 'FREQ=WEEKLY'))], done, { save })
+      openStepsOf.mockResolvedValue([])
+      await runQuickAction(task, [open('d')], done, { save })
+      expect(choiceDialog).not.toHaveBeenCalled()
+      expect(message().message).toBe('Done')
+    })
   })
 
   it('calls onSaved with the saved edits, and onUndo with only the ones Undo restored', async () => {

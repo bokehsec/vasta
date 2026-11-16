@@ -62,7 +62,7 @@ export interface QuickActions {
   reviewEvery?: number
   /** The status option Hold sets in a review (a task kept for later without a date); default one called "On hold"; "none": no Hold. */
   holdStatus?: Id
-  /** Incoming statuses for Triage; unset: Inbox, else To do. No status always needs triage. */
+  /** Incoming statuses for Triage; unset: those called Inbox, else none. No status always needs triage. */
   triageStatuses?: Id[]
 }
 

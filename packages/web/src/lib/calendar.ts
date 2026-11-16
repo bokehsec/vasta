@@ -1,10 +1,10 @@
 // Calendar page helpers: visible ranges per view, the week's first day, repeat rules, and the
 // edits the calendar makes to objects (move a date, tick a task, create something on a day).
-import type { CalendarEntry, DateValue, Id, ObjectType, PropertyDef } from '@vasta/core'
+import type { CalendarEntry, DateValue, ObjectType, PropertyDef } from '@vasta/core'
 import { addDays, daysBetween } from '@vasta/core'
 import type { OccurrenceScope } from '@vasta/core/calendar'
 import { api } from './api.ts'
-import { dayKey, setProperties } from './actions.ts'
+import { dayKey } from './actions.ts'
 import { choiceDialog } from './overlays.ts'
 import { primeFromObject } from './state.ts'
 
@@ -325,38 +325,6 @@ export async function updateEntryDate(entry: CalendarEntry, change: (value: Date
     object.props[entry.field] = { kind: 'date', value: change(current.value) }
   }
   primeFromObject(await api.saveObject(object))
-}
-
-/** The status option of a task's status property that means done or to-do. */
-function statusOption(type: ObjectType | undefined, status: 'todo' | 'done'): Id | undefined {
-  const def = type?.properties.find((p) => p.id === 'status')
-  return def?.kind === 'select' ? def.options.find((o) => o.status === status)?.id : undefined
-}
-
-export function isDone(type: ObjectType | undefined, statusIds: Id[] | undefined): boolean {
-  const def = type?.properties.find((p) => p.id === 'status')
-  return def?.kind === 'select' && !!statusIds?.some((id) => def.options.find((o) => o.id === id)?.status === 'done')
-}
-
-const taskSaves = new Set<Id>()
-
-export async function setTaskDone(objectId: Id, type: ObjectType | undefined, done: boolean) {
-  const option = statusOption(type, done ? 'done' : 'todo')
-  if (!type || !option || taskSaves.has(objectId)) return undefined
-  taskSaves.add(objectId)
-  try {
-    const object = await api.object(objectId)
-    const { runQuickAction } = await import('./quick-actions.ts')
-    let saved: Awaited<ReturnType<typeof setProperties>> | undefined
-    await runQuickAction(type, object, {
-      id: done ? 'done' : 'reopen',
-      name: done ? 'Done' : 'Reopened',
-      changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: [option] } } }],
-    }, { save: async (id, values) => { saved = await setProperties(id, values) } })
-    return saved
-  } finally {
-    taskSaves.delete(objectId)
-  }
 }
 
 /** What a day holds, for the dots of the small month calendar. */

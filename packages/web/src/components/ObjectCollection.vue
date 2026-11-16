@@ -5,7 +5,6 @@ import { computed, inject, nextTick, provide, ref, watch, type Directive } from 
 import type { AgendaSettings, BoardSettings, FilterGroup, Id, ListSettings, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { isClosedTask, nextStepFieldOf, outlineRows, parentFieldOf, parentIdOf, quickActionsOf, subtaskProgress, type OutlineRow, type QuickActionDef } from '@vasta/core'
 import { addSelectOption, setProperties, setProperty } from '../lib/actions.ts'
-import { isDone } from '../lib/calendar.ts'
 import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, listFields, MIN_COLUMN_WIDTH, QUICK_ACTIONS_COLUMN, rowFields, rowFieldsFromTable, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
@@ -334,7 +333,7 @@ const fieldsOf = (object: ObjectSummary) => {
   const fields = rowFields(object, typeOf(object), listColumns.value ?? [])
   return phoneRows.value ? fields.slice(0, 4) : fields
 }
-const isDoneTask = (object: ObjectSummary) => typeOf(object)?.system === 'task' && (completion?.done(object) ?? isDone(typeOf(object), object.props.status?.kind === 'select' ? object.props.status.value : undefined))
+const isDoneTask = (object: ObjectSummary) => typeOf(object)?.system === 'task' && (completion?.done(object) ?? isClosedTask(typeOf(object), object))
 const titleClass = (object: ObjectSummary) => ['task-title transition-colors duration-150 motion-reduce:transition-none', isDoneTask(object) ? 'task-title-done text-ink-faint line-through' : '']
 
 const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 'embed' ? 'wall' : props.layout === 'gallery' ? 'gallery' : 'grid'))

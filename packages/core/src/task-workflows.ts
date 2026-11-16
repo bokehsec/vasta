@@ -2,17 +2,10 @@
 // a next-step edit never hide an unresolved incoming task. Saved views are independent of this.
 import { STATUS_PROPERTY_ID } from './builtin-types.ts'
 import type { ObjectRecord, ObjectType, QuickActionDef, SelectOption } from './model.ts'
-import { askOf, isClosedTask, quickActionsOf } from './task-actions.ts'
+import { askOf, quickActionsOf } from './task-actions.ts'
+import { isClosedTask, triageOptionsOf } from './task-status.ts'
 import { dueForReview, holdAction } from './task-review.ts'
 import { statusProperty } from './metrics.ts'
-
-export function triageOptionsOf(type: ObjectType | undefined): SelectOption[] {
-  if (type?.system !== 'task') return []
-  const options = statusProperty(type)?.options.filter((o) => o.status !== 'done') ?? []
-  if (Array.isArray(type.quickActions?.triageStatuses)) return options.filter((o) => type.quickActions!.triageStatuses!.includes(o.id))
-  const inbox = options.filter((o) => /^inbox$/i.test(o.label.trim()))
-  return inbox.length ? inbox : options.filter((o) => /^to[\s-]?do$/i.test(o.label.trim()))
-}
 
 export function needsTriage(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>): boolean {
   if (type?.system !== 'task' || isClosedTask(type, object)) return false

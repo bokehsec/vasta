@@ -105,7 +105,7 @@ const completion = createCompletionFeedback({
   },
 })
 provide(COMPLETION_FEEDBACK, completion)
-const stopSaves = onObjectSave((object) => completion.observe(object))
+const stopSaves = onObjectSave((object, base) => completion.observe(object, base))
 onBeforeUnmount(stopSaves)
 // The query's own definition changing is a fresh view: what it kept goes with it.
 watch(() => [JSON.stringify(props.query), props.parentId], () => {

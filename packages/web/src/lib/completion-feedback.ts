@@ -1,6 +1,6 @@
 import { reactive, type InjectionKey } from 'vue'
 import type { CalendarEntry, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyValue } from '@vasta/core'
-import { isClosedTask, statusProperty } from '@vasta/core'
+import { isClosedTask } from '@vasta/core'
 import { clone } from './clone.ts'
 import type { ObjectSaveObserver } from './object-saves.ts'
 
@@ -8,6 +8,8 @@ type Values = Record<Id, PropertyValue | undefined>
 
 export interface RetainedCompletion {
   before: ObjectSummary
+  /** The values the completion changed, as they were: what its Undo puts back (the notice's Undo does the same). */
+  restore: Values
   index: number
   pending: boolean
   repeat: boolean
@@ -25,11 +27,14 @@ export function createCompletionFeedback(options: {
   const placements = reactive(new Map<Id, Pick<RetainedCompletion, 'before' | 'index'>>())
   const suppressed = new Set<Id>()
   let generation = 0
-  const done = (object: Pick<ObjectRecord, 'props' | 'typeId'>) => {
-    const status = object.props.status
-    return status?.kind === 'select' && !!statusProperty(options.type(object))?.options.some((option) => option.status === 'done' && status.value.includes(option.id))
-  }
+  const done = (object: Pick<ObjectRecord, 'props' | 'typeId'>) => isClosedTask(options.type(object), object)
   const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right)
+  /** The properties `changed` has other than `from` has, as `from` had them. */
+  const changes = (from: Pick<ObjectSummary, 'props'>, changed: Pick<ObjectRecord, 'props'>): Values => {
+    const out: Values = {}
+    for (const key of new Set([...Object.keys(from.props), ...Object.keys(changed.props)])) if (!same(from.props[key], changed.props[key])) out[key] = from.props[key] && clone(from.props[key])
+    return out
+  }
   const feedback = {
     entries,
     done: (object: ObjectSummary) => entries.has(object.id) || done(object),
@@ -41,7 +46,8 @@ export function createCompletionFeedback(options: {
       for (const object of retained) placed.splice(Math.min(placements.get(object.id)!.index, placed.length), 0, object)
       return placed
     },
-    observe(object: ObjectRecord): ObjectSaveObserver | undefined {
+    /** `base`: the object as it was before this edit, when the save knows it (else the row shows it). */
+    observe(object: ObjectRecord, base?: ObjectRecord): ObjectSaveObserver | undefined {
       const type = options.type(object)
       if (type?.system !== 'task' || object.typeId !== type.id || suppressed.has(object.id)) return
       const existing = entries.get(object.id)
@@ -65,7 +71,7 @@ export function createCompletionFeedback(options: {
       }
       if (existing || !done(object) || isClosedTask(type, before)) return
       const previousPlacement = placements.get(object.id)
-      const entry: RetainedCompletion = { before: clone(before), index: rows.indexOf(before), pending: true, repeat: false }
+      const entry: RetainedCompletion = { before: clone(before), restore: changes(base ?? before, object), index: rows.indexOf(before), pending: true, repeat: false }
       placements.set(object.id, previousPlacement ?? { before: clone(before), index: entry.index })
       entries.set(object.id, entry)
       const current = entries.get(object.id)!
@@ -75,6 +81,8 @@ export function createCompletionFeedback(options: {
           if (entries.get(object.id) !== current) return
           current.pending = false
           current.repeat = !done(saved) && !same(saved.props.due, current.before.props.due)
+          // A repeating task's due date moved on: Undo puts it back too.
+          if (current.repeat) current.restore.due = current.before.props.due && clone(current.before.props.due)
           options.replace(saved)
         },
         failed: (retry) => {
@@ -92,7 +100,7 @@ export function createCompletionFeedback(options: {
       if (!entry || entry.pending) return
       entry.pending = true
       try {
-        await options.save(id, { status: entry.before.props.status, ...(entry.repeat ? { due: entry.before.props.due } : {}) })
+        await options.save(id, entry.restore)
       } finally {
         if (entries.get(id) === entry) entry.pending = false
       }

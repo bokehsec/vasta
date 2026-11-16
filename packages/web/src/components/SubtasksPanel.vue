@@ -4,17 +4,18 @@
 // and keeps the cursor for the next; several pasted lines make one each. A new step takes the
 // parent's selects, relations, people and tags (lib/subtasks.ts). The checkbox and "done" follow
 // the type's status select (core statusProperty, as the progress does), so any type with one has
-// them and a type without one shows no checkbox. Marking a step done offers an Undo, and its
-// checkbox undoes it too, both putting the exact status back. Once every step is closed and
-// the parent is open, a line says so with a button for the type's first quick action (Done); the
-// parent is never closed by itself.
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+// them and a type without one shows no checkbox. A step's circle is the one lists have
+// (TaskCompletionCheck): it runs the type's Done, offers an Undo, and its circle undoes it too, both
+// putting the exact values back; a dropped step shows as dropped. Once every step is closed and
+// the parent is open, a line says so with a button for the type's Done action; the parent is never
+// closed by itself.
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import type { ObjectRecord, ObjectSummary, ObjectType, QuickActionDef } from '@vasta/core'
-import { DUE_PROPERTY_ID, isClosedTask, quickActionsOf, statusProperty, subtaskProgress } from '@vasta/core'
+import { DUE_PROPERTY_ID, doneActionOf, isClosedTask, quickActionsOf, statusProperty, subtaskProgress } from '@vasta/core'
 import { mainButton, tintedButton } from '../lib/buttons.ts'
 import { setProperties } from '../lib/actions.ts'
 import { displayTitle, formatDateShort } from '../lib/format.ts'
-import { createCompletionFeedback } from '../lib/completion-feedback.ts'
+import { COMPLETION_FEEDBACK, createCompletionFeedback } from '../lib/completion-feedback.ts'
 import { onObjectSave } from '../lib/object-saves.ts'
 import { runQuickAction, type QuickSave } from '../lib/quick-actions.ts'
 import { lastError, notice } from '../lib/state.ts'
@@ -23,6 +24,7 @@ import { isTouch } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectLink from './ObjectLink.vue'
 import SwipeRow, { type SwipeAction } from './SwipeRow.vue'
+import TaskCompletionCheck from './TaskCompletionCheck.vue'
 
 const props = defineProps<{ type: ObjectType; object: Pick<ObjectRecord, 'id' | 'props' | 'tagIds'>; save: QuickSave }>()
 
@@ -30,7 +32,6 @@ const steps = computed(() => subtasksOf(props.type, props.object.id))
 const progress = computed(() => subtaskProgress(props.type, props.object, steps.value))
 /** The select that says whether a step is open or closed; without one, steps have no checkbox. */
 const statusDef = computed(() => statusProperty(props.type))
-const closed = (step: ObjectSummary) => isClosedTask(props.type, step)
 const dueOf = (step: ObjectSummary) => {
   const value = step.props[DUE_PROPERTY_ID]
   return value?.kind === 'date' ? formatDateShort(value.value) : ''
@@ -39,9 +40,9 @@ const dueOf = (step: ObjectSummary) => {
 const saveStep: QuickSave = (id, values) => setProperties(id, values).then(() => loadSubtasks(props.type.id, true))
 
 // Completion feedback (lib/completion-feedback.ts), as on type pages: a step marked Done here
-// saves and stays in place (steps always are), and its checkbox or the notice's Undo puts its
-// exact status back. Only a step completed elsewhere, which the panel never watched close, falls
-// back to the first status meaning to do.
+// saves and stays in place (steps always are), and its circle or the notice's Undo puts its exact
+// values back. Only a step completed elsewhere, which the panel never watched close, reopens with
+// the status that reopens a task.
 function replaceStep(saved: ObjectRecord | ObjectSummary) {
   const index = steps.value.findIndex((step) => step.id === saved.id)
   if (index >= 0) steps.value[index] = { ...saved, preview: steps.value[index]!.preview } as ObjectSummary
@@ -55,33 +56,11 @@ const completion = createCompletionFeedback({
     notice.value = { message: 'The subtask was not saved. Try again.', action: { label: 'Retry', run: () => retry().catch(() => {}) } }
   },
 })
-const stopSaves = onObjectSave((object) => completion.observe(object))
+const stopSaves = onObjectSave((object, base) => completion.observe(object, base))
 onBeforeUnmount(stopSaves)
 watch(steps, (list) => completion.prune(new Set(list.map((step) => step.id))))
 
-/** Closes a step with the status option meaning done (its notice offers Undo), or reopens it with the one it had, else the first meaning to do. */
-async function toggle(step: ObjectSummary) {
-  if (completion.entries.has(step.id)) return void completion.undo(step.id)
-  const def = statusDef.value
-  const options = def?.options ?? []
-  const option = closed(step) ? (options.find((o) => o.status === 'todo') ?? options.find((o) => o.status !== 'done')) : options.find((o) => o.status === 'done')
-  if (!def || !option) return
-  try {
-    if (closed(step)) await saveStep(step.id, { [def.id]: { kind: 'select', value: [option.id] } })
-    else {
-      // The type's Done action, so the notice says what closed and offers an Undo of the exact status.
-      const action: QuickActionDef = {
-        id: 'done',
-        name: 'Done',
-        icon: { kind: 'icon', value: 'ph:check-circle' },
-        changes: [{ field: def.id, value: { kind: 'value', value: { kind: 'select', value: [option.id] } } }],
-      }
-      await runQuickAction(props.type, step, action, { save: saveStep })
-    }
-  } catch (error) {
-    lastError.value = (error as Error).message
-  }
-}
+provide(COMPLETION_FEEDBACK, completion)
 
 // Adding ------------------------------------------------------------------------
 const title = ref('')
@@ -109,8 +88,8 @@ function onPaste(event: ClipboardEvent) {
   void add([title.value + text.split('\n')[0], ...text.split('\n').slice(1)])
 }
 
-// Ready to close: the type's first quick action, run on the parent through the page.
-const closeAction = computed<QuickActionDef | undefined>(() => quickActionsOf(props.type)[0])
+// Ready to close: the type's Done, run on the parent through the page.
+const closeAction = computed<QuickActionDef | undefined>(() => doneActionOf(props.type))
 const parentOpen = computed(() => !isClosedTask(props.type, props.object))
 function closeParent(event: MouseEvent) {
   if (closeAction.value) void runQuickAction(props.type, props.object, closeAction.value, { anchor: event.currentTarget as HTMLElement, save: props.save })
@@ -142,18 +121,8 @@ function swipes(step: ObjectSummary): { right?: SwipeAction; left: SwipeAction[]
     <div class="divide-y divide-line/70 border-y border-line/70">
       <SwipeRow v-for="step in steps" :key="step.id" :enabled="!!swipes(step).right" :right="swipes(step).right" :left="swipes(step).left">
         <div class="flex items-start gap-2 px-1 py-1.5 max-md:py-2.5" data-subtask>
-          <button
-            v-if="statusDef"
-            class="relative mt-px shrink-0 rounded-full disabled:opacity-60 [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3 [@media(hover:none)]:after:content-['']"
-            :class="closed(step) ? 'text-[var(--color-flow-done)]' : 'text-ink-soft hover:text-ink'"
-            :title="closed(step) ? 'Mark as to do' : 'Mark as done'"
-            :disabled="completion.busy(step.id)"
-            data-subtask-check
-            @click="toggle(step)"
-          >
-            <AppIcon :fallback="closed(step) ? 'ph:check-circle-fill' : 'ph:circle'" :size="18" />
-          </button>
-          <ObjectLink :id="step.id" class="min-w-0 flex-1 text-sm hover:underline max-md:text-base max-md:leading-snug" :class="closed(step) ? 'text-ink-faint line-through' : ''">
+          <TaskCompletionCheck v-if="statusDef" :object="step" :type="type" class="mt-px" data-subtask-check />
+          <ObjectLink :id="step.id" class="min-w-0 flex-1 text-sm hover:underline max-md:text-base max-md:leading-snug" :class="completion.done(step) ? 'text-ink-faint line-through' : ''">
             {{ displayTitle(step, type) }}
           </ObjectLink>
           <span v-if="dueOf(step)" class="shrink-0 pt-0.5 text-xs text-ink-faint max-md:text-[13px]">{{ dueOf(step) }}</span>

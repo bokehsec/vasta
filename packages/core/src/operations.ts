@@ -3,7 +3,8 @@
 // copy, daily notes, the inbox, running a query.
 import { newId } from './ids.ts'
 import { ADDED_BUILTIN_PROPERTIES, BODY_PROPERTY_ID, SOURCE_PROPERTY_ID, builtinProperty, builtinTypeId, missingBuiltinTypes } from './builtin-types.ts'
-import { closedStatusIds, defaultQueryFilter, defaultViewFilter } from './closed-filter.ts'
+import { defaultQueryFilter, defaultViewFilter } from './closed-filter.ts'
+import { closedStatusIds } from './task-status.ts'
 import { docReferences } from './doc.ts'
 import type { CaptureInfo, DocNode, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, OpensOn, Person, QueryDef, Space } from './model.ts'
 import { addHabitFoodProperty } from './nutrition.ts'

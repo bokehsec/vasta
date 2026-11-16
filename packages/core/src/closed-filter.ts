@@ -5,11 +5,7 @@
 // what is done) go without it.
 import type { Filter, FilterGroup, Id, ObjectType, QueryDef, ViewDef } from './model.ts'
 import { statusProperty } from './metrics.ts'
-
-/** The ids of a type's status options meaning done. */
-export function closedStatusIds(type: ObjectType | undefined): Id[] {
-  return statusProperty(type)?.options.filter((o) => o.status === 'done').map((o) => o.id) ?? []
-}
+import { closedStatusIds } from './task-status.ts'
 
 const literalIds = (filter: Filter): Id[] => (filter.value?.kind === 'literal' && Array.isArray(filter.value.value) ? filter.value.value : [])
 const leavesOut = (item: Filter | FilterGroup, field: string): item is Filter => item.kind === 'filter' && item.field === field && item.operator === 'not-contains'

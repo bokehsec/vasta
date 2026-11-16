@@ -218,7 +218,7 @@ provide(ENTRY_COMPLETION, {
   retained: (entry: CalendarEntry): RetainedCompletion | undefined => (kept.has(entry.key) ? completion.entries.get(entry.objectId ?? '') : undefined),
   undo: (objectId: Id) => void completion.undo(objectId),
 })
-const stopSaves = onObjectSave((object) => completion.observe(object))
+const stopSaves = onObjectSave((object, base) => completion.observe(object, base))
 onBeforeUnmount(stopSaves)
 // A fresh look at the calendar (another view, range or filter) drops what it kept. The source is
 // one string: an array would be new on every re-run and clear what it should not.

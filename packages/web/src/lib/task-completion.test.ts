@@ -7,10 +7,10 @@ vi.mock('./api.ts', () => ({ api: { object } }))
 vi.mock('./actions.ts', () => ({ dayKey: () => '2026-11-15', setProperties }))
 vi.mock('./state.ts', () => ({ primeFromObject: vi.fn(), lastError: { value: '' }, notice: { value: null } }))
 vi.mock('./session.ts', () => ({ session: { user: { id: 'tester' } } }))
-vi.mock('./subtasks.ts', () => ({ openStepsNote: vi.fn() }))
+vi.mock('./subtasks.ts', () => ({ openStepsOf: vi.fn(async () => []) }))
 vi.mock('./format.ts', () => ({ formatLongDay: (value: string) => value.slice(0, 10) }))
 
-import { setTaskDone } from './calendar.ts'
+import { setTaskDone } from './task-completion.ts'
 import { notice } from './state.ts'
 
 const task = createBuiltinTypes('space', '2026-11-15T12:00:00.000Z').find((type) => type.system === 'task')!
@@ -84,4 +84,32 @@ it('a failed fetch releases the guard for a retry', async () => {
   await expect(setTaskDone(stored.id, task, true)).rejects.toThrow('offline')
   await setTaskDone(stored.id, task, true)
   expect(stored.props.status).toEqual(status('done'))
+})
+
+it('the circle runs the type’s own Done, so it does what the Done button does', async () => {
+  const finish = { id: 'finish', name: 'Finish', changes: [{ field: 'status', value: { kind: 'value' as const, value: status('done') } }, { field: 'due', value: { kind: 'clear' as const } }] }
+  const custom = { ...task, quickActions: { actions: [finish] } }
+  stored.props.due = due('FREQ=WEEKLY;COUNT=1')
+  const previousDue = stored.props.due
+  await setTaskDone(stored.id, custom, true)
+  expect(stored.props.status).toEqual(status('done'))
+  expect(stored.props.due).toBeUndefined()
+  expect((notice.value as unknown as { message: string }).message).toBe('Finish')
+  await undo()
+  expect(stored.props.due).toEqual(previousDue)
+  expect(stored.props.status).toEqual(status('next'))
+})
+
+it('a type with no Done action of its own gets the built-in one', async () => {
+  const custom = { ...task, quickActions: { actions: [{ id: 'later', name: 'Later', changes: [{ field: 'due', value: { kind: 'day' as const, days: 1 } }] }] } }
+  await setTaskDone(stored.id, custom, true)
+  expect(stored.props.status).toEqual(status('done'))
+})
+
+it('unticking a closed task reopens it as a to-do status, never back into triage', async () => {
+  const withInbox = { ...task, properties: task.properties.map((p) => (p.id === 'status' && p.kind === 'select' ? { ...p, options: [{ id: 'in', label: 'Inbox', status: 'todo' as const }, ...p.options] } : p)) }
+  stored.props.status = status('done')
+  await setTaskDone(stored.id, withInbox, false)
+  expect(stored.props.status).toEqual(status('todo'))
+  expect((notice.value as unknown as { message: string }).message).toBe('Reopened')
 })

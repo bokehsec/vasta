@@ -3,11 +3,10 @@
 // (`fields`), or leaves out the ones its columns and lanes already say (`hide`).
 import { computed, inject, ref } from 'vue'
 import type { ObjectRecord, ObjectSummary, ObjectType, PropertyDef } from '@vasta/core'
-import { BLOCKED_PROPERTY_ID } from '@vasta/core'
+import { BLOCKED_PROPERTY_ID, isClosedTask } from '@vasta/core'
 import { imageOf } from '../lib/media.ts'
 import { chip, iconTextClasses } from '../lib/colors.ts'
 import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
-import { isDone } from '../lib/calendar.ts'
 import { displayTitle } from '../lib/format.ts'
 import { formulaValue } from '../lib/properties.ts'
 import AppIcon from './AppIcon.vue'
@@ -22,7 +21,7 @@ const emit = defineEmits<{ moved: [object: ObjectRecord] }>()
 
 const feedback = inject(COMPLETION_FEEDBACK, undefined)
 const isTask = computed(() => props.type?.system === 'task')
-const completed = computed(() => isTask.value && (feedback?.done(props.object) ?? isDone(props.type, props.object.props.status?.kind === 'select' ? props.object.props.status.value : undefined)))
+const completed = computed(() => isTask.value && (feedback?.done(props.object) ?? isClosedTask(props.type, props.object)))
 
 const broken = ref(false)
 const image = computed(() => (broken.value ? undefined : imageOf(props.object)))

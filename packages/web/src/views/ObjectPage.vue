@@ -10,10 +10,10 @@ import SprintPanel from '../components/SprintPanel.vue'
 import SubtasksPanel from '../components/SubtasksPanel.vue'
 import TaskQuickActions from '../components/TaskQuickActions.vue'
 import TaskDateOptions from '../components/TaskDateOptions.vue'
-import { isClosedTask, parentFieldOf, quickActionsOf, subtaskProgress } from '@vasta/core'
+import { parentFieldOf, quickActionsOf } from '@vasta/core'
 import { setProperties } from '../lib/actions.ts'
 import { isPhone } from '../lib/viewport.ts'
-import { loadSubtasks, subtasksOf, withDescendants } from '../lib/subtasks.ts'
+import { loadSubtasks, withDescendants } from '../lib/subtasks.ts'
 import { pickObject } from '../lib/pick.ts'
 import type { QuickSave } from '../lib/quick-actions.ts'
 import DateValueEditor from '../components/DateValueEditor.vue'
@@ -487,14 +487,6 @@ const summaryFields = computed(() => visibleFields.value.filter((def) => hasValu
 /** A type with quick actions (its own list, or the task defaults) shows them on its objects' pages. */
 const hasQuickActions = computed(() => !!type.value && quickActionsOf(type.value).length > 0)
 
-/** Closing a task with steps still open says so in the notice. */
-function openStepsNote() {
-  if (!type.value || !object.value || !parentField.value || !isClosedTask(type.value, object.value)) return undefined
-  const progress = subtaskProgress(type.value, object.value, subtasksOf(type.value, object.value.id))
-  const open = progress.total - progress.done
-  return open ? `${open} subtask${open === 1 ? '' : 's'} still open` : undefined
-}
-
 /** Several properties at once (a task's quick actions), saved together. */
 function setProps(values: Record<Id, PropertyValue | undefined>) {
   if (!object.value) return
@@ -967,7 +959,7 @@ async function startFrom(template: ObjectRecord) {
         <ObjectPicker :type-ids="tagType ? [tagType.id] : []" :exclude="object.tagIds" create-label="New tag" @pick="addTag" @create="createTag" />
       </PopoverMenu>
 
-      <TaskQuickActions v-if="type && hasQuickActions && !info && !object.deletedAt" :type="type" :object="object" :note="openStepsNote" @set="setProps" />
+      <TaskQuickActions v-if="type && hasQuickActions && !info && !object.deletedAt" :type="type" :object="object" @set="setProps" />
       <button
         v-if="foldFields"
         class="mt-4 flex w-full items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-left text-sm"

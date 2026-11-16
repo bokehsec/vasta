@@ -3,18 +3,10 @@
 // points to another through it is one of that object's steps. Lists draw the steps nested under
 // their parent, its page lists them with their progress, and a parent whose steps are all closed is
 // "ready to close" (never closed by itself). Nothing here writes; it reads objects as given.
-import { statusProperty } from './metrics.ts'
 import type { Id, ObjectRecord, ObjectType, RelationPropertyDef } from './model.ts'
+import { isClosedTask } from './task-status.ts'
 
 type Item = Pick<ObjectRecord, 'id' | 'props'>
-
-/** Whether an object's status (the type's select with status meanings) is one meaning done. */
-function closed(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>): boolean {
-  const def = statusProperty(type)
-  const value = def ? object.props[def.id] : undefined
-  const ids = value?.kind === 'select' ? value.value : []
-  return !!def?.options.some((o) => o.status === 'done' && ids.includes(o.id))
-}
 
 /** Single relations of the type that can point to an object of the type itself. */
 export function eligibleParentFields(type: ObjectType): RelationPropertyDef[] {
@@ -85,8 +77,8 @@ export interface SubtaskProgress {
 
 /** How far an object's steps are: closed means a status option meaning done (Done, Dropped…). */
 export function subtaskProgress(type: ObjectType | undefined, parent: Item, children: readonly Item[]): SubtaskProgress {
-  const done = children.filter((c) => closed(type, c)).length
-  return { done, total: children.length, readyToClose: children.length > 0 && done === children.length && !closed(type, parent) }
+  const done = children.filter((c) => isClosedTask(type, c)).length
+  return { done, total: children.length, readyToClose: children.length > 0 && done === children.length && !isClosedTask(type, parent) }
 }
 
 /**

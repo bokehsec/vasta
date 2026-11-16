@@ -19,6 +19,7 @@ import {
   habitRemindAt,
   habitStats,
   isHabitDone,
+  isClosedTask,
   isHabitPaused,
   isHabitDue,
   instantOf,
@@ -30,7 +31,6 @@ import {
   type FoodNudge,
   type Id,
   type ObjectSummary,
-  type ObjectType,
   type Space,
   type User,
 } from '@vasta/core'
@@ -317,7 +317,8 @@ export class ReminderService {
         for (const entry of entries) {
           if (entry.allDay || entry.kind === 'daily-note' || !inWindow(Date.parse(entry.start) - lead)) continue
           const object = entry.objectId ? byId.get(entry.objectId) : undefined
-          if (object && isFinishedTask(object, types.get(object.typeId))) continue
+          const type = object && types.get(object.typeId)
+          if (object && type?.system === 'task' && isClosedTask(type, object)) continue
           reminders.push(this.eventReminder(entry, object, settings.eventsBefore, timeZone))
         }
       }
@@ -423,12 +424,4 @@ export class ReminderService {
     for (const failed of results.filter((r) => !r.ok && r.channel !== 'desktop')) console.warn(`Reminder to ${user.username} through ${failed.channel} failed: ${failed.error}`)
     return results
   }
-}
-
-/** A task whose status is a "done" option. */
-function isFinishedTask(object: ObjectSummary, type: ObjectType | undefined): boolean {
-  if (type?.system !== 'task') return false
-  const status = type.properties.find((p) => p.id === 'status')
-  const value = object.props.status
-  return status?.kind === 'select' && value?.kind === 'select' && status.options.some((o) => value.value.includes(o.id) && o.status === 'done')
 }

@@ -67,11 +67,13 @@ GitHub release page.
   every layout: list, table, phone rows, cards and board, plus the Done button, swipe and menu), a
   completed task keeps its place, shows a checked circle and a muted, struck-through
   title, and counts as done. It only leaves when you reload, leave the page, switch views or change
-  the filters, sort or layout; searching keeps matching rows. Uncheck it, or press Undo, to put back
-  exactly the status it had (a Next task returns to Next). A repeating task says "Done this time ·
-  Next: <date>". A failed save puts the task back with a Retry. On a board, the card stays in its
-  column; dragging it to Done still moves it. On a phone, opening a task, marking it Done and going
-  Back shows the list fresh, without it.
+  the filters, sort or layout; searching keeps matching rows. Uncheck it, or press Undo in the
+  notice, to put back everything the completion changed, not only the status (a Next task returns to
+  Next). A repeating task says "Done this time · Next: <date>". A failed save puts the task back
+  with a Retry. Its Done, Defer and Drop buttons are hidden meanwhile, leaving the circle and Undo.
+  On a board, the card stays in its column; dragging it to a Done or Dropped column still moves it
+  and runs that status's action, with the same notice and Undo as the Done button. On a phone,
+  opening a task, marking it Done and going Back shows the list fresh, without it.
 
 - **Choose your page width.** Settings › Appearance has Standard, Wide and Full width, remembered
   on this device for all object pages and daily notes. Standard keeps the reading width and gives
@@ -138,8 +140,8 @@ GitHub release page.
   "Part of" field, or use one you have). A task's page lists its steps with how many are done; type
   a step and press Return for the next, or paste several lines at once. New steps take the task's
   Area, Project, people and tags. Lists show the steps under their task, folded with its caret, with
-  a "2/5" count, and "Ready to close" once all are done (the task is never closed for you; closing it
-  early says how many steps are still open). "Nest subtasks" in a view's layout menu or a query's
+  a "2/5" count, and "Ready to close" once all are done, with a button for the type's Done (the task
+  is never closed for you; closing it early asks whether to close its open steps too). "Nest subtasks" in a view's layout menu or a query's
   settings lists them flat instead. A row's menu has Add subtask…, Make subtask of… and Remove from
   parent.
 - **Tasks on a phone: swipe a row.** Swipe right to defer a task (pick the day in the sheet that
@@ -195,6 +197,24 @@ GitHub release page.
 
 ### Changed
 
+- **One Done, everywhere.** The circle on a list, table, card, query or calendar row, a subtask's
+  circle, the Done button, a swipe and a board drag into a Done column all run the task type's own
+  Done action, so a Done you customised (extra changes, another name) behaves the same wherever you
+  press it, with the same notice and Undo. Dropped tasks now look dropped everywhere: a cross in
+  the circle, as on the calendar, instead of looking just like Done. A subtask's circle is the same
+  one lists have. "All subtasks done" in a task's page offers the type's Done, not whatever action
+  comes first.
+- **Closing a task with open subtasks asks.** Whatever closes it (Done, Drop, a board drag, a
+  review) asks once "Close its 3 open subtasks too?" with **Close them too** or **Leave open**; they
+  close with Done, or Drop when the task was dropped, and one Undo puts the task and its subtasks
+  back. Leaving them open still says how many are open.
+- **Reopening a task from the calendar goes to a to-do status.** Unticking a done or dropped task
+  (including the cross on a dropped row) sets the first to-do status that is not incoming, so a
+  reopened task no longer falls back into the review's new tasks.
+- **Only Inbox tasks are new in a review.** A task type with no Inbox status (the built-in Task)
+  used to count every To do task as new, in every review, forever. Now new means a task with no
+  status, or one in an Inbox status (or the statuses you tick as incoming in Type settings ›
+  Quick actions); To do tasks are check-ins.
 - **Calendar plans and deadlines are clear.** The Day view separates planned work, deadlines,
   completed tasks and dropped tasks. Empty circles mean unfinished work; a checkmark means done.
   Matching plan and deadline entries share one row, and each task shows its other date. Change

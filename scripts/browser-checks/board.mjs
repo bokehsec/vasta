@@ -155,6 +155,16 @@ await until(async () => (await rankOf('Charlie')) && (await rankOf('Alpha')) && 
 await page.reload()
 await until(async () => JSON.stringify(await titlesIn('todo')) === JSON.stringify(['Alpha', 'Charlie']), 'the order kept after a reload', 20000)
 
+if (!phone) {
+  step('drag a card into Done: the type\u2019s Done runs, the card sits in Done, and the notice\u2019s Undo puts it back where it was')
+  await drag(await center(card('Charlie')), await center(cellOf('done')))
+  await until(async () => (await statusOf('Charlie')) === 'done', 'Charlie done')
+  await until(async () => (await titlesIn('done')).includes('Charlie'), 'Charlie in the Done column')
+  await page.locator('[role=status]').filter({ hasText: 'Done' }).locator('button', { hasText: 'Undo' }).click()
+  await until(async () => (await statusOf('Charlie')) === 'todo', 'Undo reopened Charlie')
+  await until(async () => JSON.stringify(await titlesIn('todo')) === JSON.stringify(['Alpha', 'Charlie']), 'Charlie back in its place')
+}
+
 step('"+" at the bottom of a column')
 await cellOf('done').getByText('New').click()
 await page.keyboard.type('Echo')

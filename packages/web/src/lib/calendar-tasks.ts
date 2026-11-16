@@ -1,7 +1,7 @@
 // Tasks on the calendar: a planned work day and a deadline are separate entries, never evidence
 // of completion. The Day page combines the same slot, keeping distinct times/occurrences intact.
 import type { CalendarEntry, DateValue, Id, ObjectSummary, ObjectType } from '@vasta/core'
-import { plannedDateFieldOf, statusProperty } from '@vasta/core'
+import { closingOf, plannedDateFieldOf } from '@vasta/core'
 
 export type TaskDateRole = 'planned' | 'due'
 
@@ -14,16 +14,6 @@ export function taskDateRole(type: ObjectType | undefined, field: string | undef
 export function taskDate(object: Pick<ObjectSummary, 'props'> | undefined, field: string | undefined): DateValue | undefined {
   const value = field && object?.props[field]
   return value && value.kind === 'date' ? value.value : undefined
-}
-
-/** Alternate closing statuses (Dropped, Cancelled…) are not completed work. */
-export function taskClosing(type: ObjectType | undefined, object: Pick<ObjectSummary, 'props'> | undefined): 'completed' | 'dropped' | undefined {
-  if (type?.system !== 'task') return undefined
-  const statuses = statusProperty(type)?.options.filter((o) => o.status === 'done') ?? []
-  const value = object?.props.status
-  if (value?.kind !== 'select') return undefined
-  const selected = statuses.find((o) => value.value.includes(o.id))
-  return selected ? (selected === statuses[0] ? 'completed' : 'dropped') : undefined
 }
 
 /** A repeating deadline is completed only at its current due occurrence, not from a stale plan. */
@@ -67,8 +57,9 @@ export function dayTaskGroups(
   }
   for (const row of rows) {
     const summary = row.entry.objectId ? object(row.entry.objectId) : undefined
-    const closing = taskClosing(types.get(summary?.typeId ?? ''), summary)
-    const group = closing ?? (retained(row.entry) ? 'completed' : row.role)
+    // Done and dropped task entries have their own groups; a dropped task is not completed work.
+    const closing = summary ? closingOf(types.get(summary.typeId), summary) : undefined
+    const group = closing === 'done' ? 'completed' : closing ?? (retained(row.entry) ? 'completed' : row.role)
     groups[group].push(row)
   }
   return groups

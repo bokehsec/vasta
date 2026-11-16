@@ -1,14 +1,17 @@
 // Boards: dragging cards between columns and lanes and within them, with pointer events so a mouse
 // and a finger work alike (a mouse drags once it moves, a finger after a long press; HTML5 drag and
 // drop does not work on touch screens), and the write a drop makes: the column's (and lane's)
-// value and a place in the manual order (core rank.ts) in one save.
+// value and a place in the manual order (core rank.ts) in one save. A drop on a column of a closed
+// status (Done, Dropped) runs the type's action for it instead (closeCard).
 //
 // Drop targets are found under the pointer: `data-board-cell="<column>|<lane>"` on each column's
 // list of cards, and `data-board-card="<id>"` on the cards in it.
 import { reactive } from 'vue'
-import { RANK_PROPERTY_ID, rankBetween, rankOf, ranksAfter, type Id, type ObjectRecord, type ObjectSummary } from '@vasta/core'
+import { RANK_PROPERTY_ID, STATUS_PROPERTY_ID, closedOptionsOf, endsRepeat, isClosedTask, rankBetween, rankOf, ranksAfter, statusActionOf, statusProperty, type Id, type ObjectRecord, type ObjectSummary, type ObjectType, type PropertyValue, type SelectOption } from '@vasta/core'
+import { setProperties } from './actions.ts'
 import { api } from './api.ts'
 import { placeInGroup, type Group } from './query.ts'
+import { runQuickAction, type QuickSave } from './quick-actions.ts'
 import { primeFromObject } from './state.ts'
 
 const LONG_PRESS = 400
@@ -170,9 +173,10 @@ export interface BoardAxis {
  * Move a card to a cell of the board at `index` among `cell` (the cell's cards in order, the card
  * itself left out): its column's and lane's values change when they differ, and it gets a rank
  * between its new neighbours. When a neighbour has no rank yet, the cell's cards are ranked in
- * the order shown. Returns the objects saved.
+ * the order shown. `values` are more values the card is saved with (a closing action's). Returns
+ * the objects saved.
  */
-export async function moveCard(card: ObjectSummary, target: CardTarget, columns: BoardAxis, lanes: BoardAxis | undefined, cell: ObjectSummary[]): Promise<ObjectRecord[]> {
+export async function moveCard(card: ObjectSummary, target: CardTarget, columns: BoardAxis, lanes: BoardAxis | undefined, cell: ObjectSummary[], values: Record<Id, PropertyValue | undefined> = {}): Promise<ObjectRecord[]> {
   const order = cell.filter((o) => o.id !== card.id)
   const ranks = new Map<Id, string>()
   const before = order[target.index - 1]
@@ -192,6 +196,11 @@ export async function moveCard(card: ObjectSummary, target: CardTarget, columns:
       if (column && !inGroup(card, columns, column.key) && placeInGroup(object, columns.field, column, columns.groups)) changed = true
       const lane = lanes?.groups.find((g) => g.key === target.lane)
       if (lanes && lane && !inGroup(card, lanes, lane.key) && placeInGroup(object, lanes.field, lane, lanes.groups)) changed = true
+      for (const [field, value] of Object.entries(values)) {
+        if (value) object.props[field] = value
+        else delete object.props[field]
+        changed = true
+      }
     }
     if (!changed) continue
     const result = await api.saveObject(object)
@@ -202,3 +211,44 @@ export async function moveCard(card: ObjectSummary, target: CardTarget, columns:
 }
 
 const inGroup = (card: ObjectSummary, axis: BoardAxis, key: string) => axis.groups.find((g) => g.key === key)?.items.some((o) => o.id === card.id) ?? false
+
+/** The status option of a closed status the card is dropped on, when the columns are the type's statuses and the card is still open. */
+export function closingColumn(type: ObjectType | undefined, card: ObjectSummary, columns: BoardAxis, column: Group): SelectOption | undefined {
+  if (!type || columns.field !== statusProperty(type)?.id || isClosedTask(type, card)) return undefined
+  return closedOptionsOf(type).find((o) => o.id === column.key)
+}
+
+/** Where a drop on a column of a closed status goes, and what hears the objects saved. */
+export interface CardClosing {
+  target: CardTarget
+  columns: BoardAxis
+  lanes: BoardAxis | undefined
+  cell: ObjectSummary[]
+  /** Wraps the save that moves the card (the view keeps it where it was dropped, not where it was). */
+  moving?: <T>(run: () => Promise<T>) => Promise<T>
+  /** Hears each object saved, Undo's too. */
+  saved: (object: ObjectRecord) => void
+}
+
+/**
+ * A card dropped on a column of a closed status runs the type's action for that status through the
+ * quick-action runner (lib/quick-actions.ts), as a circle or a button does: its notice with Undo,
+ * the question about open subtasks. The card goes to the column (and lane) it was dropped on, and
+ * Undo puts back its place too. A repeating task done goes on to its next occurrence instead and
+ * stays where it was, with the explanation lists give it.
+ */
+export async function closeCard(type: ObjectType, card: ObjectSummary, option: SelectOption, drop: CardClosing) {
+  const repeats = endsRepeat(type, card, { [STATUS_PROPERTY_ID]: { kind: 'select', value: [option.id] } })
+  // What a move changes besides the status, as it was: Undo puts the card back in its place.
+  const was: Record<Id, PropertyValue | undefined> = { [RANK_PROPERTY_ID]: card.props[RANK_PROPERTY_ID] }
+  const lane = drop.lanes?.field
+  if (lane && type.properties.some((p) => p.id === lane)) was[lane] = card.props[lane]
+  let moved = false
+  const save: QuickSave = async (id, values) => {
+    const move = () => (moved || repeats ? setProperties(id, moved ? { ...values, ...was } : values).then((object) => [object]) : moveCard(card, drop.target, drop.columns, drop.lanes, drop.cell, values))
+    const saved = await (moved || repeats || !drop.moving ? move() : drop.moving(move))
+    moved = true
+    saved.forEach(drop.saved)
+  }
+  await runQuickAction(type, card, statusActionOf(type, option), { save })
+}

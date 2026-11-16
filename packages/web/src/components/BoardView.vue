@@ -9,7 +9,7 @@ import { computed, inject, nextTick, onBeforeUnmount, ref } from 'vue'
 import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef } from '@vasta/core'
 import { RANK_PROPERTY_ID, byRank, rankOf, rankBetween } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
-import { boardDrag, moveCard, pressCard, type BoardAxis, type CardTarget } from '../lib/board.ts'
+import { boardDrag, closeCard, closingColumn, moveCard, pressCard, type BoardAxis, type CardTarget } from '../lib/board.ts'
 import { chip } from '../lib/colors.ts'
 import { openMenuAt, promptDialog } from '../lib/overlays.ts'
 import { groupObjects, movableField, NO_VALUE, placeInGroup, typesOf, type Group } from '../lib/query.ts'
@@ -155,6 +155,14 @@ async function drop(cardId: Id, target: CardTarget) {
   // Reordering a column only makes sense in the manual order.
   if (sameCell && !props.manual) emit('manual')
   try {
+    const type = typeOf(card)
+    const closing = closingColumn(type, card, columnAxis.value, column)
+    if (type && closing) {
+      // Done or Dropped: the type's own action, with its notice and Undo (lib/board.ts closeCard).
+      const moving = completion && (<T,>(run: () => Promise<T>) => completion.moving(card.id, run))
+      await closeCard(type, card, closing, { target, columns: columnAxis.value, lanes: laneAxis.value, cell: cells, moving, saved: (object) => emit('moved', object) })
+      return
+    }
     const move = () => moveCard(card, target, columnAxis.value, laneAxis.value, cells)
     const saved = await (completion ? completion.moving(card.id, move) : move())
     for (const object of saved) emit('moved', object)

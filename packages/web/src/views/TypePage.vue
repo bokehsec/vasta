@@ -3,7 +3,7 @@ import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, PropertyValue, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, closedStatusIds, defaultViewFilter, dueForReview, fillFromFilter, hidesClosed, isClosedTask, matchesFilter, needsTriage, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
+import { RANK_PROPERTY_ID, closedOptionsOf, closedStatusIds, defaultViewFilter, dueForReview, fillFromFilter, hidesClosed, isClosedTask, matchesFilter, needsTriage, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
 import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -517,7 +517,7 @@ const viewFilter = computed(() => view.value.filter)
 const canShowClosed = computed(() => closedStatusIds(type.value).length > 0)
 const closedHidden = computed(() => hidesClosed(type.value, view.value.filter))
 const closedLabel = computed(() => {
-  const names = (statusProperty(type.value)?.options ?? []).filter((o) => o.status === 'done').map((o) => o.label.toLowerCase())
+  const names = closedOptionsOf(type.value).map((o) => o.label.toLowerCase())
   return `Show ${new Intl.ListFormat('en', { type: 'conjunction' }).format(names)}`
 })
 const toggleClosed = () => updateView({ filter: closedHidden.value ? withClosedShown(type.value, view.value.filter) : withClosedHidden(type.value, view.value.filter) })
@@ -531,7 +531,7 @@ const completion = createCompletionFeedback({
   },
 })
 provide(COMPLETION_FEEDBACK, completion)
-const stopSaves = onObjectSave((object) => agendaActive.value ? undefined : completion.observe(object))
+const stopSaves = onObjectSave((object, base) => agendaActive.value ? undefined : completion.observe(object, base))
 onBeforeUnmount(stopSaves)
 watch(
   () => JSON.stringify([props.id, activeViewId.value, view.value.filter, sort.value, groupField.value, view.value.layout, view.value.agenda, view.value.flat, view.value.list, view.value.table, view.value.board?.swimlanes, mineOnly.value]),

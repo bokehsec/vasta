@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes, newObject, plannedDateFieldOf, type CalendarEntry, type DateValue, type ObjectSummary } from '@vasta/core'
 import { objectEntries } from '@vasta/core/calendar'
-import { dayTaskGroups, taskClosing, taskDateRole, taskEntryCheckable } from './calendar-tasks.ts'
+import { dayTaskGroups, taskDateRole, taskEntryCheckable } from './calendar-tasks.ts'
 
 const at = '2026-11-16T12:00:00.000Z'
 const base = createBuiltinTypes('space', at).find((t) => t.system === 'task')!
@@ -51,7 +51,6 @@ describe('task calendar dates', () => {
     if (status.kind !== 'select') throw new Error('status')
     const withDrop = { ...task, properties: task.properties.map((p) => p.id === 'status' ? { ...status, options: [...status.options, { id: 'drop', label: 'Dropped', status: 'done' as const }] } : p) }
     const o = object(day(15), undefined, 'drop')
-    expect(taskClosing(withDrop, o)).toBe('dropped')
     const g = dayTaskGroups(entries(o), () => o, new Map([[task.id, withDrop]]), () => false)
     expect(g.dropped).toHaveLength(1)
     expect(g.completed).toHaveLength(0)

@@ -6,16 +6,18 @@
 // date) offers to move the due date too when the day is after it, so the task is not left overdue.
 // The question stays open, with what was typed or picked, until the values are saved: when nothing
 // could be saved it shows why and offers Retry or Cancel; while saving it takes no second answer.
+// An action that closes a task with open subtasks asks once whether to close them too (with Done, or
+// Drop for a dropped parent); the notice's one Undo then puts the parent and its subtasks back.
 import { reactive, shallowRef } from 'vue'
 import type { Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionDef } from '@vasta/core'
-import { DUE_PROPERTY_ID, askOf, dueMovedTo, isClosedTask, plannedDateFieldOf, quickActionEdits, quickActionMessage, quickActionsOf, withAskCleared, type QuickActionEdit } from '@vasta/core'
+import { DUE_PROPERTY_ID, askOf, closingOf, doneOptionOf, dropOptionOf, dueMovedTo, endsRepeat, isClosedTask, plainStatusAction, plannedDateFieldOf, quickActionEdits, quickActionMessage, quickActionsOf, statusActionOf, withAskCleared, type QuickActionContext, type QuickActionEdit } from '@vasta/core'
 import { dayKey, setProperties } from './actions.ts'
 import { nextWeekStart } from './calendar.ts'
 import { formatLongDay } from './format.ts'
-import type { MenuItem } from './overlays.ts'
+import { choiceDialog, type MenuItem } from './overlays.ts'
 import { session } from './session.ts'
 import { lastError, notice } from './state.ts'
-import { openStepsNote } from './subtasks.ts'
+import { openStepsOf } from './subtasks.ts'
 
 /** An object an action runs on; its title, when given, names it in the question (a row's Defer). */
 type Target = Pick<ObjectRecord, 'id' | 'props'> & { title?: string }
@@ -108,8 +110,6 @@ export interface RunOptions {
   save?: QuickSave
   /** The notice's word for several objects ("5 tasks"). */
   noun?: (count: number) => string
-  /** Said after the message once saved, if anything. Default: how many steps are still open on parents just closed ("3 subtasks still open"). */
-  note?: () => string | undefined
   /** The question's save button ("Save & next task" in a review); default "Save". With it the question says whether saving leaves the objects open. */
   submitLabel?: string
   /** What the question says it applies to when there is one object (default its title, if given; '' for nothing); several are "5 tasks". */
@@ -152,10 +152,13 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
   const save = options.save ?? ((id: Id, values: Values) => setProperties(id, values))
   const context = { today: dayKey(), nextWeek: nextWeekStart(), me: session.user?.id, dayOfTime }
   let completed: QuickActionEdit[] = []
+  let stepsClosed: QuickActionEdit[] = []
   let undoing = false
   /** Tells the person what was saved: the notice with its Undo (which puts back only what a try restores, once at a time). */
-  const finish = (saved: QuickActionEdit[], failed: number): QuickActionEdit[] => {
+  const finish = async (saved: QuickActionEdit[], failed: number): Promise<QuickActionEdit[]> => {
     completed.push(...saved)
+    const steps = await closeOpenSteps(type, closedBy(type, targets, saved), context)
+    stepsClosed.push(...steps.closed)
     const message = quickActionMessage(type, action, completed, { longDay, dayOfTime, due: targets.length === 1 ? targets[0]!.props[DUE_PROPERTY_ID] : undefined, failed, noun: options.noun })
     const undo = async () => {
       if (undoing) return
@@ -171,10 +174,21 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
         }
       })
       completed = completed.filter((edit) => !restored.includes(edit))
+      // The subtasks closed with them: each puts its status back as the parent's own save did.
+      const stepsBack: QuickActionEdit[] = []
+      await eachLimited([...stepsClosed], 4, async (edit) => {
+        try {
+          await setProperties(edit.id, edit.before)
+          stepsBack.push(edit)
+        } catch (error) {
+          lastError.value = (error as Error).message
+        }
+      })
+      stepsClosed = stepsClosed.filter((edit) => !stepsBack.includes(edit))
       undoing = false
       if (restored.length) options.onUndo?.(beforeUndo.filter((edit) => restored.includes(edit)))
     }
-    const note = options.note ? options.note() : openStepsNote(type, closedBy(type, targets, completed))
+    const note = steps.left ? `${count(steps.left)} still open` : steps.closed.length ? `${count(steps.closed.length)} closed too` : undefined
     notice.value = { message: note ? `${message} · ${note}` : message, action: { label: 'Undo', run: undo } }
     options.onSaved?.(saved)
     return saved
@@ -187,7 +201,7 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
       const savedIds = new Set(saved.map((edit) => edit.id))
       options.onFailed?.(() => attempt(edits.filter((edit) => !savedIds.has(edit.id))))
     }
-    return saved.length ? finish(saved, failed) : []
+    return saved.length ? await finish(saved, failed) : []
   }
 
   const asked = askOf(type, action)
@@ -246,26 +260,70 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
           const savedIds = new Set(saved.map((edit) => edit.id))
           options.onFailed?.(() => attempt(edits.filter((edit) => !savedIds.has(edit.id))))
         }
-        over(finish(saved, failed))
+        // The question is over before a follow-up one (open subtasks) is asked.
+        if (quickAsk.value === self) quickAsk.value = null
+        resolve(await finish(saved, failed))
       },
     }
     quickAsk.value = self
   })
 }
 
-/** The objects these edits closed (open before, closed by the values saved). */
-function closedBy(type: ObjectType, targets: readonly Target[], saved: readonly QuickActionEdit[]): Target[] {
+/**
+ * The objects these edits closed (open before, closed by the values saved), and how: a task done
+ * that repeats goes on to its next occurrence, still open. A page may have changed the object
+ * itself by now, so its values before are the edit's own.
+ */
+function closedBy(type: ObjectType, targets: readonly Target[], saved: readonly QuickActionEdit[]): { object: Target; closing: 'done' | 'dropped' }[] {
   const byId = new Map(targets.map((t) => [t.id, t]))
+  const withValues = (props: Target['props'], values: QuickActionEdit['values']) => {
+    const out = { ...props }
+    for (const [field, value] of Object.entries(values)) {
+      if (value) out[field] = value
+      else delete out[field]
+    }
+    return out
+  }
   return saved.flatMap((edit) => {
     const object = byId.get(edit.id)
-    if (!object || isClosedTask(type, object)) return []
-    const props = { ...object.props }
-    for (const [field, value] of Object.entries(edit.values)) {
-      if (value) props[field] = value
-      else delete props[field]
-    }
-    return isClosedTask(type, { props }) ? [object] : []
+    if (!object) return []
+    const before = withValues(object.props, edit.before)
+    if (isClosedTask(type, { props: before }) || endsRepeat(type, { props: before }, edit.values)) return []
+    const closing = closingOf(type, { props: withValues(before, edit.values) })
+    return closing ? [{ object, closing }] : []
   })
+}
+
+const count = (n: number) => `${n} subtask${n === 1 ? '' : 's'}`
+
+/** What closes the subtasks of a parent closed as `closing`: Done, or Drop for a dropped one; an action that asks gives way to the plain status, as nothing is asked here. */
+function stepAction(type: ObjectType, closing: 'done' | 'dropped'): QuickActionDef | undefined {
+  const option = (closing === 'dropped' ? dropOptionOf(type) : undefined) ?? doneOptionOf(type)
+  const own = option && statusActionOf(type, option)
+  return own && option && askOf(type, own) ? plainStatusAction(type, option) : own
+}
+
+/**
+ * Asks once whether to close the open subtasks of parents just closed, and closes them if so.
+ * Returns the edits saved and how many subtasks stay open (left open, or not saved).
+ */
+async function closeOpenSteps(type: ObjectType, closed: { object: Target; closing: 'done' | 'dropped' }[], context: QuickActionContext) {
+  const open = new Map<Id, { step: Target; closing: 'done' | 'dropped' }>()
+  for (const { object, closing } of closed) for (const step of await openStepsOf(type, object.id)) open.set(step.id, { step, closing })
+  if (!open.size) return { closed: [] as QuickActionEdit[], left: 0 }
+  const answer = await choiceDialog({
+    title: `Close ${closed.length === 1 ? 'its' : 'their'} ${open.size === 1 ? 'open subtask' : `${open.size} open subtasks`} too?`,
+    choices: [{ value: 'close', label: 'Close them too' }, { value: 'leave', label: 'Leave open' }],
+  })
+  if (answer !== 'close') return { closed: [] as QuickActionEdit[], left: open.size }
+  const edits = (['done', 'dropped'] as const).flatMap((closing) => {
+    const action = stepAction(type, closing)
+    const steps = [...open.values()].filter((o) => o.closing === closing).map((o) => o.step)
+    return action && steps.length ? quickActionEdits(type, steps, action, context) : []
+  })
+  const { saved, error } = await saveEdits(edits, (id, values) => setProperties(id, values))
+  if (error) lastError.value = error
+  return { closed: saved, left: open.size - saved.length }
 }
 
 /** The quick actions of an open task as menu items (a row's menu, long-press on a phone). */

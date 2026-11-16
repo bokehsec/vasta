@@ -10,7 +10,7 @@ vi.mock('./overlays.ts', () => ({ promptDialog: vi.fn() }))
 vi.mock('./pick.ts', () => ({ pickObject: vi.fn() }))
 vi.mock('./state.ts', () => ({ lastError: { value: '' }, primeSummaries: vi.fn(), typesById: { value: new Map() } }))
 
-const { inheritedValues, openStepsNote } = await import('./subtasks.ts')
+const { inheritedValues, openStepsOf } = await import('./subtasks.ts')
 
 const task = createBuiltinTypes('s', '2026-11-13T12:00:00.000Z').find((t) => t.system === 'task')!
 const select = (id: string): PropertyValue => ({ kind: 'select', value: [id] })
@@ -42,9 +42,9 @@ describe('inheritedValues', () => {
   })
 })
 
-describe('openStepsNote', () => {
-  it('is empty for a type without steps', () => {
-    expect(openStepsNote(createBuiltinTypes('s', '2026-11-13T12:00:00.000Z').find((t) => t.system === 'page'), [{ id: 'a', props: {} }])).toBeUndefined()
-    expect(openStepsNote(undefined, [])).toBeUndefined()
+describe('openStepsOf', () => {
+  it('is empty for a type without steps', async () => {
+    expect(await openStepsOf(createBuiltinTypes('s', '2026-11-13T12:00:00.000Z').find((t) => t.system === 'page'), 'a')).toEqual([])
+    expect(await openStepsOf(undefined, 'a')).toEqual([])
   })
 })
