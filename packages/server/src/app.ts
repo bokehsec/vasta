@@ -52,6 +52,7 @@ import { AccountError, AccountService, type Auth } from './accounts.ts'
 import { currentActor, outsideActor, runAs } from './actor.ts'
 import { AgentTools } from './agent.ts'
 import { CalendarService, CalendarSyncError, normalizeCalendarUrl } from './calendars.ts'
+import { SparkyFitnessService } from './sparkyfitness.ts'
 import { CaptureError, CaptureService, mergeCaptures, type CaptureResult } from './capture.ts'
 import { PushError, type PushKinds, type PushService, type PushSubscriptionJson } from './push.ts'
 import { ReminderError, type ReminderService } from './reminders.ts'
@@ -85,6 +86,7 @@ export interface AppOptions {
   /** Legacy single bearer token for /api/capture, acting as the oldest user (when `accounts` is not given). */
   captureToken?: string
   /** Subscribed calendars; main.ts starts its periodic sync. */
+  sparkyfitness?: SparkyFitnessService
   calendars?: CalendarService
   /** Saving URLs from the app; shared with the capture service. */
   weblinks?: WeblinkService
@@ -156,7 +158,7 @@ const MCP_VERSION = '1.0.0'
 /** At most a little over a year per calendar request, so a bad range cannot expand forever. */
 const MAX_CALENDAR_DAYS = 400
 
-export function createApp({ store, media, now = () => new Date().toISOString(), feed = new ChangeFeed(), capture, accounts, captureToken, calendars, weblinks, webDir, telegram, replica = true, webUrl, reminders, desktop, localKey }: AppOptions) {
+export function createApp({ store, media, now = () => new Date().toISOString(), feed = new ChangeFeed(), capture, accounts, captureToken, sparkyfitness, calendars, weblinks, webDir, telegram, replica = true, webUrl, reminders, desktop, localKey }: AppOptions) {
   const app = new Hono<Env>()
   // A write the store refuses (another member's comment) is the caller's mistake, not the server's.
   app.onError((error, c) => {
@@ -175,6 +177,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   const links = weblinks ?? new WeblinkService({ store, media, feed, now })
   const baseCapture = capture ?? new CaptureService({ store, media, feed, now, weblinks: links, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone })
   const users = accounts ?? new AccountService({ store, now, capture: baseCapture, ...(captureToken ? { legacyCaptureToken: captureToken } : {}) })
+  const sparkyService = sparkyfitness ?? new SparkyFitnessService({ store, feed, now })
   const calendarService = calendars ?? new CalendarService({ store, feed, now })
   const changed = (object: Pick<ObjectRecord, 'id' | 'spaceId' | 'typeId' | 'updatedAt'>) =>
     feed.emit({ kind: 'object', id: object.id, spaceId: object.spaceId, typeId: object.typeId, updatedAt: object.updatedAt })
@@ -1011,6 +1014,43 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
 
   /** Save (or replace) the readable text of the page in the weblink's "Readable text" field. */
   api.post('/objects/:id/readable', (c) => weblinkResponse(c, () => links.saveReadable(c.req.param('id'))))
+
+  api.post('/objects/:id/sparkyfitness/preview', async (c) => {
+    const habit = store.getObject(c.req.param('id'))
+    if (!habit || habit.deletedAt) return c.json({ error: 'not found' }, 404)
+    try {
+      const body = await c.req.json()
+      if (typeof body.rule !== 'string') return c.json({ error: 'choose a SparkyFitness rule' }, 400)
+      return c.json(await sparkyService.preview(habit.id, body))
+    } catch (error) {
+      return c.json({ error: error instanceof Error ? error.message : 'Could not preview SparkyFitness' }, 400)
+    }
+  })
+
+  api.get('/spaces/:id/sparkyfitness', (c) => c.json(sparkyService.status(c.req.param('id'))))
+  api.put('/spaces/:id/sparkyfitness', async (c) => {
+    const id = c.req.param('id')
+    if (!store.getSpace(id)) return c.json({ error: 'not found' }, 404)
+    try {
+      const body = await c.req.json()
+      if (typeof body.baseUrl !== 'string' || (body.apiKey !== undefined && typeof body.apiKey !== 'string')) return c.json({ error: 'enter a server address and read-only key' }, 400)
+      sparkyService.connect(id, body)
+      void sparkyService.sync(id)
+      return c.json(sparkyService.status(id))
+    } catch {
+      return c.json({ error: 'enter a valid server address, read-only key and history range' }, 400)
+    }
+  })
+  api.post('/spaces/:id/sparkyfitness/sync', async (c) => {
+    const id = c.req.param('id')
+    if (!sparkyService.status(id)) return c.json({ error: 'not found' }, 404)
+    void sparkyService.sync(id)
+    return c.json(sparkyService.status(id))
+  })
+  api.delete('/spaces/:id/sparkyfitness', (c) => {
+    sparkyService.disconnect(c.req.param('id'))
+    return c.body(null, 204)
+  })
 
   // Subscribed calendars ------------------------------------------------------
   const sourceInput = async (c: Context) => {

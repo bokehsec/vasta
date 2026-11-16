@@ -8,6 +8,12 @@ GitHub release page.
 
 ### Added
 
+- **Habits from SparkyFitness.** Connect a space to your SparkyFitness server with a read-only
+  API key, choose how much history to bring in, then preview seven days before linking a habit.
+  Steps, water and sleep fill its daily amount; named workouts and calories on target mark it
+  done. Hand entries win, including clearing a day. Values refresh every 30 minutes; disconnecting
+  keeps filled days.
+
 - **Objects in a window over the page.** A click on an object in a list, table, board or query —
   and every New — opens it in a window over what you were looking at, a sheet from the bottom on a
   phone, instead of taking you to its page. In it the object is read and edited as on its page;

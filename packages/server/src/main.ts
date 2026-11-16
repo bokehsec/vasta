@@ -14,7 +14,7 @@
 //   VASTA_CAPTURE_READABLE set to 0 to stop saving a readable copy of every captured link's page
 //   VASTA_REPLICA         set to 0 to keep web apps off their local replica (they talk to the server
 //                         directly, as before offline editing); a way out if the replica misbehaves
-//   VASTA_ALLOW_PRIVATE_FETCH  local-network hosts links and calendars may be fetched from
+//   VASTA_ALLOW_PRIVATE_FETCH  local-network hosts links, calendars and SparkyFitness may be fetched from
 //                         (comma-separated), or 1 for all; refused by default (safe-fetch.ts)
 //   VASTA_S3_BUCKET       keep media in this S3-compatible bucket instead of <data>/media, with
 //                         VASTA_S3_ENDPOINT, VASTA_S3_ACCESS_KEY_ID, VASTA_S3_SECRET_ACCESS_KEY,
@@ -39,6 +39,7 @@ import { NodeStore } from '@vasta/core/node'
 import { AccountService } from './accounts.ts'
 import { createApp } from './app.ts'
 import { CalendarService } from './calendars.ts'
+import { SparkyFitnessService } from './sparkyfitness.ts'
 import { CaptureService } from './capture.ts'
 import { ChangeFeed, DesktopListeners } from './events.ts'
 import { createMediaStore, describeMediaStore } from './media.ts'
@@ -88,6 +89,8 @@ const accounts = new AccountService({
 })
 const calendars = new CalendarService({ store, feed, now: () => new Date().toISOString() })
 calendars.start()
+const sparkyfitness = new SparkyFitnessService({ store, feed, now: () => new Date().toISOString() })
+sparkyfitness.start()
 
 // Spaces, types and objects deleted more than 30 days ago, and activity older than each space
 // keeps it, are purged at start and then every few hours.
@@ -126,7 +129,7 @@ const reminders =
     : new ReminderService({ store, accounts, calendars, desktop, push: new PushService({ store, ...(env.VASTA_WEB_URL ? { subject: env.VASTA_WEB_URL } : {}) }), ...(env.VASTA_WEB_URL ? { webUrl: env.VASTA_WEB_URL } : {}), ...(bot ? { telegram: (chat: number, text: string) => bot!.send(chat, text) } : {}) })
 reminders?.start()
 
-const server = serve({ fetch: createApp({ store, media, feed, capture, accounts, calendars, weblinks, reminders, desktop, telegram: { username: () => bot?.username, running: !!bot, channels }, replica: process.env.VASTA_REPLICA !== '0', ...(env.VASTA_WEB_URL ? { webUrl: env.VASTA_WEB_URL } : {}), ...(webDir ? { webDir } : {}), ...(localKey ? { localKey } : {}) }).fetch, port, hostname }, () => {
+const server = serve({ fetch: createApp({ store, media, feed, capture, accounts, calendars, sparkyfitness, weblinks, reminders, desktop, telegram: { username: () => bot?.username, running: !!bot, channels }, replica: process.env.VASTA_REPLICA !== '0', ...(env.VASTA_WEB_URL ? { webUrl: env.VASTA_WEB_URL } : {}), ...(webDir ? { webDir } : {}), ...(localKey ? { localKey } : {}) }).fetch, port, hostname }, () => {
   console.info(`Vasta server on http://${hostname}:${port} (data: ${dataDir}, time zone: ${timeZone})`)
   console.info(`Media: ${describeMediaStore(media)}`)
   if (webDir) console.info(`Serving the web app from ${webDir}`)
@@ -140,6 +143,7 @@ const server = serve({ fetch: createApp({ store, media, feed, capture, accounts,
 const stop = () => {
   bot?.stop()
   calendars.stop()
+  sparkyfitness.stop()
   clearInterval(purgeTimer)
   reminders?.stop()
   server.close()

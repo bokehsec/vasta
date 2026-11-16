@@ -3,12 +3,13 @@
 // year), one square per day in the habit's color, fainter for a goal partly reached. A click marks
 // a day (a goal: adds 1); a right click asks for the amount.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { addDays, habitFoodRule, habitProgress, habitStats, habitTarget, habitUnit, habitValue, isHabitDone, isHabitDue, isHabitScheduled, type ObjectRecord } from '@vasta/core'
+import { addDays, habitSparkyRule, habitFoodRule, habitProgress, habitStats, habitTarget, habitUnit, habitValue, isHabitDone, isHabitDue, isHabitScheduled, type ObjectRecord } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { askHabitAmount, formatAmount, habitAmountLabel, habitColor, setHabitAmount, stepHabit, useFoodHabits } from '../lib/habits.ts'
 import AppIcon from './AppIcon.vue'
 import HabitCheck from './HabitCheck.vue'
+import HabitSparkyLink from './HabitSparkyLink.vue'
 
 const props = defineProps<{ habit: ObjectRecord }>()
 // A habit done from food has its days from what was logged.
@@ -112,6 +113,7 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
 
 <template>
   <section class="mt-8">
+    <HabitSparkyLink :habit="props.habit" />
     <div class="mb-4 flex flex-wrap items-center gap-3">
       <div class="flex items-center gap-2.5 rounded-xl border border-line py-1.5 pl-2 pr-3">
         <HabitCheck :habit="habit" :day="today" :size="26" />
@@ -131,6 +133,7 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
       <span v-if="stats.weekly && !isHabitDue(habit, today)" class="text-xs text-ink-faint">This week’s goal is met.</span>
       <span v-else-if="!isHabitScheduled(habit, today)" class="text-xs text-ink-faint">Today is a day off for this habit.</span>
       <span v-else-if="stats.weekly" class="text-xs text-ink-faint">{{ stats.weekly }} a week, on any days.</span>
+      <span v-if="habitSparkyRule(habit)" class="text-xs text-ink-faint" data-habit-from-sparkyfitness>From SparkyFitness · hand entries take priority</span>
       <span v-if="fromFood" class="flex items-center gap-1 text-xs text-ink-faint" data-habit-from-food><AppIcon fallback="ph:bowl-food" :size="13" /> Done from what you log in Food</span>
     </div>
 

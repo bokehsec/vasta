@@ -3,7 +3,7 @@
 // goal (a square, in the Tracker, fills from the bottom). A click toggles it (a goal: adds 1); a
 // right click or long press asks for the exact amount.
 import { computed } from 'vue'
-import { habitFoodRule, habitProgress, habitTarget, isHabitDone, type ObjectSummary } from '@vasta/core'
+import { habitSparkyRule, habitFoodRule, habitProgress, habitTarget, isHabitDone, type ObjectSummary } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
 import { iconTextClasses, swatchClasses } from '../lib/colors.ts'
 import { askHabitAmount, habitAmountLabel, habitColor, stepHabit } from '../lib/habits.ts'
@@ -19,7 +19,7 @@ const future = computed(() => props.day > dayKey())
 const color = computed(() => habitColor(props.habit))
 const longDay = new Intl.DateTimeFormat(typeof navigator !== 'undefined' ? navigator.language : 'en', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 const title = computed(() => {
-  const date = longDay.format(new Date(`${props.day}T00:00:00.000Z`))
+  const date = longDay.format(new Date(`${props.day}T00:00:00.000Z`)) + (habitSparkyRule(props.habit) ? ' · from SparkyFitness' : '')
   if (future.value) return `${date} · not yet`
   if (habitFoodRule(props.habit)) return `${date} · ${goal.value ? habitAmountLabel(props.habit, props.day) : done.value ? 'done' : 'not done'} · from what you log in Food`
   if (goal.value) return `${date} · ${habitAmountLabel(props.habit, props.day)} (${Math.round(progress.value * 100)}%) · click to add 1, right click to type the amount`

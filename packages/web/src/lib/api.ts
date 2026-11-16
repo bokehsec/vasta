@@ -2,7 +2,7 @@
 // it runs, and by the server over HTTP otherwise. What only the server can do (fetch a page, store
 // a file, delete for good, members, subscriptions) always goes to it, with the replica synced
 // before and after.
-import type { ActivityEntry, ApiToken, FlowMetrics, Backlink, CalendarEntry, CalendarSource, ColorName, DocNode, FoodEntry, FoodLineAnswer, Icon, Id, InboxPreferences, Invite, LogFoodInput, NutritionSettings, ObjectRecord, ObjectSummary, ObjectType, OpensOn, QueryDef, Space, SpaceRole, TokenScope, User } from '@vasta/core'
+import type { PropertyValue, ActivityEntry, ApiToken, FlowMetrics, Backlink, CalendarEntry, CalendarSource, ColorName, DocNode, FoodEntry, FoodLineAnswer, Icon, Id, InboxPreferences, Invite, LogFoodInput, NutritionSettings, ObjectRecord, ObjectSummary, ObjectType, OpensOn, QueryDef, Space, SpaceRole, TokenScope, User } from '@vasta/core'
 import { SYNC_PROTOCOL, dayIn, type CaptureDestinations } from '@vasta/core'
 import type { OccurrenceEdit } from '@vasta/core/calendar'
 import type { CaptureAnswer } from '@vasta/core/client'
@@ -419,6 +419,11 @@ const http = {
   /** Everything dated between two days (inclusive) in the viewer's zone. */
   calendar: (spaceId: Id, from: string, to: string, timeZone: string) =>
     request<CalendarData>('GET', `/api/spaces/${spaceId}/calendar?from=${from}&to=${to}&timeZone=${encodeURIComponent(timeZone)}`),
+  previewSparkyFitness: (id: Id, data: { rule: string; workouts: string }) => request<SparkyPreviewDay[]>('POST', `/api/objects/${id}/sparkyfitness/preview`, data),
+  sparkyFitness: (spaceId: Id) => request<SparkyFitnessStatus | null>('GET', `/api/spaces/${spaceId}/sparkyfitness`),
+  connectSparkyFitness: (spaceId: Id, data: { baseUrl: string; apiKey?: string; history: number; timeZone?: string }) => request<SparkyFitnessStatus>('PUT', `/api/spaces/${spaceId}/sparkyfitness`, data),
+  syncSparkyFitness: (spaceId: Id) => request<SparkyFitnessStatus>('POST', `/api/spaces/${spaceId}/sparkyfitness/sync`),
+  disconnectSparkyFitness: (spaceId: Id) => request<void>('DELETE', `/api/spaces/${spaceId}/sparkyfitness`),
   calendarSources: (spaceId: Id) => request<CalendarSource[]>('GET', `/api/spaces/${spaceId}/calendar-sources`),
   addCalendarSource: (spaceId: Id, data: CalendarSourceInput) => request<CalendarSource>('POST', `/api/spaces/${spaceId}/calendar-sources`, data),
   updateCalendarSource: (id: Id, data: CalendarSourceInput) => request<CalendarSource>('PUT', `/api/calendar-sources/${id}`, data),
@@ -575,3 +580,15 @@ export const syncApi = {
   text: async (vectors: Record<Id, string>) => (await request<{ objects: Record<Id, string> }>('POST', '/api/sync/text', { protocol: SYNC_PROTOCOL, objects: vectors })).objects,
   pushText: async (id: Id, update: string) => (await request<{ changes: { id: Id; error?: string }[] }>('POST', '/api/sync/push', { protocol: SYNC_PROTOCOL, changes: [{ table: 'objects', id, text: update }] })).changes[0],
 }
+
+export interface SparkyFitnessStatus {
+  baseUrl: string
+  hasKey: boolean
+  history: number
+  syncedAt: string | null
+  error: string | null
+  workouts: string[]
+  importing?: { done: number; total: number }
+}
+
+export interface SparkyPreviewDay { day: string; value: PropertyValue | null; manual: PropertyValue | null }
