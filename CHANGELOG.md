@@ -17,6 +17,8 @@ GitHub release page.
   per week and a row per habit with its goal. Paused habits are listed but left out of the total;
   the range is remembered on the device. It works offline. The agent tools' `list_habits` can add
   the same numbers (`weeks`).
+- **Tracker and Progress agree.** The Habits Tracker's last column is now **4 weeks**, counted the
+  same way as the Progress tab (it was the last 30 days, counted differently for weekly habits).
 - **Menu in the phone bottom menu.** Settings › Appearance › Bottom menu can now include **Menu**,
   which opens the side menu from within reach of your thumb. The ☰ button at the top left still
   opens it too.

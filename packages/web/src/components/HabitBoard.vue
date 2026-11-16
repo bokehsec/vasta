@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // The Habits page's Tracker view: one row per habit, the last two weeks (one on phones) to check
-// off, and each habit's streak and last-30-days rate. Paused habits sit at the bottom, faded.
+// off, and each habit's streak and its last 4 weeks (counted as the Progress view counts them).
+// Paused habits sit at the bottom, faded.
 import { computed, toRef } from 'vue'
-import { addDays, habitStats, habitTarget, habitUnit, isHabitDone, isHabitDue, isHabitPaused, type ObjectSummary } from '@vasta/core'
+import { addDays, habitReport, habitStats, habitTarget, habitUnit, isHabitDone, isHabitDue, isHabitPaused, type HabitTally, type ObjectSummary } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { habitColor, useFoodHabits } from '../lib/habits.ts'
@@ -21,11 +22,15 @@ const weekday = new Intl.DateTimeFormat(locale, { weekday: 'narrow', timeZone: '
 const utc = (day: string) => new Date(`${day}T00:00:00.000Z`)
 
 const habits = useFoodHabits(toRef(props, 'habits'))
+/** Each habit's last 4 weeks, done of expected (core habitReport, as in Progress). */
+const fourWeeks = computed(() => new Map(habitReport(habits.value, 4, today).habits.map((r) => [r.id, r.total])))
+const percent = (tally: HabitTally | undefined) => (tally?.expected ? `${Math.round((tally.done / tally.expected) * 100)}%` : '—')
+
 const rows = computed(() => {
   const q = props.filter?.trim().toLowerCase()
   return habits.value
     .filter((h) => !q || h.title.toLowerCase().includes(q))
-    .map((habit) => ({ habit, paused: isHabitPaused(habit), stats: habitStats(habit, today) }))
+    .map((habit) => ({ habit, paused: isHabitPaused(habit), stats: habitStats(habit, today), weeks: fourWeeks.value.get(habit.id) }))
     .sort((a, b) => Number(a.paused) - Number(b.paused) || a.habit.title.localeCompare(b.habit.title))
 })
 </script>
@@ -41,7 +46,7 @@ const rows = computed(() => {
             <div class="tabular-nums" :class="day === today ? 'font-semibold' : ''">{{ Number(day.slice(8)) }}</div>
           </th>
           <th class="w-16 pb-2 pl-3 text-right font-medium">Streak</th>
-          <th class="w-16 pb-2 pl-3 text-right font-medium max-sm:hidden" title="Weekly habits: this week and the four before">30 days</th>
+          <th class="w-16 pb-2 pl-3 text-right font-medium max-sm:hidden" title="Done of expected over the last 4 weeks, this one included">4 weeks</th>
         </tr>
       </thead>
       <tbody>
@@ -61,7 +66,7 @@ const rows = computed(() => {
             <span v-if="row.stats.current" class="inline-flex items-center gap-0.5 text-orange-600 dark:text-orange-400"><AppIcon fallback="ph:fire-fill" :size="12" />{{ row.stats.current }}<template v-if="row.stats.streakUnit === 'week'">&nbsp;wk</template></span>
             <span v-else class="text-ink-faint">0</span>
           </td>
-          <td class="border-t border-line/70 py-1.5 pl-3 text-right tabular-nums text-ink-soft max-sm:hidden">{{ Math.round(row.stats.rate30 * 100) }}%</td>
+          <td class="border-t border-line/70 py-1.5 pl-3 text-right tabular-nums text-ink-soft max-sm:hidden" :title="row.weeks?.expected ? `${row.weeks.done} of ${row.weeks.expected}` : undefined">{{ percent(row.weeks) }}</td>
         </tr>
       </tbody>
     </table>
