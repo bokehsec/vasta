@@ -62,6 +62,16 @@ export const habitFoodProperty = (): PropertyDef => ({
   options: foodRules.map(([id, label]) => ({ id, label, color: 'gray' })),
 })
 
+export const HABIT_SPARKY_PROPERTY_ID = 'sparkyfitness'
+export const HABIT_SPARKY_WORKOUTS_PROPERTY_ID = 'sparkyfitness-workouts'
+export const sparkyRules = [['steps', 'Steps'], ['water', 'Water'], ['sleep', 'Sleep'], ['calories', 'Calories on target'], ['workout', 'Workout']] as const
+
+/** The habit properties a space gets when it connects to SparkyFitness. */
+export const habitSparkyProperties = (): PropertyDef[] => [
+  { id: HABIT_SPARKY_PROPERTY_ID, kind: 'select', name: 'From SparkyFitness', multiple: false, options: sparkyRules.map(([id, label]) => ({ id, label, color: 'gray' })) },
+  { id: HABIT_SPARKY_WORKOUTS_PROPERTY_ID, kind: 'text', name: 'SparkyFitness workouts', description: 'Workout or routine names, separated by commas' },
+]
+
 const weekdays: [string, string][] = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun']]
 
 /** A food's nutrients per 100 g (nutrition.ts); also a goal's daily kcal. */

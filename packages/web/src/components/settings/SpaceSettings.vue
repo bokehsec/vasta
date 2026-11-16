@@ -15,6 +15,7 @@ import IconPicker from '../IconPicker.vue'
 import ObjectPicker from '../ObjectPicker.vue'
 import PopoverMenu from '../PopoverMenu.vue'
 import SettingsSection from './SettingsSection.vue'
+import SparkyFitnessSettings from './SparkyFitnessSettings.vue'
 import { deleteButton } from '../../lib/buttons.ts'
 import { errorText, field, label, primary, secondary } from './styles.ts'
 
@@ -356,5 +357,6 @@ async function remove(member: Member) {
         Delete space…
       </button>
     </div>
+  <SparkyFitnessSettings :key="spaceId" :space-id="spaceId" />
   </SettingsSection>
 </template>

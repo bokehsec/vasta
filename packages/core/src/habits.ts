@@ -5,13 +5,20 @@
 // amount reaches the goal. "Repeat on" (weekdays) decides which days count; a day off neither
 // adds to nor breaks a streak. A habit with "Times a week" counts by the week instead (Monday to
 // Sunday, any days): its weeks are scored, and its streaks are in weeks.
-import { HABIT_DAYS_PROPERTY_ID, HABIT_PAUSED_PROPERTY_ID, HABIT_PER_WEEK_PROPERTY_ID, HABIT_REMIND_PROPERTY_ID, HABIT_TARGET_PROPERTY_ID, HABIT_UNIT_PROPERTY_ID } from './builtin-types.ts'
+import { HABIT_SPARKY_PROPERTY_ID, HABIT_DAYS_PROPERTY_ID, HABIT_PAUSED_PROPERTY_ID, HABIT_PER_WEEK_PROPERTY_ID, HABIT_REMIND_PROPERTY_ID, HABIT_TARGET_PROPERTY_ID, HABIT_UNIT_PROPERTY_ID } from './builtin-types.ts'
 import type { HabitTypeSettings, Id, ObjectSummary, PropertyValue } from './model.ts'
 import { addDays, mondayOf } from './time.ts'
 
 type Habit = Pick<ObjectSummary, 'props' | 'createdAt'>
 
 const DONE_PREFIX = 'done:'
+const SPARKY_PREFIX = 'sf:'
+export const habitSparkyKey = (day: string) => `${SPARKY_PREFIX}${day}`
+
+export function habitSparkyRule(habit: Pick<Habit, 'props'>): string | undefined {
+  const value = habit.props[HABIT_SPARKY_PROPERTY_ID]
+  return value?.kind === 'select' ? value.value[0] : undefined
+}
 /** A day off for the habit whatever its weekdays: set by `habitsWithFood` on days not counted, never stored. */
 const OFF_PREFIX = 'off:'
 export const habitOffKey = (day: string) => `${OFF_PREFIX}${day}`
@@ -49,7 +56,7 @@ export function habitRemindAt(habit: Habit): string | undefined {
 
 /** The amount reached on a day: a number for goals, 1 for a plain check (the goal, once one is set later). */
 export function habitValue(habit: Habit, day: string): number {
-  return valueOf(habit.props[habitDoneKey(day)], habitTarget(habit))
+  return valueOf(habit.props[habitDoneKey(day)] ?? habit.props[habitSparkyKey(day)], habitTarget(habit))
 }
 
 function valueOf(value: PropertyValue | undefined, target: number | undefined): number {
@@ -58,9 +65,13 @@ function valueOf(value: PropertyValue | undefined, target: number | undefined): 
   return 0
 }
 
-/** The prop a day's amount is stored as; undefined clears the day. */
+/** The prop a day's amount is stored as; a linked habit keeps an explicit cleared hand value. */
 export function habitDayValue(habit: Habit, amount: number): PropertyValue | undefined {
-  if (amount <= 0) return undefined
+  if (amount <= 0) {
+    const linked = habitSparkyRule(habit) || Object.keys(habit.props).some((key) => key.startsWith(SPARKY_PREFIX))
+    if (!linked) return undefined
+    return habitTarget(habit) ? { kind: 'number', value: 0 } : { kind: 'checkbox', value: false }
+  }
   return habitTarget(habit) ? { kind: 'number', value: amount } : DONE_VALUE
 }
 
@@ -79,19 +90,15 @@ export function habitProgress(habit: Habit, day: string): number {
 
 /** Every day the habit was done (the goal reached), oldest first. */
 export function habitDays(habit: Habit): string[] {
-  const target = habitTarget(habit)
-  return Object.entries(habit.props)
-    .filter(([key, value]) => key.startsWith(DONE_PREFIX) && (target ? valueOf(value, target) >= target : valueOf(value, target) > 0))
-    .map(([key]) => key.slice(DONE_PREFIX.length))
-    .sort()
+  return loggedDays(habit).filter((day) => isHabitDone(habit, day))
 }
 
 /** Every day with something logged, done or not (partial amounts too). */
 function loggedDays(habit: Habit): string[] {
-  return Object.keys(habit.props)
-    .filter((key) => key.startsWith(DONE_PREFIX) && valueOf(habit.props[key], undefined) > 0)
-    .map((key) => key.slice(DONE_PREFIX.length))
-    .sort()
+  const days = new Set(Object.keys(habit.props)
+    .filter((key) => key.startsWith(DONE_PREFIX) || key.startsWith(SPARKY_PREFIX))
+    .map((key) => key.slice(key.indexOf(':') + 1)))
+  return [...days].filter((day) => habitValue(habit, day) > 0).sort()
 }
 
 /** Weekday ids ("mon"…) it repeats on; empty means every day. */

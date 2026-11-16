@@ -27,7 +27,7 @@ import {
   habitFoodProperty,
   weekdayKcalPropertyId,
 } from './builtin-types.ts'
-import { DONE_VALUE, habitDoneKey, habitOffKey, habitTarget } from './habits.ts'
+import { DONE_VALUE, habitSparkyRule, habitDoneKey, habitOffKey, habitTarget } from './habits.ts'
 import type {
   FoodEntry,
   FoodPortion,
@@ -1251,6 +1251,7 @@ export function foodMealNudge(note: Props | undefined, meal: Meal, meals: Meal[]
 // days not counted are days off.
 
 export const habitFoodRule = (habit: Pick<ObjectSummary, 'props'>): string | undefined => {
+  if (habitSparkyRule(habit)) return undefined
   const value = habit.props[HABIT_FOOD_PROPERTY_ID]
   return value?.kind === 'select' ? value.value[0] : undefined
 }
