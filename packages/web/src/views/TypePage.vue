@@ -734,7 +734,7 @@ async function newMenu(event: MouseEvent) {
       <h1 class="min-w-0 text-2xl font-bold tracking-tight max-md:break-words md:truncate">{{ type.pluralName }}</h1>
       <span class="text-sm text-ink-faint max-md:hidden">{{ objects.length }}</span>
       <span class="flex-1" />
-      <button v-if="!loading && taskWorkflows && !isPhone" :class="review || toReview ? tintedButton : greyButton" class="min-w-0" :title="review ? `Resume ${pausedScope}` : primaryScopeLabel" data-review-tasks @click="pressReview($event.currentTarget as HTMLElement)">
+      <button v-if="!loading && taskWorkflows && !isPhone" :class="review || toReview ? tintedButton : greyButton" class="min-w-0" :title="review ? `Resume ${pausedScope}` : primaryScopeLabel" aria-live="polite" data-review-tasks @click="pressReview($event.currentTarget as HTMLElement)">
         <template v-if="review"><AppIcon fallback="ph:play" /><span class="truncate">Resume review</span> <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
         <template v-else><AppIcon fallback="ph:arrows-clockwise" />{{ primaryScope === 'view' ? 'Review' : 'Review all' }} <span v-if="toReview" class="tabular-nums">{{ toReview }}</span></template>
       </button>
@@ -849,7 +849,7 @@ async function newMenu(event: MouseEvent) {
         </button>
         <HabitProgressMenu v-if="trackerActive && type.system === 'habit'" :type="type" />
         <!-- Review sits here on a phone: the header has no room beside the title. -->
-        <button v-if="!loading && taskWorkflows" :class="[review || toReview ? tintedButton : greyButton, 'ml-auto']" :title="review ? `Resume ${pausedScope}` : primaryScopeLabel" data-review-tasks @click="pressReview($event.currentTarget as HTMLElement)">
+        <button v-if="!loading && taskWorkflows" :class="[review || toReview ? tintedButton : greyButton, 'ml-auto']" :title="review ? `Resume ${pausedScope}` : primaryScopeLabel" aria-live="polite" data-review-tasks @click="pressReview($event.currentTarget as HTMLElement)">
           <template v-if="review"><AppIcon fallback="ph:play" /> Resume <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
           <template v-else><AppIcon fallback="ph:arrows-clockwise" /> {{ primaryScope === 'view' ? 'Review' : 'Review all' }} <span v-if="toReview" class="tabular-nums">{{ toReview }}</span></template>
         </button>
@@ -1102,10 +1102,6 @@ async function newMenu(event: MouseEvent) {
     </div>
     <div v-if="isPhone && taskWorkflows && mineOn" class="mt-3 flex flex-wrap gap-2">
       <button class="flex min-h-11 items-center gap-2 rounded-lg bg-hover px-3 text-sm text-ink-soft" aria-label="Remove Mine filter" data-review-mine @click="toggleMine">Mine <AppIcon fallback="ph:x" :size="12" /></button>
-    </div>
-    <div v-if="!loading && taskWorkflows" class="border-b border-line py-3 text-xs text-ink-soft" aria-live="polite" data-review-scope>
-      <template v-if="review"><p class="break-words">Paused review: <span class="font-medium text-ink">{{ pausedScope }}</span></p><p class="mt-1 tabular-nums">{{ sessionAt }}</p></template>
-      <template v-else><p class="break-words">Review scope: <span class="font-medium text-ink">{{ primaryScopeLabel }}</span></p><p class="mt-1" data-review-counts>{{ toReview ? `${primaryQueues.triage.length} new · ${primaryQueues.review.length} ${primaryQueues.review.length === 1 ? 'check-in' : 'check-ins'}` : `Nothing to review in ${primaryScope === 'view' ? viewScope : workspace.space?.name}.` }}</p></template>
     </div>
     <WorkflowChooser v-model:open="workflowOpen" :type="type" :anchor="workflowAnchor" :mode="workflowMode" :space-name="workspace.space?.name ?? ''" :view-scope="viewScope"
       :new-count="chooserQueues.triage.length" :check-in-count="chooserQueues.review.length" :space-count="spaceToReview" :view-count="processList.length" :view-all-count="openList.length" :session="review"

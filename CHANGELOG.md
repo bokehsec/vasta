@@ -200,8 +200,8 @@ GitHub release page.
   Review and triage remain available.
 
 - **Review the tasks you are looking at.** Review uses the current task view's filters, search and
-  Mine, with its scope and counts visible; new tasks still come before check-ins. On a phone, Mine
-  also has a visible chip to remove it. **Review all tasks in Main** (using your space’s name) in ⋯ ignores those filters,
+  Mine; new tasks still come before check-ins, and the review's header names its scope. On a phone,
+  Mine also has a visible chip to remove it. **Review all tasks in Main** (using your space’s name) in ⋯ ignores those filters,
   even when nothing waits in this view. Paused sessions keep and name their original scope. Metrics
   and Agenda explicitly offer **Review all** for the whole space. Background space updates no longer
   pause an active review.
