@@ -16,9 +16,15 @@ GitHub release page.
 
 - **Habits from SparkyFitness.** Connect a space to your SparkyFitness server with a read-only
   API key, choose how much history to bring in, then preview seven days before linking a habit.
-  Steps, water and sleep fill its daily amount; named workouts and calories on target mark it
-  done. Hand entries win, including clearing a day. Values refresh every 30 minutes; disconnecting
-  keeps filled days.
+  Steps, water and sleep fill its daily amount (they need a daily goal, which the link asks for;
+  sleep is kept in the habit's unit, hours or minutes); named workouts and calories on target mark
+  it done. Hand entries win, including clearing a day. A tap on a linked habit never saves a value:
+  it opens the amount, shows what SparkyFitness gave and offers **Use SparkyFitness value** to
+  take a hand entry away. Values refresh every 30 minutes, reading again from two days before the
+  last good sync, so a long outage is caught up. The habit's page shows when it last synced and the
+  last error, and the habit can be unlinked; the panel is hidden when the space has no connection.
+  Disconnecting keeps filled days, or removes them with the links and the properties the connection
+  added. The connection sits above Delete space in space settings.
 
 - **Objects in a window over the page.** A click on an object in a list, table, board or query —
   and every New — opens it in a window over what you were looking at, a sheet from the bottom on a
@@ -40,20 +46,28 @@ GitHub release page.
   once the week's goal is met. A space that already had a field with this id keeps its own.
 - **Habit progress.** The Habits page has a **Progress** tab beside Tracker: how much of what your
   habits asked for got done over the last 4, 8 or 13 weeks, as a percent with "94 of 120", a bar
-  per week and a row per habit with its goal. Paused habits are listed but left out of the total;
-  the range is the Tracker's too, so both and every device cover the same weeks. Beside the range
-  you pick the chart (bars, a line, a calendar of days, or done and missed), kept for every device
-  too, and each habit shows its own weeks as small columns. It works offline. The agent tools'
-  `list_habits` can add the same numbers (`weeks`).
+  per week and a row per habit with its goal. Days a habit was paused count as days off, so they
+  are not asked and not missed; the range is the Tracker's too, so both and every device cover the
+  same weeks. Beside the range you pick the chart (a trend line or a calendar of done days, the
+  same two as on the Tracker), kept for every device too, and each habit shows its own weeks as
+  small columns. It works offline. The agent tools' `list_habits` can add the same numbers
+  (`weeks`) and reports the same last four weeks.
 - **Habit progress on the Tracker, your way.** The Habits Tracker shows how you are doing next to
   the habits. Its **Display** button, beside Filter, chooses where (above the habits, beside them — below them
-  on a phone — or off), the chart (week columns, a trend line, a day heat strip, week meters or
-  habit chips above; a ranking, a trend line, a calendar of days or done-and-missed counts beside) and the
-  range (4, 8 or 13 weeks), for every device alike. It starts with the day heat strip above. On a
-  phone each habit is one row, as in the Habit Tracker app: its whole name, "2 of 3 this week" or
-  its streak, its last two weeks as ticks and a round check for today (past days from its page).
-- **Tracker and Progress agree.** The Habits Tracker's last column is now **4 weeks**, counted the
-  same way as the Progress tab (it was the last 30 days, counted differently for weekly habits).
+  on a phone — or off), the chart (a trend line or a calendar of done days) and the range (4, 8 or
+  13 weeks), for every device alike. It starts with the calendar above; settings saved when there
+  were more charts read as the nearest of the two. On a phone each habit is one row, as in the Habit
+  Tracker app: its whole name, "2 of 3 this week" or its streak, its last two weeks as ticks (a day
+  a "3 a week" habit does not need is never shown as missed) and a round check for today; a long
+  press on a tick changes that past day.
+- **Pauses with dates.** A habit's page has **Pause** and **Resume**, and lists its pauses with a
+  first and a last day to change. Paused days are days off in the Tracker, Today, the calendar,
+  streaks, progress, reminders and the agent tools: not asked, not missed. A habit that was paused
+  before is paused from the day of this update.
+- **One number for how a habit is doing.** The Habits Tracker's last column is **4 weeks**, and a
+  habit's page says **Last 4 weeks** and **This week so far** (days still to come no longer count),
+  all counted the same way as the Progress tab and the agent tools (it was the last 30 days,
+  counted differently for weekly habits).
 - **Menu in the phone bottom menu.** Settings › Appearance › Bottom menu can now include **Menu**,
   which opens the side menu from within reach of your thumb. The ☰ button at the top left still
   opens it too.
@@ -303,8 +317,7 @@ GitHub release page.
 ### Fixed
 
 - **Habit progress keeps your latest display choices.** Rapid changes save in order, and saving
-  an already-open Type settings window preserves newer progress choices. The Progress chart and
-  Tracker panel now separate missed days this week from completions that are still possible.
+  an already-open Type settings window preserves newer progress choices.
 
 - **A link to a type of another space** (its page, e.g. Habits) opens that space and shows the
   page, as a link to an object already did; it used to stay blank.

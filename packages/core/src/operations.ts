@@ -2,9 +2,10 @@
 // device means the same as one made through the server: new objects and types, saving an edited
 // copy, daily notes, the inbox, running a query.
 import { newId } from './ids.ts'
-import { ADDED_BUILTIN_PROPERTIES, BODY_PROPERTY_ID, SOURCE_PROPERTY_ID, builtinProperty, builtinTypeId, missingBuiltinTypes } from './builtin-types.ts'
+import { ADDED_BUILTIN_PROPERTIES, BODY_PROPERTY_ID, HABIT_PAUSED_PROPERTY_ID, SOURCE_PROPERTY_ID, builtinProperty, builtinTypeId, missingBuiltinTypes } from './builtin-types.ts'
 import { closedStatusIds, defaultQueryFilter, defaultViewFilter } from './closed-filter.ts'
 import { docReferences } from './doc.ts'
+import { habitPauseKey } from './habits.ts'
 import type { CaptureInfo, DocNode, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, OpensOn, Person, QueryDef, Space } from './model.ts'
 import { addHabitFoodProperty } from './nutrition.ts'
 import { queryRelations, relatedIds, runQuery, timeBounds } from './query.ts'
@@ -148,8 +149,31 @@ export function ensureBuiltinTypes(store: Store, at: IsoDateTime): ObjectType[] 
       for (const space of store.listSpaces()) addClosedFilters(store, space.id, at)
       store.setMeta('closed-filter-2026-11-15', at)
     }
+    // Habits paused by a checkbox now have a pause starting that day (2026-11-16).
+    if (!store.getMeta('habit-pauses-2026-11-16')) {
+      for (const space of store.listSpaces()) addHabitPauses(store, space.id, at)
+      store.setMeta('habit-pauses-2026-11-16', at)
+    }
     return added
   })
+}
+
+/**
+ * A habit paused by the old Paused checkbox gets a pause that starts on `at`'s day and lasts until
+ * resumed (the days before it count as they did); the checkbox and its field go.
+ */
+function addHabitPauses(store: Store, spaceId: Id, at: IsoDateTime) {
+  const type = store.listTypes(spaceId).find((t) => t.system === 'habit')
+  if (!type) return
+  for (const summary of store.listObjects(type.id)) {
+    const habit = store.getObject(summary.id)
+    const paused = habit?.props[HABIT_PAUSED_PROPERTY_ID]
+    if (!habit || paused === undefined) continue
+    const { [HABIT_PAUSED_PROPERTY_ID]: _paused, ...props } = habit.props
+    if (paused.kind === 'checkbox' && paused.value) props[habitPauseKey(at.slice(0, 10))] = { kind: 'text', value: '' }
+    store.putObject({ ...habit, props, updatedAt: at })
+  }
+  if (type.properties.some((p) => p.id === HABIT_PAUSED_PROPERTY_ID)) store.putType({ ...type, properties: type.properties.filter((p) => p.id !== HABIT_PAUSED_PROPERTY_ID), updatedAt: at })
 }
 
 /**

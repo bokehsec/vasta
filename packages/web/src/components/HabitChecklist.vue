@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // The habits of a day, to check off: a column beside the calendar's day (Today), or a row of pills
 // in a daily note. Days a habit does not repeat on show it faded (a weekly habit: once its week is
-// full); paused habits are left out.
+// full); habits paused that day are left out. The day's state is core's habitDayState.
 import { computed } from 'vue'
-import { habitStats, isHabitDone, isHabitDue, isHabitPaused } from '@vasta/core'
+import { habitDayState, habitStats } from '@vasta/core'
 import { createObject, dayKey } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
 import { askHabitAmount, habitAmountLabel, habitColor, stepHabit, useHabits } from '../lib/habits.ts'
@@ -18,17 +18,18 @@ const { habits, loaded, load } = useHabits()
 
 const rows = computed(() =>
   habits.value
-    .filter((h) => !isHabitPaused(h))
-    .map((habit) => {
+    .map((habit) => ({ habit, state: habitDayState(habit, props.day, dayKey()) }))
+    .filter((r) => r.state !== 'paused')
+    .map(({ habit, state }) => {
       const week = habitStats(habit, props.day)
       return {
         habit,
-        scheduled: isHabitDue(habit, props.day),
-        done: isHabitDone(habit, props.day),
+        scheduled: state !== 'off',
+        done: state === 'done',
         amount: habitAmountLabel(habit, props.day),
         streak: habitStats(habit, dayKey()).current,
         // A weekly habit: "2 of 3 this week" where a daily one shows its streak.
-        week: week.weekly ? `${week.weekDone} of ${week.weekly} this week` : '',
+        week: week.weekly ? `${week.thisWeek.done} of ${week.thisWeek.of} this week` : '',
       }
     })
     .sort((a, b) => Number(b.scheduled) - Number(a.scheduled))

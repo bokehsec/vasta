@@ -1,14 +1,17 @@
 <script setup lang="ts">
-// On a habit's page: today's mark, its streaks and rates, and as many weeks of days as fit (up to a
-// year), one square per day in the habit's color, fainter for a goal partly reached. A click marks
-// a day (a goal: adds 1); a right click asks for the amount.
+// On a habit's page: today's mark, its streaks and how it is doing (the Progress view's numbers), and
+// as many weeks of days as fit (up to a year), one square per day in the habit's color, fainter for
+// a goal partly reached, hatched for a paused day. A click marks a day (a goal: adds 1; a habit
+// linked to SparkyFitness asks); a right click asks for the amount.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { addDays, habitSparkyRule, habitFoodRule, habitProgress, habitStats, habitTarget, habitUnit, habitValue, isHabitDone, isHabitDue, isHabitScheduled, type ObjectRecord } from '@vasta/core'
+import { addDays, habitDayState, habitSparkyRule, habitFoodRule, habitProgress, habitStats, habitTarget, habitUnit, habitValue, isHabitDone, type ObjectRecord } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
 import { swatchClasses } from '../lib/colors.ts'
-import { askHabitAmount, formatAmount, habitAmountLabel, habitColor, setHabitAmount, stepHabit, useFoodHabits } from '../lib/habits.ts'
+import { askHabitAmount, formatAmount, habitAmountLabel, habitColor, habitStateWord, setHabitAmount, stepHabit, useFoodHabits } from '../lib/habits.ts'
+import { percentText } from '../lib/habit-progress.ts'
 import AppIcon from './AppIcon.vue'
 import HabitCheck from './HabitCheck.vue'
+import HabitPauses from './HabitPauses.vue'
 import HabitSparkyLink from './HabitSparkyLink.vue'
 
 const props = defineProps<{ habit: ObjectRecord }>()
@@ -16,6 +19,7 @@ const props = defineProps<{ habit: ObjectRecord }>()
 const linked = useFoodHabits(computed(() => [props.habit as ObjectRecord & { preview: string }]))
 const habit = computed(() => linked.value[0]!)
 const fromFood = computed(() => !!habitFoodRule(props.habit))
+const fromSparky = computed(() => !!habitSparkyRule(props.habit))
 
 const today = dayKey()
 const stats = computed(() => habitStats(habit.value, today))
@@ -60,12 +64,17 @@ const monthLabels = computed(() => {
   return labels
 })
 
+/** A day's state (core's habitDayState). */
+const stateOf = (day: string) => habitDayState(habit.value, day, today, stats.value.since)
+const todayState = computed(() => stateOf(today))
+
 /** A square: the habit's color fills it from the bottom as far as the day got (all of it once done). */
 function cellClass(day: string) {
   if (day > today) return 'invisible'
-  if (day < stats.value.since || !isHabitDue(habit.value, day)) return 'bg-hover/50 hover:ring-1 hover:ring-line'
-  return 'bg-hover hover:ring-1 hover:ring-line-strong'
+  return ['off', 'paused'].includes(stateOf(day)) ? 'bg-hover/50 hover:ring-1 hover:ring-line' : 'bg-hover hover:ring-1 hover:ring-line-strong'
 }
+/** Paused days are hatched, so they don't look like a weekday it does not repeat on. */
+const hatch = { backgroundImage: 'repeating-linear-gradient(135deg, var(--color-line) 0 2px, transparent 2px 4px)' }
 
 // The hovered (or focused) square's details, shown at once above it.
 const hovered = ref<{ day: string; left: number; top: number } | null>(null)
@@ -79,20 +88,8 @@ function hover(event: Event, day: string) {
 const details = computed(() => {
   const day = hovered.value?.day
   if (!day) return null
-  const progress = habitProgress(habit.value, day)
-  const status = isHabitDone(habit.value, day)
-    ? 'Done'
-    : day < stats.value.since
-      ? 'Before this habit began'
-      : !isHabitScheduled(habit.value, day)
-        ? 'Day off'
-        : !isHabitDue(habit.value, day)
-          ? 'Week’s goal met'
-        : progress > 0
-          ? `${Math.round(progress * 100)}% of the goal`
-          : day === today
-            ? 'Not done yet'
-            : 'Missed'
+  const state = stateOf(day)
+  const status = state === 'later' ? (day === today ? 'Not done yet' : 'Not needed yet') : habitStateWord(state, habitProgress(habit.value, day))
   return { date: longDay.format(utc(day)), status, amount: target.value ? habitAmountLabel(habit.value, day) : '', done: isHabitDone(habit.value, day) }
 })
 
@@ -102,8 +99,8 @@ const streak = (count: number) => (stats.value.streakUnit === 'week' ? `${count}
 const cards = computed(() => [
   { label: 'Current streak', value: streak(stats.value.current), icon: 'ph:fire', tint: 'text-orange-500' },
   { label: 'Best streak', value: streak(stats.value.best), icon: 'ph:trophy', tint: 'text-amber-500' },
-  { label: 'This week', value: `${stats.value.weekDone}/${stats.value.weekScheduled}`, icon: 'ph:calendar-check', tint: 'text-sky-500' },
-  { label: stats.value.weekly ? 'Last 5 weeks' : 'Last 30 days', value: `${Math.round(stats.value.rate30 * 100)}%`, icon: 'ph:chart-line-up', tint: 'text-emerald-500' },
+  { label: 'This week so far', value: `${stats.value.thisWeek.done} of ${stats.value.thisWeek.of}`, icon: 'ph:calendar-check', tint: 'text-sky-500' },
+  { label: 'Last 4 weeks', value: percentText(stats.value.last4Weeks), icon: 'ph:chart-line-up', tint: 'text-emerald-500' },
   target.value
     ? { label: 'Average a day', value: `${formatAmount(stats.value.average30)}${unit.value ? ` ${unit.value}` : ''}`, icon: 'ph:gauge', tint: 'text-violet-500' }
     : { label: 'Times done', value: stats.value.total, icon: 'ph:check-circle', tint: 'text-violet-500' },
@@ -121,7 +118,7 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
           <div class="font-medium">{{ doneToday ? 'Done today' : 'Today' }}</div>
           <div v-if="target" class="text-xs tabular-nums text-ink-faint">{{ habitAmountLabel(habit, today) }}</div>
         </div>
-        <div v-if="target && !fromFood" class="ml-2 flex items-center gap-1">
+        <div v-if="target && !fromFood && !fromSparky" class="ml-2 flex items-center gap-1">
           <button class="grid h-7 w-7 place-items-center rounded-md ring-1 ring-line hover:bg-hover" title="Take 1 away" @click="setHabitAmount(habit.id, today, Math.max(0, habitValue(habit, today) - 1), habit)">
             <AppIcon fallback="ph:minus" :size="13" />
           </button>
@@ -130,14 +127,17 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
           </button>
         </div>
       </div>
-      <span v-if="stats.weekly && !isHabitDue(habit, today)" class="text-xs text-ink-faint">This week’s goal is met.</span>
-      <span v-else-if="!isHabitScheduled(habit, today)" class="text-xs text-ink-faint">Today is a day off for this habit.</span>
+      <span v-if="todayState === 'paused'" class="text-xs text-ink-faint">Paused today.</span>
+      <span v-else-if="todayState === 'off' && stats.weekly" class="text-xs text-ink-faint">This week’s goal is met.</span>
+      <span v-else-if="todayState === 'off'" class="text-xs text-ink-faint">Today is a day off for this habit.</span>
       <span v-else-if="stats.weekly" class="text-xs text-ink-faint">{{ stats.weekly }} a week, on any days.</span>
-      <span v-if="habitSparkyRule(habit)" class="text-xs text-ink-faint" data-habit-from-sparkyfitness>From SparkyFitness · hand entries take priority</span>
+      <span v-if="fromSparky" class="text-xs text-ink-faint" data-habit-from-sparkyfitness>From SparkyFitness · a hand entry takes priority</span>
       <span v-if="fromFood" class="flex items-center gap-1 text-xs text-ink-faint" data-habit-from-food><AppIcon fallback="ph:bowl-food" :size="13" /> Done from what you log in Food</span>
     </div>
 
-    <div class="grid grid-cols-2 gap-2 sm:grid-cols-5">
+    <HabitPauses :habit="props.habit" />
+
+    <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
       <div v-for="card in cards" :key="card.label" class="rounded-xl border border-line px-3 py-2.5">
         <div class="flex items-center gap-1.5 text-xs text-ink-faint"><AppIcon :fallback="card.icon" :class="card.tint" :size="14" /> {{ card.label }}</div>
         <div class="mt-1 truncate text-xl font-semibold tabular-nums">{{ card.value }}</div>
@@ -161,6 +161,7 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
             :key="day"
             class="relative overflow-hidden rounded-[3px]"
             :class="cellClass(day)"
+            :style="day <= today && stateOf(day) === 'paused' ? hatch : undefined"
             :aria-label="day"
             :disabled="day > today"
             @click="stepHabit(habit, day)"
@@ -191,7 +192,9 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
         </div>
       </div>
       <p class="mt-2 text-xs text-ink-faint">
-        Click a day to {{ target ? 'add 1' : 'mark it' }}, right click to type {{ target ? 'the amount' : 'it' }}. Counting since {{ longDay.format(utc(stats.since)) }}.
+        <template v-if="fromSparky">Click a day to type its amount or go back to SparkyFitness’s.</template>
+        <template v-else>Click a day to {{ target ? 'add 1' : 'mark it' }}, right click to type {{ target ? 'the amount' : 'it' }}.</template>
+        Counting since {{ longDay.format(utc(stats.since)) }}.
       </p>
     </div>
   </section>

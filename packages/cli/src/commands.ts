@@ -315,9 +315,9 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
         items.length ? items.map((i) => `${i.at.slice(0, 16).replace('T', ' ')} · ${i.channel}${i.done ? ' · done' : ''}\n${i.text}`).join('\n\n') : 'Nothing captured lately.'
       )
     case 'habits': {
-      type Habit = { title: string; day: { done: boolean; scheduled: boolean; amount?: number }; dailyGoal?: number; unit?: string; paused?: boolean; stats: { currentStreak: number; last30Days: string } }
+      type Habit = { title: string; day: { done: boolean; scheduled: boolean; amount?: number }; dailyGoal?: number; unit?: string; paused?: boolean; stats: { currentStreak: number; last4Weeks: { percent: number | null } } }
       const line = (h: Habit) =>
-        `${h.day.done ? '✓' : h.day.scheduled ? '○' : '–'} ${h.title}${h.dailyGoal ? `  ${h.day.amount ?? 0}/${h.dailyGoal}${h.unit ? ` ${h.unit}` : ''}` : ''}${h.paused ? '  (paused)' : ''}  · streak ${h.stats.currentStreak} · 30 days ${h.stats.last30Days}`
+        `${h.day.done ? '✓' : h.day.scheduled ? '○' : '–'} ${h.title}${h.dailyGoal ? `  ${h.day.amount ?? 0}/${h.dailyGoal}${h.unit ? ` ${h.unit}` : ''}` : ''}${h.paused ? '  (paused)' : ''}  · streak ${h.stats.currentStreak} · 4 weeks ${h.stats.last4Weeks.percent === null ? '—' : `${h.stats.last4Weeks.percent}%`}`
       return out(await call('list_habits', { ...space, recent: 0, ...(rest[0] ? { day: rest[0] } : {}) }), (habits: Habit[]) => (habits.length ? habits.map(line).join('\n') : 'No habits yet.'))
     }
     case 'habit': {

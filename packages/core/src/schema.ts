@@ -262,6 +262,21 @@ CREATE TABLE IF NOT EXISTS calendar_sources (
   created_at  TEXT NOT NULL
 );
 
+-- A space's read-only SparkyFitness connection (server only, never synced). \`signatures\` is what each
+-- linked habit was last imported with, \`workouts\` the workout names seen lately (by day).
+CREATE TABLE IF NOT EXISTS sparkyfitness_connections (
+  space_id   TEXT PRIMARY KEY REFERENCES spaces(id) ON DELETE CASCADE,
+  base_url   TEXT NOT NULL,
+  api_key    TEXT NOT NULL,
+  history    INTEGER NOT NULL,
+  time_zone  TEXT NOT NULL DEFAULT 'UTC',
+  synced_at  TEXT,
+  error      TEXT,
+  created_at TEXT NOT NULL,
+  signatures TEXT NOT NULL DEFAULT '{}',
+  workouts   TEXT NOT NULL DEFAULT '{}'
+);
+
 -- Synced rows deleted for good (purged), so clients learn they are gone. \`kind\` is the table.
 CREATE TABLE IF NOT EXISTS sync_tombstones (
   kind     TEXT NOT NULL,

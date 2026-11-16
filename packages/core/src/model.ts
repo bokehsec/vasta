@@ -2,6 +2,7 @@
 // Everything a user creates is an "object". Every object has exactly one type.
 // Types define custom properties and the views used to browse their objects.
 // See docs/data-model.md for the rationale behind each piece.
+import type { HabitTypeSettings } from './habit-progress.ts'
 
 export type Id = string
 /** ISO 8601 timestamp, always UTC. */
@@ -100,24 +101,6 @@ export type QuickActionValue =
 export interface SubtaskSettings {
   /** A single relation property of the type whose targets include the type itself. */
   parentField: Id
-}
-
-/**
- * A habit type's progress on the Habits Tracker (the Tracker's Display menu): where it shows (off, a
- * strip above the habits, or a panel beside them; below them on a phone), what the strip and panel
- * draw, the Progress tab's chart, and over how many weeks. Kept on the type, so every device shows the same; unset parts fall
- * back to `HABIT_PROGRESS_DEFAULT`.
- */
-export type HabitProgressPlace = 'off' | 'above' | 'beside'
-export type HabitStripChart = 'weeks' | 'line' | 'days' | 'meters' | 'habits'
-export type HabitPanelChart = 'weeks' | 'line' | 'calendar' | 'counts'
-export interface HabitTypeSettings {
-  place: HabitProgressPlace
-  strip: HabitStripChart
-  panel: HabitPanelChart
-  /** The Progress tab's chart (the same four as the panel, drawn larger). */
-  report: HabitPanelChart
-  weeks: 4 | 8 | 13
 }
 
 /** A space's sprints: on or off, and the word the space uses for them ("Sprint", "Rodada"…). */

@@ -30,8 +30,9 @@ export const SPRINT_GOAL_PROPERTY_ID = 'goal'
 /** A task's sprint: a relation to the space's Sprint type, added when sprints are turned on. */
 export const SPRINT_PROPERTY_ID = 'sprint'
 
-/** A habit's weekdays ("Repeat on"; none means every day) and whether it is paused. */
+/** A habit's weekdays ("Repeat on"; none means every day). */
 export const HABIT_DAYS_PROPERTY_ID = 'days'
+/** The checkbox pauses were kept in before they had dates (habits.ts); only the migration to pauses reads it. */
 export const HABIT_PAUSED_PROPERTY_ID = 'paused'
 /** Times a week (1 to 7): set, the habit counts by the week, on any days ("3 a week"). */
 export const HABIT_PER_WEEK_PROPERTY_ID = 'perweek'
@@ -167,7 +168,6 @@ const specs: Record<SystemTypeKey, BuiltinSpec> = {
       { id: HABIT_TARGET_PROPERTY_ID, kind: 'number', name: 'Daily goal' },
       { id: HABIT_UNIT_PROPERTY_ID, kind: 'text', name: 'Unit' },
       { id: HABIT_REMIND_PROPERTY_ID, kind: 'text', name: 'Remind at' },
-      { id: HABIT_PAUSED_PROPERTY_ID, kind: 'checkbox', name: 'Paused' },
       body,
     ],
   },

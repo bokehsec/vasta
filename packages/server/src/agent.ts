@@ -26,8 +26,11 @@ import {
   findPerson,
   formulaText,
   formulaToNames,
+  habitDayState,
   habitDayValue,
   habitDoneKey,
+  habitPausedOn,
+  habitPercent,
   habitRemindAt,
   habitStats,
   habitTarget,
@@ -36,8 +39,6 @@ import {
   habitWeekdays,
   habitWeeklyTarget,
   isHabitDone,
-  isHabitPaused,
-  isHabitDue,
   newObject,
   parseProperties,
   querySpace,
@@ -996,7 +997,9 @@ export class AgentTools {
   }
 
   private habitInfo(habit: Pick<ObjectSummary, 'id' | 'title' | 'props' | 'createdAt'>, day: string, recent: number) {
-    const stats = habitStats(habit, this.captures.today())
+    const today = this.captures.today()
+    const stats = habitStats(habit, today)
+    const state = habitDayState(habit, day, today)
     const target = habitTarget(habit)
     const weekdays = habitWeekdays(habit)
     const weekly = habitWeeklyTarget(habit)
@@ -1008,14 +1011,16 @@ export class AgentTools {
       ...(target ? { dailyGoal: target, unit: habitUnit(habit) || undefined } : {}),
       ...(habitFoodRule(habit) ? { fromFood: habitFoodRule(habit) } : {}),
       ...(habitRemindAt(habit) ? { remindAt: habitRemindAt(habit) } : {}),
-      ...(isHabitPaused(habit) ? { paused: true } : {}),
-      day: { day, scheduled: isHabitDue(habit, day), done: isHabitDone(habit, day), ...(target ? { amount: habitValue(habit, day) } : {}) },
+      ...(habitPausedOn(habit, today) ? { paused: true } : {}),
+      // `state`: done, partial, missed, off (a day it does not repeat on), later (not needed yet) or paused.
+      day: { day, state, scheduled: state !== 'off' && state !== 'paused', done: state === 'done', ...(target ? { amount: habitValue(habit, day) } : {}) },
       stats: {
         currentStreak: stats.current,
         bestStreak: stats.best,
         streakUnit: stats.streakUnit,
-        thisWeek: `${stats.weekDone}/${stats.weekScheduled}`,
-        ...(weekly ? { last5Weeks: `${Math.round(stats.rate30 * 100)}%` } : { last30Days: `${Math.round(stats.rate30 * 100)}%` }),
+        thisWeek: `${stats.thisWeek.done}/${stats.thisWeek.of}`,
+        // The app's own number: done of expected over the last four weeks (the Progress view's, core habitReport).
+        last4Weeks: { done: stats.last4Weeks.done, expected: stats.last4Weeks.expected, percent: habitPercent(stats.last4Weeks) ?? null },
         timesDone: stats.total,
         ...(target ? { averagePerDay: Math.round(stats.average30 * 10) / 10 } : {}),
       },

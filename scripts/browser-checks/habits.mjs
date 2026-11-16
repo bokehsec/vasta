@@ -1,10 +1,14 @@
 // Habit progress in the test env: a daily habit, one on Mon/Wed/Fri, one 3 times a week and a paused
-// one, with check-ins over the last weeks; then the Habits page: the weekly habit's "x of 3 this
-// week" on Today, a day off faded in the Tracker, the Progress tab's headline and rows (checked
-// against core's habitReport), the range switch kept on reload, its chart choice and each habit's weeks, and (on 5184, the built app) the
-// same numbers after reloading offline. SHOTS=<dir> saves light and dark screenshots; PHONE=1 a 390px width (Today left out).
-// The Tracker's own progress is checked too: where it shows (above, beside, off), the charts and
-// the range are picked in its Progress menu (kept on the type, so they survive a reload).
+// one (a pause with a first day), with check-ins over the last weeks; then the Habits page: the weekly
+// habit's "x of 3 this week" on Today, a day off faded in the Tracker (a "3 a week" habit never shows
+// a missed day), the Progress tab's headline and rows (checked against core's habitReport), the range
+// switch kept on reload, its chart choice (a trend line or a calendar, the same two in the Tracker's
+// Display menu) and each habit's weeks, settings saved with the old chart ids read as the nearest of
+// the two, Pause and Resume on a habit's page, the habit page's "last 4 weeks" matching the report,
+// a past day fixed from a phone row by long press, and (on 5184, the built app) the same numbers
+// after reloading offline. SHOTS=<dir> saves light and dark screenshots; PHONE=1 a 390px width (Today left out).
+// The Tracker's own progress is checked too: where it shows (above, beside, off), the chart and
+// the range are picked in its Display menu (kept on the type, so they survive a reload).
 //   node habits.mjs [chromium|webkit] [base]
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -74,7 +78,7 @@ const specs = [
   { title: 'Read', props: done([...week(2, 0, 1), ...week(1, 0, 1, 2, 3, 4, 5, 6)]) },
   { title: 'Stretch', props: { days: { kind: 'select', value: ['mon', 'wed', 'fri'] }, ...done(week(1, 0, 2)) } },
   { title: 'Gym', props: { perweek: { kind: 'number', value: 3 }, ...done([...week(2, 0), ...week(1, 0, 2, 4)]) } },
-  { title: 'Swim', props: { paused: { kind: 'checkbox', value: true }, ...done(week(2, 0)) } },
+  { title: 'Swim', props: { [`pause:${week(2, 1)[0]}`]: { kind: 'text', value: '' }, ...done(week(2, 0)) } },
 ]
 const habits = []
 for (const spec of specs) habits.push(await post('/api/objects', { typeId: habitType.id, ...spec, title: process.env.PHONE ? `${spec.title} ${tag}` : spec.title }))
@@ -102,16 +106,15 @@ if (!process.env.PHONE) {
 }
 
 step('Tracker: a day off is faded (phone: a row per habit)')
-await page.evaluate(() => {
-  localStorage.removeItem('vasta.habit-progress.layout')
-  localStorage.removeItem('vasta.habit-progress.place')
-})
 await page.goto(`${base}/t/${habitType.id}`)
 if (process.env.PHONE) {
   await until(() => main.locator('[data-habit-row]', { hasText: 'Stretch' }).count(), 'the phone rows')
   const ticks = await main.locator('[data-habit-row]', { hasText: 'Stretch' }).locator('i[title*="day off"]').count()
   if (!ticks) throw new Error('no day-off tick for Mon/Wed/Fri')
   if (await main.locator('table').count()) throw new Error('a table on the phone')
+  // "3 a week" asks for no day in particular: none of its days is missed (phone rows); a paused one shows paused.
+  if (await main.locator('[data-habit-row]', { hasText: 'Gym' }).locator('i[data-state="missed"]').count()) throw new Error('a missed day on a 3 a week habit')
+  if (!(await main.locator('[data-habit-row]', { hasText: 'Swim' }).locator('i[data-state="paused"]').count())) throw new Error('no paused days on the paused habit')
 } else {
   await until(() => main.locator('tr', { hasText: 'Stretch' }).count(), 'the Tracker')
   const stretchCells = main.locator('tr', { hasText: 'Stretch' }).locator('td')
@@ -119,28 +122,28 @@ if (process.env.PHONE) {
   if (!faded) throw new Error('no faded day for Mon/Wed/Fri')
 }
 
-step('Tracker progress: day strip above by default, matching the report')
+step('Tracker progress: calendar above by default, matching the report')
 const listed4 = (await get(`/api/types/${habitType.id}/objects`)).filter((h) => !h.deletedAt)
 const report4 = habitReport(listed4, 4, today)
 const pct4 = report4.total.expected ? `${Math.round((report4.total.done / report4.total.expected) * 100)}%` : '—'
-await until(async () => (await main.locator('[data-progress-strip][data-chart="days"]').count()) === 1, 'the day strip')
-await until(async () => (await text(main.locator('[data-progress-strip] [data-progress-headline]'))).startsWith(`${pct4} over the last 4 weeks ${report4.total.done} of ${report4.total.expected} done`), `strip headline ${pct4}`)
+await until(async () => (await main.locator('[data-progress-summary][data-layout="above"][data-chart="calendar"]').count()) === 1, 'the calendar above')
+await until(async () => (await text(main.locator('[data-progress-summary] [data-progress-headline]'))).startsWith(`${pct4} over the last 4 weeks ${report4.total.done} of ${report4.total.expected} done`), `headline ${pct4}`)
 // Where it shows, the charts and the range are picked in the Tracker's Display menu (beside
 // Filter), saved on the type; Type settings no longer has them.
 await page.goto(`${base}/t/${habitType.id}?settings=1`)
 await until(() => page.getByRole('button', { name: 'Save', exact: true }).count(), 'Type settings')
 if (await page.locator('[data-habit-progress-settings]').count()) throw new Error('progress still in Type settings')
 await page.goto(`${base}/t/${habitType.id}`)
-await until(async () => (await main.locator('[data-progress-strip]').count()) === 1, 'back on the Tracker')
+await until(async () => (await main.locator('[data-progress-summary]').count()) === 1, 'back on the Tracker')
 const progressSettings = async (...selectors) => {
   await page.locator('[data-progress-menu]').click()
   for (const selector of selectors) await page.locator(`[data-progress-options] ${selector}`).click()
   await page.keyboard.press('Escape')
   await until(async () => !(await page.locator('[data-progress-options]').count()), 'the progress menu closed')
 }
-for (const chart of ['weeks', 'line', 'meters', 'habits', 'days']) {
-  await progressSettings(`[data-chart-picker="strip"] [data-chart="${chart}"]`)
-  await until(async () => (await main.locator(`[data-progress-strip][data-chart="${chart}"]`).count()) === 1, `strip ${chart}`)
+for (const chart of ['line', 'calendar']) {
+  await progressSettings(`[data-chart="${chart}"]`)
+  await until(async () => (await main.locator(`[data-progress-summary][data-layout="above"][data-chart="${chart}"]`).count()) === 1, `above ${chart}`)
   if (process.env.SHOTS && chart === 'line') {
     await page.screenshot({ path: path.join(process.env.SHOTS, `habits-strip-line${process.env.PHONE ? '-phone' : ''}.png`) })
     await page.locator('[data-progress-menu]').click()
@@ -150,14 +153,19 @@ for (const chart of ['weeks', 'line', 'meters', 'habits', 'days']) {
     await until(async () => !(await page.locator('[data-progress-options]').count()), 'the progress menu closed')
   }
 }
+// Exactly two charts to pick from.
+await page.locator('[data-progress-menu]').click()
+if ((await page.locator('[data-progress-options] [data-chart]').count()) !== 2) throw new Error('not exactly two charts in the menu')
+await page.keyboard.press('Escape')
+await until(async () => !(await page.locator('[data-progress-options]').count()), 'the progress menu closed')
 await progressSettings('[data-place="beside"]')
-await until(async () => (await main.locator('[data-progress-panel][data-chart="calendar"]').count()) === 1, 'the panel')
-for (const chart of ['weeks', 'line', 'counts', 'calendar']) {
-  await progressSettings(`[data-chart-picker="panel"] [data-chart="${chart}"]`)
-  await until(async () => (await main.locator(`[data-progress-panel][data-chart="${chart}"]`).count()) === 1, `panel ${chart}`)
+await until(async () => (await main.locator('[data-progress-summary][data-layout="beside"][data-chart="calendar"]').count()) === 1, 'the column beside')
+for (const chart of ['line', 'calendar']) {
+  await progressSettings(`[data-chart="${chart}"]`)
+  await until(async () => (await main.locator(`[data-progress-summary][data-layout="beside"][data-chart="${chart}"]`).count()) === 1, `beside ${chart}`)
 }
-if (await main.locator('[data-progress-strip]').count()) throw new Error('strip and panel both shown')
-await until(async () => (await text(main.locator('[data-progress-panel] [data-progress-headline]'))) === pct4, 'panel headline')
+if ((await main.locator('[data-progress-summary]').count()) !== 1) throw new Error('above and beside both shown')
+await until(async () => (await text(main.locator('[data-progress-summary] [data-progress-headline]'))).startsWith(`${pct4} over the last 4 weeks`), 'beside headline')
 await page.keyboard.press('Escape')
 if (process.env.SHOTS) {
   for (const theme of ['light', 'dark']) {
@@ -172,18 +180,18 @@ step('Tracker progress: the range, from the same menu')
 const report8 = habitReport(listed4, 8, today)
 const pct8 = report8.total.expected ? `${Math.round((report8.total.done / report8.total.expected) * 100)}%` : '—'
 await progressSettings('[data-weeks="8"]')
-await until(async () => (await text(main.locator('[data-progress-panel] [data-progress-headline]'))) === pct8, `panel headline ${pct8}`)
+await until(async () => (await text(main.locator('[data-progress-summary] [data-progress-headline]'))).startsWith(`${pct8} over the last 8 weeks`), `headline ${pct8}`)
 
 await page.reload()
-await until(async () => (await main.locator('[data-progress-panel][data-chart="calendar"]').count()) === 1, 'the panel kept on reload')
+await until(async () => (await main.locator('[data-progress-summary][data-layout="beside"][data-chart="calendar"]').count()) === 1, 'the column kept on reload')
 await progressSettings('[data-place="off"]')
-await until(async () => !(await main.locator('[data-progress-panel], [data-progress-strip]').count()), 'progress off')
+await until(async () => !(await main.locator('[data-progress-summary]').count()), 'progress off')
 await progressSettings('[data-place="above"]')
-await until(async () => (await main.locator('[data-progress-strip][data-chart="days"]').count()) === 1, 'back to the day strip')
+await until(async () => (await main.locator('[data-progress-summary][data-layout="above"][data-chart="calendar"]').count()) === 1, 'back to the calendar above')
 // What the menu saved reached the server (synced to every device), with nothing refused.
 await until(async () => {
   const saved = (await get(`/api/types/${habitType.id}`)).habits
-  return saved?.place === 'above' && saved?.strip === 'days' && saved?.panel === 'calendar' && saved?.weeks === 8
+  return saved?.place === 'above' && saved?.chart === 'calendar' && saved?.weeks === 8 && !('strip' in saved) && !('panel' in saved) && !('report' in saved)
 }, 'the progress settings on the server')
 if (await page.getByText('did not take').count()) throw new Error('the server refused a change')
 if (process.env.SHOTS) {
@@ -199,13 +207,22 @@ step('Type settings: an old draft preserves a newer synced Display choice')
 await page.goto(`${base}/t/${habitType.id}?settings=1`)
 await until(() => page.getByRole('button', { name: 'Save', exact: true }).count(), 'Type settings draft')
 const latestType = await get(`/api/types/${habitType.id}`)
-await put(`/api/types/${habitType.id}`, { ...latestType, habits: { ...latestType.habits, strip: 'line' } })
-await until(async () => (await main.locator('[data-progress-strip][data-chart="line"]').count()) === 1, 'remote Display choice received')
+await put(`/api/types/${habitType.id}`, { ...latestType, habits: { ...latestType.habits, chart: 'line' } })
+await until(async () => (await main.locator('[data-progress-summary][data-chart="line"]').count()) === 1, 'remote Display choice received')
 await page.getByLabel('Name', { exact: true }).fill(`${latestType.name} edited`)
 await page.getByRole('button', { name: 'Save', exact: true }).click()
 await until(async () => (await get(`/api/types/${habitType.id}`)).name === `${latestType.name} edited`, 'name saved')
-if ((await get(`/api/types/${habitType.id}`)).habits.strip !== 'line') throw new Error('Type settings overwrote Display')
+if ((await get(`/api/types/${habitType.id}`)).habits.chart !== 'line') throw new Error('Type settings overwrote Display')
 await page.goto(`${base}/t/${habitType.id}`)
+
+step('Settings saved with the old chart ids read as the nearest of the two')
+const oldType = await get(`/api/types/${habitType.id}`)
+await put(`/api/types/${habitType.id}`, { ...oldType, habits: { place: 'above', strip: 'days', panel: 'counts', report: 'weeks', weeks: 8 } })
+await until(async () => (await main.locator('[data-progress-summary][data-layout="above"][data-chart="calendar"]').count()) === 1, 'old strip "days" shown as the calendar')
+await put(`/api/types/${habitType.id}`, { ...oldType, habits: { place: 'beside', strip: 'days', panel: 'counts', report: 'weeks', weeks: 8 } })
+await until(async () => (await main.locator('[data-progress-summary][data-layout="beside"][data-chart="line"]').count()) === 1, 'old panel "counts" shown as the trend line')
+await put(`/api/types/${habitType.id}`, { ...oldType, habits: { place: 'above', chart: 'calendar', weeks: 8 } })
+await until(async () => (await main.locator('[data-progress-summary][data-layout="above"][data-chart="calendar"]').count()) === 1, 'back to the calendar')
 
 step('Progress: headline and rows match the report')
 const pick = async (name) => {
@@ -231,7 +248,7 @@ async function checkNumbers(weeks, known) {
     const want = process.env.PHONE ? ` ${pct(row.total)}` : `${row.total.done} of ${row.total.expected} ${pct(row.total)}`
     await until(async () => (await text(main.locator('[data-progress-row]', { hasText: title }))).endsWith(want), `${title}: ${want}`)
   }
-  if (report.total.done !== report.habits.filter((r) => !r.paused).reduce((s, r) => s + r.total.done, 0)) throw new Error('paused habit in the total')
+  if (report.total.done !== report.habits.reduce((s, r) => s + r.total.done, 0)) throw new Error('the total is not the sum of the habits')
   console.log(`  ${weeks} weeks: ${pct(report.total)} (${report.total.done} of ${report.total.expected})`)
 }
 await page.locator('[data-range="4"]').click()
@@ -239,7 +256,7 @@ await checkNumbers(4)
 const rows = await main.locator('[data-progress-row]').allTextContents()
 if (!process.env.PHONE && (!rows.at(-1).includes('Swim') || !rows.at(-1).includes('paused'))) throw new Error('paused habit not last')
 if (!process.env.PHONE && !rows.some((r) => r.includes('3 a week'))) throw new Error('no "3 a week" goal')
-await until(() => page.locator('svg[aria-label="Share done each week"] path').count(), 'the weekly bars')
+await until(() => main.locator('[data-report-chart][data-chart="calendar"] [data-habit-days]').count(), 'the calendar')
 
 step('range: 13 weeks, saved on the type, kept on reload')
 await page.locator('[data-range="13"]').click()
@@ -252,14 +269,12 @@ await checkNumbers(13)
 
 step('Progress: the chart is picked on the tab and saved on the type')
 if (!(await main.locator('[data-progress-row] [data-habit-weeks] rect').count())) throw new Error('no weeks column')
-for (const chart of ['line', 'calendar', 'counts', 'weeks']) {
-  if (process.env.PHONE) {
-    await page.locator('[data-report-chart-button]').click()
-    await page.locator(`[data-chart-picker="report"] [data-chart="${chart}"]`).click()
-  } else await page.locator(`[data-chart-picker="report"] [data-chart="${chart}"]`).click()
+if ((await page.locator('[data-chart-picker="progress"] [data-chart]').count()) !== 2) throw new Error('not exactly two charts')
+for (const chart of ['line', 'calendar']) {
+  await page.locator(`[data-chart-picker="progress"] [data-chart="${chart}"]`).click()
   await until(async () => (await main.locator(`[data-report-chart][data-chart="${chart}"]`).count()) === 1, `report chart ${chart}`)
-  await until(async () => (await get(`/api/types/${habitType.id}`)).habits?.report === chart, `report ${chart} saved on the type`)
-  if (process.env.SHOTS && chart !== 'weeks') await main.locator('[data-habit-progress]').screenshot({ path: path.join(process.env.SHOTS, `habits-report-${chart}${process.env.PHONE ? '-phone' : ''}.png`) })
+  await until(async () => (await get(`/api/types/${habitType.id}`)).habits?.chart === chart, `chart ${chart} saved on the type`)
+  if (process.env.SHOTS) await main.locator('[data-habit-progress]').screenshot({ path: path.join(process.env.SHOTS, `habits-report-${chart}${process.env.PHONE ? '-phone' : ''}.png`) })
 }
 if (await page.getByText('did not take').count()) throw new Error('the server refused a change')
 
@@ -269,6 +284,36 @@ if (process.env.SHOTS) {
   await sleep(300)
   await page.screenshot({ path: path.join(process.env.SHOTS, `habits-progress${process.env.PHONE ? '-phone' : ''}-dark.png`), fullPage: true })
   await page.evaluate(() => document.documentElement.classList.remove('dark'))
+}
+
+step('A habit page: Pause and Resume, and the same last-4-weeks number')
+const read = habits.find((h) => h.title.startsWith('Read'))
+await page.goto(`${base}/o/${read.id}`)
+await page.locator('[data-habit-pauses]').waitFor()
+const readRow = (await expectFor(4)).habits.find((r) => r.id === read.id)
+await until(async () => (await text(main)).includes(`Last 4 weeks ${pct(readRow.total)}`), `the habit page says last 4 weeks ${pct(readRow.total)}`)
+await page.locator('[data-habit-pause]').click()
+await until(async () => (await get(`/api/objects/${read.id}`)).props[`pause:${today}`]?.value === '', 'pause saved from today')
+await page.locator('[data-habit-resume]').click()
+// A pause that began today never was.
+await until(async () => !(`pause:${today}` in (await get(`/api/objects/${read.id}`)).props), 'resumed')
+
+if (process.env.PHONE) {
+  step('Phone: a past day is fixed from its row by long press')
+  await page.goto(`${base}/t/${habitType.id}?view=__tracker`)
+  const row = main.locator('[data-habit-row]', { hasText: `Stretch ${tag}` })
+  await until(() => row.count(), 'the phone row for Stretch')
+  // The first day of the last two weeks that Stretch (Mon/Wed/Fri) is asked and not done.
+  const tick = row.locator('i[data-state="missed"]').first()
+  const day = await tick.getAttribute('data-day')
+  const box = await tick.boundingBox()
+  await row.locator('[data-habit-ticks]').evaluate((el, at) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: at.x, clientY: at.y })), { x: box.x + box.width / 2, y: box.y + box.height / 2 })
+  const dialog = page.locator('form', { hasText: /Done on/ })
+  await dialog.waitFor()
+  await dialog.locator('input').fill('1')
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+  const stretch = habits.find((h) => h.title.startsWith('Stretch'))
+  await until(async () => (await get(`/api/objects/${stretch.id}`)).props[`done:${day}`]?.value === true, `${day} saved from the phone row`)
 }
 
 if (built) {

@@ -1,23 +1,22 @@
 <script setup lang="ts">
 // The Tracker's Display button (beside Filter; beside Filters on a phone; not "Progress", the tab
 // beside it) and its menu, a sheet on
-// a phone: where progress shows (off, above the habits, or beside them; below them on a phone), its
-// chart and over how many weeks. Saved on the habit type, so every device shows the same
+// a phone: where progress shows (off, above the habits, or beside them; below them on a phone), which
+// of the two charts and over how many weeks. Saved on the habit type, so every device shows the same
 // (lib/habit-progress.ts). The menu stays open while picking, so each change shows behind it.
 import { computed, ref } from 'vue'
-import { HABIT_WEEKS_RANGES, type ObjectType } from '@vasta/core'
+import { HABIT_WEEKS_RANGES, type HabitProgressPlace, type ObjectType } from '@vasta/core'
 import { greyButton } from '../lib/buttons.ts'
-import { habitProgressOf, PANEL_CHARTS, saveHabitProgress, STRIP_CHARTS, type ProgressPlace } from '../lib/habit-progress.ts'
+import { CHARTS, habitProgressOf, saveHabitProgress } from '../lib/habit-progress.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
-import HabitChartPicker from './HabitChartPicker.vue'
 import PopoverMenu from './PopoverMenu.vue'
 
 const props = defineProps<{ type: ObjectType }>()
 const open = ref(false)
 const anchor = ref<HTMLElement | null>(null)
 const settings = computed(() => habitProgressOf(props.type))
-const places = computed<{ id: ProgressPlace; label: string }[]>(() => [
+const places = computed<{ id: HabitProgressPlace; label: string }[]>(() => [
   { id: 'off', label: 'Off' },
   { id: 'above', label: 'Above' },
   { id: 'beside', label: isPhone.value ? 'Below' : 'Beside' },
@@ -46,9 +45,10 @@ const segOn = (on: boolean) => (on ? 'bg-surface font-medium shadow-sm' : 'text-
         </button>
       </div>
       <template v-if="settings.place !== 'off'">
-        <div class="mt-1.5">
-          <HabitChartPicker v-if="settings.place === 'above'" picker="strip" :charts="STRIP_CHARTS" :model-value="settings.strip" @update="(id) => saveHabitProgress(type, { strip: id })" />
-          <HabitChartPicker v-else picker="panel" :charts="PANEL_CHARTS" :model-value="settings.panel" @update="(id) => saveHabitProgress(type, { panel: id })" />
+        <div class="mx-1.5 mt-1.5 flex rounded-lg bg-hover p-0.5" role="group" aria-label="Progress chart">
+          <button v-for="c in CHARTS" :key="c.id" :class="[seg, segOn(settings.chart === c.id)]" :aria-pressed="settings.chart === c.id" :title="c.hint" :data-chart="c.id" @click="saveHabitProgress(type, { chart: c.id })">
+            {{ c.label }}
+          </button>
         </div>
         <div class="mx-1.5 mb-1 mt-1.5 flex rounded-lg bg-hover p-0.5" role="group" aria-label="Progress range">
           <button v-for="w in HABIT_WEEKS_RANGES" :key="w" :class="[seg, segOn(settings.weeks === w)]" :aria-pressed="settings.weeks === w" :data-weeks="w" @click="saveHabitProgress(type, { weeks: w })">

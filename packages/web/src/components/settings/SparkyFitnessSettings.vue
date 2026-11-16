@@ -3,6 +3,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api, type SparkyFitnessStatus } from '../../lib/api.ts'
 import { formatRelative } from '../../lib/format.ts'
+import { choiceDialog } from '../../lib/overlays.ts'
 import { field, label, primary, secondary, errorText } from './styles.ts'
 
 const props = defineProps<{ spaceId: string }>()
@@ -32,7 +33,18 @@ const connect = () => run(async () => {
   apiKey.value = ''
 })
 const sync = () => run(() => api.syncSparkyFitness(props.spaceId))
-const disconnect = () => run(() => api.disconnectSparkyFitness(props.spaceId))
+/** Disconnecting can leave the filled days and the links in place, or take away everything the connection brought. */
+async function disconnect() {
+  const answer = await choiceDialog({
+    title: 'Disconnect SparkyFitness?',
+    message: 'Habits stop filling from it. What it already filled can stay, or go.',
+    choices: [
+      { value: 'keep', label: 'Disconnect, keep the filled days' },
+      { value: 'remove', label: 'Disconnect and remove the filled days, the habits’ links and the properties it added', danger: true },
+    ],
+  })
+  if (answer) await run(() => api.disconnectSparkyFitness(props.spaceId, answer === 'remove'))
+}
 watch(() => props.spaceId, () => { void run(initialize) })
 onMounted(() => {
   void run(initialize)
@@ -60,7 +72,7 @@ onBeforeUnmount(() => clearInterval(timer))
         <button :class="secondary" :disabled="busy || !!status.importing" @click="sync">Sync now</button>
         <button :class="secondary" :disabled="busy" @click="disconnect">Disconnect</button>
       </div>
-      <p class="text-xs text-ink-faint">Disconnecting leaves filled days in place. Pick From SparkyFitness on each habit to start filling it.</p>
+      <p class="text-xs text-ink-faint">Pick From SparkyFitness on a habit page to start filling it. A linked steps, water or sleep habit needs a daily goal.</p>
       <div v-if="status.workouts.length" class="text-sm text-ink-soft"><p class="font-medium">Workouts seen in the last 30 days</p><p>{{ status.workouts.join(', ') }}</p></div>
     </template>
   </section>

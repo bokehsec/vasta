@@ -419,11 +419,12 @@ const http = {
   /** Everything dated between two days (inclusive) in the viewer's zone. */
   calendar: (spaceId: Id, from: string, to: string, timeZone: string) =>
     request<CalendarData>('GET', `/api/spaces/${spaceId}/calendar?from=${from}&to=${to}&timeZone=${encodeURIComponent(timeZone)}`),
-  previewSparkyFitness: (id: Id, data: { rule: string; workouts: string }) => request<SparkyPreviewDay[]>('POST', `/api/objects/${id}/sparkyfitness/preview`, data),
+  previewSparkyFitness: (id: Id, data: { rule: string; workouts: string; target?: number; unit?: string }) => request<SparkyPreviewDay[]>('POST', `/api/objects/${id}/sparkyfitness/preview`, data),
   sparkyFitness: (spaceId: Id) => request<SparkyFitnessStatus | null>('GET', `/api/spaces/${spaceId}/sparkyfitness`),
   connectSparkyFitness: (spaceId: Id, data: { baseUrl: string; apiKey?: string; history: number; timeZone?: string }) => request<SparkyFitnessStatus>('PUT', `/api/spaces/${spaceId}/sparkyfitness`, data),
   syncSparkyFitness: (spaceId: Id) => request<SparkyFitnessStatus>('POST', `/api/spaces/${spaceId}/sparkyfitness/sync`),
-  disconnectSparkyFitness: (spaceId: Id) => request<void>('DELETE', `/api/spaces/${spaceId}/sparkyfitness`),
+  /** `remove`: also take away the days it imported, the habits' links and the properties it added. */
+  disconnectSparkyFitness: (spaceId: Id, remove = false) => request<void>('DELETE', `/api/spaces/${spaceId}/sparkyfitness${remove ? '?remove=1' : ''}`),
   calendarSources: (spaceId: Id) => request<CalendarSource[]>('GET', `/api/spaces/${spaceId}/calendar-sources`),
   addCalendarSource: (spaceId: Id, data: CalendarSourceInput) => request<CalendarSource>('POST', `/api/spaces/${spaceId}/calendar-sources`, data),
   updateCalendarSource: (id: Id, data: CalendarSourceInput) => request<CalendarSource>('PUT', `/api/calendar-sources/${id}`, data),
@@ -551,6 +552,10 @@ const local: Partial<Api> = {
   updateCalendarSource: viaServer(http.updateCalendarSource),
   deleteCalendarSource: viaServer(http.deleteCalendarSource),
   syncCalendarSource: viaServer(http.syncCalendarSource),
+  previewSparkyFitness: viaServer(http.previewSparkyFitness),
+  connectSparkyFitness: viaServer(http.connectSparkyFitness),
+  syncSparkyFitness: viaServer(http.syncSparkyFitness),
+  disconnectSparkyFitness: viaServer(http.disconnectSparkyFitness),
 }
 
 export const api = Object.fromEntries(
