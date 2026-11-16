@@ -2,7 +2,6 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppSidebar from './components/AppSidebar.vue'
-import BulkBar from './components/BulkBar.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import ContextMenuHost from './components/ContextMenuHost.vue'
 import DialogHost from './components/DialogHost.vue'
@@ -25,7 +24,6 @@ import { keepsScroll } from './lib/scroll-memory.ts'
 import { installShortcuts } from './lib/shortcuts.ts'
 import { checkSession, session } from './lib/session.ts'
 import { lastError, notice, ui, workspace } from './lib/state.ts'
-import { clearSelection, selecting } from './lib/selection.ts'
 import { isPhone } from './lib/viewport.ts'
 import { router } from './router.ts'
 import LoginView from './views/LoginView.vue'
@@ -56,8 +54,6 @@ watch(
     quickAsk.value?.answer(null)
   }
 )
-// A selection belongs to the page it was made on (the side pane opening keeps it).
-watch(() => route.path, clearSelection)
 watch(isPhone, () => (ui.sidebarOpen = false))
 function onKey(event: KeyboardEvent) {
   if (event.key === 'Escape' && ui.sidebarOpen && isPhone.value) ui.sidebarOpen = false
@@ -93,7 +89,7 @@ function onTouchEnd(event: TouchEvent) {
     <div class="relative flex min-h-0 flex-1">
       <Transition name="vasta-fade">
         <!-- The drawer and its backdrop (z-30) sit above the bottom bar and Capture (z-20, PhoneTabBar), and
-             below dialogs and the bulk bar (z-40), which is not rendered while the drawer is open. -->
+             below dialogs (z-40). -->
         <div v-if="isPhone && ui.sidebarOpen" class="fixed inset-0 z-30 bg-black/30" data-drawer-backdrop @click="ui.sidebarOpen = false" />
       </Transition>
       <AppSidebar
@@ -113,7 +109,7 @@ function onTouchEnd(event: TouchEvent) {
           <main
             ref="main"
             class="isolate min-h-0 min-w-0 flex-1 overflow-y-auto bg-surface md:mb-2 md:mr-2 md:rounded-xl md:border md:border-line md:shadow-[0_1px_3px_rgb(0_0_0/0.04)]"
-            :class="[ui.sidebarCollapsed ? 'md:ml-2' : '', selecting ? (isPhone ? 'pb-[calc(10rem+env(safe-area-inset-bottom))]' : 'pb-32') : isPhone ? (notice || lastError ? 'pb-[calc(13rem+env(safe-area-inset-bottom))]' : 'pb-[calc(9rem+env(safe-area-inset-bottom))]') : 'pb-[env(safe-area-inset-bottom)]']"
+            :class="[ui.sidebarCollapsed ? 'md:ml-2' : '', isPhone ? (notice || lastError ? 'pb-[calc(13rem+env(safe-area-inset-bottom))]' : 'pb-[calc(9rem+env(safe-area-inset-bottom))]') : 'pb-[env(safe-area-inset-bottom)]']"
           >
             <RouterView :key="$route.fullPath.split('?')[0]" />
           </main>
@@ -128,7 +124,6 @@ function onTouchEnd(event: TouchEvent) {
     <PickObjectHost />
     <PopupHost />
     <PhoneTabBar v-if="isPhone" />
-    <BulkBar v-if="!(isPhone && ui.sidebarOpen)" />
     <AppToast />
     <PasswordDialog v-if="ui.passwordOpen" />
     <QuickCapture v-if="ui.captureOpen" />

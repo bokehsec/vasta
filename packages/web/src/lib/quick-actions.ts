@@ -1,5 +1,5 @@
 // Running a task's quick actions (@vasta/core task-actions.ts) from anywhere: the buttons on a page
-// or row (TaskQuickActions), a row's menu, a swipe, many selected rows at once. An action that asks
+// or row (TaskQuickActions), a row's menu, or a swipe. The runner accepts one or more objects. An action that asks
 // for a value asks once (QuickAskHost, mounted in App.vue: under the element pressed, or centred
 // without one or on a phone), then each object gets its own values; one notice with one Undo puts
 // every object's previous values back. A day asked for another date than the due date (Defer's Do

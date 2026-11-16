@@ -106,60 +106,6 @@ try {
   await clientValue('/src/lib/viewport.ts', 'keyboardInset', 0)
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
 
-  console.log('Bulk partial failure offers failed-only Retry and a cumulative Undo')
-  await page.reload()
-  await page.locator('[data-filters-button]').waitFor()
-  const row = (task) => page.locator(`main a[href="/o/${task.id}"]`).first()
-  const selectTask = async (task) => {
-    await page.locator('main button[title="More"]').first().click()
-    await page.locator('[data-select-mode]').click()
-    await row(task).click()
-  }
-  await selectTask(tasks[0])
-  await row(tasks[1]).click()
-  await page.locator('[data-bulk-bar]').waitFor()
-  const failedUrl = `**/api/objects/${tasks[1].id}`
-  await page.route(failedUrl, (route) => route.request().method() === 'PUT' ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Test unavailable' }) }) : route.continue())
-  const writes = []
-  page.on('request', (request) => { if (request.method() === 'PUT' && /\/api\/objects\//.test(request.url())) writes.push(request.url()) })
-  await page.locator('[data-bulk-action=done]').click()
-  await page.locator('[data-bulk-retry]').waitFor()
-  assert.match(await page.locator('[data-bulk-count]').innerText(), /1 selected/)
-  await target(page.locator('[data-bulk-retry]'), 'Retry')
-  await page.unroute(failedUrl)
-  writes.length = 0
-  await page.locator('[data-bulk-retry]').click()
-  await until(async () => !await page.locator('[data-bulk-bar]').count())
-  assert.deepEqual(writes.map((url) => url.split('/').pop()), [tasks[1].id])
-  assert.match(await page.locator('[role=status]').innerText(), /Done · 2 tasks/)
-  await page.locator('[role=status]').getByRole('button', { name: 'Undo', exact: true }).click()
-  await until(async () => {
-    const records = await Promise.all(tasks.slice(0, 2).map((task) => request('get', `/api/objects/${task.id}`)))
-    return records.every((record) => !record.props.status?.value.includes('done'))
-  })
-
-  console.log('A late save does not clear a fresh selection on the same list')
-  await selectTask(tasks[0])
-  let release
-  const held = new Promise((resolve) => { release = resolve })
-  let saving = false
-  const heldUrl = `**/api/objects/${tasks[0].id}`
-  await page.route(heldUrl, async (route) => {
-    if (route.request().method() !== 'PUT') return route.continue()
-    saving = true
-    await held
-    await route.continue()
-  })
-  await page.locator('[data-bulk-action=done]').click()
-  await until(() => saving)
-  await page.keyboard.press('Escape')
-  await selectTask(tasks[1])
-  release()
-  await until(async () => !await page.locator('[data-bulk-action=done]').isDisabled())
-  assert.equal(await row(tasks[1]).getAttribute('data-selected'), 'true')
-  await page.unroute(heldUrl)
-  await page.keyboard.press('Escape')
-
   console.log('Review asks without falsely announcing Saving')
   // The 18 test tasks have no status: they are new, and Review starts with them. Schedule… (Defer's date question) asks a date.
   await page.locator('[data-review-tasks]').click()

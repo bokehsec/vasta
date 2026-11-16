@@ -16,7 +16,7 @@
 // (a table drawn as rows there; swipes are phone-rows.mjs).
 // A type that is not a task (Page): Type settings shows the section (empty, no defaults, no
 // next-step select), a configured action shows on its objects' pages and rows (the toggle offered
-// for the type), the table offers the column, process mode and the bulk bar run it.
+// for the type), the table offers the column, and process mode runs it.
 //   node quick-actions.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -733,20 +733,6 @@ await setToggle(true)
 await until(async () => (await headerFields()).includes('quickActions'), 'the column shows')
 await setToggle(false)
 await pickLayout('List')
-
-step('the bulk bar runs the action on both pages, one question, one Undo')
-await until(async () => (await row(visitPage.id).count()) > 0 && (await row(visitPage2.id).count()) > 0, 'the list shows both pages')
-await row(visitPage.id).hover()
-await row(visitPage.id).locator('[data-select-row]').click()
-await until(async () => (await page.locator('[data-bulk-count]').innerText()).includes('1 selected'), '1 selected')
-await row(visitPage2.id).hover()
-await row(visitPage2.id).locator('[data-select-row]').click()
-await until(async () => (await page.locator('[data-bulk-count]').innerText()).includes('2 selected'), '2 selected')
-await page.locator('[data-bulk-action="visited"]').click()
-await until(async () => dayOf((await propsOf(visitPage.id)).nextvisit) === days.inWeek && dayOf((await propsOf(visitPage2.id)).nextvisit) === days.inWeek, 'both pages got Next visit')
-await toast.filter({ hasText: '2 pages' }).waitFor()
-await toast.locator('button', { hasText: 'Undo' }).click()
-await until(async () => (await propsOf(visitPage.id)).nextvisit === undefined && (await propsOf(visitPage2.id)).nextvisit === undefined, 'Undo emptied both')
 
 step('process mode walks the type one object at a time')
 await page.locator('main header button[title="More"]').click()

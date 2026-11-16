@@ -27,7 +27,6 @@ import { greyButton, tintedButton } from '../lib/buttons.ts'
 import { onChange } from '../lib/events.ts'
 import { clone } from '../lib/clone.ts'
 import { listFields, quickActionsColumnShown, rowFieldsFromTable, tableColumns, toggleQuickActionsColumn } from '../lib/columns.ts'
-import { clearSelection } from '../lib/selection.ts'
 import { chip } from '../lib/colors.ts'
 import { displayTitle } from '../lib/format.ts'
 import { confirmDialog, openContextMenu, openMenuAt, promptDialog, type MenuItem } from '../lib/overlays.ts'
@@ -41,7 +40,6 @@ import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templ
 import { copyObjectLink, openObject } from '../lib/open.ts'
 import { quickActionMenuItems } from '../lib/quick-actions.ts'
 import { subtaskMenuItems } from '../lib/subtasks.ts'
-import { selectMenuItem } from '../lib/selection.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { COMPLETION_FEEDBACK, createCompletionFeedback } from '../lib/completion-feedback.ts'
 import { onObjectSave } from '../lib/object-saves.ts'
@@ -140,8 +138,6 @@ function togglePhoneTable() {
 }
 
 watch(activeViewId, (id) => {
-  // Another view shows other rows: what was picked in the last one goes.
-  clearSelection()
   // Opened from a view pinned in the sidebar (?view=), then another view picked: the link goes.
   if (route.query.view && route.query.view !== id) void router.replace({ query: { ...route.query, view: undefined } })
 })
@@ -359,7 +355,6 @@ async function startProcess(kind: WorkflowKind, scope: 'space' | 'view', all = f
     ? [...selectedQueues.triage, ...(all && scope === 'view' ? openList.value.filter((o) => !needsTriage(type.value, o)) : selectedQueues.review)]
     : scope === 'view' ? (all ? openList.value : processList.value) : selectedQueues[kind]
   if (!list.length || !session.user || !workspace.space) return
-  clearSelection()
   const fields = scope === 'space'
     ? ['status', 'due', ...(type.value?.quickActions?.deferField ? [type.value.quickActions.deferField] : []), 'assignee']
     : currentFields.value.filter((f) => f.on).map((f) => f.field)
@@ -393,7 +388,6 @@ function reviewSpace(anchor: HTMLElement | null) {
 }
 function resumeReview() {
   if (!review.value) return
-  clearSelection()
   workflowOpen.value = false
   processOpen.value = true
 }
@@ -443,7 +437,7 @@ watch([() => props.id, () => workspace.space?.id, () => session.user?.id], () =>
 
 /** An open task's quick actions, in its menu (a long press on a phone). */
 function quickItems(object: ObjectSummary): MenuItem[] {
-  const items = [...selectMenuItem(object.id), ...(completion.entries.has(object.id) ? [] : quickActionMenuItems(type.value, object, { save: async (id, values) => moved(await setProperties(id, values)) })), ...subtaskMenuItems(type.value, object, moved)]
+  const items = [...(completion.entries.has(object.id) ? [] : quickActionMenuItems(type.value, object, { save: async (id, values) => moved(await setProperties(id, values)) })), ...subtaskMenuItems(type.value, object, moved)]
   return items.length ? [{ kind: 'separator' }, ...items] : []
 }
 
@@ -698,13 +692,6 @@ const arrangeRows = computed(() => {
   ]
 })
 
-// "Select tasks" in a phone's More menu: selection mode with nothing picked, from the collection.
-const collection = ref<InstanceType<typeof ObjectCollection> | null>(null)
-function selectFromMenu() {
-  menuOpen.value = false
-  collection.value?.startSelecting()
-}
-
 // New: the quick card for a plain object (nothing is made until it is saved), or the type's default
 // template (lib/templates.ts); the chevron picks another, or none.
 const typeTemplates = computed(() => (type.value ? templatesOf(type.value.id) : []))
@@ -786,9 +773,6 @@ async function newMenu(event: MouseEvent) {
         <AppIcon fallback="ph:globe" class="shrink-0 text-ink-soft" />
         <span class="min-w-0 flex-1"><span class="block">Review all tasks in {{ workspace.space?.name }}</span><span class="block text-xs text-ink-faint">Across all views · filters don’t apply</span></span>
         <span class="tabular-nums text-ink-soft">{{ spaceToReview }}</span>
-      </button>
-      <button v-if="isPhone && collection?.canSelect" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" data-select-mode @click="selectFromMenu">
-        <AppIcon fallback="ph:check-square" class="text-ink-soft" /> Select {{ type.pluralName.toLowerCase() }}
       </button>
       <div class="my-1 border-t border-line" />
       <template v-if="!fixedActive">
@@ -1141,7 +1125,6 @@ async function newMenu(event: MouseEvent) {
     <p v-else-if="!visible.length && !agendaActive" class="py-16 text-center text-sm text-ink-faint">No {{ type.pluralName.toLowerCase() }} match the filter.</p>
     <ObjectCollection
       v-else
-      ref="collection"
       class="mt-6 max-md:mt-3"
       :objects="visible"
       :layout="view.layout"
@@ -1161,7 +1144,6 @@ async function newMenu(event: MouseEvent) {
       @board="updateView({ board: $event })"
       @manual="updateView({ sort: undefined })"
       @menu="objectMenu"
-      @trashed="(ids) => (objects = objects.filter((o) => !ids.includes(o.id)))"
       @moved="moved"
       @created="created"
     />

@@ -45,10 +45,9 @@ page, when there is history), the page and the bell. A bottom bar (`PhoneTabBar`
 do: Home, Tasks, Inbox, Calendar, Search; the one you are on is accent-coloured. Capture is a round
 ink button above it on the right (it rises while a notice shows). The bar hides while the keyboard is
 up (`keyboardInset`; a zoom is not a keyboard) or a whiteboard is full screen (`ui.surfaceFull`),
-and gives way to the bulk bar while rows are selected; pages get bottom padding so their last row
-clears it. Layers on a phone: bar and Capture 20, the drawer and its backdrop 30, the bulk bar and
-process mode 40, sheets and notices 50 and up. Notices sit above the bar, above the keyboard when it
-is up, and above process mode's buttons (`ui.noticeLift`). Every `PopoverMenu` is a sheet from the bottom on a phone (dimmed page,
+and pages get bottom padding so their last row clears it. Layers on a phone: bar and Capture 20,
+the drawer and its backdrop 30, process mode 40, sheets and notices 50 and up. Notices sit above
+the bar, above the keyboard when it is up, and above process mode's buttons (`ui.noticeLift`). Every `PopoverMenu` is a sheet from the bottom on a phone (dimmed page,
 rounded top, safe area, 80% high at most and never more than the keyboard leaves (`sheetMaxHeight`),
 full-width rows 44px, 16px text boxes; a modal dialog: a tap on the dimmed page closes it without
 reaching what is underneath, focus moves in and goes back);
@@ -111,22 +110,14 @@ Subtasks section under the quick actions: a quiet header with a thin progress li
 title, short due date), and an "Add subtask" line at the end; when every step is closed, a bordered
 line "All subtasks done" with the type's first quick action as a button.
 
-**Many at once**: a list or table row has a square box at its start (on hover with a mouse; always
-while something is selected there); Shift-click picks the range between, and while selecting a
-click on a row picks it (⌘-click still opens). A phone starts selecting from "Select" in a row's
-long-press menu; taps then pick rows and swipes are off. Picked rows are tinted with the accent. In a
-table the box takes the place of the row's icon on hover, so titles are not indented.
+**Row actions**: tasks have one leading completion circle. Rows open their object; their menu
+and quick actions operate on that object only. Lists and tables have no row multiselect or bulk
+action mode, on desktop or phone.
 
 **Embedded queries** have no frame: the page is the frame. The title line (icon, name, Edit query on
 hover) reads as a small heading; a table inside one, or inside a whiteboard card, draws no box or
 header fill of its own (`bare`) and its first column lines up with the text around it. Never nest
 one framed surface in another.
-The bulk bar floats at the bottom (raised surface, strong border, soft shadow): the count, Select
-all, the quick actions when every picked object is an open one of a type that has them, Move to
-trash, and Clear; on a phone a second row of labelled icons. Notices rise above it while it shows.
-What is picked stays what is shown: rows that leave the list (a filter, a sync) leave the selection,
-another view or a layout without boxes ends it, and Select all takes the rows drawn, closed ones
-aside. Rows an action could not save stay picked.
 
 **Process mode**: a view's open objects one at a time, in a centred panel (full screen on a phone)
 over the dimmed page: place and a thin progress line, the title large, the next step, the view's

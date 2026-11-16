@@ -2,7 +2,6 @@
 // Shows the last error an action reported (lastError) and the last notice (e.g. "Moved to the
 // trash · Undo") for a few seconds each.
 import { ref, watch } from 'vue'
-import { selecting } from '../lib/selection.ts'
 import { tintedButton } from '../lib/buttons.ts'
 import { lastError, notice, ui } from '../lib/state.ts'
 import { isPhone, keyboardInset } from '../lib/viewport.ts'
@@ -44,13 +43,13 @@ async function runAction() {
 
 <template>
   <Teleport to="body">
-    <!-- Above the bulk bar while a selection is open, above a phone's bottom bar, and above the keyboard
+    <!-- Above a phone's bottom bar, and above the keyboard
          when it is up (inline bottom, from keyboardInset); above process mode's buttons on a phone
          (ui.noticeLift), so Undo does not cover them. -->
     <div
       class="pointer-events-none fixed left-1/2 z-50 flex w-max max-w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 flex-col items-center gap-2"
       :style="keyboardInset > 80 ? { bottom: `${keyboardInset + 16}px` } : ui.noticeLift ? { bottom: `${ui.noticeLift + 8}px` } : undefined"
-      :class="selecting ? (isPhone ? 'bottom-[calc(8.5rem+env(safe-area-inset-bottom))]' : 'bottom-20') : isPhone && keyboardInset <= 80 ? 'bottom-[calc(4.5rem+env(safe-area-inset-bottom))]' : 'bottom-[calc(1rem+env(safe-area-inset-bottom))]'"
+      :class="isPhone && keyboardInset <= 80 ? 'bottom-[calc(4.5rem+env(safe-area-inset-bottom))]' : 'bottom-[calc(1rem+env(safe-area-inset-bottom))]'"
     >
       <div
         v-if="notice"

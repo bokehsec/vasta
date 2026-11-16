@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board,
 // agenda), optionally grouped. Used by type pages, query pages and queries embedded in documents.
-import { computed, inject, nextTick, onBeforeUnmount, provide, ref, watch, type Directive } from 'vue'
+import { computed, inject, nextTick, provide, ref, watch, type Directive } from 'vue'
 import type { AgendaSettings, BoardSettings, FilterGroup, Id, ListSettings, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { newId, isClosedTask, nextStepFieldOf, outlineRows, parentFieldOf, parentIdOf, quickActionsOf, subtaskProgress, type OutlineRow, type QuickActionDef } from '@vasta/core'
+import { isClosedTask, nextStepFieldOf, outlineRows, parentFieldOf, parentIdOf, quickActionsOf, subtaskProgress, type OutlineRow, type QuickActionDef } from '@vasta/core'
 import { addSelectOption, setProperties, setProperty } from '../lib/actions.ts'
 import { isDone } from '../lib/calendar.ts'
 import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
@@ -14,7 +14,6 @@ import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import { runQuickAction } from '../lib/quick-actions.ts'
-import { clearSelection, isSelected, isSelecting, pruneSelection, rememberMenuOwner, selection, startSelectMode, toggleSelected, type SelectionOwner } from '../lib/selection.ts'
 import { foldedSteps as folded, subtasksOf } from '../lib/subtasks.ts'
 import { hideSwipeTip, swipeTipHidden } from '../lib/tips.ts'
 import { isPhone, isTouch } from '../lib/viewport.ts'
@@ -73,8 +72,6 @@ const emit = defineEmits<{
   table: [table: TableSettings]
   board: [board: BoardSettings]
   manual: []
-  /** Objects moved to the trash from the bulk bar. */
-  trashed: [ids: Id[]]
 }>()
 
 const types = computed(() => typesOf(props.typeIds))
@@ -173,13 +170,11 @@ const nextStepOf = (object: ObjectSummary) => {
 // Swipes on a touch screen (SwipeRow): right runs the type's Defer (else its first action), left
 // uncovers the others, Done first, and More (the row's menu). On a phone they replace the row's
 // buttons; a tablet keeps both.
-/** The type whose swipes this row has on touch, selecting or not. */
-const swipeable = (object: ObjectSummary) => {
+/** The type whose swipes this row has on touch. */
+const swipeType = (object: ObjectSummary) => {
   const type = isTouch.value && !completion?.entries.has(object.id) ? actionType(object) : undefined
   return type && !isClosedTask(type, object) ? type : undefined
 }
-/** Swipes are off while selecting here (a tap picks the row). */
-const swipeType = (object: ObjectSummary) => (selectingHere.value ? undefined : swipeable(object))
 const rightActionOf = (actions: QuickActionDef[]) => actions.find((a) => a.id === 'defer') ?? actions[0]
 const saveRow = async (id: Id, values: Record<Id, PropertyValue | undefined>) => emit('moved', await setProperties(id, values))
 function swipeAction(type: ObjectType, object: ObjectSummary, action: QuickActionDef): SwipeAction {
@@ -208,36 +203,7 @@ function swipeLeft(object: ObjectSummary): SwipeAction[] {
   }
   return [...rest.slice(0, 3).map((a) => swipeAction(type, object, a)), more]
 }
-// Selection (lib/selection.ts): a box at the start of a row (on hover; always while anything is
-// selected here), Shift-click for a range in the order drawn; while selecting, a click or tap on a
-// row picks it instead of opening it (⌘/Ctrl-click still opens), and swipes are off.
-const selKey = newId()
-const owner: SelectionOwner = {
-  drawn: () => groups.value.flatMap((group) => (asList.value ? rowsOf(group).map((r) => r.object) : shown(group))),
-  all: () => props.objects,
-  pickable: (object) => {
-    const type = actionType(object)
-    return !type || (!completion?.entries.has(object.id) && !isClosedTask(type, object))
-  },
-  moved: (object) => emit('moved', object),
-  trashed: (ids) => emit('trashed', ids),
-}
-const canSelect = computed(() => !props.readonly && (asList.value || props.layout === 'table'))
-const selectingHere = computed(() => isSelecting(selKey))
-// The page's own "Select …" (a phone's More menu) starts selection with nothing picked.
-defineExpose({ canSelect, startSelecting: () => startSelectMode(selKey, owner) })
-const picked = (object: ObjectSummary) => isSelected(selKey, object.id)
-function pick(event: MouseEvent, object: ObjectSummary) {
-  toggleSelected(selKey, object.id, owner, event.shiftKey)
-}
-/** A click on a row while selecting picks it (the row's link does not open). */
-function rowClick(event: MouseEvent, object: ObjectSummary) {
-  if (!selectingHere.value || event.metaKey || event.ctrlKey) return
-  event.preventDefault()
-  pick(event, object)
-}
 function rowMenu(event: MouseEvent, object: ObjectSummary) {
-  if (canSelect.value) rememberMenuOwner(selKey, owner)
   emit('menu', event, object)
 }
 /** A phone's ⋯ at a row's end: the long-press menu, from the button's corner. */
@@ -245,14 +211,8 @@ function rowMore(event: MouseEvent, object: ObjectSummary) {
   const box = (event.currentTarget as HTMLElement).getBoundingClientRect()
   rowMenu(new MouseEvent('contextmenu', { clientX: box.left, clientY: box.bottom }), object)
 }
-onBeforeUnmount(() => selection.key === selKey && clearSelection())
-// What is picked must stay what is shown: ids no longer among the objects (a filter, another view, a
-// sync) are dropped, and a layout without selection (board, agenda, cards) ends it.
-watch([() => props.objects, () => props.objects.length], () => selection.key === selKey && pruneSelection())
-watch(canSelect, (can) => !can && selection.key === selKey && clearSelection())
-
-/** On a phone the row's own buttons give way to swipes, also while selecting (the rows keep their height). */
-const rowButtons = (object: ObjectSummary) => !!quickType(object) && !(isPhone.value && (swipeable(object) || completion?.entries.has(object.id)))
+/** On a phone the row's own buttons give way to swipes. */
+const rowButtons = (object: ObjectSummary) => !!quickType(object) && !(isPhone.value && (swipeType(object) || completion?.entries.has(object.id)))
 /** Shown once per device over the first list with swipeable rows on a phone. */
 const swipeTip = computed(() => {
   if (!isPhone.value || !asList.value || swipeTipHidden.value) return ''
@@ -425,33 +385,19 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
           <tr
             v-for="object in shown(group)"
             :key="object.id"
-            class="group/row border-t border-line"
-            :class="picked(object) ? 'bg-accent/10' : 'hover:bg-hover/60'"
-            :data-selected="picked(object) || undefined"
+            class="group/row border-t border-line hover:bg-hover/60"
             @contextmenu="rowMenu($event, object)"
           >
             <td
               v-for="column in columns"
               :key="column.field"
               class="overflow-hidden px-3 py-2 align-top"
-              :class="[column.wrap ? 'break-words' : 'whitespace-nowrap text-ellipsis', bare ? 'first:pl-0' : '', column.field === 'title' ? 'relative' : '']"
+              :class="[column.wrap ? 'break-words' : 'whitespace-nowrap text-ellipsis', bare ? 'first:pl-0' : '']"
             >
               <template v-if="column.field === 'title'">
-                <button
-                  v-if="canSelect && (selectingHere || !isTouch)"
-                  class="absolute top-2.5 z-[1] grid h-4 w-4 place-items-center rounded border text-white"
-                  :class="[picked(object) ? 'border-accent bg-accent' : 'border-line-strong bg-surface', selectingHere ? '' : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100', bare && columns[0]?.field === 'title' ? 'left-0' : 'left-3']"
-                  role="checkbox"
-                  :aria-checked="picked(object)"
-                  :aria-label="`Select ${displayTitle(object, typeOf(object))}`"
-                  data-select-row
-                  @click.prevent.stop="pick($event, object)"
-                >
-                  <AppIcon v-if="picked(object)" fallback="ph:check-bold" :size="11" />
-                </button>
                 <TaskCompletionCheck v-if="typeOf(object)?.system === 'task' && !readonly && completion" :object="object" :type="typeOf(object)" class="mr-2 inline-grid align-middle" @moved="emit('moved', $event)" />
-                <ObjectLink :id="object.id" class="font-medium hover:underline" @click="rowClick($event, object)">
-                  <AppIcon v-if="typeOf(object)?.system !== 'task'" :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" :class="canSelect && (selectingHere || !isTouch) ? (selectingHere ? 'invisible' : 'group-hover/row:invisible') : ''" /><span :class="titleClass(object)">{{ displayTitle(object, typeOf(object)) }}</span>
+                <ObjectLink :id="object.id" class="font-medium hover:underline">
+                  <AppIcon v-if="typeOf(object)?.system !== 'task'" :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" /><span :class="titleClass(object)">{{ displayTitle(object, typeOf(object)) }}</span>
                 </ObjectLink>
                 <TaskCompletionNote :object="object" class="mt-1" />
                 <span v-if="progressOf(object)" class="ml-2 rounded-md border px-1.5 text-xs font-medium tabular-nums" :class="progressOf(object)!.readyToClose ? 'border-[var(--color-flow-done)]/40 text-[var(--color-flow-done)]' : 'border-line text-ink-soft'" data-step-progress>
@@ -532,27 +478,12 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
           <SwipeRow v-for="{ object, depth, hasChildren } in rowsOf(group)" :key="object.id" :enabled="!!swipeType(object)" :right="swipeRight(object)" :left="swipeLeft(object)">
             <ObjectLink
               :id="object.id"
-              class="group/row flex items-center gap-3 rounded-lg px-2 py-2 max-md:py-2.5"
-              :class="[listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : absentParent(object) ? 'flex-wrap gap-y-0.5' : '', picked(object) ? 'bg-accent/10' : 'hover:bg-hover']"
+              class="group/row flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover max-md:py-2.5"
+              :class="[listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : absentParent(object) ? 'flex-wrap gap-y-0.5' : '']"
               :style="depth ? { paddingLeft: `${0.5 + Math.min(depth, 4) * 1.5}rem` } : undefined"
               :data-depth="nests ? depth : undefined"
-              :data-selected="picked(object) || undefined"
-              @click="rowClick($event, object)"
               @contextmenu="rowMenu($event, object)"
             >
-              <!-- The selection box: on hover (a mouse), always while selecting here. -->
-              <button
-                v-if="canSelect && (selectingHere || !isTouch)"
-                class="relative -mr-1 grid h-4 w-4 shrink-0 place-items-center rounded border text-white [@media(hover:none)]:after:absolute [@media(hover:none)]:after:-inset-3.5 [@media(hover:none)]:after:content-['']"
-                :class="[picked(object) ? 'border-accent bg-accent' : 'border-line-strong bg-surface', selectingHere ? '' : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100']"
-                role="checkbox"
-                :aria-checked="picked(object)"
-                :aria-label="`Select ${displayTitle(object, typeOf(object))}`"
-                data-select-row
-                @click.prevent.stop="pick($event, object)"
-              >
-                <AppIcon v-if="picked(object)" fallback="ph:check-bold" :size="11" />
-              </button>
               <!-- A parent's caret folds its steps; rows of an outline keep its place free. -->
               <button
                 v-if="hasChildren"
@@ -617,7 +548,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
               />
               <!-- A phone: a visible way to the row's menu, 44px to touch (a long press is not found by looking). -->
               <button
-                v-if="isPhone && !readonly && !selectingHere && actionType(object)"
+                v-if="isPhone && !readonly && actionType(object)"
                 class="-my-2.5 -mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ink-soft active:bg-hover"
                 :aria-label="`More actions for ${displayTitle(object, typeOf(object))}`"
                 data-row-more

@@ -1,17 +1,14 @@
-// Many tasks at once in the test env. Desktop: a row's box and Shift-click pick a range, the bulk
-// bar's Defer asks once and defers all three with one Undo that restores all, Select all and
-// Escape, the count following a task that stops matching the view, a click on a row picks it while
-// selecting (it does not open), Move to trash with one Undo; the review of the view with keys (3 Done, → skip, ← back, 2 Scheduled asking a date, the end's counts,
-// Escape); then the review counts only tasks not reviewed this week, "All 5" takes them all, R marks
+// The review of the current view in the test env ("Review this view…"). Desktop: the review by keys
+// (D Done, → skip, ← back, S Scheduled asking a date), the end's counts (each task once), Escape;
+// then the review counts only tasks not reviewed this week, "Review all" takes them all, R marks
 // one reviewed, and a task's whole notes show (not the list's first 280 characters). Phone (390×844,
-// touch): "Select" in a row's long-press menu, a tap picking another row, no swipes while selecting,
-// Done from the bar; the review: its button in full, full screen, a swipe left skipping, Done and
-// Undo, the next step saved as a plan field (the review stays on the task; Later goes on),
-// Pause and Resume from the one Review button (also after a reload), Open page and Back to the same task, the end's counts,
+// touch): its button in full, full screen, a swipe left skipping, Done and Undo, the next step saved
+// as a plan field (the review stays on the task; Later goes on), Pause and Resume from the one
+// Review button (also after a reload), Open page and Back to the same task, the end's counts,
 // Review skipped, End.
 // Chromium sends real touches (CDP); WebKit gets touch-shaped events in the page and a faked
 // `hover: none` (see phone-rows.mjs).
-//   node bulk.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
+//   node review.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -30,7 +27,7 @@ const opened = []
 // once with the replica on corrupt its database, so a context that only needs the API runs without it.
 async function newContext(options, touch, replica = true) {
   // WebKit keeps the replica (OPFS) only in a persistent profile.
-  const context = engine === 'webkit' ? await webkit.launchPersistentContext(mkdtempSync(path.join(tmpdir(), 'vasta-bulk-')), options) : await browser.newContext(options)
+  const context = engine === 'webkit' ? await webkit.launchPersistentContext(mkdtempSync(path.join(tmpdir(), 'vasta-review-')), options) : await browser.newContext(options)
   opened.push(context)
   if (process.env.MODE === 'json' || !replica) await context.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))
   if (touch && engine === 'webkit') {
@@ -82,28 +79,29 @@ const space = (await get('/api/spaces'))[0]
 const bundle = await get(`/api/spaces/${space.id}`)
 const taskType = bundle.types.find((t) => t.system === 'task')
 const found = await get(`/api/types/${taskType.id}`)
-const viewId = `${taskType.id}:bulk`
+const viewId = `${taskType.id}:review`
 const status = found.properties.find((p) => p.id === 'status')
+// A failed run of this check (or of the bulk one it replaced) may have left its additions on the type.
 const original = {
   ...found,
-  views: found.views.filter((v) => v.id !== viewId),
-  properties: found.properties.filter((p) => p.id !== 'dodate').map((p) => (p.id === 'status' ? { ...p, options: p.options.filter((o) => o.id !== 'scheduled') } : p)),
+  views: found.views.filter((v) => v.id !== viewId && v.id !== `${taskType.id}:bulk`),
+  properties: found.properties.filter((p) => !['dodate', 'bulknext', 'reviewnext'].includes(p.id)).map((p) => (p.id === 'status' ? { ...p, options: p.options.filter((o) => o.id !== 'scheduled') } : p)),
   quickActions: undefined,
 }
 const baseStatus = original.properties.find((p) => p.id === 'status')
 await put(`/api/types/${taskType.id}`, {
   ...original,
-  properties: [...original.properties.map((p) => (p.id === 'status' ? { ...baseStatus, options: [...baseStatus.options, { id: 'scheduled', label: 'Scheduled', status: 'todo' }] } : p)), { id: 'dodate', kind: 'date', name: 'Do date' }, { id: 'bulknext', kind: 'text', name: 'Next step' }],
+  properties: [...original.properties.map((p) => (p.id === 'status' ? { ...baseStatus, options: [...baseStatus.options, { id: 'scheduled', label: 'Scheduled', status: 'todo' }] } : p)), { id: 'dodate', kind: 'date', name: 'Do date' }, { id: 'reviewnext', kind: 'text', name: 'Next step' }],
   // These are established commitments; incoming-task decisions are covered by task-workflows.mjs.
-  quickActions: { triageStatuses: [], deferField: 'dodate', deferStatus: 'scheduled', nextStepField: 'bulknext' },
-  views: [{ id: viewId, name: 'Bulk', layout: 'list', filter: { kind: 'group', operator: 'and', items: [{ kind: 'filter', field: 'title', operator: 'contains', value: { kind: 'literal', value: `Bulk ${tag}` } }] } }, ...original.views],
+  quickActions: { triageStatuses: [], deferField: 'dodate', deferStatus: 'scheduled', nextStepField: 'reviewnext' },
+  views: [{ id: viewId, name: 'Review cycle', layout: 'list', filter: { kind: 'group', operator: 'and', items: [{ kind: 'filter', field: 'title', operator: 'contains', value: { kind: 'literal', value: `Review ${tag}` } }] } }, ...original.views],
 })
 const todo = status.options.find((o) => o.status === 'todo').id
 const doneId = status.options.find((o) => o.status === 'done').id
 const tasks = []
 // Notes longer than the list's preview: the review shows them to the end.
 const longNotes = { body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: `${'Long notes. '.repeat(40)}The end of the notes ${tag}.` }] }] } }
-for (const name of ['A', 'B', 'C', 'D', 'E']) tasks.push(await post('/api/objects', { typeId: taskType.id, title: `Bulk ${tag} ${name}`, props: { status: { kind: 'select', value: [todo] } }, content: longNotes }))
+for (const name of ['A', 'B', 'C', 'D', 'E']) tasks.push(await post('/api/objects', { typeId: taskType.id, title: `Review ${tag} ${name}`, props: { status: { kind: 'select', value: [todo] } }, content: longNotes }))
 await sleep(1500)
 const days = await page.evaluate(() => {
   const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -114,18 +112,14 @@ const propsOf = async (id) => (await get(`/api/objects/${id}`)).props
 const statusOf = async (id) => (await propsOf(id)).status?.value?.[0]
 const dayOf = (value) => value?.value?.start?.slice(0, 10)
 const dodateOf = async (id) => (await propsOf(id)).dodate?.value?.start?.slice(0, 10)
-const deleted = async (id) => {
-  const response = await page.request.get(`${base}/api/objects/${id}`)
-  return !response.ok() || !!(await response.json()).deletedAt
-}
 // A phone picks a view in the views sheet; a wider screen has tabs.
 const openView = async () => {
   await page.goto(`${base}/t/${taskType.id}`)
   await page.locator('main :is([data-view-picker], [role=button])').first().waitFor()
   if (await page.locator('[data-view-picker]').count()) {
     await page.locator('[data-view-picker]').click()
-    await page.locator('[data-view-option]', { hasText: /^\s*Bulk\s*$/ }).click()
-  } else await page.locator('main :is(button, [role=button])', { hasText: /^\s*Bulk\s*$/ }).first().click()
+    await page.locator('[data-view-option]', { hasText: /^\s*Review cycle\s*$/ }).click()
+  } else await page.locator('main :is(button, [role=button])', { hasText: /^\s*Review cycle\s*$/ }).first().click()
   await page.locator(`main a[href="/o/${tasks[0].id}"]`).waitFor()
 }
 const openReviewChooser = async () => {
@@ -134,75 +128,11 @@ const openReviewChooser = async () => {
 }
 // The next step is a field of the plan on the review screen (no menu any more).
 const nextStepInput = () => page.locator('[data-process-plan] div').filter({ has: page.locator('p', { hasText: /^Next step$/ }) }).locator('input, textarea').first()
-const row = (task) => page.locator(`main a[href="/o/${task.id}"]`).first()
-const bar = () => page.locator('[data-bulk-bar]')
-const count = async () => ((await bar().count()) ? (await page.locator('[data-bulk-count]').innerText()).trim() : '')
 const toast = () => page.locator('[role=status]')
-/** The rows in the order drawn. */
-const drawn = async () => (await page.locator('main a[href^="/o/"]').evaluateAll((els) => els.map((e) => e.getAttribute('href').slice(3)))).filter((id) => tasks.some((t) => t.id === id))
 
 try {
   // ---------------------------------------------------------------------------
-  step("desktop: a row's box picks it; Shift-click on another picks the range between")
-  await openView()
-  const order = await drawn()
-  const byId = (id) => tasks.find((t) => t.id === id)
-  const [first, second, third, fourth, fifth] = order.map(byId)
-  await row(first).hover()
-  await row(first).locator('[data-select-row]').click()
-  await until(async () => (await count()) === '1 selected', '1 selected')
-  await row(third).hover()
-  await row(third).locator('[data-select-row]').click({ modifiers: ['Shift'] })
-  await until(async () => (await count()) === '3 selected', 'the range: 3 selected')
-  if ((await page.locator('main [data-selected]').count()) !== 3) throw new Error('3 rows should look picked')
-
-  step('the bar: Defer asks once, defers all three, one notice; Undo puts all three back')
-  await page.locator('[data-bulk-action="defer"]').click()
-  await page.locator('[data-defer-menu]').waitFor()
-  await page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }).click()
-  await page.locator('[data-defer-menu] [data-ask-save]').click()
-  for (const t of [first, second, third]) await until(async () => (await dodateOf(t.id)) === days.tomorrow && (await statusOf(t.id)) === 'scheduled', `${t.title} deferred`)
-  if ((await dodateOf(fourth.id)) || (await statusOf(fourth.id)) !== todo) throw new Error('a task not picked was deferred')
-  await toast().filter({ hasText: '3 tasks' }).waitFor()
-  await until(async () => (await bar().count()) === 0, 'the selection cleared after the action')
-  await toast().locator('button', { hasText: 'Undo' }).click()
-  for (const t of [first, second, third]) await until(async () => !(await dodateOf(t.id)) && (await statusOf(t.id)) === todo, `${t.title} back`)
-
-  step('Select all picks the whole view; Escape clears it')
-  await row(second).hover()
-  await row(second).locator('[data-select-row]').click()
-  await page.locator('[data-bulk-all]').click()
-  await until(async () => (await count()) === '5 selected', 'all 5 selected')
-  await page.keyboard.press('Escape')
-  await until(async () => (await bar().count()) === 0, 'Escape cleared it')
-
-  step('the count follows the view: a task that stops matching its filter leaves the selection')
-  await row(second).hover()
-  await row(second).locator('[data-select-row]').click()
-  await page.locator('[data-bulk-all]').click()
-  await until(async () => (await count()) === '5 selected', 'all 5 selected')
-  const leaving = await get(`/api/objects/${fifth.id}`)
-  await put(`/api/objects/${fifth.id}`, { ...leaving, title: `Gone ${tag}` })
-  await until(async () => (await row(fifth).count()) === 0, 'the renamed task left the view')
-  await until(async () => (await count()) === '4 selected', 'the count dropped to 4 selected')
-  await page.keyboard.press('Escape')
-  await until(async () => (await bar().count()) === 0, 'Escape cleared it')
-  await put(`/api/objects/${fifth.id}`, { ...(await get(`/api/objects/${fifth.id}`)), title: fifth.title })
-  await until(async () => (await row(fifth).count()) === 1, 'the task is back in the view')
-
-  step('while selecting, a click on a row picks it instead of opening it; Move to trash with one Undo')
-  await row(second).hover()
-  await row(second).locator('[data-select-row]').click()
-  await row(fourth).locator('span.font-medium').first().click()
-  await until(async () => (await count()) === '2 selected', 'the clicked row picked')
-  if (page.url().includes('/o/')) throw new Error('the click opened the task')
-  await page.locator('[data-bulk-trash]').click()
-  await until(async () => (await deleted(second.id)) && (await deleted(fourth.id)), 'both in the trash')
-  await until(async () => (await row(second).count()) === 0, 'the rows left the list')
-  await toast().filter({ hasText: '2 objects' }).locator('button', { hasText: 'Undo' }).click()
-  await until(async () => !(await deleted(second.id)) && !(await deleted(fourth.id)), 'both back')
-
-  step('review: keys 3 (Done), → skip, ← back, 2 (Scheduled asks a date), to the end, its counts (each task once), Escape')
+  step('review: keys D (Done), → skip, ← back, S (Scheduled asks a date), to the end, its counts (each task once), Escape')
   await openView()
   await openReviewChooser()
   if (!/Review 5 tasks/.test(await page.locator('[data-process]').innerText())) throw new Error(`review button: ${await page.locator('[data-process]').innerText()}`)
@@ -236,7 +166,7 @@ try {
   await until(async () => (await page.locator('[data-process-resume]').count()) === 0, 'a finished review is not offered to resume')
   await openReviewChooser()
 
-  step('review dates: the deferred task was reviewed today, so the review is of 3; All 4 (open); R marks one reviewed; whole notes')
+  step('review dates: the deferred task was reviewed today, so the review is of 3; Review all takes them; R marks one reviewed; whole notes')
   const deferred = tasks.find((t) => t.title === deferTitle)
   if (dayOf((await propsOf(deferred.id)).reviewed) !== days.today) throw new Error('Defer in a review did not mark the task reviewed')
   await until(async () => /Review 3 tasks/.test(await page.locator('[data-process]').innerText()), 'Review 3 tasks (one reviewed today, one done)')
@@ -262,7 +192,7 @@ try {
   await context.close()
 
   // ---------------------------------------------------------------------------
-  step('phone: "Select" in the long-press menu, a tap picks another row, no swipes while selecting, Done from the bar')
+  step('phone: Review this view in More; full-screen review; swipe left skips; Done moves on')
   const phoneContext = await newContext(phone, true)
   page = await login(phoneContext)
   const cdp = engine === 'webkit' ? undefined : await phoneContext.newCDPSession(page)
@@ -307,21 +237,6 @@ try {
     await sleep(150)
   }
   await openView()
-  const phoneOrder = (await drawn()).map(byId)
-  await row(phoneOrder[0]).dispatchEvent('contextmenu', { clientX: 100, clientY: 300 })
-  await tap(page.locator('button', { hasText: /^\s*Select\s*$/ }))
-  await until(async () => (await count()) === '1 selected', 'selection mode with one row')
-  if ((await page.locator('main [data-swipe-row]').count()) !== 0) throw new Error('swipes are still on while selecting')
-  await tap(row(phoneOrder[1]).locator('span.font-medium').first())
-  await until(async () => (await count()) === '2 selected', 'a tap picked a second row')
-  if (page.url().includes('/o/')) throw new Error('the tap opened the task')
-  await tap(page.locator('[data-bulk-action="done"]'))
-  for (const t of phoneOrder.slice(0, 2)) await until(async () => (await statusOf(t.id)) === doneId, `${t.title} done from the bar`)
-  await tap(toast().locator('button', { hasText: 'Undo' }))
-  for (const t of phoneOrder.slice(0, 2)) await until(async () => (await statusOf(t.id)) === todo, `${t.title} back`)
-
-  step('phone: Review this view in More; full-screen review; swipe left skips; Done moves on')
-  await openView()
   await openReviewChooser()
   const entry = page.locator('[data-process]')
   await entry.waitFor()
@@ -358,7 +273,7 @@ try {
   await nextStepInput().fill('Call the plumber')
   await nextStepInput().press('Enter')
   const stepTask = tasks.find((t) => t.title === stepTitle)
-  await until(async () => (await propsOf(stepTask.id)).bulknext?.value === 'Call the plumber', 'the next step saved')
+  await until(async () => (await propsOf(stepTask.id)).reviewnext?.value === 'Call the plumber', 'the next step saved')
   if (!(await pos.innerText()).startsWith('Check-in 3 of')) throw new Error(`the next step moved the review: ${await pos.innerText()}`)
   if ((await titleNow()) !== stepTitle) throw new Error('the next step left the task')
   if ((await page.locator('[data-process-outcome]').count()) !== 0) throw new Error('a next step counted as a decision')
@@ -400,9 +315,9 @@ try {
   await phoneContext.close()
 
   if (problems.length) throw new Error(problems.join('\n'))
-  console.log(`\nAll bulk checks passed for ${engine}.`)
+  console.log(`\nAll review checks passed for ${engine}.`)
 } catch (error) {
-  const shot = path.join(tmpdir(), `vasta-bulk-${engine}.png`)
+  const shot = path.join(tmpdir(), `vasta-review-${engine}.png`)
   await page.screenshot({ path: shot }).catch(() => {})
   console.log('screenshot:', shot)
   if (problems.length) console.log(problems.join('\n'))

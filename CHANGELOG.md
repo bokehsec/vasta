@@ -58,8 +58,8 @@ GitHub release page.
   every space; a type shows in each space that has a type of that name.
 
 - **A task you mark Done stays where it was until you leave.** On a type's page (Tasks views, in
-  every layout: list, table, phone rows, cards and board, plus the Done button, swipe, menu and
-  bulk Done), a completed task keeps its place, shows a checked circle and a muted, struck-through
+  every layout: list, table, phone rows, cards and board, plus the Done button, swipe and menu), a
+  completed task keeps its place, shows a checked circle and a muted, struck-through
   title, and counts as done. It only leaves when you reload, leave the page, switch views or change
   the filters, sort or layout; searching keeps matching rows. Uncheck it, or press Undo, to put back
   exactly the status it had (a Next task returns to Next). A repeating task says "Done this time ·
@@ -91,16 +91,15 @@ GitHub release page.
 - **Search and filters in one place on a phone.** A type's page (Tasks and the rest) shows the view
   and a Filters button on one row, with a count of what is on, instead of a toolbar that scrolled
   sideways. Filters opens a sheet with Search this view, Mine, the view's filters and Arrange (sort,
-  group, layout, fields), and Clear. The page's ⋯ menu has Select tasks, and each task row has a ⋯
-  button with its actions, so nothing needs a long press to be found.
+  group, layout, fields), and Clear. Each task row has a ⋯ button with its actions, so nothing needs
+  a long press to be found.
 - **Quick capture made for a phone.** It says where the text will go, lets you pick Note or a type
   (no need to type "/Book"), and has a Save capture button above the keyboard (Return adds a line).
   Text you cancel is kept on this device and comes back next time, with Discard.
 - **Quick actions on any type.** Type settings › Quick actions, until now only on a task, works on
   every type: set up buttons that change its fields in one click, and they show on its objects'
-  pages, as a view's row buttons, in the Quick actions column, in a bulk selection's bar and in
-  process mode. (A task still gets Done, Defer, Drop and Next step until you edit them; another
-  type starts empty.)
+  pages, as a view's row buttons, in the Quick actions column and in process mode. (A task still
+  gets Done, Defer, Drop and Next step until you edit them; another type starts empty.)
 - **Drag in the agenda.** In an Agenda view or query, drag a task or an event of your own to another
   day (after a long press on a phone) to move its date there; a timed one keeps its time of day.
   A notice says where it went, with Undo, and dragging near the top or bottom scrolls to days off
@@ -110,10 +109,6 @@ GitHub release page.
   long-press menu) rise from the bottom with larger rows, and stay above the keyboard. A type's views
   are one button with the list in a sheet, a task's fields fold into one line under its buttons, and
   a task's page has Back at the top.
-- **Change many tasks at once.** Tick the box at the start of a row (it shows on hover) and
-  Shift-click another to pick everything between; on a phone, long-press a row and choose Select,
-  then tap others. A bar at the bottom offers Done, Defer, Drop and Next step for all of them (one
-  question, one Undo), Select all, and Move to trash.
 - **Review your tasks one at a time, as in OmniFocus.** "Review 12 tasks" on Tasks (on a phone, a
   full-width button under the view; the count is exactly the tasks it will show, after search, Mine
   and filters) walks through the view's open tasks that are due for review, in its order: ones never
@@ -193,6 +188,10 @@ GitHub release page.
 - **"Next week" in date pickers**, beside Today and Tomorrow.
 
 ### Changed
+
+- **Simpler task rows.** Removed row multiselect, selection menus and the bulk-action bar from
+  lists and tables throughout Vasta. Task rows keep their completion circle; individual actions,
+  Review and triage remain available.
 
 - **Review the tasks you are looking at.** Review uses the current task view's filters, search and
   Mine, with its scope and counts visible; new tasks still come before check-ins. On a phone, Mine
@@ -310,9 +309,8 @@ GitHub release page.
   daily note" off (the default), the capture box and the capture panel no longer promise "in
   today's note": they name the space, or the inbox when only that is on.
 
-- **Phone controls and failed bulk saves are easier to use.** View, Filters, template choices and
-  filter-building buttons have full-height touch targets. Failed bulk changes offer Retry for only
-  the unsaved tasks, keeping one Undo for the whole action. Capture types wrap in a bounded picker
+- **Phone controls are easier to use.** View, Filters, template choices and
+  filter-building buttons have full-height touch targets. Capture types wrap in a bounded picker
   without keyboard-only hints; subtasks have a visible Add button. Lists scroll clear of Capture,
   including while a notice shows; Triage fills the status-bar area and says Saving only during a
   save. Faint text and placeholders are more readable in both themes.

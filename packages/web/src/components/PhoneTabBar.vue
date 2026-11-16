@@ -2,13 +2,11 @@
 // The bar at the bottom of a phone: places chosen in Settings, with Capture as a round button
 // above it on the right. The sidebar stays behind the menu at the top left (and Menu here, if
 // chosen). Hidden while the keyboard is up or a full-screen surface (a whiteboard) is open; dialogs
-// cover it; while rows are selected the bulk bar takes its place. Its z-index (20) is below the
-// sidebar drawer's (30).
+// cover it. Its z-index (20) is below the sidebar drawer's (30).
 import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { isTodayRoute, sidebarItemPath } from '../lib/actions.ts'
 import { phonePlacePath, visiblePhonePlaces, type PhonePlace } from '../lib/phone-places.ts'
-import { selecting } from '../lib/selection.ts'
 import { lastError, notice, ui, workspace } from '../lib/state.ts'
 import { keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
@@ -44,7 +42,6 @@ const hidden = computed(() => keyboardInset.value > 80 || ui.surfaceFull)
 <template>
   <template v-if="!hidden">
     <button
-      v-if="!selecting"
       class="fixed right-4 z-20 grid h-13 w-13 place-items-center rounded-2xl bg-ink text-surface shadow-[0_6px_16px_rgb(0_0_0/0.22)] transition-[bottom] duration-200 active:scale-95 motion-reduce:transition-none"
       :class="notice || lastError ? 'bottom-[calc(8rem+env(safe-area-inset-bottom))]' : 'bottom-[calc(4.25rem+env(safe-area-inset-bottom))]'"
       aria-label="Capture"
@@ -54,7 +51,6 @@ const hidden = computed(() => keyboardInset.value > 80 || ui.surfaceFull)
       <AppIcon fallback="ph:plus" :size="24" />
     </button>
     <nav
-      v-if="!selecting"
       class="fixed inset-x-0 bottom-0 z-20 flex border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md"
       aria-label="Places"
       data-tab-bar

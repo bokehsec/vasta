@@ -13,7 +13,6 @@ import ObjectCollection from './ObjectCollection.vue'
 import { copyObjectLink, openObject } from '../lib/open.ts'
 import { quickActionMenuItems } from '../lib/quick-actions.ts'
 import { subtaskMenuItems } from '../lib/subtasks.ts'
-import { selectMenuItem } from '../lib/selection.ts'
 import { COMPLETION_FEEDBACK, createCompletionFeedback } from '../lib/completion-feedback.ts'
 import { onObjectSave } from '../lib/object-saves.ts'
 
@@ -124,7 +123,6 @@ function quickItems(object: ObjectSummary): MenuItem[] {
   if (props.readonly) return []
   const type = typesById.value.get(object.typeId)
   const items = [
-    ...selectMenuItem(object.id),
     ...(completion.entries.has(object.id) ? [] : quickActionMenuItems(type, object, { save: async (id, values) => moved({ ...(await setProperties(id, values)), preview: '' }) })),
     ...subtaskMenuItems(type, object, (saved) => moved({ ...saved, preview: '' })),
   ]
@@ -174,7 +172,6 @@ defineExpose({ count: computed(() => display.value.length), empty })
         @board="emit('board', $event)"
         @moved="moved({ ...$event, preview: '' })"
         @menu="objectMenu"
-        @trashed="load()"
       />
       <button v-if="limit && display.length > limit && !showAll && !isAgenda" class="mt-2 text-xs text-ink-faint hover:text-ink" @click="showAll = true">
         Show all {{ display.length }}

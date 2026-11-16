@@ -2,8 +2,7 @@
 // you are on marked) and the Capture button above it; the side menu above both, its last row
 // reachable; the top bar without Search, with the menu and, on an object's page, Back beside it; a
 // popover as a sheet along the bottom with rows 44px high; a type page's header (no count, a long
-// title wrapping), its More menu's "Select tasks" (selection with none picked, Cancel), the Filters
-// button and sheet (search, count badge, Arrange, Clear) and 320px wide with nothing clipped; the long-press menu as a sheet whose
+// title wrapping), its More menu (no selection entry), the Filters button and sheet (search, count badge, Arrange, Clear) and 320px wide with nothing clipped; the long-press menu as a sheet whose
 // submenu slides in with a Back row; a tap on a sheet's dimmed area closes it without reaching the
 // page underneath; the view picker's sheet; a task's fields folded into one line that opens; the
 // last row clear of the bar; and on a desktop none of it.
@@ -180,21 +179,16 @@ try {
   await page.keyboard.press('Escape')
   await until(async () => (await badge.count()) === 1, 'the search stays on for the next steps')
 
-  step("the More menu's \"Select tasks\": selection with none picked, a tap picks, Cancel ends it")
+  step("the More menu offers no selection of tasks (multiselect is gone)")
   await page.locator('main button[title="More"]').click()
-  const select = page.locator('[data-select-mode]')
-  await select.waitFor()
-  if (!/^\s*Select tasks\s*$/.test(await select.innerText())) throw new Error(`entry: ${await select.innerText()}`)
-  if ((await select.boundingBox()).height < 44) throw new Error('the More entries are under 44px')
-  await select.click()
-  const bulk = page.locator('[data-bulk-bar]')
-  await bulk.waitFor()
-  if ((await page.locator('[data-bulk-count]').innerText()).trim() !== '0 selected') throw new Error('selection did not start empty')
-  if (!/Cancel/.test(await page.locator('[data-bulk-clear]').innerText())) throw new Error('no Cancel with nothing picked')
-  await page.locator('main [data-select-row]').first().click()
-  await until(async () => (await page.locator('[data-bulk-count]').innerText()).trim() === '1 selected', 'a tap picks a row')
-  await page.locator('[data-bulk-clear]').click()
-  await until(async () => (await bulk.count()) === 0, 'Cancel ends selection')
+  const more = page.locator('[data-sheet]')
+  await more.waitFor()
+  if ((await page.locator('[data-select-mode]').count()) !== 0) throw new Error('the More menu still offers Select tasks')
+  if (await more.locator('button', { hasText: /Select/ }).count()) throw new Error('a Select entry in the More menu')
+  if ((await page.locator('main [data-select-row]').count()) !== 0) throw new Error('a row carries a select box')
+  if ((await page.locator('[data-bulk-bar]').count()) !== 0) throw new Error('the bulk bar shows')
+  await page.keyboard.press('Escape')
+  await until(async () => (await more.count()) === 0, 'the More menu closed')
 
   step('a popover is a sheet along the bottom, its rows 44px high')
   await page.locator('main button[title="More"]').click()

@@ -6,8 +6,8 @@
 // Next, a reload dropping it. Also: board column kept and a drag to Done still moving the card, search
 // keeping matching rows, a view switch clearing them, a repeating task ("Done this time · Next: …",
 // Undo, the last occurrence, a fresh Today view dropping it), rapid double taps, the full page and
-// Back (phone: gone) against the side pane (desktop: stays), bulk Done, and (MODE=json) a failed save
-// with Retry and a bulk partial failure; replica on: Done while offline.
+// Back (phone: gone) against the side pane (desktop: stays), and (MODE=json) a failed save with
+// Retry; replica on: Done while offline.
 //   node completion-feedback.mjs [chromium|webkit] [base]
 //   MODE=json: the replica turned off (HTTP mode); SHOTS=<dir>: a screenshot per layout;
 //   WIDTH=desktop|phone and THEME=light|dark run one cell of the matrix (default: all four)
@@ -476,49 +476,6 @@ try {
     })
   }
 
-  async function bulk() {
-    await withTasks(['Alpha', 'Bravo', 'Charlie'], undefined, async (made) => {
-      await openView('list', made)
-      const before = await drawn('list', made)
-      const picked = before.slice(0, 2).map((id) => made.find((t) => t.id === id))
-      const rest = made.find((t) => t.id === before[2])
-      for (const task of picked) {
-        await scope('list', task).hover()
-        await scope('list', task).locator('[data-select-row]').click()
-      }
-      await until(async () => (await page.locator('[data-bulk-count]').innerText()) === '2 selected', '2 selected')
-      await page.locator('[data-bulk-action="done"]').click()
-      for (const task of picked) await until(async () => (await apiStatus(task)) === doneId && (await struck('list', task)), 'bulk Done: saved and struck')
-      expect(!(await struck('list', rest)), 'bulk Done struck an unselected row')
-      await until(async () => (await page.locator('[data-bulk-bar]').count()) === 0, 'the selection ends after a full success')
-      await syncOrder('list', made, before, 'bulk Done')
-    })
-  }
-
-  async function bulkPartialFailure() {
-    await withTasks(['Alpha', 'Bravo', 'Charlie'], undefined, async (made) => {
-      await openView('list', made)
-      const before = await drawn('list', made)
-      const [first, broken, third] = before.map((id) => made.find((t) => t.id === id))
-      for (const task of [first, broken, third]) {
-        await scope('list', task).hover()
-        await scope('list', task).locator('[data-select-row]').click()
-      }
-      await until(async () => (await page.locator('[data-bulk-count]').innerText()) === '3 selected', '3 selected')
-      failing.add(broken.id)
-      await page.locator('[data-bulk-action="done"]').click()
-      for (const task of [first, third]) await until(async () => (await apiStatus(task)) === doneId && (await struck('list', task)), 'the rows that saved stay struck')
-      await until(async () => !(await struck('list', broken)) && !(await pressed('list', broken)), 'the failed row is restored')
-      expect((await apiStatus(broken)) === nextId, 'the failed task changed')
-      await until(async () => (await page.locator('[data-bulk-count]').innerText()) === '1 selected' && (await page.locator('[data-bulk-retry]').count()) === 1, 'the failed row stays picked with a Retry')
-      await syncOrder('list', made, before, 'bulk partial failure')
-      failing.delete(broken.id)
-      await page.locator('[data-bulk-retry]').click()
-      await until(async () => (await apiStatus(broken)) === doneId && (await struck('list', broken)), 'Retry completes the failed row')
-      await until(async () => (await page.locator('[data-bulk-bar]').count()) === 0, 'the selection ends after the retry')
-    })
-  }
-
   async function failedSave() {
     await withTasks(['Alpha', 'Bravo'], undefined, async (made) => {
       const [task, other] = made
@@ -567,8 +524,6 @@ try {
     ['rapid double taps', doubleTap],
     ['task page Done, then Back: gone', pageAndBack],
     ['desktop side pane: stays', sidePane, () => !isPhone() || 'no side pane on a phone'],
-    ['bulk Done', bulk, () => !isPhone() || 'phone selection needs a long press: bulk.mjs phone'],
-    ['bulk partial failure and Retry', bulkPartialFailure, () => (json && !isPhone()) || (isPhone() ? 'phone selection needs a long press' : 'a failed save needs MODE=json')],
     ['a failed save: restored, Retry', failedSave, () => json || 'a failed save needs MODE=json'],
     ['offline save keeps the row', offline, () => (!json && theme === themes[0]) || (json ? 'offline needs the replica' : 'once per width')],
   ]
@@ -601,7 +556,7 @@ try {
             failures.push(`[${label}] ${name}: ${error.message}`)
             console.log(`  FAILED: ${error.message}`)
           }
-          if (/failed save|partial failure/.test(name)) problems.length = mark
+          if (/failed save/.test(name)) problems.length = mark
         }
         if (problems.length) failures.push(`[${label}] console problems:\n    ${problems.join('\n    ')}`)
       } finally {
