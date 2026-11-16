@@ -1084,7 +1084,7 @@ async function newMenu(event: MouseEvent) {
     <FlowMetrics v-else-if="metricsActive" :type="type" />
     <HabitProgress v-else-if="progressActive" :habits="objects" :filter="filterText" @menu="objectMenu" />
     <TagTree v-else-if="fixedActive && type.system === 'tag'" :tags="objects" :filter="filterText" @menu="objectMenu" />
-    <HabitBoard v-else-if="fixedActive && type.system === 'habit'" :habits="objects" :filter="filterText" @menu="objectMenu" />
+    <HabitBoard v-else-if="fixedActive && type.system === 'habit'" :type="type" :habits="objects" :filter="filterText" @menu="objectMenu" />
     <p v-else-if="!visible.length && !agendaActive" class="py-16 text-center text-sm text-ink-faint">No {{ type.pluralName.toLowerCase() }} match the filter.</p>
     <ObjectCollection
       v-else

@@ -102,6 +102,19 @@ export interface SubtaskSettings {
   parentField: Id
 }
 
+/**
+ * A habit type's progress charts (Type settings › Progress): what the Habits Tracker's strip above
+ * the habits and panel beside them (below on a phone) draw, over how many weeks. Kept on the type,
+ * so every device shows the same charts; unset parts fall back to `HABIT_PROGRESS_DEFAULT`.
+ */
+export type HabitStripChart = 'weeks' | 'days' | 'meters' | 'habits'
+export type HabitPanelChart = 'weeks' | 'line' | 'calendar' | 'counts'
+export interface HabitTypeSettings {
+  strip: HabitStripChart
+  panel: HabitPanelChart
+  weeks: 4 | 8 | 13
+}
+
 /** A space's sprints: on or off, and the word the space uses for them ("Sprint", "Rodada"…). */
 export interface SprintSettings {
   enabled: boolean
@@ -223,6 +236,8 @@ export interface ObjectType {
   quickActions?: QuickActions
   /** Splitting its objects into steps (subtasks.ts); unset: none. */
   subtasks?: SubtaskSettings
+  /** The Tracker's progress charts; unset: the defaults. Habit types only. */
+  habits?: HabitTypeSettings
   createdAt: IsoDateTime
   updatedAt: IsoDateTime
   /** Set when the type is in the trash; its objects are trashed with it. */
