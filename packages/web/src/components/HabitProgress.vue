@@ -2,16 +2,13 @@
 // The Habits page's Progress view: how much of what the habits asked for got done over the last
 // 4, 8 or 13 whole weeks (core habitReport: done ÷ expected, added up, never an average of
 // percents). A headline, a chart of each week (bars, a line, a calendar of days or done and missed)
-// and a row per habit with its own weeks. The range and the chart are the habit type's (Type
-// settings › Progress): the switches here change them, so every device shows the same. Paused
-// habits sit at the bottom, faded, and are left out of the headline and the chart.
+// and a row per habit with its own weeks. The range and the chart are the habit type's: the
+// switches here change them, so every device shows the same (the range is the Tracker's too).
+// Paused habits sit at the bottom, faded, and are left out of the headline and the chart.
 import { computed, ref, toRef } from 'vue'
 import { HABIT_WEEKS_RANGES, habitWeekdays, habitWeeklyTarget, isHabitPaused, type HabitTally, type HabitTypeSettings, type ObjectSummary, type ObjectType } from '@vasta/core'
-import { api } from '../lib/api.ts'
-import { clone } from '../lib/clone.ts'
-import { habitProgressOf, REPORT_CHARTS, useHabitProgress, type PanelChart } from '../lib/habit-progress.ts'
+import { habitProgressOf, REPORT_CHARTS, saveHabitProgress, useHabitProgress, type PanelChart } from '../lib/habit-progress.ts'
 import { isPhone } from '../lib/viewport.ts'
-import { replaceType } from '../lib/state.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { habitColor, useFoodHabits, useToday } from '../lib/habits.ts'
 import AppIcon from './AppIcon.vue'
@@ -27,13 +24,7 @@ const RANGES = HABIT_WEEKS_RANGES
 const settings = computed(() => habitProgressOf(props.type))
 const weeks = computed(() => settings.value.weeks)
 const chart = computed(() => settings.value.report)
-/** Saves a change of range or chart on the type, as Type settings would. */
-function setProgress(patch: Partial<HabitTypeSettings>) {
-  const next = clone(props.type)
-  next.habits = { ...settings.value, ...patch }
-  replaceType(next)
-  void api.saveType(next).then(replaceType)
-}
+const setProgress = (patch: Partial<HabitTypeSettings>) => saveHabitProgress(props.type, patch)
 const setWeeks = (value: HabitTypeSettings['weeks']) => value !== weeks.value && setProgress({ weeks: value })
 const chartButton = ref<HTMLElement | null>(null)
 const chartMenu = ref(false)

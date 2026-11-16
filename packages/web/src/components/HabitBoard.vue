@@ -3,7 +3,7 @@
 // check off, and each habit's streak and its last 4 weeks (counted as the Progress view counts
 // them); on a phone, rows as in the Habit Tracker app (HabitRows). Progress shows above the habits
 // or beside them (below on a phone), or not at all; where, which chart and over how many weeks are
-// the type's own (Type settings › Progress). Paused habits sit at the bottom, faded.
+// the type's own (the Tracker's Display menu). Paused habits sit at the bottom, faded.
 import { computed, toRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { addDays, habitReport, habitStats, habitTarget, habitUnit, isHabitDone, isHabitDue, isHabitPaused, type HabitTally, type ObjectType, type ObjectSummary } from '@vasta/core'
@@ -22,7 +22,7 @@ const props = defineProps<{ habits: ObjectSummary[]; type?: ObjectType; filter?:
 const emit = defineEmits<{ menu: [event: MouseEvent, object: ObjectSummary] }>()
 
 const today = useToday()
-/** The type's progress (Type settings › Progress): where, which charts, the range; on every device alike. */
+/** The type's progress (the Tracker's Display menu): where, which charts, the range; on every device alike. */
 const charts = useTypeHabitProgress(toRef(props, 'type'))
 const place = computed(() => charts.value.place)
 const beside = computed(() => place.value === 'beside')

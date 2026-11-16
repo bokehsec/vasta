@@ -17,6 +17,7 @@ import QuickAdd from '../components/QuickAdd.vue'
 import WorkflowChooser from '../components/WorkflowChooser.vue'
 import HabitBoard from '../components/HabitBoard.vue'
 import HabitProgress from '../components/HabitProgress.vue'
+import HabitProgressMenu from '../components/HabitProgressMenu.vue'
 import TagTree from '../components/TagTree.vue'
 import PopoverMenu from '../components/PopoverMenu.vue'
 import TypeSettings from '../components/TypeSettings.vue'
@@ -836,6 +837,7 @@ async function newMenu(event: MouseEvent) {
           <AppIcon fallback="ph:funnel" :size="16" /> Filters
           <span v-if="activeFilterCount" class="grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-semibold text-white" data-filters-count>{{ activeFilterCount }}</span>
         </button>
+        <HabitProgressMenu v-if="trackerActive && type.system === 'habit'" :type="type" />
         <!-- Review sits here on a phone: the header has no room beside the title. -->
         <button v-if="!loading && taskWorkflows" :class="[review || toReview ? tintedButton : greyButton, 'ml-auto']" data-review-tasks @click="pressReview($event.currentTarget as HTMLElement)">
           <template v-if="review"><AppIcon fallback="ph:play" /> Resume <span class="tabular-nums" data-process-resume>{{ sessionAt }}</span></template>
@@ -929,6 +931,7 @@ async function newMenu(event: MouseEvent) {
           <AppIcon fallback="ph:magnifying-glass" :size="14" />
           <input v-model="filterText" class="w-28 bg-transparent md:w-36 text-ink outline-none placeholder:text-ink-faint" placeholder="Filter…" />
         </div>
+        <HabitProgressMenu v-if="trackerActive && type.system === 'habit'" :type="type" />
         <template v-if="!fixedActive">
         <button
           v-if="showMine && !agendaActive"

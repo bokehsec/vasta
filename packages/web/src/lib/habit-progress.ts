@@ -1,8 +1,11 @@
 // Habit progress beside the Tracker. Where it shows (off, above the habits, or beside them; below
-// them on a phone), which charts and over how many weeks are kept on the habit type (Type settings ›
-// Progress), so every device shows the same. The numbers come from core's habitReport and
+// them on a phone), which charts and over how many weeks are kept on the habit type, so every device
+// shows the same; they are picked where they show (the Tracker's Display menu, the Progress tab). The numbers come from core's habitReport and
 // habitDayTotals, counted the same way as the Progress tab.
 import { computed, type Ref } from 'vue'
+import { api } from './api.ts'
+import { clone } from './clone.ts'
+import { replaceType, unsavedTypes, workspace } from './state.ts'
 import { addDays, HABIT_PROGRESS_DEFAULT, HABIT_WEEKS_RANGES, habitDayTotals, habitReport, habitWeekPlan, isHabitPaused, mondayOf, type HabitPanelChart, type HabitProgressPlace, type HabitStripChart, type HabitTypeSettings, type HabitTally, type ObjectType, type ObjectSummary } from '@vasta/core'
 
 export type ProgressPlace = HabitProgressPlace
@@ -32,7 +35,7 @@ export const REPORT_CHARTS: { id: PanelChart; label: string; hint: string }[] = 
   { id: 'counts', label: 'Done and missed', hint: 'Counts each week, not percents' },
 ]
 
-// Before all of it moved into Type settings, each device kept its own picks here (the place under
+// Before all of it was kept on the type, each device kept its own picks here (the place under
 // PLACE_KEY, the whole layout under OLD_LAYOUT_KEY). A device keeps seeing what it had picked for
 // any part the type doesn't set yet.
 const PLACE_KEY = 'vasta.habit-progress.place'
@@ -58,7 +61,7 @@ function settle(saved: Partial<Record<keyof HabitTypeSettings, unknown>>, fallba
   }
 }
 
-/** What this device had picked before progress moved into Type settings, so it keeps seeing that. */
+/** What this device had picked before progress was kept on the type, so it keeps seeing that. */
 export function deviceHabitProgress(): HabitTypeSettings {
   const layout = readSaved(OLD_LAYOUT_KEY)
   const place = readSaved(PLACE_KEY).place ?? layout.place
@@ -70,7 +73,38 @@ export function habitProgressOf(type: Pick<ObjectType, 'habits'> | undefined): H
   return settle(type?.habits ?? {}, deviceHabitProgress())
 }
 
-/** The type's progress (Type settings › Progress), shown on every device alike. */
+// Send changes in order: an earlier response must not undo a later optimistic choice.
+const progressSaves = new Map<string, Promise<void>>()
+
+/** Saves a change to a habit type's progress (place, charts, range), for every device. */
+export function saveHabitProgress(type: ObjectType, patch: Partial<HabitTypeSettings>) {
+  const current = () => workspace.types.find((t) => t.id === type.id) ?? type
+  const next = clone(current())
+  next.habits = { ...habitProgressOf(next), ...patch }
+  unsavedTypes.set(type.id, next)
+  replaceType(next)
+  const previous = progressSaves.get(type.id) ?? Promise.resolve()
+  const save = previous.catch(() => {}).then(async () => {
+    // Preserve other type edits made while this request waited its turn.
+    const payload = clone(current())
+    payload.habits = next.habits
+    const saved = await api.saveType(payload)
+    if (progressSaves.get(type.id) === save && unsavedTypes.get(type.id) === next) {
+      unsavedTypes.delete(type.id)
+      replaceType(saved)
+    }
+  })
+  progressSaves.set(type.id, save)
+  void save.finally(() => {
+    if (progressSaves.get(type.id) === save) {
+      progressSaves.delete(type.id)
+      if (unsavedTypes.get(type.id) === next) unsavedTypes.delete(type.id)
+    }
+  }).catch(() => {})
+  return save
+}
+
+/** The type's progress, shown on every device alike. */
 export function useTypeHabitProgress(type: Ref<ObjectType | undefined>) {
   return computed<HabitTypeSettings>(() => habitProgressOf(type.value))
 }

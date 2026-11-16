@@ -106,7 +106,8 @@ const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
       <div class="mt-3.5 flex h-24 items-end gap-[3px] border-b border-line-strong" role="img" :aria-label="`Done and missed each week, last ${weeks} weeks`">
         <div v-for="w in byWeek" :key="w.monday" class="flex h-full flex-1 flex-col justify-end gap-0.5" :title="w.current ? weekTitle(w) : `Week of ${dayLabel(w.monday)}: ${w.tally.done} done, ${w.tally.expected - w.tally.done} missed`">
           <template v-if="w.current">
-            <b class="hatch block rounded-t" :style="{ height: `${((w.plan - w.tally.done) / countTop) * 100}%` }" />
+            <b class="hatch block rounded-t" :style="{ height: `${((w.plan - w.tally.expected) / countTop) * 100}%` }" />
+            <b class="block bg-line-strong" :style="{ height: `${((w.tally.expected - w.tally.done) / countTop) * 100}%` }" />
             <i class="block bg-[var(--color-chart)]" :style="{ height: `${(w.tally.done / countTop) * 100}%` }" />
           </template>
           <template v-else>

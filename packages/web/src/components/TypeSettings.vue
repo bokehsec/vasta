@@ -3,19 +3,17 @@ import { newId } from '@vasta/core'
 // Edit a type: identity (name, icon, color, description) and its property definitions.
 // Changes are made on a draft and saved together.
 import { computed, reactive, ref } from 'vue'
-import type { ColorName, FormulaPropertyDef, HabitTypeSettings, Icon, ObjectType, PropertyDef, QuickActions, SelectOption } from '@vasta/core'
-import { FORMULA_BUILTIN_FIELDS, FORMULA_FUNCTIONS, checkFormula, eligibleParentFields, formulaFromNames, formulaKind, formulaToNames, formulaUses, HABIT_WEEKS_RANGES } from '@vasta/core'
+import type { ColorName, FormulaPropertyDef, Icon, ObjectType, PropertyDef, QuickActions, SelectOption } from '@vasta/core'
+import { FORMULA_BUILTIN_FIELDS, FORMULA_FUNCTIONS, checkFormula, eligibleParentFields, formulaFromNames, formulaKind, formulaToNames, formulaUses } from '@vasta/core'
 import { greyButton, mainButton } from '../lib/buttons.ts'
 import { api } from '../lib/api.ts'
 import { clone } from '../lib/clone.ts'
 import { chip, colorNames, iconTextClasses, swatchClasses } from '../lib/colors.ts'
-import { PANEL_CHARTS, STRIP_CHARTS, habitProgressOf, type ProgressPlace } from '../lib/habit-progress.ts'
 import { PROPERTY_KINDS, kindIcon, kindLabel, newPropertyDef } from '../lib/properties.ts'
 import { confirmDialog } from '../lib/overlays.ts'
 import { replaceType, workspace } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
 import ColorPicker from './ColorPicker.vue'
-import HabitChartPicker from './HabitChartPicker.vue'
 import IconPicker from './IconPicker.vue'
 import ModalDialog from './ModalDialog.vue'
 import PopoverMenu from './PopoverMenu.vue'
@@ -57,19 +55,6 @@ function setOpenIn(value: 'popup' | 'pane' | 'page') {
 function setQuickActions(value: QuickActions | undefined) {
   if (value) draft.value.quickActions = value
   else delete draft.value.quickActions
-}
-
-// Progress (habits): where the Tracker shows progress, its chart and range, saved on the type so
-// every device shows the same. Any part the type doesn't set yet shows what this device had picked.
-const isHabitType = props.type.system === 'habit'
-const habitProgress = computed<HabitTypeSettings>(() => habitProgressOf(draft.value))
-const progressPlaces: { id: ProgressPlace; label: string }[] = [
-  { id: 'off', label: 'Off' },
-  { id: 'above', label: 'Above' },
-  { id: 'beside', label: 'Beside' },
-]
-function setHabitProgress(patch: Partial<HabitTypeSettings>) {
-  draft.value.habits = { ...habitProgress.value, ...patch }
 }
 
 // Subtasks: the single relation to the type itself that makes an object a step of another, or a
@@ -211,7 +196,14 @@ async function save() {
     draft.value.name = draft.value.name.trim()
     draft.value.pluralName = draft.value.pluralName.trim() || draft.value.name
     for (const def of draft.value.properties) def.name = def.name.trim() || 'Untitled'
-    replaceType(await api.saveType(draft.value))
+    // Display choices are edited outside this draft; keep the latest synced value.
+    const next = clone(draft.value)
+    const current = workspace.types.find((t) => t.id === next.id)
+    if (current) {
+      if (current.habits) next.habits = clone(current.habits)
+      else delete next.habits
+    }
+    replaceType(await api.saveType(next))
     emit('close')
   } catch (e) {
     error.value = (e as Error).message
@@ -288,48 +280,6 @@ async function leave(path: string) {
         <option value="page">Its own page</option>
       </select>
       <p class="mt-0.5 text-xs text-ink-faint">A click on a {{ (draft.name || 'object').toLowerCase() }} in a list, table, board or query opens it there. A view can choose otherwise.</p>
-    </section>
-    <section v-if="isHabitType" class="mt-4" data-habit-progress-settings>
-      <div class="mb-1.5 text-xs text-ink-faint">Progress</div>
-      <div class="mb-1 text-sm font-medium">Show on the Tracker</div>
-      <div class="flex max-w-[16rem] rounded-lg bg-hover p-0.5 text-sm" role="group" aria-label="Where progress shows">
-        <button
-          v-for="p in progressPlaces"
-          :key="p.id"
-          class="min-h-8 flex-1 rounded-md px-2 max-md:min-h-11"
-          :class="habitProgress.place === p.id ? 'bg-surface font-medium shadow-sm' : 'text-ink-soft hover:text-ink'"
-          :aria-pressed="habitProgress.place === p.id"
-          :data-place="p.id"
-          @click="setHabitProgress({ place: p.id })"
-        >
-          {{ p.label }}
-        </button>
-      </div>
-      <p class="mt-1 text-xs text-ink-faint">
-        <template v-if="habitProgress.place === 'off'">Just the habits, no progress.</template>
-        <template v-else-if="habitProgress.place === 'above'">A strip above the habits.</template>
-        <template v-else>A panel beside the habits, below them on a phone.</template>
-        On every device.
-      </p>
-      <template v-if="habitProgress.place !== 'off'">
-        <div class="mb-1 mt-3 text-sm font-medium">Chart</div>
-        <HabitChartPicker v-if="habitProgress.place === 'above'" picker="strip" :charts="STRIP_CHARTS" :model-value="habitProgress.strip" @update="(id) => setHabitProgress({ strip: id })" />
-        <HabitChartPicker v-else picker="panel" :charts="PANEL_CHARTS" :model-value="habitProgress.panel" @update="(id) => setHabitProgress({ panel: id })" />
-        <div class="mb-1 mt-3 text-sm font-medium">Range</div>
-        <div class="flex max-w-[16rem] rounded-lg bg-hover p-0.5 text-sm" role="group" aria-label="Progress range">
-          <button
-            v-for="w in HABIT_WEEKS_RANGES"
-            :key="w"
-            class="min-h-8 flex-1 rounded-md px-2 max-md:min-h-11"
-            :class="habitProgress.weeks === w ? 'bg-surface font-medium shadow-sm' : 'text-ink-soft hover:text-ink'"
-            :aria-pressed="habitProgress.weeks === w"
-            :data-weeks="w"
-            @click="setHabitProgress({ weeks: w })"
-          >
-            {{ w }} weeks
-          </button>
-        </div>
-      </template>
     </section>
     <QuickActionsSettings :type="draft" @update="setQuickActions" />
     <section class="mt-4" data-subtask-settings>
