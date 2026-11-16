@@ -128,6 +128,11 @@ GitHub release page.
 
 ### Changed
 
+- **Queries in a page lose their boxes.** An embedded query is no longer a framed card holding a
+  second framed table: its title sits in the page like a small heading, the results follow with only
+  a hairline between rows, and Edit query shows when you point at it (always on touch). The same
+  table on a whiteboard card loses its inner box. Tables everywhere drop the shaded header row, and
+  a row's select box now appears over its icon instead of pushing every title to the right.
 - **Done stands out on a task's page.** Done is the one filled button; Defer, Drop and Next step stay
   quiet beside it. On a phone these buttons, the page's ⋯ and the Undo and close buttons on a notice
   are full finger size, and a notice with Undo stays while your finger or pointer is on it.

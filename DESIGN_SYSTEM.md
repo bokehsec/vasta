@@ -79,7 +79,13 @@ line "All subtasks done" with the type's first quick action as a button.
 **Many at once**: a list or table row has a square box at its start (on hover with a mouse; always
 while something is selected there); Shift-click picks the range between, and while selecting a
 click on a row picks it (⌘-click still opens). A phone starts selecting from "Select" in a row's
-long-press menu; taps then pick rows and swipes are off. Picked rows are tinted with the accent.
+long-press menu; taps then pick rows and swipes are off. Picked rows are tinted with the accent. In a
+table the box takes the place of the row's icon on hover, so titles are not indented.
+
+**Embedded queries** have no frame: the page is the frame. The title line (icon, name, Edit query on
+hover) reads as a small heading; a table inside one, or inside a whiteboard card, draws no box or
+header fill of its own (`bare`) and its first column lines up with the text around it. Never nest
+one framed surface in another.
 The bulk bar floats at the bottom (raised surface, strong border, soft shadow): the count, Select
 all, the quick actions when every picked object is an open one of a type that has them, Move to
 trash, and Clear; on a phone a second row of labelled icons. Notices rise above it while it shows.
