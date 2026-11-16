@@ -15,7 +15,8 @@ GitHub release page.
 - **Habit progress.** The Habits page has a **Progress** tab beside Tracker: how much of what your
   habits asked for got done over the last 4, 8 or 13 weeks, as a percent with "94 of 120", a bar
   per week and a row per habit with its goal. Paused habits are listed but left out of the total;
-  the range is remembered on the device. It works offline. The agent tools' `list_habits` can add
+  the range is the one in Type settings › Progress, so the Tracker and every device cover the same
+  weeks. It works offline. The agent tools' `list_habits` can add
   the same numbers (`weeks`).
 - **Habit progress on the Tracker, your way.** The Habits Tracker shows how you are doing next to
   the habits. Type settings › Progress chooses where (above the habits, beside them — below them

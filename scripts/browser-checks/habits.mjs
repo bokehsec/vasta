@@ -217,9 +217,11 @@ if (!process.env.PHONE && (!rows.at(-1).includes('Swim') || !rows.at(-1).include
 if (!process.env.PHONE && !rows.some((r) => r.includes('3 a week'))) throw new Error('no "3 a week" goal')
 await until(() => page.locator('svg[aria-label="Share done each week"] path').count(), 'the weekly bars')
 
-step('range: 13 weeks, kept on reload')
+step('range: 13 weeks, saved on the type, kept on reload')
 await page.locator('[data-range="13"]').click()
 await checkNumbers(13)
+// The switch is the Type settings range: saved on the type, for the Tracker and every device.
+await until(async () => (await get(`/api/types/${habitType.id}`)).habits?.weeks === 13, 'the range saved on the type')
 await page.reload()
 await until(async () => (await page.locator('[data-range="13"]').getAttribute('aria-pressed').catch(() => null)) === 'true', '13 weeks kept')
 await checkNumbers(13)

@@ -1,34 +1,32 @@
 <script setup lang="ts">
 // The Habits page's Progress view: how much of what the habits asked for got done over the last
-// 4, 8 or 13 whole weeks (core habitReport: done ÷ expected, added up, never an average of
+// 4, 8 or 13 whole weeks, the range in Type settings › Progress (the switch here changes that same
+// setting, so the Tracker and every device cover the same weeks) (core habitReport: done ÷ expected, added up, never an average of
 // percents). A headline, one bar per week (the current one faded, being under way) and a row per
 // habit. Paused habits sit at the bottom, faded, and are left out of the headline and the bars.
-import { computed, ref, toRef, watch } from 'vue'
-import { habitReport, habitWeekdays, habitWeeklyTarget, isHabitPaused, type HabitTally, type ObjectSummary } from '@vasta/core'
+import { computed, toRef } from 'vue'
+import { HABIT_WEEKS_RANGES, habitReport, habitWeekdays, habitWeeklyTarget, isHabitPaused, type HabitTally, type HabitTypeSettings, type ObjectSummary, type ObjectType } from '@vasta/core'
+import { api } from '../lib/api.ts'
+import { clone } from '../lib/clone.ts'
+import { habitProgressOf } from '../lib/habit-progress.ts'
+import { replaceType } from '../lib/state.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { habitColor, useFoodHabits, useToday } from '../lib/habits.ts'
 import BarChart, { type Bar } from './charts/BarChart.vue'
 import ObjectLink from './ObjectLink.vue'
 
-const props = defineProps<{ habits: ObjectSummary[]; filter?: string }>()
+const props = defineProps<{ type: ObjectType; habits: ObjectSummary[]; filter?: string }>()
 const emit = defineEmits<{ menu: [event: MouseEvent, object: ObjectSummary] }>()
 
-const RANGES = [4, 8, 13]
-const RANGE_KEY = 'vasta.habit-progress.weeks'
-function savedRange() {
-  try {
-    const value = Number(localStorage.getItem(RANGE_KEY))
-    return RANGES.includes(value) ? value : 4
-  } catch {
-    return 4
-  }
+const RANGES = HABIT_WEEKS_RANGES
+const weeks = computed(() => habitProgressOf(props.type).weeks)
+function setWeeks(value: HabitTypeSettings['weeks']) {
+  if (value === weeks.value) return
+  const next = clone(props.type)
+  next.habits = { ...habitProgressOf(props.type), weeks: value }
+  replaceType(next)
+  void api.saveType(next).then(replaceType)
 }
-const weeks = ref(savedRange())
-watch(weeks, (value) => {
-  try {
-    localStorage.setItem(RANGE_KEY, String(value))
-  } catch {}
-})
 
 const today = useToday()
 // Habits done from food get their days from what was logged; without this they would chart as never done.
@@ -95,7 +93,7 @@ const nothingYet = computed(() => !report.value.total.expected && !report.value.
         :class="weeks === count ? 'bg-surface font-medium shadow-sm' : 'text-ink-soft hover:text-ink'"
         :aria-pressed="weeks === count"
         :data-range="count"
-        @click="weeks = count"
+        @click="setWeeks(count)"
       >
         {{ count }} weeks
       </button>
