@@ -196,7 +196,14 @@ async function save() {
     draft.value.name = draft.value.name.trim()
     draft.value.pluralName = draft.value.pluralName.trim() || draft.value.name
     for (const def of draft.value.properties) def.name = def.name.trim() || 'Untitled'
-    replaceType(await api.saveType(draft.value))
+    // Display choices are edited outside this draft; keep the latest synced value.
+    const next = clone(draft.value)
+    const current = workspace.types.find((t) => t.id === next.id)
+    if (current) {
+      if (current.habits) next.habits = clone(current.habits)
+      else delete next.habits
+    }
+    replaceType(await api.saveType(next))
     emit('close')
   } catch (e) {
     error.value = (e as Error).message

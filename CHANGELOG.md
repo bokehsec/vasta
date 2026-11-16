@@ -272,6 +272,10 @@ GitHub release page.
 
 ### Fixed
 
+- **Habit progress keeps your latest display choices.** Rapid changes save in order, and saving
+  an already-open Type settings window preserves newer progress choices. The Progress chart and
+  Tracker panel now separate missed days this week from completions that are still possible.
+
 - **A link to a type of another space** (its page, e.g. Habits) opens that space and shows the
   page, as a link to an object already did; it used to stay blank.
 - **Swiping back on an iPhone goes back.** A swipe from the screen's left edge could leave you on
