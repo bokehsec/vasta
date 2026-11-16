@@ -23,6 +23,18 @@ export async function createObject(typeId: Id, data: Partial<ObjectRecord> = {},
 }
 
 /**
+ * A New from the sidebar or the top bar, made for where the user is: on today's page it gets today
+ * in the type's first date field (a task's Due), as the calendar's quick create does.
+ */
+export async function createObjectHere(typeId: Id) {
+  const date = isTodayRoute(router.currentRoute.value) ? typesById.value.get(typeId)?.properties.find((p) => p.kind === 'date') : undefined
+  if (!date) return createObject(typeId)
+  const object = await createObject(typeId, { props: { [date.id]: { kind: 'date', value: { start: `${dayKey()}T00:00:00.000Z`, resolution: 'day' } } } }, false)
+  await openObject(object.id, { where: 'popup', query: { new: `date:${date.id}` } })
+  return object
+}
+
+/**
  * Sets one property of an object and saves it, as a table cell does. The fetched copy goes along
  * as the base, so a field changed elsewhere meanwhile is kept and only this one is written.
  */

@@ -69,7 +69,10 @@ page; phones have none. The link of the object the pane shows is tinted (`bg-hov
 once set; not text blocks, formulas or fields shown only with a value), and a footer on the raised
 surface: the type, the keys (↵ add · ⌘↵ add and open), Cancel, Open, Add <type> (Main). Nothing is
 made until it is added; Enter adds and the card stays for the next one, with an "Added …" line
-(Open, Undo). On a phone a sheet above the keyboard, chips in one scrolling row, 44px controls.
+(Open, Undo). On a phone a sheet above the keyboard, chips in one scrolling row, 44px controls. Its fields start with
+what the view on show filters on (`fillFromFilter` in core: what a filter states plainly, never
+what it rules out), and go back to that after each add. On Today, a New from the sidebar or the
+top bar puts today in the type's first date field.
 
 **Sidebar top**: Calendar, Inbox and Tasks (⌘1, ⌘2, ⌘3, in that order), the places visited every
 day, above the user's sections; Tasks is never listed again among the types. Today is not a row:

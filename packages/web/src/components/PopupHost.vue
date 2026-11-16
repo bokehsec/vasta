@@ -6,7 +6,7 @@
 // removed when it closes, so cancelling a New leaves nothing behind.
 import { defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api } from '../lib/api.ts'
-import { closePopup, expandPopup, pageObjectId, popupBlockId, popupCursor, popupIsNew, popupObjectId } from '../lib/open.ts'
+import { closePopup, expandPopup, pageObjectId, popupBlockId, popupCursor, popupDefaultDate, popupIsNew, popupObjectId } from '../lib/open.ts'
 import { onObjectSave } from '../lib/object-saves.ts'
 import { forgetSummary, refreshCounts } from '../lib/state.ts'
 import { isPhone } from '../lib/viewport.ts'
@@ -48,6 +48,7 @@ watch(
 // so an untouched new item can be told from one that got as far as a title.
 let openId: string | undefined
 let openNew = false
+let openDefaultDate: string | undefined
 let saved = false
 // The id whose saves count: the one shown, and — while it is being closed — the one that just
 // left, whose page flushes what it was saving as it goes (ObjectPage saves on unmount).
@@ -58,15 +59,17 @@ watch(
     void (async () => {
       const gone = openId
       const wasNew = openNew
+      const defaultDate = openDefaultDate
       openId = id
       openNew = !!isNew
+      openDefaultDate = popupDefaultDate.value
       countsFor = id
       saved = false
       // Closed, or another object took the window: a new one that was never touched goes away.
       if (gone && wasNew) {
         countsFor = gone
         await nextTick()
-        if (!saved) await removeIfUntouched(gone)
+        if (!saved) await removeIfUntouched(gone, defaultDate)
         countsFor = openId
       }
     })()
@@ -91,10 +94,9 @@ function onKey(event: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
-/** A new item that was never touched is deleted (to the trash and out), as if it was never made:
- * one made with something in it (the quick card's title, a template) is kept, and so is one that
- * was saved while it was open, even if it ended up empty. */
-async function removeIfUntouched(id: string) {
+/** An untouched blank draft goes away. Explicit content (templates, calendar choices) stays;
+ * only the date automatically filled by New on Today can be ignored. */
+async function removeIfUntouched(id: string, defaultDate?: string) {
   if (saved) return
   let object
   try {
@@ -102,8 +104,8 @@ async function removeIfUntouched(id: string) {
   } catch {
     return // gone already (trashed from inside the window, or the like)
   }
-  const empty = !object.title && !Object.keys(object.props ?? {}).length && !Object.keys(object.content ?? {}).length && !(object.tagIds ?? []).length
-  if (!empty) return
+  const hasProps = Object.entries(object.props ?? {}).some(([id, value]) => id !== defaultDate || value.kind !== 'date')
+  if (object.title || hasProps || Object.keys(object.content ?? {}).length || (object.tagIds ?? []).length) return
   try {
     await api.deleteObject(id)
     await api.deleteObjectForever(id)

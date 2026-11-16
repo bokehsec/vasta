@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { Icon, Id, ObjectType } from '@vasta/core'
 import {
-  createObject,
+  createObjectHere,
   deleteObjectFlow,
   deleteSectionFlow,
   deleteTypeFlow,
@@ -121,7 +121,7 @@ function typeMenu(event: MouseEvent, type: ObjectType, sectionId?: string) {
   const items: MenuItem[] = [
     { kind: 'heading', label: type.pluralName },
     { label: 'Open', icon: 'ph:arrow-square-out', run: () => router.push(`/t/${type.id}`) },
-    { label: `New ${type.name}`, icon: 'ph:plus', run: () => createObject(type.id) },
+    { label: `New ${type.name}`, icon: 'ph:plus', run: () => createObjectHere(type.id) },
     { label: 'Type settings…', icon: 'ph:gear-six', run: () => router.push({ path: `/t/${type.id}`, query: { settings: '1' } }) },
     { kind: 'separator' },
     pinMenu(type.id),
@@ -373,7 +373,7 @@ const initial = computed(() => (workspace.space?.name ?? '?').trim().charAt(0).t
 
 async function pickType(type: ObjectType) {
   newOpen.value = false
-  await createObject(type.id)
+  await createObjectHere(type.id)
 }
 </script>
 

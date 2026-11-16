@@ -18,7 +18,7 @@ import { chromium, devices, webkit } from 'playwright'
 const engine = process.argv[2] ?? 'chromium'
 const base = process.argv[3] ?? 'http://127.0.0.1:5183'
 const phone = process.argv[4] === 'phone'
-if (!/^http:\/\/127\.0\.0\.1:518[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
+if (!/^http:\/\/127\.0\.0\.1:5[12]8[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
 if (phone && engine !== 'chromium') throw new Error('the phone run needs chromium')
 
 const options = { ...(phone ? devices['Pixel 7'] : { viewport: { width: 1400, height: 900 } }), locale: 'en-US', timezoneId: 'America/Sao_Paulo' }
@@ -316,10 +316,65 @@ if (phone) {
   await until(async () => !popupId(), 'the window closed')
   const untitled = await get(`/api/spaces/${space.id}/search?q=Untitled&limit=100`)
   if (untitled.some((o) => o.typeId === task.id && !o.title)) throw new Error('an untouched new task was left behind')
+
+  step('the quick card starts with what the view filters on; what it adds shows in the view')
+  const priority = properties.find((p) => p.id === 'priority')
+  const high = priority.options[0]
+  const byPriority = { kind: 'group', operator: 'and', items: [{ kind: 'filter', field: 'priority', operator: 'is', value: { kind: 'literal', value: [high.id] } }] }
+  await put(`/api/types/${task.id}`, { ...(await get(`/api/types/${task.id}`)), views: [{ id: `${task.id}:all`, name: 'All', layout: 'list', filter: byPriority }] })
+  await page.goto(`${base}/t/${task.id}`)
+  await page.locator('[data-new-split] button').first().click()
+  await until(async () => (await card.count()) > 0, 'the quick card opens')
+  const priorityChip = card.locator('[data-quick-add-field="Priority"]')
+  await until(async () => (await priorityChip.innerText()).includes(high.label), `the Priority chip starts as ${high.label}`)
+  await cardTitle.fill(t('Card filled'))
+  await cardTitle.press('Enter')
+  await until(async () => (await card.locator('[data-quick-add-added]').innerText().catch(() => '')).includes(t('Card filled')), 'the card says it was added')
+  const filledMade = (await get(`/api/spaces/${space.id}/search?q=${encodeURIComponent(t('Card filled'))}&limit=10`)).find((o) => o.title === t('Card filled'))
+  if ((await get(`/api/objects/${filledMade.id}`)).props.priority?.value?.[0] !== high.id) throw new Error('the added task did not get the view\'s Priority')
+  await until(async () => (await page.locator('main a').filter({ hasText: t('Card filled') }).count()) > 0, 'the view lists the added task')
+  if (!(await priorityChip.innerText()).includes(high.label)) throw new Error('the next one does not start with the view\'s Priority again')
+  await page.keyboard.press('Escape')
+  await until(async () => (await card.count()) === 0, 'Esc closed the card')
+
+  step("on Today, a New gets today's date; closed untouched, it is still removed")
+  const today = await page.evaluate(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
+  await page.goto(`${base}/calendar?view=day&date=${today}`)
+  await page.locator('aside').getByRole('button').filter({ hasText: 'New' }).first().click()
+  await until(async () => (await picker.count()) > 0, 'the type picker opens')
+  await picker.getByText('Task', { exact: true }).click()
+  await until(async () => popupId() && query().get('new') === 'date:due', 'a new task in the window', 20000)
+  const todayId = popupId()
+  const todayTask = await get(`/api/objects/${todayId}`)
+  if (!todayTask.props.due?.value?.start?.startsWith(today)) throw new Error(`the new task is not due today: ${JSON.stringify(todayTask.props.due)}`)
+  await page.keyboard.press('Escape')
+  await until(async () => !popupId(), 'the window closed')
+  await until(async () => (await page.request.get(`${base}/api/objects/${todayId}`)).status() === 404, 'the untouched task from Today was removed')
+
+  step('closing an untitled item with explicit content or calendar fields keeps it')
+  for (const data of [
+    { content: { body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Template answer' }] }] } } },
+    { props: { due: { kind: 'date', value: { start: `${today}T15:00:00.000Z`, resolution: 'minute' } } } },
+  ]) {
+    const explicit = await post(`/api/objects`, { typeId: task.id, title: '', ...data })
+    await page.goto(`${base}/t/${task.id}?popup=${explicit.id}&new=1`)
+    await until(async () => (await page.locator('[data-popup] [contenteditable]').count()) > 0, 'the explicit item opened')
+    await page.keyboard.press('Escape')
+    await until(async () => !popupId(), 'the explicit item closed')
+    await page.waitForTimeout(300)
+    const kept = await get(`/api/objects/${explicit.id}`)
+    if (data.content && !Object.keys(kept.content ?? {}).length) throw new Error('template content was lost')
+    if (data.props && !kept.props.due) throw new Error('calendar date was lost')
+    await page.request.delete(`${base}/api/objects/${explicit.id}`, { headers })
+  }
+
 }
 
 for (const object of Object.values(made)) await page.request.delete(`${base}/api/objects/${object.id}`, { headers })
-for (const title of [t('Card'), t('Card open'), t('Card undo'), t('Phone card')]) {
+for (const title of [t('Card'), t('Card open'), t('Card undo'), t('Phone card'), t('Card filled')]) {
   for (const object of await get(`/api/spaces/${space.id}/search?q=${encodeURIComponent(title)}&limit=10`)) await page.request.delete(`${base}/api/objects/${object.id}`, { headers })
 }
 {

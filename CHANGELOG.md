@@ -20,6 +20,8 @@ GitHub release page.
   (with Open and Undo); ⌘↩ or **Open** adds it and opens it in the window; Cancel, Esc or a click
   outside leave nothing behind. On a phone it is a sheet from the bottom. Types with a default
   template keep their flow; the menu's Blank choice uses the card.
+  The card starts with what the view you are on filters on (on a Work view, Area is Work), so what
+  you add shows there; on Today, a New from the sidebar or the top bar is dated today.
 - **Habits by the week.** A habit has a new field, **Times a week**: set it to 3 and the habit counts
   by the week (Monday to Sunday), on any days. Today's list, the Tracker, the habit's page,
   reminders and the agent tools say "2 of 3 this week", count streaks in weeks, and stop asking
