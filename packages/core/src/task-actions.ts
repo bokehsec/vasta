@@ -9,7 +9,7 @@
 // field). Changes naming a property the type no longer has, or a value that does not fit it, are
 // left out.
 import { DUE_PROPERTY_ID, REVIEWED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
-import type { Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActionValue, SelectOption, TextPropertyDef } from './model.ts'
+import type { DatePropertyDef, Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActionValue, SelectOption, TextPropertyDef } from './model.ts'
 import { statusProperty } from './metrics.ts'
 import { addDays } from './time.ts'
 
@@ -102,6 +102,16 @@ export function askOf(type: ObjectType, action: QuickActionDef): { change: Quick
   const change = action.changes.find((c) => c.value.kind === 'ask')
   const def = change && type.properties.find((p) => p.id === change.field)
   return change && def ? { change, def } : undefined
+}
+
+/** A task's work date, as configured for Defer/Schedule; Due remains its deadline. */
+export function plannedDateFieldOf(type: ObjectType | undefined): DatePropertyDef | undefined {
+  if (type?.system !== 'task') return undefined
+  const configured = type.properties.find((p) => p.id === type.quickActions?.deferField)
+  if (configured?.kind === 'date' && configured.id !== DUE_PROPERTY_ID) return configured
+  const action = quickActionsOf(type).find((a) => a.id === 'defer' || a.id === 'schedule')
+  const asked = action && askOf(type, action)?.def
+  return asked?.kind === 'date' && asked.id !== DUE_PROPERTY_ID ? asked : undefined
 }
 
 /**

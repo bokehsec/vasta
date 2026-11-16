@@ -9,6 +9,7 @@ import ObjectComments from '../components/ObjectComments.vue'
 import SprintPanel from '../components/SprintPanel.vue'
 import SubtasksPanel from '../components/SubtasksPanel.vue'
 import TaskQuickActions from '../components/TaskQuickActions.vue'
+import TaskDateOptions from '../components/TaskDateOptions.vue'
 import { isClosedTask, parentFieldOf, quickActionsOf, subtaskProgress } from '@vasta/core'
 import { setProperties } from '../lib/actions.ts'
 import { isPhone } from '../lib/viewport.ts'
@@ -1055,7 +1056,9 @@ async function startFrom(template: ObjectRecord) {
             <PropertyValueEditor :def="def" :value="object.props[def.id]" @update="setProp(def, $event)" @add-option="addOption(def, $event)" />
             <button class="mr-1 shrink-0 rounded-md px-1.5 py-0.5 font-mono text-xs text-ink-faint opacity-0 hover:bg-hover hover:text-ink group-hover/fill:opacity-100 [@media(hover:none)]:opacity-100" title="Fill from a placeholder (date:+7d, me…)" @click="setFill(def)" v-text="braced(' ')" />
           </div>
-          <PropertyValueEditor v-else :def="def" :value="object.props[def.id]" @update="setProp(def, $event)" @add-option="addOption(def, $event)" />
+          <PropertyValueEditor v-else :def="def" :value="object.props[def.id]" @update="setProp(def, $event)" @add-option="addOption(def, $event)">
+            <template #date-options><TaskDateOptions v-if="type?.system === 'task'" :type="type" :object="object" :field="def.id" @change="setProps" /></template>
+          </PropertyValueEditor>
         </div>
         <ReverseRelations v-if="!info" :object-id="object.id" :type-id="object.typeId" :show-empty="showAllFields" :hide="hiddenReverse" @count="reverseCount = $event" />
         <div v-if="!hideAddProperty" class="mt-1 flex gap-3 text-xs text-ink-faint">

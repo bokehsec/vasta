@@ -224,6 +224,7 @@ function setToday() {
         </template>
       </div>
 
+      <slot name="date-options" />
       <button v-if="value" class="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-red-600 hover:bg-hover" @click="emit('update', undefined), (open = false)">
         <AppIcon fallback="ph:trash" /> Clear date
       </button>

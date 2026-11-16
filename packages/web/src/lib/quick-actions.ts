@@ -8,7 +8,7 @@
 // could be saved it shows why and offers Retry or Cancel; while saving it takes no second answer.
 import { reactive, shallowRef } from 'vue'
 import type { Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionDef } from '@vasta/core'
-import { DUE_PROPERTY_ID, askOf, dueMovedTo, isClosedTask, quickActionEdits, quickActionMessage, quickActionsOf, withAskCleared, type QuickActionEdit } from '@vasta/core'
+import { DUE_PROPERTY_ID, askOf, dueMovedTo, isClosedTask, plannedDateFieldOf, quickActionEdits, quickActionMessage, quickActionsOf, withAskCleared, type QuickActionEdit } from '@vasta/core'
 import { dayKey, setProperties } from './actions.ts'
 import { nextWeekStart } from './calendar.ts'
 import { formatLongDay } from './format.ts'
@@ -56,7 +56,7 @@ export interface QuickAsk {
   /**
    * How many of the objects have a due date a later day could take along (a day asked for another
    * date, such as Defer's Do date; not a due date that repeats): the question offers "Move the due
-   * date too", on at first.
+   * date too", off at first so deadlines stay put unless explicitly moved.
    */
   dueMovable: number
   /** What a day would do to the due dates when they move along: how many move, and, for one object, to which day. */
@@ -206,7 +206,7 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
     const self: QuickAsk = {
       id: ++asks,
       action,
-      def: asked.def,
+      def: plannedDateFieldOf(type)?.id === asked.def.id ? { ...asked.def, name: 'Planned for' } : asked.def,
       anchor: options.anchor ?? null,
       count: targets.length,
       scope: targets.length > 1 ? (options.noun ? options.noun(targets.length) : `${targets.length} tasks`) : (options.scope ?? (one?.title || undefined)),

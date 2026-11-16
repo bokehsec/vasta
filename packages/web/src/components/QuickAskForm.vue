@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The inside of a quick action's question (QuickAskHost): a day (tomorrow, next week or one picked
-// on a calendar, which only select it: the day, and what it does to the due date, show before
-// Save writes it, with a box to move the due date along when the day is after it) or a line of text
+// on a calendar, which only select it: the day, and where the due date ends up, show before Save
+// writes it, keeping deadlines unless explicitly moved) or a line of text
 // (a number, a link); an empty line clears the field. Cancel and Save are always on screen. It stays
 // open with what was typed or picked while saving, and when nothing could be saved says why and
 // offers Retry.
@@ -28,9 +28,9 @@ const nextWeek = computed(() => nextWeekStart())
 
 // The day picked, if any: the one the object has at first. Nothing is written until Save.
 const picked = ref<string | undefined>(props.ask.day)
-// "Move the due date too": on at first, since a task put off past its due date is otherwise left
-// overdue; off keeps a real deadline where it is.
-const moveDue = ref(true)
+// "Also move the due date": off at first — rescheduling replaces the plan, and a deadline moves
+// only by that explicit choice; a task planned past its due date is left overdue on purpose.
+const moveDue = ref(false)
 
 const saving = computed(() => props.ask.state.saving)
 const failed = computed(() => props.ask.state.error)
@@ -53,7 +53,13 @@ const dueLine = computed(() => {
   const moves = ask.dueMoves(day)
   if (moves.to && moveDue.value) return `${due} → ${longDay(moves.to)}`
   if (!ask.dueMovable) return `${due} (repeats, so it stays)`
-  return `${due} stays; the new day is after it`
+  return `${due} — planned after the deadline`
+})
+
+// A plan after its unchanged deadline needs a visible warning, including repeating deadlines.
+const afterDue = computed(() => {
+  const { ask } = props
+  return ask.def.kind === 'date' && ask.def.id !== DUE_PROPERTY_ID && !!ask.due && !!picked.value && picked.value > ask.due && (!moveDue.value || !ask.dueMoves(picked.value).count)
 })
 
 const problem = computed(() => (props.ask.def.kind === 'date' ? undefined : textProblem(props.ask.def, text.value)))
@@ -88,12 +94,12 @@ const saveClass = [mainButton, 'flex-1']
     </div>
     <MiniMonth :selected="picked" @pick="pick" />
     <p class="font-medium" :class="picked ? 'text-ink' : 'text-ink-faint'" data-picked-day>{{ ask.def.name }}: {{ picked ? longDay(picked) : 'choose a day' }}</p>
-    <p v-if="dueLine" class="flex items-center gap-1.5 text-xs text-ink-faint" data-due-line>
-      <AppIcon fallback="ph:flag" :size="12" /> {{ dueLine }}
+    <p v-if="dueLine" class="flex items-center gap-1.5 text-xs" :class="afterDue ? 'font-medium text-amber-700 dark:text-amber-400' : 'text-ink-faint'" data-due-line>
+      <AppIcon :fallback="afterDue ? 'ph:warning-circle' : 'ph:flag'" :size="12" /> {{ dueLine }}
     </p>
     <label v-if="ask.dueMovable" class="flex items-start gap-2 text-xs text-ink-soft max-md:min-h-11 max-md:items-center max-md:text-sm" data-move-due>
       <input v-model="moveDue" type="checkbox" :disabled="saving" class="mt-px shrink-0 accent-[var(--color-accent)] max-md:h-5 max-md:w-5" />
-      <span>{{ ask.count === 1 ? 'Move the due date too, if the new day is after it' : 'Move due dates too, where the new day is after them' }}</span>
+      <span>{{ ask.count === 1 ? 'Also move the due date, if the new day is after it' : 'Also move due dates, where the new day is after them' }}</span>
     </label>
     <p v-if="stays" class="text-xs text-ink-faint">{{ stays }}</p>
     <p v-if="failed" class="text-xs text-red-600" role="alert" data-ask-error>Not saved: {{ failed }}</p>

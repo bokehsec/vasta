@@ -43,6 +43,7 @@ import { onObjectSave } from '../lib/object-saves.ts'
 import { cachedSummary, lastError, notice, primeFromObject, primeSummaries, refreshCounts, typesById, workspace } from '../lib/state.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { openObject } from '../lib/open.ts'
+import { taskDateRole, taskEntryCheckable } from '../lib/calendar-tasks.ts'
 
 const route = useRoute()
 const router = useRouter()
@@ -154,7 +155,7 @@ function leftOut(entry: CalendarEntry): boolean {
 function categoryOf(entry: CalendarEntry): Category {
   if (entry.kind === 'external') return `source:${entry.sourceId}`
   const type = typesById.value.get(cachedSummary(entry.objectId ?? '')?.typeId ?? '')
-  return type?.system === 'task' && entry.field === 'due' ? 'tasks' : 'objects'
+  return taskDateRole(type, entry.field) ? 'tasks' : 'objects'
 }
 
 const dailyNotes = computed(() => {
@@ -187,7 +188,7 @@ function replace(object: ObjectRecord | ObjectSummary) {
   if (!completion.entries.has(object.id)) return
   if ([...kept.values()].some((entry) => entry.objectId === object.id)) return
   for (const entry of selected.value) {
-    if (entry.objectId !== object.id || entry.field !== 'due' || (entry.recurring && !entry.current)) continue
+    if (entry.objectId !== object.id || !taskEntryCheckable(entry, typesById.value.get(object.typeId), object)) continue
     kept.set(entry.key, { ...entry })
   }
 }
@@ -366,6 +367,7 @@ async function loadMini() {
     const marks = new Map<string, DayMarks>()
     const mark = (day: string) => marks.get(day) ?? (marks.set(day, {}), marks.get(day)!)
     const withText = new Set(data.objects.filter((o) => o.preview.trim()).map((o) => o.id))
+    const taskDays = new Set<string>()
     for (const entry of data.entries) {
       if (entry.kind === 'daily-note') {
         if (showDailyNotes.value && withText.has(entry.objectId ?? '')) mark(entry.startDay).note = true
@@ -375,6 +377,11 @@ async function loadMini() {
       if (hidden.has(category) || leftOut(entry)) continue
       const key = category === 'tasks' ? 'tasks' : category === 'objects' ? 'dated' : 'events'
       for (let day = entry.startDay < range[0]! ? range[0]! : entry.startDay; day <= entry.endDay && day <= range.at(-1)!; day = addDays(day, 1)) {
+        if (key === 'tasks') {
+          const taskDay = `${day}:${entry.objectId}`
+          if (taskDays.has(taskDay)) continue
+          taskDays.add(taskDay)
+        }
         const marks = mark(day)
         marks[key] = (marks[key] ?? 0) + 1
       }

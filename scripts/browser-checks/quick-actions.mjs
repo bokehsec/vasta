@@ -1,7 +1,8 @@
 // A task's quick actions in the test env: the default Mark done, Defer (Tomorrow, Next week, a day on the
 // calendar) and Drop under its tags (a button each, [data-action="<id>"]), with their Undo notices;
 // what the old settings still shape in the defaults (a "Dropped" status, a "Do date" field and a
-// "Scheduled" status), the "Due …" line, "Move the due date too" and the late note; the section showing for Task only; the
+// "Scheduled" status), the "Due …" line, "Also move the due date" (off at first: the deadline
+// stays) and the late note; the section showing for Task only; the
 // "Next week" pick in a date property's editor; a phone width (list rows, and a table's actions under
 // each title).
 // Type settings › Quick actions: the defaults listed, the first edit making them the type's own list
@@ -25,7 +26,7 @@ import { chromium, webkit } from 'playwright'
 
 const engine = process.argv[2] ?? 'chromium'
 const base = process.argv[3] ?? 'http://127.0.0.1:5183'
-if (!/^http:\/\/127\.0\.0\.1:5[12]8[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
+if (!/^http:\/\/127\.0\.0\.1:5[123]8[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
 
 const options = { viewport: { width: 1400, height: 900 }, locale: 'en-US', timezoneId: 'America/Sao_Paulo' }
 // WebKit has OPFS (the replica) only in a persistent profile.
@@ -256,7 +257,7 @@ await toast.filter({ hasText: 'Defer · Do date' }).locator('button', { hasText:
 await toast.locator('button', { hasText: 'Undo' }).click()
 await until(async () => (await propsOf(task.id)).dodate === undefined && (await propsOf(task.id)).status?.value?.[0] !== 'scheduled', 'Defer undone')
 
-step('"Due …" in the defer menu; deferring past it moves the due date too (ticked) or says so (unticked); before it, neither')
+step('"Due …" in the defer menu; past it the deadline stays unless the box moves it; before it, neither')
 const due = `${days.month}-12`
 task = await makeTask('Late', { due: { kind: 'date', value: { start: `${due}T00:00:00.000Z`, resolution: 'day' } } })
 await open(task)
@@ -264,28 +265,35 @@ await act('defer').click()
 await page.waitForSelector('[data-defer-menu]')
 await dueLine().waitFor()
 if (!(await dueLine().innerText()).includes(dateDay(due))) throw new Error(`Due line: ${await dueLine().innerText()}`)
-// "Move the due date too" is offered, ticked: a day after the due date takes it along; Undo puts both back.
+// "Also move the due date" is off at first: the deadline moves only by that explicit choice.
 const moveDue = page.locator('[data-move-due] input')
-if (!(await moveDue.isChecked())) throw new Error('"Move the due date too" is not ticked at first')
+if (await moveDue.isChecked()) throw new Error('"Also move the due date" is ticked at first')
+// A day after the due date, the box left off: the line warns the plan is past the deadline, and
+// saving keeps the due date where it is.
+await page.locator('[data-defer-menu] button', { hasText: /^\s*18\s*$/ }).first().click()
+if (!(await dueLine().innerText()).includes('planned after the deadline')) throw new Error(`no late warning: ${await dueLine().innerText()}`)
+await page.locator('[data-defer-menu] [data-ask-save]').click()
+await toast.filter({ hasText: 'after its due date' }).waitFor()
+await until(async () => dayOf((await propsOf(task.id)).dodate) === picked, 'Do date set although late')
+if (dayOf((await propsOf(task.id)).due) !== due) throw new Error('Due moved although the box was unticked')
+await toast.locator('button', { hasText: 'Undo' }).click()
+await until(async () => (await propsOf(task.id)).dodate === undefined && dayOf((await propsOf(task.id)).due) === due, 'Undo put the do date back')
+// Ticked: a day after the due date takes it along; Undo puts both back.
+await act('defer').click()
+await page.waitForSelector('[data-defer-menu]')
+await moveDue.check()
 await page.locator('[data-defer-menu] button', { hasText: /^\s*18\s*$/ }).first().click()
 await page.locator('[data-defer-menu] [data-ask-save]').click()
 await toast.filter({ hasText: 'due date moved too' }).waitFor()
 await until(async () => dayOf((await propsOf(task.id)).dodate) === picked && dayOf((await propsOf(task.id)).due) === picked, 'Do date and Due both on the 18th')
 await toast.locator('button', { hasText: 'Undo' }).click()
 await until(async () => (await propsOf(task.id)).dodate === undefined && dayOf((await propsOf(task.id)).due) === due, 'Undo put the due date back')
-// Unticked: the due date stays and the notice says the day is after it.
+// Before the due date: no note, and the box makes no difference.
 await act('defer').click()
 await page.waitForSelector('[data-defer-menu]')
-await moveDue.uncheck()
-await page.locator('[data-defer-menu] button', { hasText: /^\s*18\s*$/ }).first().click()
-await page.locator('[data-defer-menu] [data-ask-save]').click()
-await toast.filter({ hasText: 'after its due date' }).waitFor()
-await until(async () => dayOf((await propsOf(task.id)).dodate) === picked, 'Do date set although late')
-if (dayOf((await propsOf(task.id)).due) !== due) throw new Error('Due changed with the box unticked')
-// Before the due date: no note.
-await act('defer').click()
-await page.waitForSelector('[data-defer-menu]')
+await moveDue.check()
 await page.locator('[data-defer-menu] button', { hasText: /^\s*10\s*$/ }).first().click()
+if ((await dueLine().innerText()).includes('planned after the deadline')) throw new Error(`late warning for a day before Due: ${await dueLine().innerText()}`)
 await page.locator('[data-defer-menu] [data-ask-save]').click()
 await until(async () => dayOf((await propsOf(task.id)).dodate) === `${days.month}-10`, 'Do date moved to the 10th')
 if ((await toast.innerText()).includes('after its due date')) throw new Error('late note shown for a day before Due')

@@ -26,6 +26,7 @@ import { cachedSummary, lastError, notice, primeSummaries, summaryOf, typesById,
 import CalendarEntryItem from './calendar/CalendarEntryItem.vue'
 import EventDetails from './calendar/EventDetails.vue'
 import OccurrenceDetails from './calendar/OccurrenceDetails.vue'
+import { taskEntryCheckable } from '../lib/calendar-tasks.ts'
 import PopoverMenu from './PopoverMenu.vue'
 
 const props = defineProps<{
@@ -133,7 +134,7 @@ function replace(object: ObjectRecord | ObjectSummary) {
   if (!completion.entries.has(object.id)) return
   if ([...kept.values()].some((entry) => entry.objectId === object.id)) return
   for (const entry of selected.value) {
-    if (entry.objectId !== object.id || entry.field !== 'due' || (entry.recurring && !entry.current)) continue
+    if (entry.objectId !== object.id || !taskEntryCheckable(entry, typesById.value.get(object.typeId), object)) continue
     kept.set(entry.key, { ...entry })
   }
 }

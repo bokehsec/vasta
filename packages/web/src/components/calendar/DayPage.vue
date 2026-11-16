@@ -1,13 +1,15 @@
 <script setup lang="ts">
 // The calendar's Day view, which is also Today: what is scheduled that day, its daily note
 // (edited in place, with what refers to the day), and what was created that day.
-import { computed, provide, ref, watch } from 'vue'
+import { computed, inject, provide, ref, watch } from 'vue'
 import { defaultTemplate, type CalendarEntry, type CalendarSource, type Id, type ObjectSummary } from '@vasta/core'
 import { ENTRY_DRAGGING } from '../../lib/calendar-drag.ts'
 import { formatClock, isToday, isoWeek } from '../../lib/calendar.ts'
 import { greyButton, mainButton } from '../../lib/buttons.ts'
 import { displayTitle } from '../../lib/format.ts'
-import { systemType, typesById } from '../../lib/state.ts'
+import { cachedSummary, systemType, typesById } from '../../lib/state.ts'
+import { dayTaskGroups } from '../../lib/calendar-tasks.ts'
+import { ENTRY_COMPLETION } from '../../lib/completion-feedback.ts'
 import { pageWidthClass } from '../../lib/page-width.ts'
 import { templatesOf } from '../../lib/templates.ts'
 import ObjectPage from '../../views/ObjectPage.vue'
@@ -53,7 +55,15 @@ const weekday = computed(() => new Intl.DateTimeFormat(locale, { weekday: 'long'
 const date = computed(() => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${props.day}T00:00:00.000Z`)))
 
 /** All-day entries first, then by time. */
-const scheduled = computed(() => [...props.entries].sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start.localeCompare(b.start)))
+const completion = inject(ENTRY_COMPLETION, undefined)
+const grouped = computed(() => dayTaskGroups([...props.entries].sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start.localeCompare(b.start)), cachedSummary, typesById.value, (entry) => !!completion?.retained(entry)))
+const scheduled = computed(() => grouped.value.scheduled)
+const taskSections = computed(() => [
+  { id: 'planned', title: 'Planned for this day', icon: 'ph:calendar-blank', rows: grouped.value.planned },
+  { id: 'due', title: 'Due by this day', icon: 'ph:flag', rows: grouped.value.due },
+  { id: 'completed', title: 'Completed', icon: 'ph:check-circle', rows: grouped.value.completed },
+  { id: 'dropped', title: 'Dropped', icon: 'ph:x-circle', rows: grouped.value.dropped },
+].filter((section) => section.rows.length))
 const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
 </script>
 
@@ -79,14 +89,21 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
           <AppIcon fallback="ph:plus" :size="13" /> Add
         </button>
       </div>
-      <p v-if="!scheduled.length" class="rounded-lg border border-dashed border-line px-3 py-3 text-sm text-ink-faint">Nothing scheduled. Tasks due, dated objects and events show here.</p>
-      <div v-else class="space-y-1">
+      <p v-if="!scheduled.length && !taskSections.length" class="rounded-lg border border-dashed border-line px-3 py-3 text-sm text-ink-faint">Nothing scheduled. Planned tasks, deadlines, dated objects and events show here.</p>
+      <div v-if="scheduled.length" class="space-y-1">
         <div v-for="entry in scheduled" :key="entry.key" class="flex items-stretch gap-3">
           <span class="w-14 shrink-0 pt-1 text-right text-xs tabular-nums text-ink-faint">{{ entry.allDay ? 'All day' : formatClock(entry.start) }}</span>
           <div class="min-w-0 flex-1 text-sm">
             <CalendarEntryItem :entry="entry" variant="block" :source="sources.get(entry.sourceId ?? '')" @details="(e, el) => emit('details', e, el)" />
           </div>
         </div>
+      </div>
+    </section>
+
+    <section v-for="section in taskSections" :key="section.id" class="mt-8" :data-task-section="section.id">
+      <h2 :class="heading" class="mb-3"><AppIcon :fallback="section.icon" /> {{ section.title }} <span class="font-normal text-ink-faint">{{ section.rows.length }}</span></h2>
+      <div class="space-y-1.5">
+        <CalendarEntryItem v-for="row in section.rows" :key="row.entry.key" :entry="row.entry" :task-role="row.role" variant="day-task" @details="(e, el) => emit('details', e, el)" />
       </div>
     </section>
 

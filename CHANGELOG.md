@@ -195,6 +195,14 @@ GitHub release page.
 
 ### Changed
 
+- **Calendar plans and deadlines are clear.** The Day view separates planned work, deadlines,
+  completed tasks and dropped tasks. Empty circles mean unfinished work; a checkmark means done.
+  Matching plan and deadline entries share one row, and each task shows its other date. Change
+  dates by opening the task; there are no extra Reschedule buttons on the calendar.
+- **Rescheduling keeps deadlines.** Schedule changes the planned work date without moving a
+  deadline unless you ask. Planning after the deadline shows a warning. A task's date picker
+  shows the other date and offers to move it too; repeating dates stay separate.
+
 - **Simpler task rows.** Removed row multiselect, selection menus and the bulk-action bar from
   lists and tables throughout Vasta. Task rows keep their completion circle; individual actions,
   Review and triage remain available.

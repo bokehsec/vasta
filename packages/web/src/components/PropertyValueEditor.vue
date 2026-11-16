@@ -187,7 +187,9 @@ function removeRelation(id: string) {
       :placeholder="placeholder"
       @update="emit('update', $event ? { kind: 'date', value: $event } : undefined)"
       @close="emit('close')"
-    />
+    >
+      <template #date-options><slot name="date-options" /></template>
+    </DateValueEditor>
 
     <template v-else-if="def.kind === 'select'">
       <button ref="anchor" class="flex min-h-8 w-full flex-wrap items-center gap-1 rounded-md px-1.5 py-1 text-left hover:bg-hover" @click="open = !open">

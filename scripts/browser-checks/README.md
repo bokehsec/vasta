@@ -21,6 +21,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node httpsave.mjs            # HTTP mode: a rename made elsewhere while typing is not undone
     node calendar.mjs [chromium|webkit] [base] [phone]   # repeating dates: drag, resize, the three choices, bars, a repeating task's checkbox; phone = long press (chromium)
     node calendar-closed.mjs [chromium|webkit] [base]   # closed tasks on the Calendar page: Done and Dropped left out by default (month, week, day, the small month's dots), "Done and dropped tasks" in the Show menu (struck, no "hidden" count, kept on reload), a task ticked there stays checked and struck with Undo until another range or a reload
+    node calendar-planned.mjs [chromium|webkit] [base]   # planned work vs deadlines, actual completion/Undo, same-slot deduplication, safe repeats, task filtering and explicit related-date moves; desktop/phone; defaults to isolated 5383, MODE=json too
     node group-collapse.mjs [chromium|webkit] [base]   # group carets, personal per-view/embed folds, keyboard, phone rows, linked chips and full preview counts (default 5283; MODE=json too)
     node table.mjs [chromium|webkit] [base]   # Columns menu, resizing, filters through a relation (MODE=json too)
     node listrows.mjs [chromium|webkit] [base]   # fields on list rows: the Fields menu (Due, wrap titles), a task's checkbox, reset to default (MODE=json too)
