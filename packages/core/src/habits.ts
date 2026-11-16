@@ -6,7 +6,7 @@
 // adds to nor breaks a streak. A habit with "Times a week" counts by the week instead (Monday to
 // Sunday, any days): its weeks are scored, and its streaks are in weeks.
 import { HABIT_DAYS_PROPERTY_ID, HABIT_PAUSED_PROPERTY_ID, HABIT_PER_WEEK_PROPERTY_ID, HABIT_REMIND_PROPERTY_ID, HABIT_TARGET_PROPERTY_ID, HABIT_UNIT_PROPERTY_ID } from './builtin-types.ts'
-import type { HabitTypeSettings, Id, ObjectSummary, PropertyValue } from './model.ts'
+import type { Id, ObjectSummary, PropertyValue } from './model.ts'
 import { addDays, mondayOf } from './time.ts'
 
 type Habit = Pick<ObjectSummary, 'props' | 'createdAt'>
@@ -19,11 +19,6 @@ const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
 export const habitDoneKey = (day: string) => `${DONE_PREFIX}${day}`
 export const DONE_VALUE: PropertyValue = { kind: 'checkbox', value: true }
-
-/** The progress charts a habit type starts with (HabitTypeSettings, Type settings › Progress). */
-export const HABIT_PROGRESS_DEFAULT: HabitTypeSettings = { strip: 'days', panel: 'calendar', weeks: 4 }
-/** The ranges a habit type's progress may cover, in weeks. */
-export const HABIT_WEEKS_RANGES: readonly (4 | 8 | 13)[] = [4, 8, 13]
 
 /** The daily goal of a habit that has one (a number above zero). */
 export function habitTarget(habit: Habit): number | undefined {
