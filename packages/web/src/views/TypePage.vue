@@ -33,7 +33,7 @@ import { confirmDialog, openContextMenu, openMenuAt, promptDialog, type MenuItem
 import { groupOptions, queryContext } from '../lib/query.ts'
 import { keysOf } from '../lib/shortcuts.ts'
 import { meId, sharedSpace } from '../lib/people.ts'
-import { primeSummaries, replaceType, typesById, unsavedTypes, workspace } from '../lib/state.ts'
+import { loadWorkspace, primeSummaries, replaceType, typesById, unsavedTypes, workspace } from '../lib/state.ts'
 import { session } from '../lib/session.ts'
 import { readSession, startSession, undoOutcome, writeSession, workflowTitle, type WorkflowKind, type ReviewSession } from '../lib/review-session.ts'
 import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
@@ -57,6 +57,11 @@ const filterText = ref('')
 const activeViewId = ref<string>('')
 
 async function loadObjects() {
+  // A type of another space (a link to it) opens that space: the page reads its type from that space's types.
+  if (!typesById.value.has(props.id)) {
+    const other = await api.type(props.id).catch(() => undefined)
+    if (other && other.spaceId !== workspace.space?.id) await loadWorkspace(other.spaceId)
+  }
   objects.value = await api.objectsOfType(props.id)
   completion.prune(new Set(objects.value.map((object) => object.id)))
   primeSummaries(objects.value)

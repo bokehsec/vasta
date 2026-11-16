@@ -24,6 +24,14 @@ export const PANEL_CHARTS: { id: PanelChart; label: string; hint: string }[] = [
   { id: 'counts', label: 'Done and missed', hint: 'Counts each week, not percents' },
 ]
 
+/** The Progress tab's charts: the panel's four, larger, with shorter names to fit a switch. */
+export const REPORT_CHARTS: { id: PanelChart; label: string; hint: string }[] = [
+  { id: 'weeks', label: 'Bars', hint: 'Share done each week' },
+  { id: 'line', label: 'Line', hint: 'The trend, as one line' },
+  { id: 'calendar', label: 'Calendar', hint: 'Every day, darker when more got done' },
+  { id: 'counts', label: 'Done and missed', hint: 'Counts each week, not percents' },
+]
+
 // Before all of it moved into Type settings, each device kept its own picks here (the place under
 // PLACE_KEY, the whole layout under OLD_LAYOUT_KEY). A device keeps seeing what it had picked for
 // any part the type doesn't set yet.
@@ -45,6 +53,7 @@ function settle(saved: Partial<Record<keyof HabitTypeSettings, unknown>>, fallba
     place: PROGRESS_PLACES.find((p) => p === saved.place) ?? fallback.place,
     strip: STRIP_CHARTS.find((c) => c.id === saved.strip)?.id ?? fallback.strip,
     panel: PANEL_CHARTS.find((c) => c.id === saved.panel)?.id ?? fallback.panel,
+    report: REPORT_CHARTS.find((c) => c.id === saved.report)?.id ?? fallback.report,
     weeks: HABIT_WEEKS_RANGES.find((w) => w === saved.weeks) ?? fallback.weeks,
   }
 }

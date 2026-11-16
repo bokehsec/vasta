@@ -312,11 +312,11 @@ describe('sync', () => {
     await a.push()
     expect(store.getType('type-book')).not.toHaveProperty('subtasks')
     // A habit type's progress on the Tracker (where, which charts, the range), set on any device.
-    a.edit('types', 'type-book', { habits: { place: 'beside', strip: 'days', panel: 'line', weeks: 8 } }, 's')
+    a.edit('types', 'type-book', { habits: { place: 'beside', strip: 'line', panel: 'line', report: 'counts', weeks: 8 } }, 's')
     a.edit('types', 'type-book', { habits: { place: 'below' } }, 's')
     a.edit('types', 'type-book', { habits: { weeks: 5 } }, 's')
     expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for habits', 'invalid value for habits'])
-    expect(store.getType('type-book')?.habits).toEqual({ place: 'beside', strip: 'days', panel: 'line', weeks: 8 })
+    expect(store.getType('type-book')?.habits).toEqual({ place: 'beside', strip: 'line', panel: 'line', report: 'counts', weeks: 8 })
     a.edit('types', 'type-book', { habits: null }, 's')
     await a.push()
     expect(store.getType('type-book')).not.toHaveProperty('habits')

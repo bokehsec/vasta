@@ -28,7 +28,8 @@ GitHub release page.
   habits asked for got done over the last 4, 8 or 13 weeks, as a percent with "94 of 120", a bar
   per week and a row per habit with its goal. Paused habits are listed but left out of the total;
   the range is the one in Type settings › Progress, so the Tracker and every device cover the same
-  weeks. It works offline. The agent tools' `list_habits` can add
+  weeks. Beside the range you pick the chart (bars, a line, a calendar of days, or done and
+  missed), kept on the habit type too, and each habit shows its own weeks as small columns. It works offline. The agent tools' `list_habits` can add
   the same numbers (`weeks`).
 - **Habit progress on the Tracker, your way.** The Habits Tracker shows how you are doing next to
   the habits. Type settings › Progress chooses where (above the habits, beside them — below them
@@ -271,6 +272,8 @@ GitHub release page.
 
 ### Fixed
 
+- **A link to a type of another space** (its page, e.g. Habits) opens that space and shows the
+  page, as a link to an object already did; it used to stay blank.
 - **Swiping back on an iPhone goes back.** A swipe from the screen's left edge could leave you on
   the same page: it also started opening the side menu, and Back then closed that menu instead of
   leaving. The edge swipe now only goes back; the side menu opens from the ☰ button (or Menu in the
