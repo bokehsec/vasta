@@ -1,20 +1,20 @@
 <script setup lang="ts">
-// The Habits page's Tracker view: one row per habit, the last two weeks (one beside a panel) to
-// check off, and each habit's streak and its last 4 weeks (counted as the Progress view counts
-// them); on a phone, rows as in the Habit Tracker app (HabitRows). Progress shows above the habits
-// or beside them (below on a phone), or not at all; where, which chart and over how many weeks are
-// the type's own (the Tracker's Display menu). Paused habits sit at the bottom, faded.
+// The Habits page's Tracker view: one row per habit, the last two weeks (one beside the progress) to
+// check off (days off, paused ones, faded), and each habit's streak and its last 4 weeks (core's habitStats, counted as
+// the Progress view counts them); on a phone, rows as in the Habit Tracker app (HabitRows). Progress
+// shows above the habits or beside them (below on a phone), or not at all; where, which chart and
+// over how many weeks are the type's own (the Tracker's Display menu). Habits paused today sit at
+// the bottom, faded.
 import { computed, toRef } from 'vue'
 import { useRoute } from 'vue-router'
-import { addDays, habitReport, habitStats, habitTarget, habitUnit, isHabitDone, isHabitDue, isHabitPaused, type HabitTally, type ObjectType, type ObjectSummary } from '@vasta/core'
+import { addDays, habitDayState, habitPausedOn, habitStats, habitTarget, habitUnit, type ObjectType, type ObjectSummary } from '@vasta/core'
 import { swatchClasses } from '../lib/colors.ts'
 import { habitColor, useFoodHabits, useToday } from '../lib/habits.ts'
-import { useHabitProgress, useTypeHabitProgress } from '../lib/habit-progress.ts'
+import { percentText, useHabitProgress, useTypeHabitProgress } from '../lib/habit-progress.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import HabitCheck from './HabitCheck.vue'
-import HabitProgressPanel from './HabitProgressPanel.vue'
-import HabitProgressStrip from './HabitProgressStrip.vue'
+import HabitProgressSummary from './HabitProgressSummary.vue'
 import HabitRows from './HabitRows.vue'
 import ObjectLink from './ObjectLink.vue'
 
@@ -37,9 +37,6 @@ const weekday = new Intl.DateTimeFormat(locale, { weekday: 'narrow', timeZone: '
 const utc = (day: string) => new Date(`${day}T00:00:00.000Z`)
 
 const habits = useFoodHabits(toRef(props, 'habits'))
-/** Each habit's last 4 weeks, done of expected (core habitReport, as in Progress). */
-const fourWeeks = computed(() => new Map(habitReport(habits.value, 4, today.value).habits.map((r) => [r.id, r.total])))
-const percent = (tally: HabitTally | undefined) => (tally?.expected ? `${Math.round((tally.done / tally.expected) * 100)}%` : '—')
 
 const shown = computed(() => {
   const q = props.filter?.trim().toLowerCase()
@@ -47,7 +44,7 @@ const shown = computed(() => {
 })
 const rows = computed(() => {
   return shown.value
-    .map((habit) => ({ habit, paused: isHabitPaused(habit), stats: habitStats(habit, today.value), weeks: fourWeeks.value.get(habit.id) }))
+    .map((habit) => ({ habit, paused: habitPausedOn(habit, today.value), stats: habitStats(habit, today.value) }))
     .sort((a, b) => Number(a.paused) - Number(b.paused) || a.habit.title.localeCompare(b.habit.title))
 })
 
@@ -59,9 +56,9 @@ const progressLink = computed(() => `${route.path}?view=__progress`)
 
 <template>
   <div class="mt-4 max-md:pb-24">
-    <HabitProgressStrip
+    <HabitProgressSummary
       v-if="place === 'above' && shown.length"
-      :chart="charts.strip"
+      :chart="charts.chart"
       :weeks="weeks"
       :total="progress.total.value"
       :by-week="progress.byWeek.value"
@@ -95,22 +92,23 @@ const progressLink = computed(() => `${route.path}?view=__progress`)
             </ObjectLink>
           </td>
           <td v-for="day in days" :key="day" class="border-t border-line/70 py-1.5 text-center">
-            <HabitCheck :habit="row.habit" :day="day" :size="24" square class="mx-auto" :class="isHabitDue(row.habit, day) || isHabitDone(row.habit, day) ? '' : 'opacity-40'" />
+            <HabitCheck :habit="row.habit" :day="day" :size="24" square class="mx-auto" :class="['off', 'paused'].includes(habitDayState(row.habit, day, today)) ? 'opacity-40' : ''" />
           </td>
           <td class="border-t border-line/70 py-1.5 pl-3 text-right tabular-nums">
             <span v-if="row.stats.current" class="inline-flex items-center gap-0.5 text-orange-600 dark:text-orange-400"><AppIcon fallback="ph:fire-fill" :size="12" />{{ row.stats.current }}<template v-if="row.stats.streakUnit === 'week'">&nbsp;wk</template></span>
             <span v-else class="text-ink-faint">0</span>
           </td>
-          <td class="border-t border-line/70 py-1.5 pl-3 text-right tabular-nums text-ink-soft max-sm:hidden" :title="row.weeks?.expected ? `${row.weeks.done} of ${row.weeks.expected}` : undefined">{{ percent(row.weeks) }}</td>
+          <td class="border-t border-line/70 py-1.5 pl-3 text-right tabular-nums text-ink-soft max-sm:hidden" :title="row.stats.last4Weeks.expected ? `${row.stats.last4Weeks.done} of ${row.stats.last4Weeks.expected}` : undefined">{{ percentText(row.stats.last4Weeks) }}</td>
         </tr>
       </tbody>
     </table>
     <p v-if="!rows.length" class="py-10 text-center text-sm text-ink-faint">No habits match the filter.</p>
     </div>
-    <HabitProgressPanel
+    <HabitProgressSummary
       v-if="beside && shown.length"
+      beside
       :class="isPhone ? 'mt-2 border-t border-line pt-5' : 'border-l border-line pl-6'"
-      :chart="charts.panel"
+      :chart="charts.chart"
       :weeks="weeks"
       :total="progress.total.value"
       :by-week="progress.byWeek.value"

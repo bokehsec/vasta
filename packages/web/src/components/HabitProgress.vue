@@ -1,21 +1,19 @@
 <script setup lang="ts">
 // The Habits page's Progress view: how much of what the habits asked for got done over the last
 // 4, 8 or 13 whole weeks (core habitReport: done ÷ expected, added up, never an average of
-// percents). A headline, a chart of each week (bars, a line, a calendar of days or done and missed)
-// and a row per habit with its own weeks. The range and the chart are the habit type's: the
-// switches here change them, so every device shows the same (the range is the Tracker's too).
-// Paused habits sit at the bottom, faded, and are left out of the headline and the chart.
-import { computed, ref, toRef } from 'vue'
-import { HABIT_WEEKS_RANGES, habitWeekdays, habitWeeklyTarget, isHabitPaused, type HabitTally, type HabitTypeSettings, type ObjectSummary, type ObjectType } from '@vasta/core'
-import { habitProgressOf, REPORT_CHARTS, saveHabitProgress, useHabitProgress, type PanelChart } from '../lib/habit-progress.ts'
+// percents). A headline, the chart (a trend line or a calendar of done days, the same two as the
+// Tracker's) and a row per habit with its own weeks. The range and the chart are the habit type's:
+// the switches here change them, so every device shows the same (they are the Tracker's too). Days
+// a habit was paused count as days off; habits paused today sit at the bottom, faded.
+import { computed, toRef } from 'vue'
+import { HABIT_WEEKS_RANGES, habitPausedOn, habitPercent, habitWeekdays, habitWeeklyTarget, type HabitChart, type HabitTally, type HabitTypeSettings, type ObjectSummary, type ObjectType } from '@vasta/core'
+import { CHARTS, dayLabel, habitProgressOf, percentText, saveHabitProgress, useHabitProgress } from '../lib/habit-progress.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { habitColor, useFoodHabits, useToday } from '../lib/habits.ts'
-import AppIcon from './AppIcon.vue'
-import HabitChartPicker from './HabitChartPicker.vue'
-import HabitReportChart from './HabitReportChart.vue'
+import HabitDaysChart from './HabitDaysChart.vue'
+import HabitTrendChart from './HabitTrendChart.vue'
 import ObjectLink from './ObjectLink.vue'
-import PopoverMenu from './PopoverMenu.vue'
 
 const props = defineProps<{ type: ObjectType; habits: ObjectSummary[]; filter?: string }>()
 const emit = defineEmits<{ menu: [event: MouseEvent, object: ObjectSummary] }>()
@@ -23,16 +21,10 @@ const emit = defineEmits<{ menu: [event: MouseEvent, object: ObjectSummary] }>()
 const RANGES = HABIT_WEEKS_RANGES
 const settings = computed(() => habitProgressOf(props.type))
 const weeks = computed(() => settings.value.weeks)
-const chart = computed(() => settings.value.report)
+const chart = computed(() => settings.value.chart)
 const setProgress = (patch: Partial<HabitTypeSettings>) => saveHabitProgress(props.type, patch)
 const setWeeks = (value: HabitTypeSettings['weeks']) => value !== weeks.value && setProgress({ weeks: value })
-const chartButton = ref<HTMLElement | null>(null)
-const chartMenu = ref(false)
-function setChart(value: PanelChart) {
-  chartMenu.value = false
-  if (value !== chart.value) setProgress({ report: value })
-}
-const chartLabel = computed(() => REPORT_CHARTS.find((c) => c.id === chart.value)!.label)
+const setChart = (value: HabitChart) => value !== chart.value && setProgress({ chart: value })
 
 const today = useToday()
 // Habits done from food get their days from what was logged; without this they would chart as never done.
@@ -44,18 +36,10 @@ const shown = computed(() => {
 const { report, byWeek, days } = useHabitProgress(shown, today, weeks)
 
 const locale = typeof navigator !== 'undefined' ? navigator.language : 'en'
-const short = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })
 const weekdayName = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' })
-const dayLabel = (day: string) => short.format(new Date(`${day}T00:00:00Z`))
 // 2026-11-16 is a Monday: the weekday ids in order from it.
 const WEEKDAY_IDS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 const weekdayLabel = (id: string) => weekdayName.format(new Date(`2026-11-${16 + WEEKDAY_IDS.indexOf(id)}T00:00:00Z`))
-
-const percent = (tally: HabitTally) => (tally.expected ? Math.round((tally.done / tally.expected) * 100) : undefined)
-const percentText = (tally: HabitTally) => {
-  const value = percent(tally)
-  return value === undefined ? '—' : `${value}%`
-}
 
 /** A habit's goal in words: "3 a week", its weekdays, or every day. */
 function goalText(habit: ObjectSummary) {
@@ -68,7 +52,7 @@ function goalText(habit: ObjectSummary) {
 const rows = computed(() => {
   const byId = new Map(report.value.habits.map((r) => [r.id, r]))
   return shown.value
-    .map((habit) => ({ habit, paused: isHabitPaused(habit), tally: byId.get(habit.id)!.total, byWeek: byId.get(habit.id)!.byWeek }))
+    .map((habit) => ({ habit, paused: habitPausedOn(habit, today.value), tally: byId.get(habit.id)!.total, byWeek: byId.get(habit.id)!.byWeek }))
     .sort((a, b) => Number(a.paused) - Number(b.paused) || a.habit.title.localeCompare(b.habit.title))
 })
 /** A habit's own weeks as small columns (share done; this week faded; nothing asked: a stub). */
@@ -97,21 +81,11 @@ const nothingYet = computed(() => !report.value.total.expected && !report.value.
           {{ count }} weeks
         </button>
       </div>
-      <!-- The chart: a switch on a computer, a button opening the list (a sheet) on a phone. -->
-      <template v-if="isPhone">
-        <button ref="chartButton" class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-hover px-3 text-sm font-medium" :aria-expanded="chartMenu" data-report-chart-button @click="chartMenu = !chartMenu">
-          {{ chartLabel }}
-          <AppIcon fallback="ph:caret-down" :size="14" class="text-ink-faint" />
-        </button>
-        <PopoverMenu v-model:open="chartMenu" :anchor="chartButton" label="Chart">
-          <HabitChartPicker picker="report" :charts="REPORT_CHARTS" :model-value="chart" @update="setChart" />
-        </PopoverMenu>
-      </template>
-      <div v-else class="inline-flex rounded-lg bg-hover p-0.5 text-sm" role="group" aria-label="Chart" data-chart-picker="report">
+      <div class="inline-flex rounded-lg bg-hover p-0.5 text-sm max-md:min-w-[14.5rem] max-md:flex-1" role="group" aria-label="Chart" data-chart-picker="progress">
         <button
-          v-for="c in REPORT_CHARTS"
+          v-for="c in CHARTS"
           :key="c.id"
-          class="min-h-9 whitespace-nowrap rounded-md px-3 py-1"
+          class="min-h-9 whitespace-nowrap rounded-md px-3 py-1 max-md:min-h-11 max-md:flex-1 max-md:px-2"
           :class="chart === c.id ? 'bg-surface font-medium shadow-sm' : 'text-ink-soft hover:text-ink'"
           :aria-pressed="chart === c.id"
           :title="c.hint"
@@ -135,8 +109,11 @@ const nothingYet = computed(() => !report.value.total.expected && !report.value.
       </div>
 
       <section>
-        <h3 class="mb-2 text-sm font-semibold">Each week</h3>
-        <HabitReportChart :chart="chart" :weeks="weeks" :by-week="byWeek" :days="days" />
+        <h3 class="mb-2 text-sm font-semibold">{{ chart === 'line' ? 'Each week' : 'Each day' }}</h3>
+        <div data-report-chart :data-chart="chart">
+          <HabitTrendChart v-if="chart === 'line'" :weeks="byWeek" :height="150" labels />
+          <HabitDaysChart v-else :days="days" :cell="isPhone ? 16 : 22" labels />
+        </div>
       </section>
 
       <section>
@@ -168,9 +145,9 @@ const nothingYet = computed(() => !report.value.total.expected && !report.value.
                     v-for="(t, i) in miniWeeks(row.byWeek)"
                     :key="i"
                     :x="i * MINI.step"
-                    :y="MINI.h - (t.expected ? Math.max(1.5, ((percent(t) ?? 0) / 100) * MINI.h) : 1.5)"
+                    :y="MINI.h - (t.expected ? Math.max(1.5, ((habitPercent(t) ?? 0) / 100) * MINI.h) : 1.5)"
                     :width="MINI.bar"
-                    :height="t.expected ? Math.max(1.5, ((percent(t) ?? 0) / 100) * MINI.h) : 1.5"
+                    :height="t.expected ? Math.max(1.5, ((habitPercent(t) ?? 0) / 100) * MINI.h) : 1.5"
                     rx="1"
                     :fill="t.expected ? 'var(--color-chart)' : 'var(--color-line-strong)'"
                     :opacity="i === miniWeeks(row.byWeek).length - 1 ? 0.4 : 1"

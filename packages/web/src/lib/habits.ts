@@ -1,7 +1,8 @@
 // Habits (core's habits.ts): the space's habits, kept fresh, and logging a day: checked on or off,
 // or an amount toward a daily goal. A change writes only that day's prop (`done:<day>`), on top of
 // the habit as stored. A habit done from food ("From food") has its days worked out from what is
-// logged (core's withFood) and is not checked by hand.
+// logged (core's withFood) and is not checked by hand. A habit linked to SparkyFitness is never
+// changed by a tap: its marks ask for the amount, and a hand entry can be taken away again.
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import {
   FOOD_HABIT_DAYS,
@@ -10,15 +11,20 @@ import {
   habitDayValue,
   habitDoneKey,
   habitFoodRule,
+  habitHasHandValue,
+  habitSparkyRule,
+  habitSyncedText,
+  habitTap,
   habitTarget,
   habitUnit,
   habitValue,
-  isHabitDone,
   nutritionDays,
   withFood,
   type ColorName,
+  type HabitDayState,
   type NutritionDay,
   type ObjectSummary,
+  type PropertyValue,
 } from '@vasta/core'
 import { api } from './api.ts'
 import { clone } from './clone.ts'
@@ -26,7 +32,7 @@ import { onChange } from './events.ts'
 import { dayKey } from './actions.ts'
 import { formatLongDay } from './format.ts'
 import { dailyNotesBetween, useGoals } from './nutrition.ts'
-import { promptDialog } from './overlays.ts'
+import { amountDialog, promptDialog } from './overlays.ts'
 import { lastError, notice, primeFromObject, primeSummaries, systemType } from './state.ts'
 
 export const DEFAULT_HABIT_COLOR: ColorName = 'emerald'
@@ -117,24 +123,25 @@ export function useHabits() {
 }
 
 /**
- * Set the amount a habit reached on a day (a plain habit: 1 done, 0 not); `local` (a habit shown on
- * screen) changes at once and goes back if the save fails.
+ * Set the amount a habit reached on a day (a plain habit: 1 done, 0 not), or `'synced'`: take the
+ * hand entry away so what SparkyFitness gave counts again. `local` (a habit shown on screen)
+ * changes at once and goes back if the save fails.
  */
-export async function setHabitAmount(habitId: string, day: string, amount: number, local?: ObjectSummary) {
+export async function setHabitAmount(habitId: string, day: string, amount: number | 'synced', local?: ObjectSummary) {
   if (fromFood(local)) return
   const key = habitDoneKey(day)
-  const apply = (habit: Pick<ObjectSummary, 'props' | 'createdAt'>, value: number) => {
-    const next = habitDayValue(habit, value)
-    if (next) habit.props[key] = next
+  const apply = (habit: Pick<ObjectSummary, 'props' | 'createdAt'>, value: PropertyValue | undefined) => {
+    if (value) habit.props[key] = value
     else delete habit.props[key]
   }
-  const before = local ? habitValue(local, day) : 0
-  if (local) apply(local, amount)
+  const next = (habit: Pick<ObjectSummary, 'props' | 'createdAt'>) => (amount === 'synced' ? undefined : habitDayValue(habit, amount))
+  const before = local?.props[key]
+  if (local) apply(local, next(local))
   try {
     const base = await api.object(habitId)
-    const next = clone(base)
-    apply(next, amount)
-    primeFromObject(await api.saveObject(next, base))
+    const object = clone(base)
+    apply(object, next(object))
+    primeFromObject(await api.saveObject(object, base))
   } catch (error) {
     if (local) apply(local, before)
     lastError.value = (error as Error).message
@@ -146,29 +153,35 @@ export function setHabitDone(habit: ObjectSummary, day: string, done: boolean) {
   return setHabitAmount(habit.id, day, done ? (habitTarget(habit) ?? 1) : 0, habit)
 }
 
-/** One click on a habit for a day: a plain one toggles, a goal one adds 1 (past the goal it starts over). */
+/** One click on a habit for a day (core's habitTap): a plain one toggles, a goal one adds 1; one linked to SparkyFitness asks. */
 export function stepHabit(habit: ObjectSummary, day: string) {
   if (fromFood(habit)) return
-  const target = habitTarget(habit)
-  if (!target) return setHabitDone(habit, day, !isHabitDone(habit, day))
-  const value = habitValue(habit, day)
-  return setHabitAmount(habit.id, day, value >= target ? 0 : value + 1, habit)
+  const tap = habitTap(habit, day)
+  return tap === 'ask' ? askHabitAmount(habit, day) : setHabitAmount(habit.id, day, tap.amount, habit)
 }
 
-/** Ask for a day's exact amount (goal habits; right click or long press). */
+/** Ask for a day's exact amount (right click or long press); for a habit linked to SparkyFitness, with what it gave and a way back to it. */
 export async function askHabitAmount(habit: ObjectSummary, day: string) {
   if (fromFood(habit)) return
   const target = habitTarget(habit)
   const unit = habitUnit(habit)
-  const answer = await promptDialog({
+  const date = formatLongDay(`${day}T00:00:00.000Z`)
+  const hand = habitHasHandValue(habit, day)
+  const question = target ? `How much on ${date}? The goal is ${target}${unit ? ` ${unit}` : ''}.` : `Done on ${date}? 1 for yes, 0 for no.`
+  const linked = !!habitSparkyRule(habit)
+  const synced = `From SparkyFitness: ${habitSyncedText(habit, day) || 'nothing for this day'}.`
+  const options = {
     title: habit.title || 'Habit',
-    message: target ? `How much on ${formatLongDay(`${day}T00:00:00.000Z`)}? The goal is ${target}${unit ? ` ${unit}` : ''}.` : `Done on ${formatLongDay(`${day}T00:00:00.000Z`)}? 1 for yes, 0 for no.`,
-    value: String(habitValue(habit, day) || ''),
+    message: linked ? `${synced} ${hand ? 'Your own entry for this day counts instead.' : question}` : question,
+    value: linked && !hand ? '' : String(habitValue(habit, day) || ''),
     placeholder: '0',
     confirmLabel: 'Save',
-  })
+  }
+  // A linked habit with a hand entry can go back to what SparkyFitness gave.
+  const answer = linked && hand ? await amountDialog({ ...options, alternative: 'Use SparkyFitness value' }) : await promptDialog(options)
   if (answer === null) return
-  const amount = Number(answer.replace(',', '.'))
+  if (answer === 'alternative') return setHabitAmount(habit.id, day, 'synced', habit)
+  const amount = Number((typeof answer === 'string' ? answer : answer.text).replace(',', '.'))
   if (!Number.isFinite(amount) || amount < 0) {
     lastError.value = 'Type a number, 0 or more.'
     return
@@ -180,3 +193,21 @@ export async function askHabitAmount(habit: ObjectSummary, day: string) {
 export const habitAmountLabel = habitAmountText
 
 export const formatAmount = (value: number) => (Number.isInteger(value) ? String(value) : value.toFixed(1))
+
+/** A day's state in words, for a mark's title ("done", "60% of the goal", "day off"…); `part` is how far along a partial day is, 0 to 1. */
+export function habitStateWord(state: HabitDayState, part = 0): string {
+  switch (state) {
+    case 'done':
+      return 'done'
+    case 'partial':
+      return `${Math.round(part * 100)}% of the goal`
+    case 'missed':
+      return 'not done'
+    case 'off':
+      return 'day off'
+    case 'later':
+      return 'not done yet'
+    case 'paused':
+      return 'paused'
+  }
+}

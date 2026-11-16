@@ -52,7 +52,7 @@ import { AccountError, AccountService, type Auth } from './accounts.ts'
 import { currentActor, outsideActor, runAs } from './actor.ts'
 import { AgentTools } from './agent.ts'
 import { CalendarService, CalendarSyncError, normalizeCalendarUrl } from './calendars.ts'
-import { SparkyFitnessService } from './sparkyfitness.ts'
+import { SparkyError, SparkyFitnessService } from './sparkyfitness.ts'
 import { CaptureError, CaptureService, mergeCaptures, type CaptureResult } from './capture.ts'
 import { PushError, type PushKinds, type PushService, type PushSubscriptionJson } from './push.ts'
 import { ReminderError, type ReminderService } from './reminders.ts'
@@ -1023,7 +1023,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
       if (typeof body.rule !== 'string') return c.json({ error: 'choose a SparkyFitness rule' }, 400)
       return c.json(await sparkyService.preview(habit.id, body))
     } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : 'Could not preview SparkyFitness' }, 400)
+      return c.json({ error: error instanceof SparkyError ? error.message : 'Could not preview SparkyFitness' }, 400)
     }
   })
 
@@ -1037,8 +1037,8 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
       sparkyService.connect(id, body)
       void sparkyService.sync(id)
       return c.json(sparkyService.status(id))
-    } catch {
-      return c.json({ error: 'enter a valid server address, read-only key and history range' }, 400)
+    } catch (error) {
+      return c.json({ error: error instanceof SparkyError ? error.message : 'enter a valid server address, read-only key and history range' }, 400)
     }
   })
   api.post('/spaces/:id/sparkyfitness/sync', async (c) => {
@@ -1047,8 +1047,9 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     void sparkyService.sync(id)
     return c.json(sparkyService.status(id))
   })
+  /** `?remove=1` also takes away what the connection added: its imported days, the habits' links and its two properties. */
   api.delete('/spaces/:id/sparkyfitness', (c) => {
-    sparkyService.disconnect(c.req.param('id'))
+    sparkyService.disconnect(c.req.param('id'), { remove: c.req.query('remove') === '1' })
     return c.body(null, 204)
   })
 

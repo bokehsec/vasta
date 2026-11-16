@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // A habit's mark for a day: a circle that fills when done, or a ring that fills toward a daily
 // goal (a square, in the Tracker, fills from the bottom). A click toggles it (a goal: adds 1); a
-// right click or long press asks for the exact amount.
+// right click or long press asks for the exact amount. On a habit linked to SparkyFitness a click
+// asks too, so a tap never turns what SparkyFitness gave into a hand entry (lib/habits.ts).
 import { computed } from 'vue'
-import { habitSparkyRule, habitFoodRule, habitProgress, habitTarget, isHabitDone, type ObjectSummary } from '@vasta/core'
+import { habitSparkyRule, habitFoodRule, habitProgress, habitSyncedText, habitTarget, isHabitDone, type ObjectSummary } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
 import { iconTextClasses, swatchClasses } from '../lib/colors.ts'
 import { askHabitAmount, habitAmountLabel, habitColor, stepHabit } from '../lib/habits.ts'
@@ -19,9 +20,11 @@ const future = computed(() => props.day > dayKey())
 const color = computed(() => habitColor(props.habit))
 const longDay = new Intl.DateTimeFormat(typeof navigator !== 'undefined' ? navigator.language : 'en', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 const title = computed(() => {
-  const date = longDay.format(new Date(`${props.day}T00:00:00.000Z`)) + (habitSparkyRule(props.habit) ? ' · from SparkyFitness' : '')
+  const linked = !!habitSparkyRule(props.habit)
+  const date = longDay.format(new Date(`${props.day}T00:00:00.000Z`)) + (linked ? ` · from SparkyFitness${habitSyncedText(props.habit, props.day) ? `: ${habitSyncedText(props.habit, props.day)}` : ''}` : '')
   if (future.value) return `${date} · not yet`
   if (habitFoodRule(props.habit)) return `${date} · ${goal.value ? habitAmountLabel(props.habit, props.day) : done.value ? 'done' : 'not done'} · from what you log in Food`
+  if (linked) return `${date} · ${goal.value ? `${habitAmountLabel(props.habit, props.day)} · ` : ''}click to change`
   if (goal.value) return `${date} · ${habitAmountLabel(props.habit, props.day)} (${Math.round(progress.value * 100)}%) · click to add 1, right click to type the amount`
   return `${date} · ${done.value ? 'done · click to undo' : 'click to mark as done'}`
 })

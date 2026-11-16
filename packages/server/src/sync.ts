@@ -3,7 +3,7 @@
 // than the stored one, and Yjs updates of rich text; `text` hands out the Yjs updates a client
 // lacks. The app's other routes keep writing whole records; the store stamps them.
 import type { Id, ObjectRecord, ObjectType } from '@vasta/core'
-import { ClockDriftError, SYNC_TABLES, WriteRefused, applyFields, builtinTypeKey, canonicalJson, contentOfText, hlcTime, isHlc, isOpensOn, isPushable, mergeFields, type SyncRecords, type SyncTable } from '@vasta/core'
+import { ClockDriftError, SYNC_TABLES, WriteRefused, applyFields, builtinTypeKey, canonicalJson, contentOfText, hlcTime, isHabitProgressSettings, isHlc, isOpensOn, isPushable, mergeFields, type SyncRecords, type SyncTable } from '@vasta/core'
 import type { NodeStore, PulledRow, SyncChange, SyncChangeResult, SyncRow, SyncTombstone } from '@vasta/core/node'
 import { Y } from '@vasta/editor-schema/yjs'
 
@@ -95,13 +95,7 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   views: Array.isArray,
   openIn: optional((v) => v === 'page' || v === 'pane'),
   subtasks: optional((v) => isObject(v) && isNonEmpty((v as { parentField?: unknown }).parentField)),
-  habits: optional((v) => isObject(v) && Object.entries(v as object).every(([key, x]) => {
-    if (key === 'place') return ['off', 'above', 'beside'].includes(x as string)
-    if (key === 'strip') return ['weeks', 'line', 'days', 'meters', 'habits'].includes(x as string)
-    if (key === 'panel' || key === 'report') return ['weeks', 'line', 'calendar', 'counts'].includes(x as string)
-    if (key === 'weeks') return [4, 8, 13].includes(x as number)
-    return false
-  })),
+  habits: optional(isHabitProgressSettings),
   quickActions: optional((v) => isObject(v) && Object.entries(v as object).every(([key, x]) => {
     if (key === 'actions') return Array.isArray(x) && x.every(isQuickAction)
     if (key === 'triageStatuses') return Array.isArray(x) && x.every(isNonEmpty)

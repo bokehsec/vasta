@@ -20,7 +20,6 @@ import {
   habitStats,
   isHabitDone,
   isClosedTask,
-  isHabitPaused,
   isHabitDue,
   instantOf,
   isNutritionOn,
@@ -287,7 +286,7 @@ export class ReminderService {
         const habits = type ? habitsWithFood(this.store, space.id, this.store.listObjects(type.id), days.at(-1)!) : []
         for (const habit of habits) {
           const time = habitRemindAt(habit)
-          if (!time || isHabitPaused(habit)) continue
+          if (!time) continue
           const [hour, minute] = time.split(':').map(Number) as [number, number]
           for (const day of days) {
             const [year, month, date] = day.split('-').map(Number) as [number, number, number]
@@ -299,7 +298,7 @@ export class ReminderService {
             reminders.push({
               key: `habit:${habit.id}:${day}`,
               title: habit.title || 'A habit',
-              message: [amount ? `${amount} so far today` : 'Not done yet today', stats.weekly ? `${stats.weekDone} of ${stats.weekly} this week` : '', streak ? (stats.streakUnit === 'week' ? `${streak} ${streak === 1 ? 'week' : 'weeks'} in a row` : `${streak} in a row`) : ''].filter(Boolean).join(' · '),
+              message: [amount ? `${amount} so far today` : 'Not done yet today', stats.weekly ? `${stats.thisWeek.done} of ${stats.thisWeek.of} this week` : '', streak ? (stats.streakUnit === 'week' ? `${streak} ${streak === 1 ? 'week' : 'weeks'} in a row` : `${streak} in a row`) : ''].filter(Boolean).join(' · '),
               tag: 'alarm_clock',
               kind: 'habits',
               ...this.link(habit.id),

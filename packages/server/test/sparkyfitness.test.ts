@@ -6,7 +6,8 @@ import { createBuiltinTypes, habitValue, newObject } from '@vasta/core'
 import { NodeStore } from '@vasta/core/node'
 import { NodeMediaStore } from '@vasta/core/media-node'
 import { ChangeFeed } from '../src/events.ts'
-import { SparkyFitnessService, sparkyWater } from '../src/sparkyfitness.ts'
+import { currentActor, runAs } from '../src/actor.ts'
+import { SparkyFitnessService, sparkyWater, sparkySleep } from '../src/sparkyfitness.ts'
 import { createApp } from '../src/app.ts'
 import { asUser } from './helpers.ts'
 
@@ -47,8 +48,8 @@ describe('SparkyFitness sync', () => {
   it('fills each rule, ignores Active Calories, keeps hand entries and only writes changes', async () => {
     const { store, service, add, requests, changeSteps } = setup()
     const steps = add('steps', { target: { kind: 'number', value: 8000 }, 'done:2026-11-16': { kind: 'number', value: 12 } })
-    const water = add('water', { unit: { kind: 'text', value: 'L' } })
-    const sleep = add('sleep')
+    const water = add('water', { unit: { kind: 'text', value: 'L' }, target: { kind: 'number', value: 2 } })
+    const sleep = add('sleep', { target: { kind: 'number', value: 8 } })
     const calories = add('calories')
     const workout = add('workout', { 'sparkyfitness-workouts': { kind: 'text', value: ' other, full BODY a ' } })
     const active = add('workout', { 'sparkyfitness-workouts': { kind: 'text', value: 'Active Calories' } })
@@ -98,12 +99,12 @@ describe('SparkyFitness sync', () => {
   it('reimports history when a habit is linked, its rule changes or history changes', async () => {
     const { service, store, add, requests } = setup()
     await service.sync('s')
-    const id = add('steps')
+    const id = add('steps', { target: { kind: 'number', value: 8000 } })
     requests.length = 0
     await service.sync('s')
     expect(requests.filter((u) => u.includes('check-in-measurements'))).toHaveLength(7)
     const object = store.getObject(id)!
-    store.putObject({ ...object, props: { ...object.props, sparkyfitness: { kind: 'select', value: ['water'] } } })
+    store.putObject({ ...object, props: { ...object.props, sparkyfitness: { kind: 'select', value: ['water'] }, unit: { kind: 'text', value: 'L' } } })
     requests.length = 0
     await service.sync('s')
     expect(requests.filter((u) => u.includes('water-intake'))).toHaveLength(7)
@@ -113,20 +114,20 @@ describe('SparkyFitness sync', () => {
     expect(requests.filter((u) => u.includes('water-intake'))).toHaveLength(30)
   })
 
-  it.each([0, 7, 30, 90, 365])('imports %i days and only refreshes seven afterwards', async (history) => {
+  it.each([0, 7, 30, 90, 365])('imports %i days and only refreshes from two days before the last sync afterwards', async (history) => {
     const { service, add, requests } = setup()
     service.connect('s', { baseUrl: 'https://fitness.example.com', history })
-    add('steps')
+    add('steps', { target: { kind: 'number', value: 8000 } })
     await service.sync('s')
     expect(requests.filter((u) => u.includes('check-in-measurements'))).toHaveLength(Math.max(1, history))
     requests.length = 0
     await service.sync('s')
-    expect(requests.filter((u) => u.includes('check-in-measurements'))).toHaveLength(history === 0 ? 1 : 7)
+    expect(requests.filter((u) => u.includes('check-in-measurements'))).toHaveLength(history === 0 ? 1 : 3)
   }, 20000)
 
   it('previews seven days without writes and reports manual overrides and missing data', async () => {
     const { service, store, add } = setup()
-    const id = add('water', { unit: { kind: 'text', value: 'L' }, 'done:2026-11-16': { kind: 'number', value: 0 } })
+    const id = add('water', { unit: { kind: 'text', value: 'L' }, target: { kind: 'number', value: 2 }, 'done:2026-11-16': { kind: 'number', value: 0 } })
     const before = store.getObject(id)
     const connection = service.status('s')
     const preview = await service.preview(id, { rule: 'water' })
@@ -146,7 +147,7 @@ describe('SparkyFitness sync', () => {
 
   it('replaces prior source status and values when the server or API key changes', async () => {
     const { service, store, add } = setup()
-    const id = add('water', { 'done:2026-11-16': { kind: 'number', value: 3 } })
+    const id = add('water', { target: { kind: 'number', value: 2 }, 'done:2026-11-16': { kind: 'number', value: 3 } })
     await service.sync('s')
     expect(service.status('s')?.workouts).not.toEqual([])
     service.connect('s', { baseUrl: 'https://fitness.example.com', apiKey: 'replacement-key' })
@@ -170,6 +171,7 @@ describe('SparkyFitness sync', () => {
     const type = store.listTypes('s').find((t) => t.system === 'habit')!
     const habit = newObject(type, { title: 'Steps' }, 'steps', at)
     habit.props.sparkyfitness = { kind: 'select', value: ['steps'] }
+    habit.props.target = { kind: 'number', value: 8000 }
     store.putObject(habit)
     now = at
     service.connect('s', { baseUrl: 'https://fitness.example.com', history: 0 })
@@ -185,11 +187,92 @@ describe('SparkyFitness sync', () => {
 
   it('rejects unknown water units in preview and sync without writing values', async () => {
     const { service, store, add } = setup()
-    const id = add('water', { unit: { kind: 'text', value: 'bottles' } })
+    const id = add('water', { unit: { kind: 'text', value: 'bottles' }, target: { kind: 'number', value: 8 } })
     await expect(service.preview(id, { rule: 'water' })).rejects.toThrow('water habit unit')
     await service.sync('s')
     expect(service.status('s')?.error).toContain('water habit unit')
     expect(Object.keys(store.getObject(id)!.props).some((k) => k.startsWith('sf:'))).toBe(false)
+  })
+
+  it.each([[0, 'h', 7], [0, '', 7], [0, 'hours', 7], [0, 'min', 420], [0, 'minutes', 420]])('converts sleep to the habit unit %#', (_n, unit, amount) => {
+    expect(sparkySleep(7 * 3600, unit)).toBe(amount)
+  })
+
+  it('stores sleep in the habit\'s unit and needs a goal for steps, water and sleep', async () => {
+    const { store, service, add } = setup()
+    const minutes = add('sleep', { target: { kind: 'number', value: 450 }, unit: { kind: 'text', value: 'minutes' } })
+    const noGoal = add('steps')
+    await service.sync('s')
+    expect(store.getObject(minutes)!.props['sf:2026-11-16']).toEqual({ kind: 'number', value: 420 })
+    expect(Object.keys(store.getObject(noGoal)!.props).some((k) => k.startsWith('sf:'))).toBe(false)
+    await expect(service.preview(noGoal, { rule: 'steps' })).rejects.toThrow('daily goal')
+    expect(await service.preview(noGoal, { rule: 'steps', target: 8000 })).toHaveLength(7)
+  })
+
+  it('reads again from two days before the last good sync, so a long outage is caught up', async () => {
+    const store = new NodeStore(':memory:')
+    store.putSpace({ id: 's', name: 'Space', sidebar: [], createdAt: at })
+    for (const type of createBuiltinTypes('s', at)) store.putType(type)
+    let now = at
+    const days: string[] = []
+    const service = new SparkyFitnessService({ store, feed: new ChangeFeed(), now: () => now, fetch: async (url) => {
+      if (url.includes('check-in-measurements')) days.push(url.match(/\d{4}-\d{2}-\d{2}/)![0])
+      return Response.json([])
+    } })
+    service.connect('s', { baseUrl: 'https://fitness.example.com', apiKey: 'secret-key', history: 90 })
+    const habit = newObject(store.listTypes('s').find((t) => t.system === 'habit')!, { title: 'Steps' }, 'steps', at)
+    habit.props = { sparkyfitness: { kind: 'select', value: ['steps'] }, target: { kind: 'number', value: 8000 } }
+    store.putObject(habit)
+    await service.sync('s')
+    days.length = 0
+    // Twenty days without a sync (the last good one was on the 16th): it reads from the 14th to the 6th of December.
+    now = '2026-12-06T12:00:00.000Z'
+    await service.sync('s')
+    expect(days[0]).toBe('2026-11-14')
+    expect(days.at(-1)).toBe('2026-12-06')
+    expect(days).toHaveLength(23)
+  }, 20000)
+
+  it('does not rewrite a habit when its link changed but nothing was imported', async () => {
+    const { store, service, add } = setup()
+    const id = add('steps', { target: { kind: 'number', value: 8000 } })
+    store.putObject({ ...store.getObject(id)!, props: { ...store.getObject(id)!.props, 'sf:2026-11-15': { kind: 'number', value: 1 } } })
+    await service.sync('s')
+    const object = store.getObject(id)!
+    store.putObject({ ...object, props: { ...Object.fromEntries(Object.entries(object.props).filter(([k]) => !k.startsWith('sf:'))), unit: { kind: 'text', value: 'steps' } } })
+    // The link's unit changed and no sf: value is left to remove: the habit is only read, not rewritten first.
+    const spy = store.putObject.bind(store)
+    let removals = 0
+    store.putObject = ((object: Parameters<typeof spy>[0]) => {
+      if (object.id === id && !Object.keys(object.props).some((k) => k.startsWith('sf:'))) removals++
+      return spy(object)
+    }) as typeof store.putObject
+    await service.sync('s')
+    expect(removals).toBe(0)
+  })
+
+  it('imports as nobody, whoever started it', async () => {
+    const { store, service, add } = setup()
+    store.actor = currentActor
+    const id = add('steps', { target: { kind: 'number', value: 8000 } })
+    await runAs('some-user', () => service.sync('s'))
+    expect(store.getObject(id)!.props['sf:2026-11-16']).toBeDefined()
+    expect(store.getObject(id)!.updatedBy).toBeUndefined()
+  })
+
+  it('disconnects keeping the days, or removing them with the links and the properties it added', async () => {
+    const { store, service, add } = setup()
+    const id = add('steps', { target: { kind: 'number', value: 8000 }, 'done:2026-11-16': { kind: 'number', value: 5 } })
+    await service.sync('s')
+    service.disconnect('s')
+    expect(store.getObject(id)!.props['sf:2026-11-15']).toBeDefined()
+    service.connect('s', { baseUrl: 'https://fitness.example.com', apiKey: 'secret-key', history: 7 })
+    service.disconnect('s', { remove: true })
+    const props = store.getObject(id)!.props
+    expect(Object.keys(props).some((k) => k.startsWith('sf:'))).toBe(false)
+    expect(props.sparkyfitness).toBeUndefined()
+    expect(props['done:2026-11-16']).toEqual({ kind: 'number', value: 5 })
+    expect(store.listTypes('s').find((t) => t.system === 'habit')!.properties.some((p) => p.id === 'sparkyfitness' || p.id === 'sparkyfitness-workouts')).toBe(false)
   })
 
   it.each([['ml', 2000], ['mL', 2000], ['', 2000], ['litres', 2], ['l', 2], ['oz', 2000 / 29.5735], ['fl oz', 2000 / 29.5735], ['glasses', 8], ['cups', 8]])('converts water to %s', (unit, amount) => {
@@ -211,6 +294,11 @@ describe('SparkyFitness sync', () => {
     expect(preview.status).toBe(400)
     const outsider = asUser(app, store, { spaces: [] })
     expect((await outsider.request('/api/objects/preview-habit/sparkyfitness/preview', { method: 'POST' })).status).toBe(404)
+    const put = await user.request('/api/spaces/s/sparkyfitness', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ baseUrl: 'ftp://fitness.example.com', apiKey: 'k' }) })
+    expect(put.status).toBe(400)
+    expect(((await put.json()) as { error: string }).error).toContain('https://')
+    const history = await user.request('/api/spaces/s/sparkyfitness', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ baseUrl: 'https://fitness.example.com', history: 5 }) })
+    expect(((await history.json()) as { error: string }).error).toBe('choose a history range')
     for (const [method, suffix] of [['GET', ''], ['PUT', ''], ['DELETE', ''], ['POST', '/sync']]) {
       expect((await outsider.request(`/api/spaces/s/sparkyfitness${suffix}`, { method })).status).toBe(404)
     }

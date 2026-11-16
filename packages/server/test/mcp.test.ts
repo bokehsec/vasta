@@ -208,7 +208,7 @@ describe('MCP endpoint', () => {
     await call('create_object', { type: 'Habit', title: 'Meditate' })
     await call('create_object', { type: 'Habit', title: 'Água', properties: { 'Daily goal': 8, Unit: 'copos' } })
     let water = await call('log_habit', { habit: 'agua', add: 3 })
-    expect(water.day).toEqual({ day: '2026-10-19', scheduled: true, done: false, amount: 3 })
+    expect(water.day).toEqual({ day: '2026-10-19', state: 'partial', scheduled: true, done: false, amount: 3 })
     water = await call('log_habit', { habit: water.id, add: 5 })
     expect(water.day.done).toBe(true)
     expect(water.stats.currentStreak).toBe(1)

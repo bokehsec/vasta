@@ -348,6 +348,8 @@ async function remove(member: Member) {
       <a :class="secondary" :href="exportUrl" download>Export…</a>
     </div>
 
+    <SparkyFitnessSettings :key="spaceId" :space-id="spaceId" />
+
     <div v-if="isOwner" class="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-red-200 px-3 py-2.5 dark:border-red-900/60">
       <div class="min-w-0 flex-1 text-sm">
         <div class="font-medium">Delete this space</div>
@@ -357,6 +359,5 @@ async function remove(member: Member) {
         Delete space…
       </button>
     </div>
-  <SparkyFitnessSettings :key="spaceId" :space-id="spaceId" />
   </SettingsSection>
 </template>

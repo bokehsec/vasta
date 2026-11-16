@@ -15,6 +15,8 @@ interface PromptRequest {
   confirmLabel: string
   /** The text may be left empty (an optional note). */
   optional?: boolean
+  /** A second button beside the confirm one (amountDialog); it settles the dialog itself. */
+  alternative?: { label: string; pick: () => void }
   resolve: (value: string | null) => void
 }
 
@@ -74,6 +76,30 @@ export function promptDialog(options: { title: string; message?: string; value?:
         activeDialog.value = null
         resolve(value?.trim() ? value.trim() : value !== null && options.optional ? '' : null)
       },
+    }
+  })
+}
+
+/**
+ * Ask for an amount, with a second answer beside Save (a habit's amount: or use what SparkyFitness
+ * gave). Resolves to the typed text, `'alternative'` when that button was pressed, or null when cancelled.
+ */
+export function amountDialog(options: { title: string; message?: string; value?: string; placeholder?: string; confirmLabel?: string; alternative: string }) {
+  return new Promise<{ text: string } | 'alternative' | null>((resolve) => {
+    cancelActiveDialog()
+    const settle = (answer: { text: string } | 'alternative' | null) => {
+      activeDialog.value = null
+      resolve(answer)
+    }
+    activeDialog.value = {
+      kind: 'prompt',
+      title: options.title,
+      message: options.message,
+      value: options.value ?? '',
+      placeholder: options.placeholder,
+      confirmLabel: options.confirmLabel ?? 'OK',
+      alternative: { label: options.alternative, pick: () => settle('alternative') },
+      resolve: (value) => settle(value?.trim() ? { text: value.trim() } : null),
     }
   })
 }

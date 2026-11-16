@@ -62,7 +62,7 @@ describe('vasta CLI', () => {
     expect(await vasta(['habit', 'agua', '+3'])).toBe('Água on 2026-10-19: 3/8 copos · streak 0')
     expect(await vasta(['habit', 'Ler'])).toBe('Ler on 2026-10-19: done · streak 1')
     expect(await vasta(['habit', 'Ler', 'undo', '--day', '2026-10-19'])).toBe('Ler on 2026-10-19: not done · streak 0')
-    expect(await vasta(['habits'])).toBe('○ Água  3/8 copos  · streak 0 · 30 days 0%\n○ Ler  · streak 0 · 30 days 0%')
+    expect(await vasta(['habits'])).toBe('○ Água  3/8 copos  · streak 0 · 4 weeks —\n○ Ler  · streak 0 · 4 weeks —')
   })
 
   it('logs food and shows a day of it', async () => {

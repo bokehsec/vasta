@@ -113,6 +113,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         />
         <div class="mt-5 flex justify-end gap-2">
           <button type="button" :class="greyButton" @click="cancel">Cancel</button>
+          <button v-if="activeDialog.kind === 'prompt' && activeDialog.alternative" type="button" :class="greyButton" data-dialog-alternative @click="activeDialog.alternative.pick()">{{ activeDialog.alternative.label }}</button>
           <button
             v-if="activeDialog.kind !== 'choice'"
             ref="confirmButton"
