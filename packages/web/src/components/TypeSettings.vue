@@ -9,7 +9,7 @@ import { greyButton, mainButton } from '../lib/buttons.ts'
 import { api } from '../lib/api.ts'
 import { clone } from '../lib/clone.ts'
 import { chip, colorNames, iconTextClasses, swatchClasses } from '../lib/colors.ts'
-import { PANEL_CHARTS, STRIP_CHARTS, deviceHabitProgress } from '../lib/habit-progress.ts'
+import { PANEL_CHARTS, STRIP_CHARTS, habitProgressOf, type ProgressPlace } from '../lib/habit-progress.ts'
 import { PROPERTY_KINDS, kindIcon, kindLabel, newPropertyDef } from '../lib/properties.ts'
 import { confirmDialog } from '../lib/overlays.ts'
 import { replaceType, workspace } from '../lib/state.ts'
@@ -58,10 +58,15 @@ function setQuickActions(value: QuickActions | undefined) {
   else delete draft.value.quickActions
 }
 
-// Progress (habits): the Tracker's charts and range, saved on the type so every device shows the
-// same. Until the type has its own, what this device had picked shows (and fills the draft).
+// Progress (habits): where the Tracker shows progress, its chart and range, saved on the type so
+// every device shows the same. Any part the type doesn't set yet shows what this device had picked.
 const isHabitType = props.type.system === 'habit'
-const habitProgress = computed<HabitTypeSettings>(() => draft.value.habits ?? deviceHabitProgress())
+const habitProgress = computed<HabitTypeSettings>(() => habitProgressOf(draft.value))
+const progressPlaces: { id: ProgressPlace; label: string }[] = [
+  { id: 'off', label: 'Off' },
+  { id: 'above', label: 'Above' },
+  { id: 'beside', label: 'Beside' },
+]
 function setHabitProgress(patch: Partial<HabitTypeSettings>) {
   draft.value.habits = { ...habitProgress.value, ...patch }
 }
@@ -277,25 +282,45 @@ async function leave(path: string) {
     </section>
     <section v-if="isHabitType" class="mt-4" data-habit-progress-settings>
       <div class="mb-1.5 text-xs text-ink-faint">Progress</div>
-      <div class="mb-1 text-sm font-medium">Chart above the habits</div>
-      <HabitChartPicker picker="strip" :charts="STRIP_CHARTS" :model-value="habitProgress.strip" @update="(id) => setHabitProgress({ strip: id })" />
-      <div class="mb-1 mt-3 text-sm font-medium">Chart beside the habits <span class="font-normal text-ink-faint">(below them on a phone)</span></div>
-      <HabitChartPicker picker="panel" :charts="PANEL_CHARTS" :model-value="habitProgress.panel" @update="(id) => setHabitProgress({ panel: id })" />
-      <div class="mb-1 mt-3 text-sm font-medium">Range</div>
-      <div class="flex max-w-[16rem] rounded-lg bg-hover p-0.5 text-sm" role="group" aria-label="Progress range">
+      <div class="mb-1 text-sm font-medium">Show on the Tracker</div>
+      <div class="flex max-w-[16rem] rounded-lg bg-hover p-0.5 text-sm" role="group" aria-label="Where progress shows">
         <button
-          v-for="w in HABIT_WEEKS_RANGES"
-          :key="w"
+          v-for="p in progressPlaces"
+          :key="p.id"
           class="min-h-8 flex-1 rounded-md px-2 max-md:min-h-11"
-          :class="habitProgress.weeks === w ? 'bg-surface font-medium shadow-sm' : 'text-ink-soft hover:text-ink'"
-          :aria-pressed="habitProgress.weeks === w"
-          :data-weeks="w"
-          @click="setHabitProgress({ weeks: w })"
+          :class="habitProgress.place === p.id ? 'bg-surface font-medium shadow-sm' : 'text-ink-soft hover:text-ink'"
+          :aria-pressed="habitProgress.place === p.id"
+          :data-place="p.id"
+          @click="setHabitProgress({ place: p.id })"
         >
-          {{ w }} weeks
+          {{ p.label }}
         </button>
       </div>
-      <p class="mt-1 text-xs text-ink-faint">What the Tracker's progress shows, on every device. Where it shows is each device's own, in the Tracker's Progress button.</p>
+      <p class="mt-1 text-xs text-ink-faint">
+        <template v-if="habitProgress.place === 'off'">Just the habits, no progress.</template>
+        <template v-else-if="habitProgress.place === 'above'">A strip above the habits.</template>
+        <template v-else>A panel beside the habits, below them on a phone.</template>
+        On every device.
+      </p>
+      <template v-if="habitProgress.place !== 'off'">
+        <div class="mb-1 mt-3 text-sm font-medium">Chart</div>
+        <HabitChartPicker v-if="habitProgress.place === 'above'" picker="strip" :charts="STRIP_CHARTS" :model-value="habitProgress.strip" @update="(id) => setHabitProgress({ strip: id })" />
+        <HabitChartPicker v-else picker="panel" :charts="PANEL_CHARTS" :model-value="habitProgress.panel" @update="(id) => setHabitProgress({ panel: id })" />
+        <div class="mb-1 mt-3 text-sm font-medium">Range</div>
+        <div class="flex max-w-[16rem] rounded-lg bg-hover p-0.5 text-sm" role="group" aria-label="Progress range">
+          <button
+            v-for="w in HABIT_WEEKS_RANGES"
+            :key="w"
+            class="min-h-8 flex-1 rounded-md px-2 max-md:min-h-11"
+            :class="habitProgress.weeks === w ? 'bg-surface font-medium shadow-sm' : 'text-ink-soft hover:text-ink'"
+            :aria-pressed="habitProgress.weeks === w"
+            :data-weeks="w"
+            @click="setHabitProgress({ weeks: w })"
+          >
+            {{ w }} weeks
+          </button>
+        </div>
+      </template>
     </section>
     <QuickActionsSettings :type="draft" @update="setQuickActions" />
     <section class="mt-4" data-subtask-settings>

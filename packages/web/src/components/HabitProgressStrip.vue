@@ -41,7 +41,6 @@ const weekTitle = (w: Week) => (w.current ? `This week: ${w.tally.done} done so 
           <RouterLink :to="progressLink" class="text-accent hover:underline">See progress</RouterLink>
         </div>
       </div>
-      <div v-if="chart !== 'weeks'" class="self-start"><slot name="action" /></div>
 
       <!-- Week columns: share done each week, this week faded while under way. -->
       <div v-if="chart === 'weeks'" class="flex items-end gap-1.5" role="img" :aria-label="`Share done each week, last ${weeks} weeks`">
@@ -52,7 +51,6 @@ const weekTitle = (w: Week) => (w.current ? `This week: ${w.tally.done} done so 
           <span class="text-[11px] tabular-nums text-ink-faint">{{ Number(w.monday.slice(8)) }}</span>
         </div>
       </div>
-      <div v-if="chart === 'weeks'" class="self-start max-sm:order-first max-sm:w-full max-sm:text-right"><slot name="action" /></div>
     </div>
 
     <!-- Day heat strip: every day, darker when more of its habits got done. -->

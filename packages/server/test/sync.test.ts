@@ -311,7 +311,16 @@ describe('sync', () => {
     a.edit('types', 'type-book', { subtasks: null }, 's')
     await a.push()
     expect(store.getType('type-book')).not.toHaveProperty('subtasks')
-    const dune = (await (await user.request('/api/objects/obj-dune')).json()) as ObjectRecord
+    // A habit type's progress on the Tracker (where, which charts, the range), set on any device.
+    a.edit('types', 'type-book', { habits: { place: 'beside', strip: 'days', panel: 'line', weeks: 8 } }, 's')
+    a.edit('types', 'type-book', { habits: { place: 'below' } }, 's')
+    a.edit('types', 'type-book', { habits: { weeks: 5 } }, 's')
+    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for habits', 'invalid value for habits'])
+    expect(store.getType('type-book')?.habits).toEqual({ place: 'beside', strip: 'days', panel: 'line', weeks: 8 })
+    a.edit('types', 'type-book', { habits: null }, 's')
+    await a.push()
+    expect(store.getType('type-book')).not.toHaveProperty('habits')
+    const dune =(await (await user.request('/api/objects/obj-dune')).json()) as ObjectRecord
     expect(dune).toMatchObject({ title: 'Dune', typeId: 'type-book', spaceId: 's', aliases: [] })
     expect(((await (await user.request('/api/spaces/s/search?q=spice')).json()) as ObjectRecord[]).map((o) => o.id)).toEqual(['obj-dune'])
 

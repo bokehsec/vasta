@@ -3,8 +3,8 @@
 // week" on Today, a day off faded in the Tracker, the Progress tab's headline and rows (checked
 // against core's habitReport), the range switch kept on reload, and (on 5184, the built app) the
 // same numbers after reloading offline. SHOTS=<dir> saves light and dark screenshots; PHONE=1 a 390px width (Today left out).
-// The Tracker's own progress is checked too: the charts and the range are picked in Type settings
-// (kept on the type, so they survive a reload), the place (above, beside, off) in its menu.
+// The Tracker's own progress is checked too: where it shows (above, beside, off), the charts and
+// the range are picked in Type settings (kept on the type, so they survive a reload).
 //   node habits.mjs [chromium|webkit] [base]
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -125,14 +125,12 @@ const report4 = habitReport(listed4, 4, today)
 const pct4 = report4.total.expected ? `${Math.round((report4.total.done / report4.total.expected) * 100)}%` : '—'
 await until(async () => (await main.locator('[data-progress-strip][data-chart="days"]').count()) === 1, 'the day strip')
 await until(async () => (await text(main.locator('[data-progress-strip] [data-progress-headline]'))).startsWith(`${pct4} over the last 4 weeks ${report4.total.done} of ${report4.total.expected} done`), `strip headline ${pct4}`)
-// The place is the Tracker's menu; the charts and the range are Type settings, saved on the type.
-const menu = async (selector) => {
-  if (!(await page.locator('[data-progress-options]').isVisible().catch(() => false))) await main.locator('[data-progress-menu]').click()
-  await page.locator(`[data-progress-options] ${selector}`).click()
-}
-const progressSettings = async (selector) => {
+// Where it shows, the charts and the range are all Type settings, saved on the type; the Tracker
+// itself has no progress button.
+if (await main.locator('[data-progress-menu]').count()) throw new Error('a progress button on the Tracker')
+const progressSettings = async (...selectors) => {
   await page.goto(`${base}/t/${habitType.id}?settings=1`)
-  await page.locator(`[data-habit-progress-settings] ${selector}`).click()
+  for (const selector of selectors) await page.locator(`[data-habit-progress-settings] ${selector}`).click()
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await until(async () => !(await page.locator('[data-habit-progress-settings]').count()), 'the settings saved')
 }
@@ -140,7 +138,7 @@ for (const chart of ['weeks', 'meters', 'habits', 'days']) {
   await progressSettings(`[data-chart-picker="strip"] [data-chart="${chart}"]`)
   await until(async () => (await main.locator(`[data-progress-strip][data-chart="${chart}"]`).count()) === 1, `strip ${chart}`)
 }
-await menu('[data-place="beside"]')
+await progressSettings('[data-place="beside"]')
 await until(async () => (await main.locator('[data-progress-panel][data-chart="calendar"]').count()) === 1, 'the panel')
 for (const chart of ['weeks', 'line', 'counts', 'calendar']) {
   await progressSettings(`[data-chart-picker="panel"] [data-chart="${chart}"]`)
@@ -166,11 +164,16 @@ await until(async () => (await text(main.locator('[data-progress-panel] [data-pr
 
 await page.reload()
 await until(async () => (await main.locator('[data-progress-panel][data-chart="calendar"]').count()) === 1, 'the panel kept on reload')
-await menu('[data-place="off"]')
+await progressSettings('[data-place="off"]')
 await until(async () => !(await main.locator('[data-progress-panel], [data-progress-strip]').count()), 'progress off')
-await menu('[data-place="above"]')
+await progressSettings('[data-place="above"]')
 await until(async () => (await main.locator('[data-progress-strip][data-chart="days"]').count()) === 1, 'back to the day strip')
-await page.keyboard.press('Escape')
+// What Type settings saved reached the server (synced to every device), with nothing refused.
+await until(async () => {
+  const saved = (await get(`/api/types/${habitType.id}`)).habits
+  return saved?.place === 'above' && saved?.strip === 'days' && saved?.panel === 'calendar' && saved?.weeks === 8
+}, 'the progress settings on the server')
+if (await page.getByText('did not take').count()) throw new Error('the server refused a change')
 if (process.env.SHOTS) {
   for (const theme of ['light', 'dark']) {
     await page.evaluate((dark) => document.documentElement.classList.toggle('dark', dark), theme === 'dark')

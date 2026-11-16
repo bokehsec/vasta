@@ -20,8 +20,8 @@ const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 export const habitDoneKey = (day: string) => `${DONE_PREFIX}${day}`
 export const DONE_VALUE: PropertyValue = { kind: 'checkbox', value: true }
 
-/** The progress charts a habit type starts with (HabitTypeSettings, Type settings › Progress). */
-export const HABIT_PROGRESS_DEFAULT: HabitTypeSettings = { strip: 'days', panel: 'calendar', weeks: 4 }
+/** The progress a habit type starts with (HabitTypeSettings, Type settings › Progress). */
+export const HABIT_PROGRESS_DEFAULT: HabitTypeSettings = { place: 'above', strip: 'days', panel: 'calendar', weeks: 4 }
 /** The ranges a habit type's progress may cover, in weeks. */
 export const HABIT_WEEKS_RANGES: readonly (4 | 8 | 13)[] = [4, 8, 13]
 

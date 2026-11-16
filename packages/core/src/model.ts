@@ -103,13 +103,16 @@ export interface SubtaskSettings {
 }
 
 /**
- * A habit type's progress charts (Type settings › Progress): what the Habits Tracker's strip above
- * the habits and panel beside them (below on a phone) draw, over how many weeks. Kept on the type,
- * so every device shows the same charts; unset parts fall back to `HABIT_PROGRESS_DEFAULT`.
+ * A habit type's progress on the Habits Tracker (Type settings › Progress): where it shows (off, a
+ * strip above the habits, or a panel beside them; below them on a phone), what the strip and panel
+ * draw, and over how many weeks. Kept on the type, so every device shows the same; unset parts fall
+ * back to `HABIT_PROGRESS_DEFAULT`.
  */
+export type HabitProgressPlace = 'off' | 'above' | 'beside'
 export type HabitStripChart = 'weeks' | 'days' | 'meters' | 'habits'
 export type HabitPanelChart = 'weeks' | 'line' | 'calendar' | 'counts'
 export interface HabitTypeSettings {
+  place: HabitProgressPlace
   strip: HabitStripChart
   panel: HabitPanelChart
   weeks: 4 | 8 | 13
@@ -236,7 +239,7 @@ export interface ObjectType {
   quickActions?: QuickActions
   /** Splitting its objects into steps (subtasks.ts); unset: none. */
   subtasks?: SubtaskSettings
-  /** The Tracker's progress charts; unset: the defaults. Habit types only. */
+  /** The Tracker's progress: where it shows, its charts and range; unset: the defaults. Habit types only. */
   habits?: HabitTypeSettings
   createdAt: IsoDateTime
   updatedAt: IsoDateTime

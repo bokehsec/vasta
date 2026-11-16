@@ -18,13 +18,12 @@ GitHub release page.
   the range is remembered on the device. It works offline. The agent tools' `list_habits` can add
   the same numbers (`weeks`).
 - **Habit progress on the Tracker, your way.** The Habits Tracker shows how you are doing next to
-  the habits: a **Progress** button chooses where on that device (above the habits, beside them,
-  below them on a phone, or off), and Type settings › Progress chooses the charts (week columns, a
-  day heat strip, week meters or habit chips above; a ranking, a trend line, a calendar of days or
-  done-and-missed counts beside) and the range (4, 8 or 13 weeks), for every device alike. It
-  starts with the day heat strip. On a phone each habit is one row, as in the Habit Tracker app:
-  its whole name, "2 of 3 this week" or its streak, its last two weeks as ticks and a round check
-  for today (past days from its page).
+  the habits. Type settings › Progress chooses where (above the habits, beside them — below them
+  on a phone — or off), the chart (week columns, a day heat strip, week meters or habit chips
+  above; a ranking, a trend line, a calendar of days or done-and-missed counts beside) and the
+  range (4, 8 or 13 weeks), for every device alike. It starts with the day heat strip above. On a
+  phone each habit is one row, as in the Habit Tracker app: its whole name, "2 of 3 this week" or
+  its streak, its last two weeks as ticks and a round check for today (past days from its page).
 - **Tracker and Progress agree.** The Habits Tracker's last column is now **4 weeks**, counted the
   same way as the Progress tab (it was the last 30 days, counted differently for weekly habits).
 - **Menu in the phone bottom menu.** Settings › Appearance › Bottom menu can now include **Menu**,

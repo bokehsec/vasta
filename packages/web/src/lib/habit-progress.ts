@@ -1,15 +1,15 @@
 // Habit progress beside the Tracker. Where it shows (off, above the habits, or beside them; below
-// them on a phone) is each device's own, in the Tracker's Progress button. Which charts and over how
-// many weeks is kept on the habit type (Type settings › Progress), so every device shows the same.
-// The numbers come from core's habitReport and habitDayTotals, counted the same way as the Progress
-// tab.
-import { computed, ref, type Ref } from 'vue'
-import { addDays, HABIT_PROGRESS_DEFAULT, HABIT_WEEKS_RANGES, habitDayTotals, habitReport, habitWeekPlan, isHabitPaused, mondayOf, type HabitPanelChart, type HabitStripChart, type HabitTypeSettings, type HabitTally, type ObjectType, type ObjectSummary } from '@vasta/core'
+// them on a phone), which charts and over how many weeks are kept on the habit type (Type settings ›
+// Progress), so every device shows the same. The numbers come from core's habitReport and
+// habitDayTotals, counted the same way as the Progress tab.
+import { computed, type Ref } from 'vue'
+import { addDays, HABIT_PROGRESS_DEFAULT, HABIT_WEEKS_RANGES, habitDayTotals, habitReport, habitWeekPlan, isHabitPaused, mondayOf, type HabitPanelChart, type HabitProgressPlace, type HabitStripChart, type HabitTypeSettings, type HabitTally, type ObjectType, type ObjectSummary } from '@vasta/core'
 
-export type ProgressPlace = 'off' | 'above' | 'beside'
+export type ProgressPlace = HabitProgressPlace
 export type StripChart = HabitStripChart
 export type PanelChart = HabitPanelChart
 
+export const PROGRESS_PLACES: readonly ProgressPlace[] = ['off', 'above', 'beside']
 export const STRIP_CHARTS: { id: StripChart; label: string; hint: string }[] = [
   { id: 'weeks', label: 'Week columns', hint: 'Share done each week' },
   { id: 'days', label: 'Day heat strip', hint: 'Every day, darker when more got done' },
@@ -23,56 +23,46 @@ export const PANEL_CHARTS: { id: PanelChart; label: string; hint: string }[] = [
   { id: 'counts', label: 'Done and missed', hint: 'Counts each week, not percents' },
 ]
 
-// The place is per device. Before the charts moved into Type settings, the whole layout was kept
-// here; a device that had picked charts keeps seeing them until the type has settings of its own.
+// Before all of it moved into Type settings, each device kept its own picks here (the place under
+// PLACE_KEY, the whole layout under OLD_LAYOUT_KEY). A device keeps seeing what it had picked for
+// any part the type doesn't set yet.
 const PLACE_KEY = 'vasta.habit-progress.place'
 const OLD_LAYOUT_KEY = 'vasta.habit-progress.layout'
 
-function readPlace(): ProgressPlace {
+function readSaved(key: string): Record<string, unknown> {
   try {
-    const saved = JSON.parse(localStorage.getItem(PLACE_KEY) ?? localStorage.getItem(OLD_LAYOUT_KEY) ?? 'null') as { place?: unknown } | null
-    return (['off', 'above', 'beside'] as const).find((p) => p === saved?.place) ?? 'above'
+    const saved = JSON.parse(localStorage.getItem(key) ?? 'null') as unknown
+    return saved && typeof saved === 'object' ? (saved as Record<string, unknown>) : {}
   } catch {
-    return 'above'
+    return {}
   }
 }
 
-/** Where progress shows on this device, shared by every component that shows it. */
-export const progressPlace = ref<ProgressPlace>(readPlace())
-
-export function setProgressPlace(place: ProgressPlace) {
-  progressPlace.value = place
-  try {
-    localStorage.setItem(PLACE_KEY, JSON.stringify({ place }))
-  } catch {}
+/** Fills each part of `saved` that isn't a known value from `fallback`. */
+function settle(saved: Partial<Record<keyof HabitTypeSettings, unknown>>, fallback: HabitTypeSettings): HabitTypeSettings {
+  return {
+    place: PROGRESS_PLACES.find((p) => p === saved.place) ?? fallback.place,
+    strip: STRIP_CHARTS.find((c) => c.id === saved.strip)?.id ?? fallback.strip,
+    panel: PANEL_CHARTS.find((c) => c.id === saved.panel)?.id ?? fallback.panel,
+    weeks: HABIT_WEEKS_RANGES.find((w) => w === saved.weeks) ?? fallback.weeks,
+  }
 }
 
-/** What this device had picked before the charts moved into Type settings, so it keeps seeing that. */
+/** What this device had picked before progress moved into Type settings, so it keeps seeing that. */
 export function deviceHabitProgress(): HabitTypeSettings {
-  try {
-    const saved = JSON.parse(localStorage.getItem(OLD_LAYOUT_KEY) ?? 'null') as Partial<HabitTypeSettings> | null ?? {}
-    return {
-      strip: STRIP_CHARTS.find((c) => c.id === saved.strip)?.id ?? HABIT_PROGRESS_DEFAULT.strip,
-      panel: PANEL_CHARTS.find((c) => c.id === saved.panel)?.id ?? HABIT_PROGRESS_DEFAULT.panel,
-      weeks: HABIT_WEEKS_RANGES.find((w) => w === saved.weeks) ?? HABIT_PROGRESS_DEFAULT.weeks,
-    }
-  } catch {
-    return { ...HABIT_PROGRESS_DEFAULT }
-  }
+  const layout = readSaved(OLD_LAYOUT_KEY)
+  const place = readSaved(PLACE_KEY).place ?? layout.place
+  return settle({ ...layout, place }, HABIT_PROGRESS_DEFAULT)
 }
 
-/** The type's progress charts, with what this device had picked before filling any unset part. */
+/** A habit type's progress settings, any part it doesn't set filled from this device's old picks. */
+export function habitProgressOf(type: Pick<ObjectType, 'habits'> | undefined): HabitTypeSettings {
+  return settle(type?.habits ?? {}, deviceHabitProgress())
+}
+
+/** The type's progress (Type settings › Progress), shown on every device alike. */
 export function useTypeHabitProgress(type: Ref<ObjectType | undefined>) {
-  return computed<HabitTypeSettings>(() => {
-    const saved = type.value?.habits
-    if (!saved) return deviceHabitProgress()
-    const fallback = deviceHabitProgress()
-    return {
-      strip: STRIP_CHARTS.find((c) => c.id === saved.strip)?.id ?? fallback.strip,
-      panel: PANEL_CHARTS.find((c) => c.id === saved.panel)?.id ?? fallback.panel,
-      weeks: HABIT_WEEKS_RANGES.find((w) => w === saved.weeks) ?? fallback.weeks,
-    }
-  })
+  return computed<HabitTypeSettings>(() => habitProgressOf(type.value))
 }
 
 export const percentOf = (tally: Pick<HabitTally, 'done' | 'expected'> | undefined) => (tally?.expected ? Math.round((tally.done / tally.expected) * 100) : undefined)
