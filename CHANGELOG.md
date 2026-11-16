@@ -260,6 +260,8 @@ GitHub release page.
 
 ### Fixed
 
+- **A link to a type of another space** (its page, e.g. Habits) opens that space and shows the
+  page, as a link to an object already did; it used to stay blank.
 - **Swiping back on an iPhone goes back.** A swipe from the screen's left edge could leave you on
   the same page: it also started opening the side menu, and Back then closed that menu instead of
   leaving. The edge swipe now only goes back; the side menu opens from the ☰ button (or Menu in the
