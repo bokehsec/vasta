@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { NodeStore } from '../src/store-node.ts'
 import { builtinTypeId, createBuiltinTypes, ensureBuiltinTypes } from '../src/index.ts'
-import { DONE_VALUE, habitDoneKey, habitProgress, habitRemindAt, habitReport, habitStats, habitValue, habitWeek, habitWeeklyTarget, isHabitDone, isHabitDue, isHabitScheduled, type PropertyValue } from '../src/index.ts'
+import { DONE_VALUE, habitDoneKey, habitProgress, habitRemindAt, habitDayTotals, habitReport, habitStats, habitWeekPlan, habitValue, habitWeek, habitWeeklyTarget, isHabitDone, isHabitDue, isHabitScheduled, type PropertyValue } from '../src/index.ts'
 
 const habit = (days: string[], props: Record<string, PropertyValue> = {}) => ({
   createdAt: '2026-10-01T12:00:00.000Z',
@@ -167,5 +167,26 @@ describe('habit report', () => {
     expect(counts(report.total)).toEqual([14, 21])
     expect(report.habits[2]!.paused).toBe(true)
     expect(report.habits[2]!.total.expected).toBeGreaterThan(0)
+  })
+})
+
+describe('habit day totals and week plans', () => {
+  it('counts daily habits on their days and weekly ones only when done', () => {
+    const daily = habit(['2026-10-05'])
+    const weekly = habit(['2026-10-06'], { perweek: { kind: 'number', value: 3 } })
+    const paused = habit(['2026-10-05'], { paused: { kind: 'checkbox', value: true } })
+    const totals = habitDayTotals([daily, weekly, paused], '2026-10-05', '2026-10-08', '2026-10-07')
+    expect(totals.map((t) => [t.day, t.done, t.due])).toEqual([
+      ['2026-10-05', 1, 1],
+      ['2026-10-06', 1, 2],
+      // Today, not done yet: not counted.
+      ['2026-10-07', 0, 0],
+    ])
+  })
+
+  it('plans a whole week: scheduled days, or times a week', () => {
+    expect(habitWeekPlan(habit([]), '2026-10-05')).toBe(7)
+    expect(habitWeekPlan(habit([], { days: { kind: 'select', value: ['mon', 'fri'] } }), '2026-10-05')).toBe(2)
+    expect(habitWeekPlan(habit([], { perweek: { kind: 'number', value: 3 } }), '2026-10-05')).toBe(3)
   })
 })

@@ -3,6 +3,7 @@
 // week" on Today, a day off faded in the Tracker, the Progress tab's headline and rows (checked
 // against core's habitReport), the range switch kept on reload, and (on 5184, the built app) the
 // same numbers after reloading offline. SHOTS=<dir> saves light and dark screenshots; PHONE=1 a 390px width (Today left out).
+// The Tracker's own progress (strip or panel, every chart, Off, kept on reload) is checked too.
 //   node habits.mjs [chromium|webkit] [base]
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -94,12 +95,66 @@ if (!process.env.PHONE) {
   await until(async () => / of 3 this week/.test(await text(main)), '"x of 3 this week" on Today')
 }
 
-step('Tracker: a day off is faded')
+step('Tracker: a day off is faded (phone: a row per habit)')
+await page.evaluate(() => localStorage.removeItem('vasta.habit-progress.layout'))
 await page.goto(`${base}/t/${habitType.id}`)
-await until(() => main.locator('tr', { hasText: 'Stretch' }).count(), 'the Tracker')
-const stretchCells = main.locator('tr', { hasText: 'Stretch' }).locator('td')
-const faded = await stretchCells.evaluateAll((cells) => cells.filter((c) => c.querySelector('.opacity-40')).length)
-if (!faded) throw new Error('no faded day for Mon/Wed/Fri')
+if (process.env.PHONE) {
+  await until(() => main.locator('[data-habit-row]', { hasText: 'Stretch' }).count(), 'the phone rows')
+  const ticks = await main.locator('[data-habit-row]', { hasText: 'Stretch' }).locator('i[title*="day off"]').count()
+  if (!ticks) throw new Error('no day-off tick for Mon/Wed/Fri')
+  if (await main.locator('table').count()) throw new Error('a table on the phone')
+} else {
+  await until(() => main.locator('tr', { hasText: 'Stretch' }).count(), 'the Tracker')
+  const stretchCells = main.locator('tr', { hasText: 'Stretch' }).locator('td')
+  const faded = await stretchCells.evaluateAll((cells) => cells.filter((c) => c.querySelector('.opacity-40')).length)
+  if (!faded) throw new Error('no faded day for Mon/Wed/Fri')
+}
+
+step('Tracker progress: day strip above by default, matching the report')
+const listed4 = (await get(`/api/types/${habitType.id}/objects`)).filter((h) => !h.deletedAt)
+const report4 = habitReport(listed4, 4, today)
+const pct4 = report4.total.expected ? `${Math.round((report4.total.done / report4.total.expected) * 100)}%` : '—'
+await until(async () => (await main.locator('[data-progress-strip][data-chart="days"]').count()) === 1, 'the day strip')
+await until(async () => (await text(main.locator('[data-progress-strip] [data-progress-headline]'))).startsWith(`${pct4} over the last 4 weeks ${report4.total.done} of ${report4.total.expected} done`), `strip headline ${pct4}`)
+const menu = async (selector) => {
+  if (!(await page.locator('[data-progress-options]').isVisible().catch(() => false))) await main.locator('[data-progress-menu]').click()
+  await page.locator(`[data-progress-options] ${selector}`).click()
+}
+for (const chart of ['weeks', 'meters', 'habits', 'days']) {
+  await menu(`[data-chart="${chart}"]`)
+  await until(async () => (await main.locator(`[data-progress-strip][data-chart="${chart}"]`).count()) === 1, `strip ${chart}`)
+}
+await menu('[data-place="beside"]')
+for (const chart of ['weeks', 'line', 'counts', 'calendar']) {
+  await menu(`[data-chart="${chart}"]`)
+  await until(async () => (await main.locator(`[data-progress-panel][data-chart="${chart}"]`).count()) === 1, `panel ${chart}`)
+}
+if (await main.locator('[data-progress-strip]').count()) throw new Error('strip and panel both shown')
+await until(async () => (await text(main.locator('[data-progress-panel] [data-progress-headline]'))) === pct4, 'panel headline')
+await page.keyboard.press('Escape')
+if (process.env.SHOTS) {
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((dark) => document.documentElement.classList.toggle('dark', dark), theme === 'dark')
+    await sleep(300)
+    await page.screenshot({ path: path.join(process.env.SHOTS, `habits-panel${process.env.PHONE ? '-phone' : ''}-${theme}.png`), fullPage: true })
+  }
+  await page.evaluate(() => document.documentElement.classList.remove('dark'))
+}
+await page.reload()
+await until(async () => (await main.locator('[data-progress-panel][data-chart="calendar"]').count()) === 1, 'the panel kept on reload')
+await menu('[data-place="off"]')
+await until(async () => !(await main.locator('[data-progress-panel], [data-progress-strip]').count()), 'progress off')
+await menu('[data-place="above"]')
+await until(async () => (await main.locator('[data-progress-strip][data-chart="days"]').count()) === 1, 'back to the day strip')
+await page.keyboard.press('Escape')
+if (process.env.SHOTS) {
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((dark) => document.documentElement.classList.toggle('dark', dark), theme === 'dark')
+    await sleep(300)
+    await page.screenshot({ path: path.join(process.env.SHOTS, `habits-strip${process.env.PHONE ? '-phone' : ''}-${theme}.png`), fullPage: true })
+  }
+  await page.evaluate(() => document.documentElement.classList.remove('dark'))
+}
 
 step('Progress: headline and rows match the report')
 const pick = async (name) => {

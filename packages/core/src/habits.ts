@@ -274,6 +274,39 @@ export function habitStats(habit: Habit, today: string, createdDay = habit.creat
   }
 }
 
+/** One day across habits: how many were done and how many counted that day. */
+export interface HabitDayTotal {
+  day: string
+  done: number
+  due: number
+}
+
+/**
+ * Per day from `from` to `to` (up to `today`), across habits not paused: a daily habit counts on
+ * its scheduled days since it began (today only once done); a weekly habit only on days it was
+ * done, since it asks for no day in particular. The share done is `done / due`.
+ */
+export function habitDayTotals(habits: Habit[], from: string, to: string, today: string): HabitDayTotal[] {
+  const active = habits.filter((h) => !isHabitPaused(h)).map((habit) => ({ habit, since: habitSince(habit), weekly: habitWeeklyTarget(habit) }))
+  const totals: HabitDayTotal[] = []
+  for (let day = from; day <= to && day <= today; day = addDays(day, 1)) {
+    const total = { day, done: 0, due: 0 }
+    for (const { habit, since, weekly } of active) {
+      if (day < since) continue
+      const done = isHabitDone(habit, day)
+      if (done) total.done++
+      if (done || (!weekly && isHabitScheduled(habit, day) && day !== today)) total.due++
+    }
+    totals.push(total)
+  }
+  return totals
+}
+
+/** What a habit plans for a whole Monday–Sunday week (all its days, as if the week were over). */
+export function habitWeekPlan(habit: Habit, monday: string): number {
+  return habitWeek(habit, monday, addDays(monday, 7), habitSince(habit)).expected
+}
+
 export interface HabitReport {
   /** Mondays, oldest first; the last is the current week. */
   weeks: string[]

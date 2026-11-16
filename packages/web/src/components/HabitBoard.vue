@@ -1,42 +1,80 @@
 <script setup lang="ts">
-// The Habits page's Tracker view: one row per habit, the last two weeks (one on phones) to check
-// off, and each habit's streak and its last 4 weeks (counted as the Progress view counts them).
+// The Habits page's Tracker view: one row per habit, the last two weeks (one beside a panel) to
+// check off, and each habit's streak and its last 4 weeks (counted as the Progress view counts
+// them); on a phone, rows as in the Habit Tracker app (HabitRows). Progress shows above the habits
+// or beside them (below on a phone), or not at all, as picked in its menu on this device.
 // Paused habits sit at the bottom, faded.
 import { computed, toRef } from 'vue'
+import { useRoute } from 'vue-router'
 import { addDays, habitReport, habitStats, habitTarget, habitUnit, isHabitDone, isHabitDue, isHabitPaused, type HabitTally, type ObjectSummary } from '@vasta/core'
-import { dayKey } from '../lib/actions.ts'
 import { swatchClasses } from '../lib/colors.ts'
-import { habitColor, useFoodHabits } from '../lib/habits.ts'
+import { habitColor, useFoodHabits, useToday } from '../lib/habits.ts'
+import { progressLayout, useHabitProgress } from '../lib/habit-progress.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import HabitCheck from './HabitCheck.vue'
+import HabitProgressMenu from './HabitProgressMenu.vue'
+import HabitProgressPanel from './HabitProgressPanel.vue'
+import HabitProgressStrip from './HabitProgressStrip.vue'
+import HabitRows from './HabitRows.vue'
 import ObjectLink from './ObjectLink.vue'
 
 const props = defineProps<{ habits: ObjectSummary[]; filter?: string }>()
 const emit = defineEmits<{ menu: [event: MouseEvent, object: ObjectSummary] }>()
 
-const today = dayKey()
-const days = computed(() => Array.from({ length: isPhone.value ? 7 : 14 }, (_, i) => addDays(today, i - (isPhone.value ? 6 : 13))))
+const today = useToday()
+const place = computed(() => progressLayout.value.place)
+const beside = computed(() => place.value === 'beside')
+/** Days to check off: two weeks, one beside a panel. */
+const days = computed(() => {
+  const count = beside.value ? 7 : 14
+  return Array.from({ length: count }, (_, i) => addDays(today.value, i - (count - 1)))
+})
 const locale = typeof navigator !== 'undefined' ? navigator.language : 'en'
 const weekday = new Intl.DateTimeFormat(locale, { weekday: 'narrow', timeZone: 'UTC' })
 const utc = (day: string) => new Date(`${day}T00:00:00.000Z`)
 
 const habits = useFoodHabits(toRef(props, 'habits'))
 /** Each habit's last 4 weeks, done of expected (core habitReport, as in Progress). */
-const fourWeeks = computed(() => new Map(habitReport(habits.value, 4, today).habits.map((r) => [r.id, r.total])))
+const fourWeeks = computed(() => new Map(habitReport(habits.value, 4, today.value).habits.map((r) => [r.id, r.total])))
 const percent = (tally: HabitTally | undefined) => (tally?.expected ? `${Math.round((tally.done / tally.expected) * 100)}%` : '—')
 
-const rows = computed(() => {
+const shown = computed(() => {
   const q = props.filter?.trim().toLowerCase()
-  return habits.value
-    .filter((h) => !q || h.title.toLowerCase().includes(q))
-    .map((habit) => ({ habit, paused: isHabitPaused(habit), stats: habitStats(habit, today), weeks: fourWeeks.value.get(habit.id) }))
+  return habits.value.filter((h) => !q || h.title.toLowerCase().includes(q))
+})
+const rows = computed(() => {
+  return shown.value
+    .map((habit) => ({ habit, paused: isHabitPaused(habit), stats: habitStats(habit, today.value), weeks: fourWeeks.value.get(habit.id) }))
     .sort((a, b) => Number(a.paused) - Number(b.paused) || a.habit.title.localeCompare(b.habit.title))
 })
+
+// Progress over the shown habits (the filter applies), and the link to the Progress tab.
+const progress = useHabitProgress(shown, today)
+const route = useRoute()
+const progressLink = computed(() => `${route.path}?view=__progress`)
 </script>
 
 <template>
-  <div class="mt-4 overflow-x-auto">
+  <div class="mt-4 max-md:pb-24">
+    <div v-if="place === 'off' || !shown.length || (beside && isPhone)" class="mb-4 flex justify-end">
+      <HabitProgressMenu />
+    </div>
+    <HabitProgressStrip
+      v-if="place === 'above' && shown.length"
+      :chart="progressLayout.strip"
+      :weeks="progress.weeks.value"
+      :total="progress.total.value"
+      :by-week="progress.byWeek.value"
+      :days="progress.days.value"
+      :habit-rows="progress.habitRows.value"
+      :progress-link="progressLink"
+    >
+      <template #action><HabitProgressMenu /></template>
+    </HabitProgressStrip>
+    <div :class="beside && !isPhone ? 'grid grid-cols-[minmax(0,1fr)_16.25rem] gap-7' : ''">
+    <HabitRows v-if="isPhone" :habits="shown" :today="today" @menu="(event, object) => emit('menu', event, object)" />
+    <div v-else class="min-w-0 overflow-x-auto">
     <table class="w-full border-separate border-spacing-0 text-sm">
       <thead>
         <tr class="text-[11px] text-ink-faint">
@@ -71,5 +109,20 @@ const rows = computed(() => {
       </tbody>
     </table>
     <p v-if="!rows.length" class="py-10 text-center text-sm text-ink-faint">No habits match the filter.</p>
+    </div>
+    <HabitProgressPanel
+      v-if="beside && shown.length"
+      :class="isPhone ? 'mt-2 border-t border-line pt-5' : 'border-l border-line pl-6'"
+      :chart="progressLayout.panel"
+      :weeks="progress.weeks.value"
+      :total="progress.total.value"
+      :by-week="progress.byWeek.value"
+      :days="progress.days.value"
+      :habit-rows="progress.habitRows.value"
+      :progress-link="progressLink"
+    >
+      <template v-if="!isPhone" #action><HabitProgressMenu compact /></template>
+    </HabitProgressPanel>
+    </div>
   </div>
 </template>
