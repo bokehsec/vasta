@@ -19,8 +19,8 @@ GitHub release page.
   the same numbers (`weeks`).
 - **Habit progress on the Tracker, your way.** The Habits Tracker shows how you are doing next to
   the habits. Type settings › Progress chooses where (above the habits, beside them — below them
-  on a phone — or off), the chart (week columns, a day heat strip, week meters or habit chips
-  above; a ranking, a trend line, a calendar of days or done-and-missed counts beside) and the
+  on a phone — or off), the chart (week columns, a trend line, a day heat strip, week meters or
+  habit chips above; a ranking, a trend line, a calendar of days or done-and-missed counts beside) and the
   range (4, 8 or 13 weeks), for every device alike. It starts with the day heat strip above. On a
   phone each habit is one row, as in the Habit Tracker app: its whole name, "2 of 3 this week" or
   its streak, its last two weeks as ticks and a round check for today (past days from its page).

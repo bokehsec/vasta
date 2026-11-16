@@ -12,6 +12,7 @@ export type PanelChart = HabitPanelChart
 export const PROGRESS_PLACES: readonly ProgressPlace[] = ['off', 'above', 'beside']
 export const STRIP_CHARTS: { id: StripChart; label: string; hint: string }[] = [
   { id: 'weeks', label: 'Week columns', hint: 'Share done each week' },
+  { id: 'line', label: 'Trend line', hint: 'Share done each week, as one line' },
   { id: 'days', label: 'Day heat strip', hint: 'Every day, darker when more got done' },
   { id: 'meters', label: 'Week meters', hint: 'A bar per week' },
   { id: 'habits', label: 'Habit chips', hint: 'Each habit over the range' },

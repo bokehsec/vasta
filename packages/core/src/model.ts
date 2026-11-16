@@ -109,7 +109,7 @@ export interface SubtaskSettings {
  * back to `HABIT_PROGRESS_DEFAULT`.
  */
 export type HabitProgressPlace = 'off' | 'above' | 'beside'
-export type HabitStripChart = 'weeks' | 'days' | 'meters' | 'habits'
+export type HabitStripChart = 'weeks' | 'line' | 'days' | 'meters' | 'habits'
 export type HabitPanelChart = 'weeks' | 'line' | 'calendar' | 'counts'
 export interface HabitTypeSettings {
   place: HabitProgressPlace

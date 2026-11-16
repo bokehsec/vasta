@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Habit progress as a strip above the habits (Tracker): the total over the range in a sentence,
-// then one of four small charts: week columns, a heat strip of days, week meters or a chip per
-// habit. Numbers from lib/habit-progress.ts (core habitReport), as the Progress tab counts them.
+// then one of five small charts: week columns, a trend line, a heat strip of days, week meters or a
+// chip per habit. Numbers from lib/habit-progress.ts (core habitReport), as the Progress tab counts them.
 import { computed } from 'vue'
 import type { HabitTally, ObjectSummary } from '@vasta/core'
 import { swatchClasses } from '../lib/colors.ts'
@@ -25,6 +25,16 @@ const thisWeek = computed(() => props.byWeek.at(-1))
 /** The heat strip shows at most 4 weeks of days on a phone, 8 on a computer. */
 const heatWeeks = computed(() => props.days.slice(-(isPhone.value ? 4 : 8)))
 const meterWeeks = computed(() => props.byWeek.slice(-5))
+
+// The trend line: finished weeks' share done, 0–100%, beside the headline (as the week columns).
+const LINE = { w: 200, h: 44, top: 6, bottom: 40, left: 4, right: 34 }
+const lineY = (p: number) => LINE.bottom - (p / 100) * (LINE.bottom - LINE.top)
+const linePoints = computed(() => {
+  const list = props.byWeek.filter((w) => !w.current && w.tally.expected)
+  const step = list.length > 1 ? (LINE.w - LINE.left - LINE.right) / (list.length - 1) : 0
+  return list.map((w, i) => ({ w, x: LINE.left + i * step, y: lineY(w.percent ?? 0) }))
+})
+const linePath = computed(() => linePoints.value.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' '))
 const dayTitle = (d: Day) =>
   d.future ? `${longDayLabel(d.day)}: still to come` : d.total?.due ? `${longDayLabel(d.day)}: ${d.total.done} of ${d.total.due} done` : d.today ? `${longDayLabel(d.day)}: today, nothing done yet` : `${longDayLabel(d.day)}: nothing to do`
 const weekTitle = (w: Week) => (w.current ? `This week: ${w.tally.done} done so far, ${w.plan} planned` : `Week of ${dayLabel(w.monday)}: ${w.tally.done} of ${w.tally.expected}${w.tally.expected ? ` (${w.percent}%)` : ''}`)
@@ -51,6 +61,21 @@ const weekTitle = (w: Week) => (w.current ? `This week: ${w.tally.done} done so 
           <span class="text-[11px] tabular-nums text-ink-faint">{{ Number(w.monday.slice(8)) }}</span>
         </div>
       </div>
+
+      <!-- Trend line: finished weeks' share done; the last one marked and labelled. -->
+      <div v-else-if="chart === 'line'" class="w-[200px] max-w-full max-sm:w-full"><div class="w-[200px] max-w-full">
+        <svg v-if="linePoints.length" :viewBox="`0 0 ${LINE.w} ${LINE.h}`" width="100%" :height="LINE.h" class="block overflow-visible" role="img" :aria-label="`Share done each week, last ${weeks} weeks`">
+          <line v-for="t in [0, 50, 100]" :key="t" :x1="LINE.left" :x2="LINE.w - LINE.right" :y1="lineY(t)" :y2="lineY(t)" stroke="var(--color-line)" stroke-width="1" shape-rendering="crispEdges" />
+          <path :d="linePath" fill="none" stroke="var(--color-chart)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+          <g v-for="(pt, i) in linePoints" :key="pt.w.monday">
+            <circle v-if="i === linePoints.length - 1" :cx="pt.x" :cy="pt.y" r="3.5" fill="var(--color-chart)" stroke="var(--color-surface)" stroke-width="2" />
+            <rect :x="pt.x - 8" y="0" width="16" :height="LINE.h" fill="transparent"><title>{{ weekTitle(pt.w) }}</title></rect>
+          </g>
+          <text :x="linePoints.at(-1)!.x + 8" :y="linePoints.at(-1)!.y + 4" font-size="12" font-weight="600" fill="var(--color-ink)">{{ linePoints.at(-1)!.w.percent }}%</text>
+        </svg>
+        <div v-if="linePoints.length" class="mt-1 flex justify-between pr-[34px] text-[11px] text-ink-faint"><span>{{ dayLabel(linePoints[0]!.w.monday) }}</span><span>{{ dayLabel(linePoints.at(-1)!.w.monday) }}</span></div>
+        <p v-else class="text-xs text-ink-faint">A line shows once a week is over.</p>
+      </div></div>
     </div>
 
     <!-- Day heat strip: every day, darker when more of its habits got done. -->

@@ -134,9 +134,10 @@ const progressSettings = async (...selectors) => {
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await until(async () => !(await page.locator('[data-habit-progress-settings]').count()), 'the settings saved')
 }
-for (const chart of ['weeks', 'meters', 'habits', 'days']) {
+for (const chart of ['weeks', 'line', 'meters', 'habits', 'days']) {
   await progressSettings(`[data-chart-picker="strip"] [data-chart="${chart}"]`)
   await until(async () => (await main.locator(`[data-progress-strip][data-chart="${chart}"]`).count()) === 1, `strip ${chart}`)
+  if (process.env.SHOTS && chart === 'line') await page.screenshot({ path: path.join(process.env.SHOTS, `habits-strip-line${process.env.PHONE ? '-phone' : ''}.png`) })
 }
 await progressSettings('[data-place="beside"]')
 await until(async () => (await main.locator('[data-progress-panel][data-chart="calendar"]').count()) === 1, 'the panel')

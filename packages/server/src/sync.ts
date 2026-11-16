@@ -97,7 +97,7 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   subtasks: optional((v) => isObject(v) && isNonEmpty((v as { parentField?: unknown }).parentField)),
   habits: optional((v) => isObject(v) && Object.entries(v as object).every(([key, x]) => {
     if (key === 'place') return ['off', 'above', 'beside'].includes(x as string)
-    if (key === 'strip') return ['weeks', 'days', 'meters', 'habits'].includes(x as string)
+    if (key === 'strip') return ['weeks', 'line', 'days', 'meters', 'habits'].includes(x as string)
     if (key === 'panel') return ['weeks', 'line', 'calendar', 'counts'].includes(x as string)
     if (key === 'weeks') return [4, 8, 13].includes(x as number)
     return false
