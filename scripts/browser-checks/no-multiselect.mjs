@@ -18,8 +18,8 @@ if (!/^http:\/\/127\.0\.0\.1:5[12]8[34]$/.test(base)) throw new Error(`not the t
 
 const desktop = { viewport: { width: 1300, height: 900 }, locale: 'en-US', timezoneId: 'America/Toronto' }
 const phone = { viewport: { width: 390, height: 844 }, hasTouch: true, ...(engine === 'webkit' ? {} : { isMobile: true }), locale: 'en-US', timezoneId: 'America/Toronto' }
-const browser = engine === 'webkit' ? await webkit.launch() : await chromium.launch()
-// A persistent WebKit context is not the browser's: it keeps the process alive until it is closed itself.
+const browser = engine === 'webkit' ? null : await chromium.launch()
+// WebKit uses only persistent contexts below; a spare browser can block its automation session.
 const opened = []
 // Playwright's WebKit shares OPFS between contexts (navigator.locks does not span them): two open at
 // once with the replica on corrupt its database, so a context that only needs the API runs without it.
@@ -265,6 +265,6 @@ try {
   // Every context, the cleanup's too (WebKit's persistent ones are not closed with the browser), then
   // leave: a script that passed must not hang.
   for (const context of opened) await context.close().catch(() => {})
-  await browser.close().catch(() => {})
+  await browser?.close().catch(() => {})
   process.exit(process.exitCode ?? 0)
 }
