@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="T extends string">
-// One of the Tracker's progress charts, picked in Type settings › Progress: a small drawing of
+// One of the habit progress charts (the Tracker's Display menu, the Progress tab on a phone): a small drawing of
 // each chart, its name and what it shows. Shared by the strip (above the habits) and panel (beside
 // them) lists.
 import AppIcon from './AppIcon.vue'

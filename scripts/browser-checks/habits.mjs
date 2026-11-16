@@ -4,7 +4,7 @@
 // against core's habitReport), the range switch kept on reload, its chart choice and each habit's weeks, and (on 5184, the built app) the
 // same numbers after reloading offline. SHOTS=<dir> saves light and dark screenshots; PHONE=1 a 390px width (Today left out).
 // The Tracker's own progress is checked too: where it shows (above, beside, off), the charts and
-// the range are picked in Type settings (kept on the type, so they survive a reload).
+// the range are picked in its Progress menu (kept on the type, so they survive a reload).
 //   node habits.mjs [chromium|webkit] [base]
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -125,19 +125,30 @@ const report4 = habitReport(listed4, 4, today)
 const pct4 = report4.total.expected ? `${Math.round((report4.total.done / report4.total.expected) * 100)}%` : '—'
 await until(async () => (await main.locator('[data-progress-strip][data-chart="days"]').count()) === 1, 'the day strip')
 await until(async () => (await text(main.locator('[data-progress-strip] [data-progress-headline]'))).startsWith(`${pct4} over the last 4 weeks ${report4.total.done} of ${report4.total.expected} done`), `strip headline ${pct4}`)
-// Where it shows, the charts and the range are all Type settings, saved on the type; the Tracker
-// itself has no progress button.
-if (await main.locator('[data-progress-menu]').count()) throw new Error('a progress button on the Tracker')
+// Where it shows, the charts and the range are picked in the Tracker's Display menu (beside
+// Filter), saved on the type; Type settings no longer has them.
+await page.goto(`${base}/t/${habitType.id}?settings=1`)
+await until(() => page.getByRole('button', { name: 'Save', exact: true }).count(), 'Type settings')
+if (await page.locator('[data-habit-progress-settings]').count()) throw new Error('progress still in Type settings')
+await page.goto(`${base}/t/${habitType.id}`)
+await until(async () => (await main.locator('[data-progress-strip]').count()) === 1, 'back on the Tracker')
 const progressSettings = async (...selectors) => {
-  await page.goto(`${base}/t/${habitType.id}?settings=1`)
-  for (const selector of selectors) await page.locator(`[data-habit-progress-settings] ${selector}`).click()
-  await page.getByRole('button', { name: 'Save', exact: true }).click()
-  await until(async () => !(await page.locator('[data-habit-progress-settings]').count()), 'the settings saved')
+  await page.locator('[data-progress-menu]').click()
+  for (const selector of selectors) await page.locator(`[data-progress-options] ${selector}`).click()
+  await page.keyboard.press('Escape')
+  await until(async () => !(await page.locator('[data-progress-options]').count()), 'the progress menu closed')
 }
 for (const chart of ['weeks', 'line', 'meters', 'habits', 'days']) {
   await progressSettings(`[data-chart-picker="strip"] [data-chart="${chart}"]`)
   await until(async () => (await main.locator(`[data-progress-strip][data-chart="${chart}"]`).count()) === 1, `strip ${chart}`)
-  if (process.env.SHOTS && chart === 'line') await page.screenshot({ path: path.join(process.env.SHOTS, `habits-strip-line${process.env.PHONE ? '-phone' : ''}.png`) })
+  if (process.env.SHOTS && chart === 'line') {
+    await page.screenshot({ path: path.join(process.env.SHOTS, `habits-strip-line${process.env.PHONE ? '-phone' : ''}.png`) })
+    await page.locator('[data-progress-menu]').click()
+    await sleep(400)
+    await page.screenshot({ path: path.join(process.env.SHOTS, `habits-progress-menu${process.env.PHONE ? '-phone' : ''}.png`) })
+    await page.keyboard.press('Escape')
+    await until(async () => !(await page.locator('[data-progress-options]').count()), 'the progress menu closed')
+  }
 }
 await progressSettings('[data-place="beside"]')
 await until(async () => (await main.locator('[data-progress-panel][data-chart="calendar"]').count()) === 1, 'the panel')
@@ -157,7 +168,7 @@ if (process.env.SHOTS) {
   await page.evaluate(() => document.documentElement.classList.remove('dark'))
 }
 
-step('Tracker progress: the range is a Type setting too')
+step('Tracker progress: the range, from the same menu')
 const report8 = habitReport(listed4, 8, today)
 const pct8 = report8.total.expected ? `${Math.round((report8.total.done / report8.total.expected) * 100)}%` : '—'
 await progressSettings('[data-weeks="8"]')
@@ -169,7 +180,7 @@ await progressSettings('[data-place="off"]')
 await until(async () => !(await main.locator('[data-progress-panel], [data-progress-strip]').count()), 'progress off')
 await progressSettings('[data-place="above"]')
 await until(async () => (await main.locator('[data-progress-strip][data-chart="days"]').count()) === 1, 'back to the day strip')
-// What Type settings saved reached the server (synced to every device), with nothing refused.
+// What the menu saved reached the server (synced to every device), with nothing refused.
 await until(async () => {
   const saved = (await get(`/api/types/${habitType.id}`)).habits
   return saved?.place === 'above' && saved?.strip === 'days' && saved?.panel === 'calendar' && saved?.weeks === 8
@@ -221,7 +232,7 @@ await until(() => page.locator('svg[aria-label="Share done each week"] path').co
 step('range: 13 weeks, saved on the type, kept on reload')
 await page.locator('[data-range="13"]').click()
 await checkNumbers(13)
-// The switch is the Type settings range: saved on the type, for the Tracker and every device.
+// The switch is the Tracker's range too: saved on the type, for the Tracker and every device.
 await until(async () => (await get(`/api/types/${habitType.id}`)).habits?.weeks === 13, 'the range saved on the type')
 await page.reload()
 await until(async () => (await page.locator('[data-range="13"]').getAttribute('aria-pressed').catch(() => null)) === 'true', '13 weeks kept')
