@@ -15,6 +15,7 @@ import ObjectCollection from '../components/ObjectCollection.vue'
 import ProcessMode from '../components/ProcessMode.vue'
 import WorkflowChooser from '../components/WorkflowChooser.vue'
 import HabitBoard from '../components/HabitBoard.vue'
+import HabitProgress from '../components/HabitProgress.vue'
 import TagTree from '../components/TagTree.vue'
 import PopoverMenu from '../components/PopoverMenu.vue'
 import TypeSettings from '../components/TypeSettings.vue'
@@ -82,7 +83,12 @@ const fixedView = computed(() => FIXED_VIEWS[type.value?.system ?? ''])
 const METRICS_VIEW = '__metrics'
 const hasMetrics = computed(() => !!statusProperty(type.value))
 const metricsActive = computed(() => hasMetrics.value && activeViewId.value === METRICS_VIEW)
-const fixedActive = computed(() => metricsActive.value || (!!fixedView.value && activeViewId.value === fixedView.value.id))
+// Habits also have their Progress over the weeks, after the Tracker.
+const PROGRESS_VIEW = '__progress'
+const hasProgress = computed(() => type.value?.system === 'habit')
+const progressActive = computed(() => hasProgress.value && activeViewId.value === PROGRESS_VIEW)
+const trackerActive = computed(() => !!fixedView.value && activeViewId.value === fixedView.value.id)
+const fixedActive = computed(() => metricsActive.value || progressActive.value || trackerActive.value)
 
 // A type opens on the view last picked in it, per type, on this device.
 const viewKey = `vasta.view.${props.id}`
@@ -142,7 +148,8 @@ watch(type, (t) => {
     else activeViewId.value = lastView() || fixed?.id || ''
   }
   const metrics = activeViewId.value === METRICS_VIEW && !!statusProperty(t)
-  if (activeViewId.value !== fixed?.id && !metrics && !t.views.some((v) => v.id === activeViewId.value)) activeViewId.value = t.views[0]?.id ?? ''
+  const progress = activeViewId.value === PROGRESS_VIEW && t.system === 'habit'
+  if (activeViewId.value !== fixed?.id && !metrics && !progress && !t.views.some((v) => v.id === activeViewId.value)) activeViewId.value = t.views[0]?.id ?? ''
 }, { immediate: true })
 
 const view = computed<ViewDef>(() => type.value?.views.find((v) => v.id === activeViewId.value) ?? { id: 'default', name: 'All', layout: 'list' })
@@ -281,7 +288,7 @@ async function deleteType() {
 // A phone's view picker: the views in a sheet behind one button.
 const viewPickerOpen = ref(false)
 const viewPickerAnchor = ref<HTMLElement | null>(null)
-const currentViewLabel = computed(() => (metricsActive.value ? 'Metrics' : fixedActive.value && fixedView.value ? fixedView.value.label : view.value.name))
+const currentViewLabel = computed(() => (metricsActive.value ? 'Metrics' : progressActive.value ? 'Progress' : trackerActive.value && fixedView.value ? fixedView.value.label : view.value.name))
 
 // Global workflows have stable, explicit queues independent of the list's filters. A targeted
 // review remains in More. The session snapshots its scope/order/fields, with one paused on device.
@@ -737,7 +744,11 @@ async function newMenu(event: MouseEvent) {
           <p class="px-2.5 pb-1 text-base font-semibold">Views</p>
           <button v-if="fixedView" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" data-view-option @click="pickView(fixedView.id), (viewPickerOpen = false)">
             <AppIcon :fallback="fixedView.icon" :size="16" class="text-ink-soft" /> {{ fixedView.label }}
-            <AppIcon v-if="fixedActive" fallback="ph:check" class="ml-auto text-accent" />
+            <AppIcon v-if="trackerActive" fallback="ph:check" class="ml-auto text-accent" />
+          </button>
+          <button v-if="hasProgress" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" data-view-option @click="pickView(PROGRESS_VIEW), (viewPickerOpen = false)">
+            <AppIcon fallback="ph:chart-bar" :size="16" class="text-ink-soft" /> Progress
+            <AppIcon v-if="progressActive" fallback="ph:check" class="ml-auto text-accent" />
           </button>
           <button v-for="v in type.views" :key="v.id" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" data-view-option @click="pickView(v.id), (viewPickerOpen = false)">
             {{ v.name }}
@@ -803,10 +814,19 @@ async function newMenu(event: MouseEvent) {
       <button
         v-if="fixedView"
         class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm"
-        :class="fixedActive ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'"
+        :class="trackerActive ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'"
         @click="pickView(fixedView.id)"
       >
         <AppIcon :fallback="fixedView.icon" :size="14" /> {{ fixedView.label }}
+      </button>
+      <button
+        v-if="hasProgress"
+        class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm"
+        :class="progressActive ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'"
+        data-progress-tab
+        @click="pickView(PROGRESS_VIEW)"
+      >
+        <AppIcon fallback="ph:chart-bar" :size="14" /> Progress
       </button>
       <!-- A div: WebKit does not start a drag on a button. A tab drags into the sidebar to pin the view. -->
       <div
@@ -1021,6 +1041,7 @@ async function newMenu(event: MouseEvent) {
     </div>
 
     <FlowMetrics v-else-if="metricsActive" :type="type" />
+    <HabitProgress v-else-if="progressActive" :habits="objects" :filter="filterText" @menu="objectMenu" />
     <TagTree v-else-if="fixedActive && type.system === 'tag'" :tags="objects" :filter="filterText" @menu="objectMenu" />
     <HabitBoard v-else-if="fixedActive && type.system === 'habit'" :habits="objects" :filter="filterText" @menu="objectMenu" />
     <p v-else-if="!visible.length && !agendaActive" class="py-16 text-center text-sm text-ink-faint">No {{ type.pluralName.toLowerCase() }} match the filter.</p>

@@ -22,7 +22,8 @@ export interface Bar {
   note?: string
 }
 
-const props = withDefaults(defineProps<{ bars: Bar[]; height?: number; format?: (value: number) => string; unit?: string; label: string }>(), {
+// `max` fixes the top of the y axis (100 for percents); without it the axis fits the values.
+const props = withDefaults(defineProps<{ bars: Bar[]; height?: number; format?: (value: number) => string; unit?: string; label: string; max?: number }>(), {
   height: 168,
   format: (value: number) => String(Math.round(value)),
   unit: '',
@@ -44,6 +45,7 @@ const plot = computed(() => ({ left: AXIS, width: Math.max(1, width.value - AXIS
 
 /** A clean top for the y axis (its half a clean number too), at or above the highest value or target. */
 const top = computed(() => {
+  if (props.max) return props.max
   const max = Math.max(1, ...props.bars.map((b) => Math.max(b.value, b.target ?? 0)))
   const power = 10 ** Math.floor(Math.log10(max))
   // Some room above the highest, so a target there is not lost in the top gridline.

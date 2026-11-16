@@ -53,6 +53,7 @@ import {
   foodPortions,
   habitFoodRule,
   habitsWithFood,
+  habitReport,
   goalForDay,
   groupByMeal,
   isDayCounted,
@@ -1029,7 +1030,8 @@ export class AgentTools {
   }
 
   /** The habits of a space with a day's state (today by default), streaks and rates, and the last `recent` days. */
-  habits(options: { space?: string; day?: string; recent?: number } = {}) {
+  /** `weeks` (1 to 13) adds each habit's progress over that many whole weeks, as the app's Progress view counts it. */
+  habits(options: { space?: string; day?: string; recent?: number; weeks?: number } = {}) {
     const space = this.space(options.space)
     const day = options.day ?? this.captures.today()
     if (!isValidDay(day)) throw new AgentError('day must be YYYY-MM-DD')
@@ -1037,7 +1039,21 @@ export class AgentTools {
     if (!type) return []
     const recent = Math.min(Math.max(options.recent ?? 7, 0), 60)
     const habits = habitsWithFood(this.store, space.id, this.store.listObjects(type.id), this.captures.today())
-    return habits.sort((a, b) => a.title.localeCompare(b.title)).map((habit) => this.habitInfo(habit, day, recent))
+    const weeks = Math.min(Math.max(Math.floor(options.weeks ?? 0), 0), 13)
+    const report = weeks ? habitReport(habits, weeks, this.captures.today()) : undefined
+    return habits
+      .sort((a, b) => a.title.localeCompare(b.title))
+      .map((habit) => {
+        const info = this.habitInfo(habit, day, recent)
+        const row = report?.habits.find((r) => r.id === habit.id)
+        if (!report || !row) return info
+        const progress = {
+          weeks: report.weeks.map((week, i) => ({ week, done: row.byWeek[i]!.done, expected: row.byWeek[i]!.expected })),
+          done: row.total.done,
+          expected: row.total.expected,
+        }
+        return { ...info, progress }
+      })
   }
 
   /**

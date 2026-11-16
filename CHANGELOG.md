@@ -12,6 +12,11 @@ GitHub release page.
   by the week (Monday to Sunday), on any days. Today's list, the Tracker, the habit's page,
   reminders and the agent tools say "2 of 3 this week", count streaks in weeks, and stop asking
   once the week's goal is met. A space that already had a field with this id keeps its own.
+- **Habit progress.** The Habits page has a **Progress** tab beside Tracker: how much of what your
+  habits asked for got done over the last 4, 8 or 13 weeks, as a percent with "94 of 120", a bar
+  per week and a row per habit with its goal. Paused habits are listed but left out of the total;
+  the range is remembered on the device. It works offline. The agent tools' `list_habits` can add
+  the same numbers (`weeks`).
 - **Triage and review as two steps of one routine.** A task type's page has one **Triage & review**
   button instead of a Review button on every view. It offers two queues across the whole space,
   whatever view or filters you are on: **Triage incoming** (tasks with no status or an incoming one,

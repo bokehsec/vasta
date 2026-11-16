@@ -2,7 +2,7 @@
 // or an amount toward a daily goal. A change writes only that day's prop (`done:<day>`), on top of
 // the habit as stored. A habit done from food ("From food") has its days worked out from what is
 // logged (core's withFood) and is not checked by hand.
-import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import {
   FOOD_HABIT_DAYS,
   addDays,
@@ -63,6 +63,25 @@ export function useFoodHabits(habits: Ref<ObjectSummary[]>) {
     clearTimeout(timer)
   })
   return computed(() => (days.value.length ? habits.value.map((h) => withFood(h, days.value)) : habits.value))
+}
+
+/** Today's day key, kept current: checked every minute and when the page comes back into view, so a view left open rolls over at midnight. */
+export function useToday() {
+  const today = ref(dayKey())
+  const refresh = () => {
+    const now = dayKey()
+    if (now !== today.value) today.value = now
+  }
+  let timer: ReturnType<typeof setInterval> | undefined
+  onMounted(() => {
+    timer = setInterval(refresh, 60_000)
+    document.addEventListener('visibilitychange', refresh)
+  })
+  onBeforeUnmount(() => {
+    clearInterval(timer)
+    document.removeEventListener('visibilitychange', refresh)
+  })
+  return today
 }
 
 /** A habit done from food can't be checked by hand: say so. */
