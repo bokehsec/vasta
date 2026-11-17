@@ -2,7 +2,8 @@
 // `type/<id>/mine` or `page-width`: what it belongs to first, so deleting a view or type can drop its
 // keys with one prefix) and one of three scopes:
 //   account  follows the person to every device: kept on the server with the user's profile
-//            (User.preferences), cached here so it works offline and sent when back online.
+//            (User.preferences, which reaches an offline start with the cached /api/auth/me);
+//            a change not sent yet waits here and goes when the server can be reached.
 //            Folds, "show done", the phone's menu, the last view of a type, the Habits display…
 //   device   this device and this person: localStorage `vasta.device.<user>.<key>`. Page width,
 //            capture drafts, where a pane or the camera of a board is.
@@ -20,7 +21,7 @@ import { convertLegacy, isBrowserLegacy } from './preferences-legacy.ts'
 export type PreferenceScope = 'account' | 'device' | 'browser'
 
 let userId = ''
-/** The account's preferences as last known, and the changes not yet sent (null: removed). */
+/** The account's preferences as the server last said, and the changes not yet sent (null: removed). */
 let account = new Map<string, unknown>()
 let pending: Record<string, unknown> = {}
 /** Device and browser values read from localStorage so far, by storage name. */
@@ -133,7 +134,7 @@ let sending = false
 
 function saveCache() {
   try {
-    storage()?.setItem(accountCacheName(userId), JSON.stringify({ values: Object.fromEntries(account), pending }))
+    storage()?.setItem(accountCacheName(userId), JSON.stringify({ pending }))
   } catch {}
 }
 
@@ -216,11 +217,13 @@ export function migrateLegacy(user: string) {
 /** The person logged in: load their preferences (the server's, with what was changed here and not sent), move the old keys, send. */
 export function startPreferences(user: Pick<User, 'id' | 'preferences'>) {
   userId = user.id
-  let cached: { values?: Record<string, unknown>; pending?: Record<string, unknown> } = {}
+  let cached: { pending?: Record<string, unknown> } = {}
   try {
     cached = JSON.parse(storage()?.getItem(accountCacheName(user.id)) ?? '{}') as typeof cached
   } catch {}
-  account = new Map(Object.entries(user.preferences ?? cached.values ?? {}))
+  // The user comes from the server (or its offline copy of /api/auth/me), which leaves `preferences`
+  // out when there are none: that is the answer, never the cache's older values.
+  account = new Map(Object.entries(user.preferences ?? {}))
   pending = cached.pending ?? {}
   for (const [key, value] of Object.entries(pending)) {
     if (value === null) account.delete(key)

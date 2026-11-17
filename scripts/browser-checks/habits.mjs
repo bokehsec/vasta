@@ -213,7 +213,10 @@ await page.getByRole('button', { name: 'Save', exact: true }).click()
 await until(async () => (await get(`/api/types/${habitType.id}`)).name === `${latestType.name} edited`, 'name saved')
 if (!(await get(`/api/types/${habitType.id}`)).views.some((v) => v.id.endsWith(':meanwhile'))) throw new Error('Type settings overwrote a view added meanwhile')
 await put(`/api/types/${habitType.id}`, { ...(await get(`/api/types/${habitType.id}`)), views: latestType.views })
-// The Display choice is personal: forget it, so the type's own (starting) settings show.
+// The Display choice is personal: forget it, so the type's own (starting) settings show. First let
+// this device send what it still holds (a reload can cut a send short; it goes again at the start),
+// or that newer pick would rightly come back over the server's.
+await until(async () => page.evaluate(() => Object.entries(localStorage).every(([name, raw]) => !name.startsWith('vasta.account.') || !Object.keys(JSON.parse(raw).pending ?? {}).length)), 'preferences sent')
 await put('/api/auth/me', { preferences: { [`type/${habitType.id}/habits`]: null } })
 await page.goto(`${base}/t/${habitType.id}`)
 
