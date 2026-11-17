@@ -420,7 +420,7 @@ const sourcesOpen = ref(false)
 const openDayView = (day: string) => go({ view: 'day', date: day })
 const openNote = (day: string) => {
   const id = dailyNotes.value.get(day)
-  if (id) void openObject(id)
+  if (id) void openObject(id, { where: 'type' })
 }
 </script>
 

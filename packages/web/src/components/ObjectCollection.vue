@@ -9,7 +9,8 @@ import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, listFields, MIN_COLUMN_WIDTH, QUICK_ACTIONS_COLUMN, rowFields, rowFieldsFromTable, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatDateShort, formatRelative } from '../lib/format.ts'
-import { groupObjects, typesOf, type Group } from '../lib/query.ts'
+import { startNew, useNewPlace } from '../lib/new-item.ts'
+import { groupObjects, movableField, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById, workspace } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import { runQuickAction } from '../lib/quick-actions.ts'
@@ -94,6 +95,10 @@ const groups = computed<Group[]>(() => {
 
 const { folded: foldedGroups, toggle: toggleGroup, collapseAll, expandAll } = useGroupFolds(() =>
   groupFoldKey(session.user?.id, workspace.space?.id, props.foldScope, props.groupField))
+// A "+" on a group's header adds an item into that group, on a type page (lib/new-item.ts).
+const newPlace = useNewPlace()
+const addable = computed(() => !!newPlace && !props.readonly && props.typeIds.length === 1 && props.typeIds[0] === newPlace.typeId && movableField(props.groupField, types.value))
+const addIn = (group: Group) => newPlace && startNew(newPlace.typeId, { groups: [{ field: props.groupField, group }] })
 const groupCollapsed = (group: Group) => !!props.groupField && foldedGroups.value.has(group.key)
 const hasExpanded = computed(() => groups.value.some((group) => !groupCollapsed(group)))
 const hasCollapsed = computed(() => groups.value.some(groupCollapsed))
@@ -392,7 +397,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
         <tbody v-for="(group, index) in groups" :key="group.key">
           <tr v-if="groupField">
             <th :colspan="columns.length + 1" scope="rowgroup" class="pb-3 text-left font-normal" :class="index ? 'pt-6' : 'pt-3'">
-              <GroupHeading :group="group" :field="groupField" :collapsed="groupCollapsed(group)" @toggle="toggleGroup(group.key)" />
+              <GroupHeading :group="group" :field="groupField" :collapsed="groupCollapsed(group)" :addable="addable" @toggle="toggleGroup(group.key)" @add="addIn(group)" />
             </th>
           </tr>
           <template v-if="!groupCollapsed(group)">
@@ -481,7 +486,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
 
     <template v-else>
       <section v-for="group in groups" :key="group.key" class="mt-4 first:mt-0">
-        <GroupHeading v-if="groupField" class="mb-3" :group="group" :field="groupField" :collapsed="groupCollapsed(group)" @toggle="toggleGroup(group.key)" />
+        <GroupHeading v-if="groupField" class="mb-3" :group="group" :field="groupField" :collapsed="groupCollapsed(group)" :addable="addable" @toggle="toggleGroup(group.key)" @add="addIn(group)" />
 
         <template v-if="!groupCollapsed(group)">
           <!-- List; on a phone a table too. -->

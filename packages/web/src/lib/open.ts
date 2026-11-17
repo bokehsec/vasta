@@ -3,15 +3,18 @@
 // bottom on a phone). Everything that opens an object goes through here, so the choice is made in
 // one place. The pane and the popup live in the address, so back/forward, reload and copied links
 // bring them back; leaving the page closes them, and a page changing only its own query (the
-// calendar's view and date) keeps them (the guard in router.ts).
+// calendar's view and date) keeps them (the guard in router.ts). Back closes them, and closing
+// them goes back too, never a step forward (closePopup; the Back rule is in lib/back.ts).
 import { computed, type InjectionKey } from 'vue'
 import type { LocationQueryRaw, RouteLocationRaw } from 'vue-router'
 import type { Id } from '@vasta/core'
 import { closingOverlay, router } from '../router.ts'
 import { isPhone } from './viewport.ts'
-import { lastError, notice } from './state.ts'
+import { lastError, notice, summaryOf, typesById } from './state.ts'
 
 export type OpenPlace = 'page' | 'pane' | 'popup'
+/** 'type' opens it where its type says (the window unless the type's Open in is another) on a phone, and on its page on a desktop. */
+export type OpenWhere = OpenPlace | 'type'
 
 export interface OpenOptions {
   /** A block of its text to scroll to (#b-<id>). */
@@ -20,7 +23,7 @@ export interface OpenOptions {
   query?: LocationQueryRaw
   /** 'pane' opens it next to the current page where there is room for one, 'popup' in a window
    * over what is showing; the default is its page. */
-  where?: OpenPlace
+  where?: OpenWhere
   /** Replace the current history entry; a pane or popup already open is always replaced (see openObject). */
   replace?: boolean
 }
@@ -115,12 +118,7 @@ export const popupBlockId = computed(() => {
   return typeof value === 'string' && value ? value : undefined
 })
 /** Whether the popup's object is new (its title gets the cursor): `?popup=<id>&new=1`. */
-// A date-prefilled blank draft carries the automatic field so closing can ignore only that value.
-export const popupDefaultDate = computed(() => {
-  const value = router.currentRoute.value.query.new
-  return typeof value === 'string' && value.startsWith('date:') ? value.slice(5) : undefined
-})
-export const popupIsNew = computed(() => router.currentRoute.value.query.new === '1' || !!popupDefaultDate.value)
+export const popupIsNew = computed(() => router.currentRoute.value.query.new === '1')
 /** Where a template put the cursor in the popup's text ("<block>:<offset>"). */
 export const popupCursor = computed(() => {
   const value = router.currentRoute.value.query.cursor
@@ -136,15 +134,20 @@ export const pageObjectId = computed(() => {
 /** Whether an object is open, on its page, in the pane or in the popup. */
 export const isOpen = (id: Id) => pageObjectId.value === id || paneObjectId.value === id || popupObjectId.value === id
 
+/** Where a type opens its objects: its Open in setting, a window unless it says otherwise. */
+const typeOpensOf = (id: Id): OpenPlace => typesById.value.get(summaryOf(id)?.typeId ?? '')?.openIn ?? 'popup'
+
 /**
  * Where an object asked to open in the pane or the popup goes: phones have no room for a pane, and
  * the page of the same object is already showing it, so both open (or stay on) the page. A popup
- * has room everywhere, but not over the same object's page either.
+ * has room everywhere, but not over the same object's page either. 'type' is where its type says
+ * on a phone (`typeOpens`), its page on a desktop.
  */
-export function resolvePlace(id: Id, where: OpenPlace = 'page', phone = isPhone.value, onPage = pageObjectId.value): OpenPlace {
+export function resolvePlace(id: Id, where: OpenWhere = 'page', phone = isPhone.value, onPage = pageObjectId.value, typeOpens: OpenPlace = typeOpensOf(id)): OpenPlace {
   if (onPage === id) return 'page'
-  if (where === 'pane') return phone ? 'page' : 'pane'
-  return where
+  const place = where === 'type' ? (phone ? typeOpens : 'page') : where
+  if (place === 'pane') return phone ? 'page' : 'pane'
+  return place
 }
 
 /** The current address with the pane set to an object, or without a pane. */
@@ -170,41 +173,43 @@ export function openObject(id: Id, options: OpenOptions = {}) {
   return replacing ? router.replace(to) : router.push(to)
 }
 
+/**
+ * Closes the pane or popup, kept in the address. When the entry before is the page without it (it
+ * was opened over the page) that is gone back to, so the next Back leaves the page and does not
+ * reopen the window; else (opened by an address, or read through from list to list) the entry is
+ * replaced. `replace`: always replace (one object giving way to another page).
+ */
+async function closeOverlay(kind: 'pane' | 'popup', to: RouteLocationRaw, replace: boolean) {
+  if (!replace && router.options.history.state.back === router.resolve(to).fullPath) return router.back()
+  closingOverlay[kind] = true
+  try {
+    return await router.replace(to)
+  } finally {
+    closingOverlay[kind] = false
+  }
+}
+
 export async function closePane(replace = false) {
   if (!paneObjectId.value) return
-  const to = withPane(undefined)
-  closingOverlay.pane = true
-  try {
-    return await (replace ? router.replace(to) : router.push(to))
-  } finally {
-    closingOverlay.pane = false
-  }
+  return closeOverlay('pane', withPane(undefined), replace)
 }
 
-/** Closes the popup window. An untouched new item in it is removed (PopupHost does that). */
+/** Closes the popup window (see closeOverlay). */
 export async function closePopup(replace = false) {
   if (!popupObjectId.value) return
-  const to = withPopup(undefined)
-  closingOverlay.popup = true
-  try {
-    return await (replace ? router.replace(to) : router.push(to))
-  } finally {
-    closingOverlay.popup = false
-  }
+  return closeOverlay('popup', withPopup(undefined), replace)
 }
 
-/** The popup's object on its own page, in place of the page behind it. */
-export function expandPopup(replace = false) {
+/** The popup's object on its own page, in the place of the window's history entry: one Back returns to the page behind. */
+export function expandPopup() {
   const id = popupObjectId.value
   if (!id) return
-  const to = objectRoute(id, { block: popupBlockId.value })
-  return replace ? router.replace(to) : router.push(to)
+  return router.replace(objectRoute(id, { block: popupBlockId.value }))
 }
 
-/** The pane's object on its own page, in place of the page behind it. */
-export function expandPane(replace = false) {
+/** The pane's object on its own page, in the place of the pane's history entry. */
+export function expandPane() {
   const id = paneObjectId.value
   if (!id) return
-  const to = objectRoute(id, { block: paneBlockId.value })
-  return replace ? router.replace(to) : router.push(to)
+  return router.replace(objectRoute(id, { block: paneBlockId.value }))
 }

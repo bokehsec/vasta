@@ -46,6 +46,7 @@ import { offline } from '../lib/network.ts'
 import { openText, useReplica, type TextSession } from '../lib/replica.ts'
 import { openRemoteText } from '../lib/remote-text.ts'
 import { PAGE_OBJECT_ID } from '../lib/page.ts'
+import { closesOnBack } from '../lib/back.ts'
 import { closePane, closePopup, copyObjectLink } from '../lib/open.ts'
 import { clone } from '../lib/clone.ts'
 import { chip, iconTextClasses, swatchClasses } from '../lib/colors.ts'
@@ -148,6 +149,8 @@ const hideAddProperty = computed(() => isStartPage.value && propertiesEmpty.valu
 const board = shallowRef<TextSession | null>(null)
 const boardFailed = ref(false)
 const boardFull = ref(false)
+// Back on a phone leaves the full screen, not the page (lib/back.ts).
+closesOnBack(boardFull, () => (boardFull.value = false))
 // A phone's bottom bar and Capture would sit over a full-screen board and its controls: they step aside.
 watch(boardFull, (full) => (ui.surfaceFull = full))
 onBeforeUnmount(() => boardFull.value && (ui.surfaceFull = false))

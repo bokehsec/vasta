@@ -1,7 +1,7 @@
 // Back on a phone (390×844, touch) with something open over the page: the row menu (a submenu
 // first steps back to the menu), a quick action's question (Defer), the Filters sheet, the side
-// menu, Review tasks and its chooser, and Quick capture (its text kept as the draft) each close, and the page
-// and its address stay; with nothing open Back leaves the page as before. A sheet's grabber pulled
+// menu, Review tasks and its chooser, Search, the quick card ("+" on a type's page) and Quick
+// capture (its text kept as the draft) each close, and the page and its address stay; with nothing open Back leaves the page as before. A sheet's grabber pulled
 // down closes it, a small pull springs back. Quick capture saves with no connection (the replica
 // takes it; not in MODE=json, where it needs the server).
 //   node phone-back.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
@@ -179,14 +179,33 @@ try {
   await back()
   await gone('[data-process-mode]', 'Back closes the resumed review')
 
-  step('Back with Quick capture open closes it and keeps the text as the draft')
+  step('Back with Search open closes it; the page under it does not change')
+  await page.locator('[data-tab="Search"]').click()
+  await page.locator('input[placeholder="Search or create…"]').waitFor()
+  await back()
+  await gone('input[placeholder="Search or create…"]', 'Back closes Search')
+  if ((await where()) !== list) throw new Error(`Back with Search open left the list: ${await where()}`)
+
+  step('Back with the quick card ("+" on a type page) open closes it; the list stays')
   await page.locator('[data-capture-button]').click()
+  await page.locator('[data-quick-add]').waitFor()
+  await back()
+  await gone('[data-quick-add]', 'Back closes the quick card')
+  if ((await where()) !== list) throw new Error(`Back with the quick card open left the list: ${await where()}`)
+
+  step('Back with Quick capture open closes it and keeps the text as the draft')
+  // On a type page "+" opens the card; its link opens capture.
+  const openCapture = async () => {
+    await page.locator('[data-capture-button]').click()
+    await page.locator('[data-quick-add-capture]').click()
+  }
+  await openCapture()
   const field = page.locator('[role=dialog][aria-label="Quick capture"] textarea').first()
   await field.fill(`Draft ${tag}`)
   await back()
   await gone('[role=dialog][aria-label="Quick capture"]', 'Back closes Quick capture')
   if ((await where()) !== list) throw new Error(`Back with Quick capture open left the list: ${await where()}`)
-  await page.locator('[data-capture-button]').click()
+  await openCapture()
   if ((await field.inputValue()) !== `Draft ${tag}`) throw new Error(`the draft was not kept: "${await field.inputValue()}"`)
 
   if (!json) {

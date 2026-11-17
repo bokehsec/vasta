@@ -26,7 +26,7 @@ const VERBS: Record<Notice['kind'], string> = { assigned: 'assigned you', mentio
 function go(notice: Notice) {
   open.value = false
   if (!notice.read) void readNotices([notice.id])
-  void openObject(notice.objectId)
+  void openObject(notice.objectId, { where: 'type' })
 }
 </script>
 

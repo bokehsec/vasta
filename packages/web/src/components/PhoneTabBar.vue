@@ -1,13 +1,15 @@
 <script setup lang="ts">
-// The bar at the bottom of a phone: places chosen in Settings, with Capture as a round button
-// above it on the right. The sidebar stays behind the menu at the top left (and Menu here, if
+// The bar at the bottom of a phone: places chosen in Settings, with the one "+" as a round button
+// above it on the right: on a type's page it starts a new item of that type from the view (the quick
+// card, lib/new-item.ts); elsewhere it opens quick capture. The sidebar stays behind the menu at the top left (and Menu here, if
 // chosen). Hidden while the keyboard is up or a full-screen surface (a whiteboard) is open; dialogs
 // cover it. Its z-index (20) is below the sidebar drawer's (30).
 import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { isTodayRoute, sidebarItemPath } from '../lib/actions.ts'
 import { phonePlacePath, visiblePhonePlaces, type PhonePlace } from '../lib/phone-places.ts'
-import { lastError, notice, ui, workspace } from '../lib/state.ts'
+import { newPlace, startNew } from '../lib/new-item.ts'
+import { lastError, notice, typesById, ui, workspace } from '../lib/state.ts'
 import { keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 
@@ -36,6 +38,9 @@ function again(event: MouseEvent, place: PhonePlace) {
   if (place.id !== 'home' && route.fullPath !== path) void router.replace(path)
   else document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })
 }
+/** The type a "+" here makes an item of: the type page showing; none elsewhere (a note is captured). */
+const newType = computed(() => (newPlace.value ? typesById.value.get(newPlace.value.typeId) : undefined))
+const plus = () => (newType.value ? startNew(newType.value.id, { capture: true, template: 'blank' }) : (ui.captureOpen = true))
 const hidden = computed(() => keyboardInset.value > 80 || ui.surfaceFull)
 </script>
 
@@ -44,9 +49,9 @@ const hidden = computed(() => keyboardInset.value > 80 || ui.surfaceFull)
     <button
       class="fixed right-4 z-20 grid h-13 w-13 place-items-center rounded-2xl bg-ink text-surface shadow-[0_6px_16px_rgb(0_0_0/0.22)] transition-[bottom] duration-200 active:scale-95 motion-reduce:transition-none"
       :class="notice || lastError ? 'bottom-[calc(8rem+env(safe-area-inset-bottom))]' : 'bottom-[calc(4.25rem+env(safe-area-inset-bottom))]'"
-      aria-label="Capture"
+      :aria-label="newType ? `New ${newType.name}` : 'Capture'"
       data-capture-button
-      @click="ui.captureOpen = true"
+      @click="plus"
     >
       <AppIcon fallback="ph:plus" :size="24" />
     </button>

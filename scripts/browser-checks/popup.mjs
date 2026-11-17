@@ -5,10 +5,10 @@
 // edited (the list behind shows it), another click switches it in place (one Back closes it), and
 // back, forward, reload, Esc, clicking outside and "Open full page" all work; the calendar keeps it
 // while its view changes; a move to the trash from the window closes it (and Undo brings it back);
-// links still go to the object's page. A New (top bar, the quick card's Open) opens the made
-// object in the window, and closing it without touching it removes it; the type page's New button
-// opens the quick card instead (Enter adds and stays, ⌘↩ adds and opens, Esc cancels leaving
-// nothing).
+// links still go to the object's page. Closing the window goes back in history (Back never reopens
+// it) and "Open full page" replaces its entry (one Back returns to the list). Every New (the type
+// page's button, the sidebar's, a group's "+", a phone's floating "+") opens the quick card:
+// Enter adds and stays, ⌘↩ adds and opens it in the window, Esc cancels leaving nothing behind.
 //   node popup.mjs [chromium|webkit] [base] [phone]   (MODE=json: the replica turned off; phone needs chromium)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -28,7 +28,7 @@ const browser = launched ?? context
 if (process.env.MODE === 'json') await context.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))
 const page = context.pages()[0] ?? (await context.newPage())
 const problems = []
-page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && !/401|404|TextSelection endpoint|due to access control checks|SQLITE_CORRUPT|Importing a module script failed|VUE_ROUTER_R0010|router.onError/.test(m.text()) && problems.push(`${m.type()}: ${m.text()}`))
+page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && !/401|404|TextSelection endpoint|due to access control checks|SQLITE_CORRUPT|Importing a module script failed|VUE_ROUTER_R0010|router.onError|async component loader/.test(m.text()) && problems.push(`${m.type()}: ${m.text()}`))
 page.on('pageerror', (e) => !/Importing a module script failed/.test(e.message) && problems.push(`pageerror: ${e.message}`))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const step = (name) => console.log(`• ${name}`)
@@ -84,6 +84,8 @@ const savedOpenIn = async () => (await get(`/api/types/${task.id}`)).views.find(
 await setLayout('list', null)
 
 const t = (name) => `Popup ${name} ${tag}`
+/** An object made in the app, once it has reached the server (the replica syncs a moment after). */
+const madeAs = (title) => until(async () => (await get(`/api/spaces/${space.id}/search?q=${encodeURIComponent(title)}&limit=10`)).find((o) => o.title === title), `${title} reached the server`, 20000)
 const openType = async () => {
   await page.goto(`${base}/t/${task.id}`)
   await until(async () => (await page.locator(`main a[href="/o/${made.Alpha.id}"]`).count()) > 0, 'the type page lists the tasks', 20000)
@@ -117,16 +119,20 @@ if (phone) {
   await until(async () => popupId() === made.Bravo.id, 'Bravo in the sheet again')
   await window.getByTitle('Open full page').click()
   await until(() => new URL(page.url()).pathname === `/o/${made.Bravo.id}` && !popupId(), 'Bravo as the page')
+  await page.goBack()
+  await until(() => new URL(page.url()).pathname === `/t/${task.id}` && !popupId(), 'one Back from the full page returns to the list, without the sheet')
 
-  step('phone: New opens the quick card as a sheet at the bottom; Add adds and it stays; Back closes it')
+  step('phone: the type page has one "+" (the floating one); it opens the quick card for the type')
   await openType()
   // An entry of the app's own to go back to (a reload's first entry would leave the app).
-  await page.locator(`main a[href="/o/${made.Alpha.id}"]`).first().click()
-  await until(async () => popupId() === made.Alpha.id, 'Alpha in the sheet')
-  await window.getByTitle('Close').click()
-  await until(async () => !popupId(), 'the sheet closed')
-  await page.locator('[data-new-split] button').first().click()
-  const sheet = page.locator('[data-quick-add] [role=dialog]')
+  await page.locator('[data-tab="Inbox"]').click()
+  await page.locator('[data-tab="Tasks"]').click()
+  await until(async () => new URL(page.url()).pathname === `/t/${task.id}`, 'the Tasks list, reached inside the app')
+  if (await page.locator('[data-new-split]').count()) throw new Error('the type page still has its own New button on a phone')
+  const plus = page.locator('[data-capture-button]')
+  if (!/New Task/.test((await plus.getAttribute('aria-label')) ?? '')) throw new Error('the floating + does not say it makes a task here')
+  await plus.click()
+  const sheet = page.locator('[data-quick-add]')
   await until(async () => (await sheet.count()) > 0, 'the quick card opens')
   const box = await sheet.boundingBox()
   const height = page.viewportSize().height
@@ -134,6 +140,13 @@ if (phone) {
   for (const control of await sheet.locator('[data-quick-add-save], [data-quick-add-open]').all()) {
     if ((await control.boundingBox()).height < 44) throw new Error('a card button is under 44px')
   }
+  // "Capture a note instead" swaps the card for quick capture.
+  await sheet.locator('[data-quick-add-capture]').click()
+  await until(async () => (await sheet.count()) === 0 && (await page.locator('[data-testid="capture-destination"]').count()) > 0, 'the link opened quick capture and put the card away')
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await until(async () => (await page.locator('[data-testid="capture-destination"]').count()) === 0, 'capture closed')
+  await plus.click()
+  await until(async () => (await sheet.count()) > 0, 'the card opens again')
   await sheet.locator('[data-quick-add-title]').fill(t('Phone card'))
   await sheet.locator('[data-quick-add-save]').click()
   await until(async () => (await sheet.locator('[data-quick-add-added]').innerText().catch(() => '')).includes(t('Phone card')), 'the card says it was added')
@@ -182,6 +195,8 @@ if (phone) {
   await window.getByTitle('Open full page').click()
   await until(async () => new URL(page.url()).pathname === `/o/${made.Charlie.id}` && !popupId() && !(await window.count()), 'Charlie as the page')
   await until(async () => (await page.locator('main textarea[data-large-text]').inputValue()) === t('Charlie'), 'the page shows Charlie')
+  await page.goBack()
+  await until(async () => new URL(page.url()).pathname === `/t/${task.id}` && !popupId(), 'one Back from the full page returns to the list, without the window')
 
   step('the same object as the page opens no window')
   await page.goto(`${base}/o/${made.Charlie.id}?popup=${made.Charlie.id}`)
@@ -280,7 +295,7 @@ if (phone) {
   if (!(await cardTitle.evaluate((el) => el === document.activeElement))) throw new Error('the title lost the cursor after adding')
   await until(async () => (await page.locator(`main a`).filter({ hasText: t('Card') }).count()) > 0, 'the list shows the made task')
   if (new URL(page.url()).pathname !== `/t/${task.id}`) throw new Error(`the page changed: ${page.url()}`)
-  const cardMade = (await get(`/api/spaces/${space.id}/search?q=${encodeURIComponent(t('Card'))}&limit=10`)).find((o) => o.title === t('Card'))
+  const cardMade = await madeAs(t('Card'))
   const cardObject = await get(`/api/objects/${cardMade.id}`)
   if (!JSON.stringify(cardObject.content).includes('Ask about Thursday')) throw new Error('the note did not go into the text')
   // a second one, then Undo takes it back
@@ -299,23 +314,23 @@ if (phone) {
   await card.locator('[data-quick-add-title]').press('Meta+Enter')
   await until(async () => popupId() && (await windowTitle.inputValue().catch(() => '')) === t('Card open'), 'the made task in the window', 20000)
 
-  step('an untouched new object in the window is removed on close; one made with a title stays')
+  step('the sidebar New opens the quick card too: cancelling it leaves nothing behind')
   await page.keyboard.press('Escape')
   await until(async () => !popupId(), 'the window closed')
-  const kept = await get(`/api/spaces/${space.id}/search?q=${encodeURIComponent(t('Card open'))}&limit=10`)
-  if (!kept.some((o) => o.title === t('Card open'))) throw new Error('a new object with a title was removed')
-  // an untouched one: the sidebar's New makes a task straight in the window
+  await madeAs(t('Card open'))
   await page.goto(`${base}/t/${task.id}`)
   await until(async () => (await page.locator(`main a[href="/o/${made.Alpha.id}"]`).count()) > 0, 'the type page lists the tasks', 20000)
+  const untitledBefore = (await get(`/api/spaces/${space.id}/search?q=Untitled&limit=100`)).filter((o) => o.typeId === task.id && !o.title).length
   await page.locator('aside').getByRole('button').filter({ hasText: 'New' }).first().click()
   const picker = page.locator('[data-overlay]')
   await until(async () => (await picker.count()) > 0, 'the type picker opens')
   await picker.getByText('Task', { exact: true }).click()
-  await until(async () => popupId() && query().get('new') === '1', 'a new task in the window', 20000)
+  await until(async () => (await card.count()) > 0 && !popupId(), 'the quick card opens, not a window')
   await page.keyboard.press('Escape')
-  await until(async () => !popupId(), 'the window closed')
-  const untitled = await get(`/api/spaces/${space.id}/search?q=Untitled&limit=100`)
-  if (untitled.some((o) => o.typeId === task.id && !o.title)) throw new Error('an untouched new task was left behind')
+  await until(async () => (await card.count()) === 0, 'Esc closed the card')
+  await page.waitForTimeout(300)
+  const untitledAfter = (await get(`/api/spaces/${space.id}/search?q=Untitled&limit=100`)).filter((o) => o.typeId === task.id && !o.title).length
+  if (untitledAfter !== untitledBefore) throw new Error('cancelling a New made an untitled task')
 
   step('the quick card starts with what the view filters on; what it adds shows in the view')
   const priority = properties.find((p) => p.id === 'priority')
@@ -330,14 +345,30 @@ if (phone) {
   await cardTitle.fill(t('Card filled'))
   await cardTitle.press('Enter')
   await until(async () => (await card.locator('[data-quick-add-added]').innerText().catch(() => '')).includes(t('Card filled')), 'the card says it was added')
-  const filledMade = (await get(`/api/spaces/${space.id}/search?q=${encodeURIComponent(t('Card filled'))}&limit=10`)).find((o) => o.title === t('Card filled'))
+  const filledMade = await madeAs(t('Card filled'))
   if ((await get(`/api/objects/${filledMade.id}`)).props.priority?.value?.[0] !== high.id) throw new Error('the added task did not get the view\'s Priority')
   await until(async () => (await page.locator('main a').filter({ hasText: t('Card filled') }).count()) > 0, 'the view lists the added task')
   if (!(await priorityChip.innerText()).includes(high.label)) throw new Error('the next one does not start with the view\'s Priority again')
   await page.keyboard.press('Escape')
   await until(async () => (await card.count()) === 0, 'Esc closed the card')
 
-  step("on Today, a New gets today's date; closed untouched, it is still removed")
+  step("a group's \"+\" adds into that group")
+  const bravo = await get(`/api/objects/${made.Bravo.id}`)
+  await put(`/api/objects/${made.Bravo.id}`, { ...bravo, props: { ...bravo.props, status: { kind: 'select', value: ['doing'] } } })
+  await put(`/api/types/${task.id}`, { ...(await get(`/api/types/${task.id}`)), views: [{ id: `${task.id}:all`, name: 'All', layout: 'list', groupBy: [{ field: 'status' }] }] })
+  await openType()
+  await page.locator('[data-group-heading="doing"] [data-group-add]').click()
+  await until(async () => (await card.count()) > 0, 'the quick card opens from the group')
+  await until(async () => (await card.locator('[data-quick-add-field="Status"]').innerText()).includes('In progress'), 'the Status chip starts as the group (In progress)')
+  await cardTitle.fill(t('Card group'))
+  await cardTitle.press('Enter')
+  await until(async () => (await card.locator('[data-quick-add-added]').innerText().catch(() => '')).includes(t('Card group')), 'the card says it was added')
+  const groupMade = await madeAs(t('Card group'))
+  if ((await get(`/api/objects/${groupMade.id}`)).props.status?.value?.[0] !== 'doing') throw new Error('the task did not go into the group it was added in')
+  await page.keyboard.press('Escape')
+  await setLayout('list')
+
+  step("on Today, the sidebar's New starts with today's date")
   const today = await page.evaluate(() => {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -346,13 +377,25 @@ if (phone) {
   await page.locator('aside').getByRole('button').filter({ hasText: 'New' }).first().click()
   await until(async () => (await picker.count()) > 0, 'the type picker opens')
   await picker.getByText('Task', { exact: true }).click()
-  await until(async () => popupId() && query().get('new') === 'date:due', 'a new task in the window', 20000)
-  const todayId = popupId()
-  const todayTask = await get(`/api/objects/${todayId}`)
+  await until(async () => (await card.count()) > 0, 'the quick card opens on Today')
+  await cardTitle.fill(t('Card today'))
+  await cardTitle.press('Enter')
+  await until(async () => (await card.locator('[data-quick-add-added]').innerText().catch(() => '')).includes(t('Card today')), 'the card says it was added')
+  const todayMade = await madeAs(t('Card today'))
+  const todayTask = await get(`/api/objects/${todayMade.id}`)
   if (!todayTask.props.due?.value?.start?.startsWith(today)) throw new Error(`the new task is not due today: ${JSON.stringify(todayTask.props.due)}`)
   await page.keyboard.press('Escape')
-  await until(async () => !popupId(), 'the window closed')
-  await until(async () => (await page.request.get(`${base}/api/objects/${todayId}`)).status() === 404, 'the untouched task from Today was removed')
+
+  step('Back on a desktop puts away the quick card, not leaving it over the page that came back')
+  await openType()
+  await page.locator('aside a', { hasText: 'Inbox' }).first().click()
+  await until(() => new URL(page.url()).pathname === '/inbox', 'the Inbox, reached inside the app')
+  await page.locator('aside').getByRole('button').filter({ hasText: 'New' }).first().click()
+  await until(async () => (await picker.count()) > 0, 'the type picker opens')
+  await picker.getByText('Task', { exact: true }).click()
+  await until(async () => (await card.count()) > 0, 'the quick card opens on the Inbox')
+  await page.goBack()
+  await until(async () => new URL(page.url()).pathname === `/t/${task.id}` && (await card.count()) === 0, 'Back went to the list and the card is gone')
 
   step('closing an untitled item with explicit content or calendar fields keeps it')
   for (const data of [
@@ -374,7 +417,7 @@ if (phone) {
 }
 
 for (const object of Object.values(made)) await page.request.delete(`${base}/api/objects/${object.id}`, { headers })
-for (const title of [t('Card'), t('Card open'), t('Card undo'), t('Phone card'), t('Card filled')]) {
+for (const title of [t('Card'), t('Card open'), t('Card undo'), t('Phone card'), t('Card filled'), t('Card today'), t('Card group')]) {
   for (const object of await get(`/api/spaces/${space.id}/search?q=${encodeURIComponent(title)}&limit=10`)) await page.request.delete(`${base}/api/objects/${object.id}`, { headers })
 }
 {

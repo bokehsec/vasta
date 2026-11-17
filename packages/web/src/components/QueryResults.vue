@@ -133,7 +133,7 @@ function quickItems(object: ObjectSummary): MenuItem[] {
 function objectMenu(event: MouseEvent, object: ObjectSummary) {
   openContextMenu(event, [
     { kind: 'heading', label: displayTitle(object, typesById.value.get(object.typeId)) },
-    { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(object.id) },
+    { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(object.id, { where: 'type' }) },
     { label: 'Copy link to page', icon: 'ph:link', run: () => copyObjectLink(object.id) },
     pinMenu(object.id),
     ...quickItems(object),

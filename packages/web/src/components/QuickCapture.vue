@@ -8,14 +8,16 @@
 // eaten on today's note instead, offering the foods at the cursor. With Settings › Desktop app ›
 // "Ask a template's questions", a "/Type …" line whose template asks something shows its
 // questions before it saves (Esc goes back to the text). On a phone it also shows where the text
-// goes, a Note / type picker (it writes the "/Type " prefix), a Save capture button above the
-// keyboard, and keeps an unsaved text on this device as a draft for the next capture.
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { foodCommand, type ObjectSummary, type ObjectType, type TemplateAsk } from '@vasta/core'
+// goes, a Note / type picker (the types you make most, then More…; it writes the "/Type " prefix)
+// and a Save capture button above the keyboard. An unsaved text is kept on this device as a draft
+// for the next capture, written as you type and when the page is hidden, so a reload keeps it.
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { foodCommand, type FilterGroup, type ObjectSummary, type ObjectType, type TemplateAsk } from '@vasta/core'
 import { captureAsks, captureSpace, captureText, completionSource, dayKey, openCapture, typesOf } from '../lib/actions.ts'
+import { api } from '../lib/api.ts'
 import { greyButton, mainButton } from '../lib/buttons.ts'
 import { foodSourcesOf, previewFoodLine } from '../lib/nutrition.ts'
-import { clearDraft, readDraft, withType, writeDraft, writtenText } from '../lib/capture-draft.ts'
+import { clearDraft, readDraft, usedTypes, withType, writeDraft, writtenText } from '../lib/capture-draft.ts'
 import { isDesktop } from '../lib/platform.ts'
 import { meId, people } from '../lib/people.ts'
 import { session } from '../lib/session.ts'
@@ -42,10 +44,11 @@ const space = computed(captureSpace)
 const toDaily = computed(() => !isDesktop || ui.captureDaily)
 const where = computed(() => (toDaily.value ? `today’s note in ${space.value?.name}` : space.value?.name))
 
-// A phone keeps what was not saved: put back here, kept again by `leave`, dropped once saved.
+// What was not saved is kept as a draft: put back here, written as you type (a moment after) and
+// whenever the page is hidden or closed (an app reload keeps it), dropped once saved.
 const draftRestored = ref(false)
 const draftOwner = () => (session.user && space.value ? ([session.user.id, space.value.id] as const) : undefined)
-if (isPhone.value) {
+{
   const owner = draftOwner()
   const draft = owner ? readDraft(...owner) : ''
   if (draft) {
@@ -53,6 +56,28 @@ if (isPhone.value) {
     draftRestored.value = true
   }
 }
+let saved = false
+
+/** The text as the draft (a picked type alone is not one); a saved capture leaves none. */
+function keepDraft() {
+  const owner = draftOwner()
+  if (owner && !saved) writeDraft(...owner, writtenText(types.value, text.value) ? text.value : '')
+}
+let typing: ReturnType<typeof setTimeout> | undefined
+watch(text, () => {
+  clearTimeout(typing)
+  typing = setTimeout(keepDraft, 500)
+})
+const onHidden = () => document.visibilityState === 'hidden' && keepDraft()
+document.addEventListener('visibilitychange', onHidden)
+window.addEventListener('pagehide', keepDraft)
+// Also when the capture goes away with its page (Back on a desktop).
+onBeforeUnmount(() => {
+  clearTimeout(typing)
+  keepDraft()
+  document.removeEventListener('visibilitychange', onHidden)
+  window.removeEventListener('pagehide', keepDraft)
+})
 
 function discardDraft() {
   const owner = draftOwner()
@@ -62,25 +87,31 @@ function discardDraft() {
   field.value?.focus()
 }
 
-/** Cancel, X, Esc: a phone keeps the text as the draft (a picked type alone is not one). */
-function leave() {
-  const owner = draftOwner()
-  if (isPhone.value && owner) writeDraft(...owner, writtenText(types.value, text.value) ? text.value : '')
-  close()
-}
-
 /** After a save: no draft is left behind. */
 function done() {
+  saved = true
   const owner = draftOwner()
   if (owner) clearDraft(...owner)
   close()
 }
 
+// The phone's picker: the types made most in the last 90 days first, the others under More…
+const created = ref<{ typeId: string }[]>([])
+const moreTypes = ref(false)
+
 onMounted(async () => {
   await nextTick()
   field.value?.focus()
-  if (space.value) types.value = await typesOf(space.value).catch(() => [])
+  if (!space.value) return
+  types.value = await typesOf(space.value).catch(() => [])
+  if (isPhone.value) created.value = await recentlyCreated(space.value.id)
 })
+
+/** What was made in the last 90 days, for the types worth a chip. */
+function recentlyCreated(spaceId: string): Promise<{ typeId: string }[]> {
+  const filter: FilterGroup = { kind: 'group', operator: 'and', items: [{ kind: 'filter', field: 'createdAt', operator: 'after', value: { kind: 'variable', name: 'today', offsetDays: -90 } }] }
+  return api.query(spaceId, { query: { typeIds: [], filter }, today: dayKey(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }).catch(() => [])
+}
 
 const source = computed(() => (space.value ? completionSource(space.value.id, types.value) : undefined))
 const { shown, active, dismiss, move, current } = useCompletions(text, cursor, () => source.value)
@@ -89,8 +120,10 @@ watch(text, () => nextTick(readCursor))
 
 const typed = computed(() => typedLine(types.value, text.value))
 
-// The phone's picker: the types a line can make, "Note" when the text names none.
+// The phone's picker: the types a line can make, "Note" when the text names none. The ones made
+// most lately show first, the rest under More…
 const pickable = computed(() => types.value.filter(offered))
+const chips = computed(() => usedTypes(pickable.value, created.value, typed.value?.type))
 const destination = computed(() => {
   const name = space.value?.name ?? ''
   if (eaten.value !== undefined) return `Food log · ${name}`
@@ -226,7 +259,7 @@ function onKey(event: KeyboardEvent) {
 </script>
 
 <template>
-  <ModalDialog title="Quick capture" width="34rem" keep-above-keyboard @close="leave">
+  <ModalDialog title="Quick capture" width="34rem" @close="close">
     <template #icon><AppIcon fallback="ph:lightning" class="text-ink-soft" /></template>
     <template v-if="isPhone && !asks">
       <p class="text-sm text-ink-soft" data-testid="capture-destination">{{ destination }}</p>
@@ -241,7 +274,7 @@ function onKey(event: KeyboardEvent) {
           Note
         </button>
         <button
-          v-for="type in pickable"
+          v-for="type in moreTypes ? pickable : chips.shown"
           :key="type.id"
           class="min-h-11 rounded-lg border px-3 text-sm"
           role="radio"
@@ -251,13 +284,14 @@ function onKey(event: KeyboardEvent) {
         >
           {{ type.name }}
         </button>
+        <button v-if="!moreTypes && chips.more.length" class="min-h-11 rounded-lg border border-dashed border-line px-3 text-sm text-ink-soft" data-testid="capture-more" @click="moreTypes = true">More…</button>
       </div>
-      <p v-if="draftRestored" class="mt-1 text-xs text-ink-faint" data-testid="capture-draft">
-        Draft restored ·
-        <button class="inline-flex min-h-11 items-center px-1 text-ink-soft underline" @click="discardDraft">Discard</button>
-      </p>
       <div class="mt-2" />
     </template>
+    <p v-if="draftRestored && !asks" class="mb-2 text-xs text-ink-faint" data-testid="capture-draft">
+      Draft restored ·
+      <button class="inline-flex items-center px-1 text-ink-soft underline max-md:min-h-11" @click="discardDraft">Discard</button>
+    </p>
     <div v-if="asks" ref="questions" class="space-y-3" data-testid="capture-questions" @keydown="onQuestionKey">
       <p class="truncate text-sm text-ink-soft">{{ text.split('\n')[0] }}</p>
       <div v-for="item in asks" :key="item.label">
@@ -334,13 +368,13 @@ function onKey(event: KeyboardEvent) {
         </button>
         <div class="flex gap-2">
           <button v-if="asks" class="flex-1" :class="greyButton" @click="backToText">Back</button>
-          <button class="flex-1" :class="greyButton" @click="leave">Cancel</button>
+          <button class="flex-1" :class="greyButton" @click="close">Cancel</button>
         </div>
       </div>
     </template>
     <template v-else #footer>
       <button v-if="asks" :class="greyButton" @click="backToText">Back</button>
-      <button class="ml-auto" :class="greyButton" @click="leave">Cancel</button>
+      <button class="ml-auto" :class="greyButton" @click="close">Cancel</button>
       <button :class="mainButton" :disabled="!text.trim() || saving" @click="save()">Capture</button>
     </template>
   </ModalDialog>
