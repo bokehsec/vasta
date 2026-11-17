@@ -66,14 +66,14 @@ for (const [title, value, extra] of [
 await put(`/api/types/${task.id}`, { ...(await get(`/api/types/${task.id}`)), views: [{ id: `${task.id}:all`, name: 'All', layout: 'kanban', groupBy: [{ field: 'status' }] }] })
 
 // Open the space (the app starts in the last one opened; else from the space menu once it knows it).
-await page.evaluate((id) => localStorage.setItem('vasta.space', id), space.id)
+await page.evaluate((id) => localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(id)), space.id)
 await page.reload()
 await page.waitForSelector('nav', { state: 'attached' })
 await until(async () => {
   if ((await page.title()).includes(`Board ${tag}`) || (await page.locator('aside').getByText(`Board ${tag}`).count())) return true
   if (phone) {
     // No sidebar on a phone: open the board and see whether it shows.
-    await page.evaluate((id) => localStorage.setItem('vasta.space', id), space.id)
+    await page.evaluate((id) => localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(id)), space.id)
     await page.goto(`${base}/t/${task.id}`)
     await sleep(2000)
     return (await page.locator('[data-board-card]').count()) > 0
@@ -192,7 +192,10 @@ await toColumn('done')
 await cellOf('done').locator('xpath=..').locator('button[title="Column options"]').click()
 await page.getByText('Fold column').click()
 await until(async () => !(await cellOf('done').count()), 'Done folded')
-await until(async () => (await get(`/api/types/${task.id}`)).views[0].board?.collapsed?.includes('done'), 'folded saved')
+// Folding is the person's own choice (an account preference); the view itself is not edited.
+const foldKey = `type/${task.id}/view/${(await get(`/api/types/${task.id}`)).views[0].id}/columns/status`
+await until(async () => ((await get('/api/auth/me')).preferences ?? {})[foldKey]?.includes('done'), 'folded saved for the person')
+if ((await get(`/api/types/${task.id}`)).views[0].board?.collapsed?.length) throw new Error('folding a column edited the view')
 
 step('card fields and swimlanes')
 await page.getByRole('button', { name: 'Cards' }).click()

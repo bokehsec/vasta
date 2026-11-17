@@ -239,7 +239,7 @@ if (!phone) {
   await page.keyboard.press('Escape')
   await until(async () => (await endedEntries.count()) >= 4, 'the ended task shows every week')
   for (const title of await endedEntries.locator('span.font-medium:not([class*="rounded"])').all()) if (!(await title.getAttribute('class')).includes('line-through')) throw new Error('a week of the ended task is not struck through')
-  await page.evaluate(() => localStorage.removeItem('vasta.calendar.showClosed'))
+  await page.request.put(`${base}/api/auth/me`, { headers, data: { preferences: { 'calendar/show-closed': null } } })
   for (const id of [bins.id, ended.id]) await page.request.delete(`${base}/api/objects/${id}`, { headers })
 }
 

@@ -1,9 +1,10 @@
 // Quick capture: the phone's "Note / Type" picker works on the text's "/Type " prefix (read by
 // typed-line.ts, so typing it by hand and picking it are the same) and offers the types you
-// actually make; a text that was not saved is kept on this device, per user and space, to come back
+// actually make; a text that was not saved is kept on this device (a device preference, per space), to come back
 // at the next capture (also after a reload: QuickCapture writes it as you type and when the page
 // is hidden).
 import type { Id, ObjectRecord, ObjectType } from '@vasta/core'
+import { getPreference, setPreference } from './preferences.ts'
 import { typedLine } from './typed-line.ts'
 
 /** `text` with its "/Type " prefix replaced by `type`'s (none: removed), keeping what follows it. */
@@ -32,25 +33,17 @@ export function usedTypes(types: ObjectType[], created: Pick<ObjectRecord, 'type
   return { shown, more: types.filter((type) => !shown.includes(type)) }
 }
 
-const draftKey = (userId: Id, spaceId: Id) => `vasta.capture-draft.${userId}.${spaceId}`
+const draftKey = (spaceId: Id) => `capture-draft/${spaceId}`
 
-/** The draft kept for this user and space, or ''. */
-export function readDraft(userId: Id, spaceId: Id, storage: Pick<Storage, 'getItem'> = localStorage): string {
-  try {
-    return storage.getItem(draftKey(userId, spaceId)) ?? ''
-  } catch {
-    return ''
-  }
+/** The draft kept for this space (on this device, for the person logged in), or ''. */
+export function readDraft(spaceId: Id): string {
+  const draft = getPreference('device', draftKey(spaceId))
+  return typeof draft === 'string' ? draft : ''
 }
 
 /** Keep `text` as the draft; a blank one clears it. */
-export function writeDraft(userId: Id, spaceId: Id, text: string, storage: Pick<Storage, 'setItem' | 'removeItem'> = localStorage): void {
-  try {
-    if (text.trim()) storage.setItem(draftKey(userId, spaceId), text)
-    else storage.removeItem(draftKey(userId, spaceId))
-  } catch {
-    // Storage blocked or full: the draft is lost, nothing else.
-  }
+export function writeDraft(spaceId: Id, text: string): void {
+  setPreference('device', draftKey(spaceId), text.trim() ? text : undefined)
 }
 
-export const clearDraft = (userId: Id, spaceId: Id, storage?: Pick<Storage, 'setItem' | 'removeItem'>): void => writeDraft(userId, spaceId, '', storage)
+export const clearDraft = (spaceId: Id): void => writeDraft(spaceId, '')

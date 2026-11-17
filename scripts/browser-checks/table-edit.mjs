@@ -298,7 +298,7 @@ try {
   await frame.evaluate((el) => { el.scrollLeft = 200 })
   if (await frame.evaluate((el) => el.scrollLeft) < 100) throw new Error('grouped table cannot scroll horizontally')
   await page.setViewportSize({ width: 390, height: 844 })
-  await until(async () => await page.locator('main table').count() === 0 && await page.locator('section header').count() >= 2, 'phone keeps grouped rows')
+  await until(async () => await page.locator('main table').count() === 0 && await page.locator('section [data-group-heading]').count() >= 2, 'phone keeps grouped rows')
   if (await page.locator('main').evaluate((el) => el.scrollWidth > el.clientWidth + 1)) throw new Error('phone rows overflow')
   await page.setViewportSize(options.viewport)
   await until(async () => await page.locator('main thead').count() === 1, 'desktop headings restored')

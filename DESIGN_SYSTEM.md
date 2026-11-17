@@ -11,10 +11,29 @@ where it carries meaning (types, select options, tags), the content as the loude
 **Typography**: the system font (`--font-sans`); UI at 14px (`text-sm`), 15px in the phone drawer;
 notes at 16px, line height 1.6. Page titles bold with tight tracking.
 **Spacing**: Tailwind's 4px scale. Sidebar rows 30px on desktop, 40px+ on phones.
-**Theme**: system, light or dark per device (`lib/theme.ts`, Settings › Appearance and the sidebar's
+**Theme**: system, light or dark per browser (`lib/theme.ts`, Settings › Appearance and the sidebar's
 footer).
 
 ## Patterns
+
+**Preferences** (`lib/preferences.ts`): every choice about how Vasta *looks to one person* goes through
+one store, never a bare `localStorage` key. A key is a path that names what it belongs to first
+(`type/<id>/view/<id>/phone-table`, `page-width`), so deleting a view or type drops its keys with one
+prefix (`dropPreferences`). Three scopes: **account**, kept on the server with the user's profile and
+cached here (works offline, sent when back): folds, "Show done", Mine, the last view, the phone menu,
+the Habits display, calendar choices, dismissed tips; **device**, this device and this person
+(`vasta.device.<user>.<key>`): page width, a pane's width, capture drafts, where a board's camera is;
+**browser**, this device for anyone (`vasta.browser.<key>`): the theme, caches, what shows before login.
+Nothing a person folds, hides or picks changes what anyone else sees: views, types and objects are
+shared data; only their *starting values* (a view's saved filter, a type's habit display) come from
+there. A temporary state (a filter's narrowing) lives in the page, not in a preference. Old keys are
+converted once in `lib/preferences-legacy.ts`. Technical switches that are not choices
+(`vasta.replica`, the review session) stay outside.
+
+**Type saves** (`lib/type-patch.ts`): a type is changed by `patchType(id, { fields })`, which shows the
+change at once and sends only the named fields (core `type-patch.ts`; server `PATCH /api/types/:id`,
+replica `patchType`). Nothing saves a whole type, so a dialog, a view setting and another device never
+overwrite each other's fields.
 
 **Buttons** (`lib/buttons.ts`): five kinds, each with one job, the same on every screen (after Apple's
 filled, tinted, grey and plain styles). **Main**, ink fill: the one most likely action of a place
@@ -142,7 +161,8 @@ Group controls above the collection are Quiet Collapse all / Expand all buttons,
 already in that state. A table retains one shared header, column widths and scroll area, without
 frames around groups. Folded bodies (including Show more) are not drawn. On phones the standard
 44px button targets apply and a table's row layout keeps the same folds. Choices stay personal
-per account, space, view/query instance and grouping field on this device; new scopes start open.
+per account (every device), view/query instance and grouping field; new scopes start open. A board's
+column folds work the same way (the view's saved `collapsed` is only what shows until you fold one).
 Folding changes visibility only, not filters, task state or Review scope. Subtask and kanban
 folding remain independent. Grouped query previews limit rows per group, keeping full counts.
 
@@ -166,7 +186,7 @@ back 40px, flicked back or tapped, and settles with an ease-out (no bounce). Pro
 goes past 25% of the screen, or flicked past 40px. One row is open at a time; a tap elsewhere closes it. On phones
 swipes replace the row's buttons; tablets keep both. Swipes start 24px in from the left edge (the
 drawer's). Done is a deep green, Defer the (light theme's) accent blue, the rest warm greys: fixed
-shades, so the white labels stay readable in both themes. A tip says it once per device.
+shades, so the white labels stay readable in both themes. A tip says it once per account.
 
 **Hover-only affordances**: secondary actions that would clutter an empty page (an object's Icon
 and Cover buttons, section carets) appear on hover or focus, and are always visible on touch

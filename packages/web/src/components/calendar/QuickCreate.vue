@@ -7,23 +7,20 @@ import { greyButton, mainButton } from '../../lib/buttons.ts'
 import { createObject } from '../../lib/actions.ts'
 import { dateProperties, formatClock, formatDayShort, instantAt } from '../../lib/calendar.ts'
 import { iconTextClasses } from '../../lib/colors.ts'
+import { preference } from '../../lib/preferences.ts'
 import { workspace } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
 
 const props = defineProps<{ day: string; minutes?: number | undefined; title?: string; end?: string }>()
 const emit = defineEmits<{ done: [] }>()
 
-const TYPE_KEY = 'vasta.calendar.createType'
+const remembered = preference<string>('calendar/create-type', '', { scope: 'account' })
 const types = computed(() =>
   workspace.types
     .filter((t) => !t.deletedAt && dateProperties(t).length)
     .sort((a, b) => (a.system === 'task' ? -1 : b.system === 'task' ? 1 : a.name.localeCompare(b.name)))
 )
-let remembered = ''
-try {
-  remembered = localStorage.getItem(TYPE_KEY) ?? ''
-} catch {}
-const typeId = ref(types.value.find((t) => t.id === remembered)?.id ?? types.value[0]?.id ?? '')
+const typeId = ref(types.value.find((t) => t.id === remembered.value)?.id ?? types.value[0]?.id ?? '')
 const type = computed(() => types.value.find((t) => t.id === typeId.value))
 const title = ref(props.title ?? '')
 const input = ref<HTMLInputElement | null>(null)
@@ -46,9 +43,7 @@ async function create(open: boolean) {
   const def = dateProperties(target)[0]
   if (!target || !def || busy.value) return
   busy.value = true
-  try {
-    localStorage.setItem(TYPE_KEY, target.id)
-  } catch {}
+  remembered.value = target.id
   try {
     await createObject(target.id, { title: title.value.trim(), props: { [def.id]: { kind: 'date', value: dateFor(target) } } }, open)
     emit('done')

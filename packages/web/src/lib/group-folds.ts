@@ -1,27 +1,26 @@
-// Personal display choices, like the phone menu: this account and device only. An unidentified
-// legacy embed keeps its folds for its mounted instance rather than sharing another's choices.
-import { ref, watch } from 'vue'
+// Which groups of a list and which columns of a board this person folded: their own choice, on every
+// device of theirs (an account preference, lib/preferences.ts), never the view's. `scope` names the
+// view or embedded query (`type/<id>/view/<id>`), so deleting it drops its folds. An embed without
+// an identity keeps its folds for the instance that is mounted rather than sharing another's.
+import { computed, ref } from 'vue'
+import { preference } from './preferences.ts'
 
-export function groupFoldKey(user: string | undefined, space: string | undefined, scope: string | undefined, field: string): string | undefined {
-  return user && space && scope && field ? `vasta.group-folds:${JSON.stringify([user, space, scope, field])}` : undefined
+/** The preference holding the folds of `field`'s groups (`folds`) or of a board's columns (`columns`) in `scope`; undefined until both are known. */
+export function foldKey(kind: 'folds' | 'columns', scope: string | undefined, field: string): string | undefined {
+  return scope && field ? `${scope}/${kind}/${field}` : undefined
 }
 
-export function useGroupFolds(key: () => string | undefined) {
-  const folded = ref(new Set<string>())
-  watch(key, (id) => {
-    let value: unknown
-    try { value = id ? JSON.parse(localStorage.getItem(id) ?? 'null') : undefined } catch {}
-    folded.value = new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [])
-  }, { immediate: true, flush: 'sync' })
+const parse = (value: unknown) => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : undefined)
+
+/** `starting`: what is folded until the person folds or unfolds something (a board's saved `collapsed`). */
+export function useGroupFolds(key: () => string | undefined, starting?: () => string[] | undefined) {
+  const stored = preference<string[] | undefined>(key, undefined, { scope: 'account', parse })
+  const local = ref<string[]>()
+  const folded = computed(() => new Set((key() ? stored.value : local.value) ?? starting?.() ?? []))
 
   function save(next: Set<string>) {
-    folded.value = next
-    const id = key()
-    if (!id) return
-    try {
-      if (next.size) localStorage.setItem(id, JSON.stringify([...next]))
-      else localStorage.removeItem(id)
-    } catch {}
+    if (key()) stored.value = [...next]
+    else local.value = [...next]
   }
   function toggle(group: string) {
     const next = new Set(folded.value)

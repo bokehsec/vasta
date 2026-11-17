@@ -1,11 +1,11 @@
 // Query helpers for the UI: field menus, operator labels, grouping, and moving an object between
 // groups (kanban drops). Filtering and sorting themselves live in @vasta/core (query.ts).
-import type { FilterOperator, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, QueryDef } from '@vasta/core'
+import type { Filter, FilterGroup, FilterOperator, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, QueryDef } from '@vasta/core'
 import { DAY_BUCKETS, REVIEW_DUE_FIELD, dayBucket, dayIn, fieldKind, reviewFieldOf, type DayBucket, type FieldKind, type QueryContext } from '@vasta/core'
 import { api } from './api.ts'
 import { dayKey } from './actions.ts'
 import { startOfWeek } from './calendar.ts'
-import { meId, personName, sharedSpace } from './people.ts'
+import { meId, people, personName, sharedSpace } from './people.ts'
 import { current as currentSprint } from './sprints.ts'
 import { primeFromObject, summaryOf, typesById, workspace } from './state.ts'
 
@@ -86,6 +86,36 @@ export const OPERATOR_LABELS: Record<FilterOperator, string> = {
 /** Labels that read better for lists of ids (tags, selects, relations). */
 export const IDS_OPERATOR_LABELS: Partial<Record<FilterOperator, string>> = {
   contains: 'has any of', 'not-contains': 'has none of', is: 'is exactly', 'is-not': 'is not exactly',
+}
+
+/** A filter in words, for a line that says what a view leaves out or keeps: "Area is Work · Priority is High or Urgent". */
+export function describeFilter(group: FilterGroup, typeIds: Id[]): string {
+  const options = filterFieldOptions(typeIds)
+  const value = (filter: Filter, option: FieldOption | undefined): string => {
+    const v = filter.value
+    if (!v) return ''
+    if (v.kind === 'variable') {
+      if (v.name === 'me') return 'me'
+      if (v.name === 'current-sprint') return 'the current sprint'
+      if (v.name === 'parent') return 'the page'
+      return v.offsetDays ? `today ${v.offsetDays > 0 ? '+' : '−'} ${Math.abs(v.offsetDays)} days` : 'today'
+    }
+    const list = Array.isArray(v.value) ? v.value : [v.value]
+    const names = list.map((item) => {
+      if (typeof item !== 'string') return String(item)
+      if (option?.def?.kind === 'select') return option.def.options.find((o) => o.id === item)?.label ?? item
+      if (option?.kind === 'ids') return people.known[item]?.name ?? summaryOf(item)?.title ?? item
+      return item
+    })
+    return names.join(' or ')
+  }
+  const part = (item: Filter | FilterGroup): string => {
+    if (item.kind === 'group') return `(${item.items.map(part).join(item.operator === 'and' ? ' and ' : ' or ')})`
+    const option = options.find((o) => o.field === item.field)
+    const operator = (option?.kind === 'ids' ? IDS_OPERATOR_LABELS[item.operator] : undefined) ?? OPERATOR_LABELS[item.operator]
+    return [option?.label ?? item.field, operator, value(item, option)].filter(Boolean).join(' ')
+  }
+  return group.items.map(part).join(group.operator === 'and' ? ' · ' : ' or ')
 }
 
 /** Context for filtering on this thread; related objects come from the summary cache (and load into it). */

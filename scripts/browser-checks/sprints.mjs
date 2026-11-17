@@ -55,7 +55,7 @@ await page.waitForSelector('nav', { state: 'attached', timeout: 30000 })
 
 const tag = `${engine}-${Date.now() % 100000}`
 const space = await post('/api/spaces', { name: `Sprints ${tag}` })
-await page.evaluate((id) => localStorage.setItem('vasta.space', id), space.id)
+await page.evaluate((id) => localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(id)), space.id)
 await page.reload()
 await page.waitForSelector('nav', { state: 'attached' })
 await until(async () => {

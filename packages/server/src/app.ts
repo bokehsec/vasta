@@ -10,10 +10,11 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { streamSSE } from 'hono/streaming'
-import type { CalendarSource, ColorName, Icon, Id, InboxPreferences, ObjectRecord, ObjectType, QueryDef, Space, SpaceRole, StoredFile, TokenScope } from '@vasta/core'
+import type { CalendarSource, ColorName, Icon, Id, InboxPreferences, ObjectRecord, ObjectType, QueryDef, Space, SpaceRole, StoredFile, TokenScope, TypePatch } from '@vasta/core'
 import {
   ACTIVITY_RETENTION_CHOICES,
   addDays,
+  applyTypePatch,
   dayIn,
   flowMetrics,
   statusProperty,
@@ -358,16 +359,17 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     }
   }
 
-  /** Name, time zone (null: the server's), capture space (null: the first space) and inbox preferences. */
+  /** Name, time zone (null: the server's), capture space (null: the first space), inbox preferences and display preferences (a change to them: keys set, null removes). */
   authApi.put('/me', appAuth, (c) =>
     accountChange(c, async () => {
-      type Profile = { name?: string; timeZone?: string | null; captureSpaceId?: string | null; inbox?: InboxPreferences | null }
+      type Profile = { name?: string; timeZone?: string | null; captureSpaceId?: string | null; inbox?: InboxPreferences | null; preferences?: Record<string, unknown> }
       const body = await c.req.json<Profile>().catch(() => ({}) as Profile)
       const changes = {
         ...(typeof body.name === 'string' ? { name: body.name } : {}),
         ...(body.timeZone === null || typeof body.timeZone === 'string' ? { timeZone: body.timeZone } : {}),
         ...(body.captureSpaceId === null || typeof body.captureSpaceId === 'string' ? { captureSpaceId: body.captureSpaceId } : {}),
         ...(typeof body.inbox === 'object' ? { inbox: body.inbox } : {}),
+        ...(body.preferences && typeof body.preferences === 'object' ? { preferences: body.preferences } : {}),
       }
       return c.json(users.updateProfile(c.get('auth').user.id, changes))
     })
@@ -1258,6 +1260,23 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     const body = await c.req.json<ObjectType>()
     const type: ObjectType = { ...body, id: existing.id, spaceId: existing.spaceId, createdAt: existing.createdAt, updatedAt: now() }
     if (existing.system) type.system = existing.system
+    store.putType(type)
+    return c.json(type)
+  })
+
+  /** Change some fields of a type (name, icon, properties, views…); the fields the body leaves out keep what is stored. null takes an optional field away. */
+  api.patch('/types/:id', async (c) => {
+    const existing = store.getType(c.req.param('id'))
+    if (!existing) return c.json({ error: 'not found' }, 404)
+    const body = await c.req.json<TypePatch>().catch(() => undefined)
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return c.json({ error: 'send the fields to change' }, 400)
+    let type: ObjectType
+    try {
+      type = applyTypePatch(existing, body, now())
+    } catch (error) {
+      return c.json({ error: (error as Error).message }, 400)
+    }
+    if (!type.name.trim() || !type.pluralName.trim()) return c.json({ error: 'a type needs a name' }, 400)
     store.putType(type)
     return c.json(type)
   })

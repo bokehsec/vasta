@@ -9,24 +9,17 @@ import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 
 // The object page is its own chunk (router.ts); the pane waits for it the same way.
+import { preference } from '../lib/preferences.ts'
 const ObjectPage = defineAsyncComponent(() => import('../views/ObjectPage.vue'))
 
-const WIDTH_KEY = 'vasta.pane-width'
 const MIN_WIDTH = 360
 const DEFAULT_WIDTH = 520
 /** The page behind keeps at least this much room. */
 const PAGE_ROOM = 420
 
-function readWidth() {
-  try {
-    const value = Number(localStorage.getItem(WIDTH_KEY))
-    return value >= MIN_WIDTH ? value : DEFAULT_WIDTH
-  } catch {
-    return DEFAULT_WIDTH
-  }
-}
-
-const width = ref(readWidth())
+// How wide the pane is, kept on this device.
+const savedWidth = preference<number>('pane-width', DEFAULT_WIDTH, { scope: 'device', parse: (value) => (typeof value === 'number' && value >= MIN_WIDTH ? value : undefined) })
+const width = ref(savedWidth.value)
 const clamp = (value: number) => Math.round(Math.max(MIN_WIDTH, Math.min(value, window.innerWidth - PAGE_ROOM)))
 
 watch(
@@ -66,9 +59,7 @@ function resize(event: PointerEvent) {
 function endResize() {
   if (!drag) return
   drag = undefined
-  try {
-    localStorage.setItem(WIDTH_KEY, String(width.value))
-  } catch {}
+  savedWidth.value = width.value
 }
 function resizeByKey(event: KeyboardEvent) {
   const step = event.key === 'ArrowLeft' ? 32 : event.key === 'ArrowRight' ? -32 : 0

@@ -55,7 +55,7 @@ const wanted = await post('/api/objects', { typeId: pageType.id, title: `Wanted 
 const pinned = await post('/api/objects', { typeId: pageType.id, title: `Pinned ${tag}` })
 await put(`/api/spaces/${space.id}`, { sidebar: [{ id: 'pinned', name: 'Pinned', items: [pinned.id] }] })
 const opensOn = (value) => put(`/api/spaces/${space.id}`, { opensOn: value })
-await page.evaluate((id) => localStorage.setItem('vasta.space', id), space.id)
+await page.evaluate((id) => localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(id)), space.id)
 
 /** Load "/" until it lands on `expected` (a device takes a moment to hear of a change made elsewhere). */
 async function opens(expected, what) {

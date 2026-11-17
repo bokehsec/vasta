@@ -77,7 +77,9 @@ try {
   await make('F finished', 'done')
   await page.goto(base, { waitUntil: 'networkidle' })
   await page.locator('main').waitFor()
-  await page.evaluate(({ spaceId, typeId, viewId }) => { localStorage.setItem('vasta.space', spaceId); localStorage.setItem(`vasta.view.${typeId}`, viewId) }, { spaceId: space.id, typeId: type.id, viewId: 'all' })
+  await page.request.put(`${base}/api/auth/me`, { headers: { 'x-requested-with': 'vasta' }, data: { preferences: { [`type/${type.id}/last-view`]: 'all' } } })
+  await page.evaluate((spaceId) => localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(spaceId)), space.id)
+  await page.reload({ waitUntil: 'networkidle' })
   // The replica pulls the new space in the background: reopen the page until it has the type.
   await until(async () => {
     await page.goto(`${base}/t/${type.id}`)

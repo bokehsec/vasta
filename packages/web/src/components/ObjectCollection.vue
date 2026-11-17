@@ -11,11 +11,10 @@ import { columnWidth, listFields, MIN_COLUMN_WIDTH, QUICK_ACTIONS_COLUMN, rowFie
 import { displayTitle, formatDate, formatDateShort, formatRelative } from '../lib/format.ts'
 import { startNew, useNewPlace } from '../lib/new-item.ts'
 import { groupObjects, movableField, typesOf, type Group } from '../lib/query.ts'
-import { lastError, summaryOf, typesById, workspace } from '../lib/state.ts'
+import { lastError, summaryOf, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import { swipeActionsFor } from '../lib/quick-actions.ts'
-import { session } from '../lib/session.ts'
-import { groupFoldKey, useGroupFolds } from '../lib/group-folds.ts'
+import { foldKey, useGroupFolds } from '../lib/group-folds.ts'
 import { quietButton } from '../lib/buttons.ts'
 import { foldedSteps as folded, subtasksOf } from '../lib/subtasks.ts'
 import { hideSwipeTip, swipeTipHidden } from '../lib/tips.ts'
@@ -41,7 +40,7 @@ const props = defineProps<{
   layout: ViewLayout
   /** Field to group by; '' for no grouping. */
   groupField: string
-  /** Stable identity of this view or query instance, for personal group folds on this device. */
+  /** Stable identity of this view or query instance (a path: `type/<id>/view/<id>`), for the person's own group and column folds. */
   foldScope?: string
   /** Preview rows per group; grouping and its counts still see every result. */
   initialLimit?: number
@@ -93,8 +92,7 @@ const groups = computed<Group[]>(() => {
     .map((group) => ({ ...group, items: group.items.map((object) => actual.get(object.id)!) }))
 })
 
-const { folded: foldedGroups, toggle: toggleGroup, collapseAll, expandAll } = useGroupFolds(() =>
-  groupFoldKey(session.user?.id, workspace.space?.id, props.foldScope, props.groupField))
+const { folded: foldedGroups, toggle: toggleGroup, collapseAll, expandAll } = useGroupFolds(() => foldKey('folds', props.foldScope, props.groupField))
 // A "+" on a group's header adds an item into that group, on a type page (lib/new-item.ts).
 const newPlace = useNewPlace()
 const addable = computed(() => !!newPlace && !props.readonly && props.typeIds.length === 1 && props.typeIds[0] === newPlace.typeId && movableField(props.groupField, types.value))
@@ -331,6 +329,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
     :group-field="groupField"
     :type-ids="typeIds"
     :board="board"
+    :fold-scope="foldScope"
     :manual="manual ?? true"
     @menu="(event, object) => emit('menu', event, object)"
     @moved="emit('moved', $event)"

@@ -32,7 +32,7 @@ const until = async (check, what, timeout = 15000) => {
 
 // The open space, and two pages in it: the source (blocks without ids yet) and the note.
 await page.waitForTimeout(1500)
-const spaceId = await page.evaluate(() => localStorage.getItem('vasta.space'))
+const spaceId = await page.evaluate(() => JSON.parse(localStorage.getItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)))))
 const space = spaceId ? await get(`/api/spaces/${spaceId}`) : await get(`/api/spaces/${(await get('/api/spaces'))[0].id}`)
 const pageType = space.types.find((t) => t.system === 'page')
 const n = Date.now() % 100000

@@ -57,7 +57,7 @@ async function openContext(wanted, scheme, replica = true) {
   const opened = launched ? await launched.newContext(options) : await webkit.launchPersistentContext(mkdtempSync(path.join(tmpdir(), 'vasta-completion-')), options)
   await opened.addInitScript((value) => {
     try {
-      localStorage.setItem('vasta.theme', value)
+      localStorage.setItem('vasta.browser.theme', JSON.stringify(value))
     } catch {}
   }, scheme)
   if (json || !replica) await opened.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // The Tags page's Tree view: tags nested under their parents, a tag with sub-tags folding like a
-// folder (remembered on this device). A filter shows the matching tags with the tags above them.
-import { computed, ref, watch } from 'vue'
+// folder (remembered for this person). A filter shows the matching tags with the tags above them.
+import { computed } from 'vue'
 import type { Id, ObjectSummary } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
 import { promptDialog } from '../lib/overlays.ts'
+import { preference } from '../lib/preferences.ts'
 import { lastError, systemType } from '../lib/state.ts'
 import { tagColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
@@ -14,25 +15,14 @@ import ObjectLink from './ObjectLink.vue'
 const props = defineProps<{ tags: ObjectSummary[]; filter?: string }>()
 const emit = defineEmits<{ menu: [event: MouseEvent, object: ObjectSummary] }>()
 
-const FOLDED_KEY = 'vasta.tags.folded'
-function readFolded(): Set<Id> {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(FOLDED_KEY) ?? '[]') as Id[])
-  } catch {
-    return new Set()
-  }
-}
-const folded = ref(readFolded())
-watch(folded, (set) => {
-  try {
-    localStorage.setItem(FOLDED_KEY, JSON.stringify([...set]))
-  } catch {}
-})
+// The tags this person folded, on every device of theirs.
+const foldedIds = preference<Id[]>('tags/folded', [], { scope: 'account', parse: (value) => (Array.isArray(value) ? value.filter((id): id is Id => typeof id === 'string') : undefined) })
+const folded = computed(() => new Set(foldedIds.value))
 function toggle(id: Id) {
   const next = new Set(folded.value)
   if (next.has(id)) next.delete(id)
   else next.add(id)
-  folded.value = next
+  foldedIds.value = [...next]
 }
 
 const byId = computed(() => new Map(props.tags.map((t) => [t.id, t])))

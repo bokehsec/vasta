@@ -1,43 +1,15 @@
 // "Getting started" tips for people new to Vasta (TipsCard): shown on Today and on empty type
-// pages until hidden. Hidden per device (localStorage), like the theme.
+// pages until hidden. Hidden for the person (an account preference), on every device.
 import { ref } from 'vue'
 import { authApi } from './api.ts'
+import { preference } from './preferences.ts'
 
-const HIDDEN_KEY = 'vasta.tips.hidden'
+export const tipsHidden = preference<boolean>('tips/hidden', false, { scope: 'account' })
+export const hideTips = () => (tipsHidden.value = true)
 
-function readHidden(): boolean {
-  try {
-    return localStorage.getItem(HIDDEN_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-export const tipsHidden = ref(readHidden())
-
-export function hideTips() {
-  tipsHidden.value = true
-  try {
-    localStorage.setItem(HIDDEN_KEY, '1')
-  } catch {}
-}
-
-// The tip over swipeable rows on a phone, until hidden (per device).
-const SWIPE_KEY = 'vasta.tips.swipe'
-function readSwipeHidden(): boolean {
-  try {
-    return localStorage.getItem(SWIPE_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-export const swipeTipHidden = ref(readSwipeHidden())
-export function hideSwipeTip() {
-  swipeTipHidden.value = true
-  try {
-    localStorage.setItem(SWIPE_KEY, '1')
-  } catch {}
-}
+// The tip over swipeable rows on a phone, until hidden.
+export const swipeTipHidden = preference<boolean>('tips/swipe', false, { scope: 'account' })
+export const hideSwipeTip = () => (swipeTipHidden.value = true)
 
 /** Whether the user is the server's first account, who invites people; asked once. */
 export const serverAdmin = ref(false)

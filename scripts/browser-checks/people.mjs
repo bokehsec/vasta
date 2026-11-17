@@ -66,7 +66,7 @@ await post('/api/objects', { typeId: task.id, title: 'Mine already', props: { as
 
 // Open it: the app starts in the space last opened, else from the space menu once it knows it
 // (the replica pulls it first).
-await page.evaluate((id) => localStorage.setItem('vasta.space', id), space.id)
+await page.evaluate((id) => localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(id)), space.id)
 await page.reload()
 await page.waitForSelector('nav')
 await until(async () => {
@@ -110,9 +110,11 @@ await fieldSelect.selectOption({ label: 'Assignee' })
 await until(() => page.locator('button', { hasText: /^\s*Me\s*$/ }).count(), 'a Me button')
 await page.locator('button', { hasText: /^\s*Me\s*$/ }).click()
 await until(async () => !(await page.locator('main').getByText('Paint the fence').count()), 'filtered to me')
+// The narrowing is for this visit; Save to view makes it the view's own.
+await page.locator('[data-save-to-view]').click()
 const view = await until(async () => {
   const saved = (await get(`/api/types/${task.id}`)).views[0]
-  return JSON.stringify(saved.filter?.items?.[0]?.value) === JSON.stringify({ kind: 'variable', name: 'me' }) && saved
+  return saved.filter?.items?.some((item) => JSON.stringify(item.value) === JSON.stringify({ kind: 'variable', name: 'me' })) && saved
 }, 'the filter saved as "me"')
 await put(`/api/types/${task.id}`, { ...(await get(`/api/types/${task.id}`)), views: [{ ...view, filter: undefined, layout: 'kanban', groupBy: [{ field: 'assignee' }] }] })
 

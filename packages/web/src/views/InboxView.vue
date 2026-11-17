@@ -15,25 +15,16 @@ import { reviewed } from '../lib/inbox.ts'
 import { openContextMenu } from '../lib/overlays.ts'
 import { lastError, notice, primeSummaries, systemType, workspace } from '../lib/state.ts'
 import { openObject } from '../lib/open.ts'
+import { preference } from '../lib/preferences.ts'
 
 const STEP = 14
 const MAX_DAYS = 365
-const SHOW_DONE_KEY = 'vasta.inbox.showDone'
 
 const items = ref<InboxItem[]>([])
 const days = ref(STEP)
 const loading = ref(true)
-const showDone = ref(false)
-try {
-  showDone.value = localStorage.getItem(SHOW_DONE_KEY) === '1'
-} catch {}
-
-function toggleShowDone() {
-  showDone.value = !showDone.value
-  try {
-    localStorage.setItem(SHOW_DONE_KEY, showDone.value ? '1' : '0')
-  } catch {}
-}
+const showDone = preference<boolean>('inbox/show-done', false, { scope: 'account' })
+const toggleShowDone = () => (showDone.value = !showDone.value)
 
 async function load() {
   if (!workspace.space) return

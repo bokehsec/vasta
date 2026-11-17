@@ -27,6 +27,8 @@ export const ADDED_COLUMNS: { table: string; column: string; definition: string 
   { table: 'objects', column: 'parent_id', definition: 'TEXT' },
   // JSON InboxPreferences (Settings › Inbox).
   { table: 'users', column: 'inbox', definition: 'TEXT' },
+  // JSON map of the person's display preferences (User.preferences).
+  { table: 'users', column: 'preferences', definition: 'TEXT' },
   // JSON NutritionSettings: food tracking turned on, and the space's meals.
   { table: 'spaces', column: 'nutrition', definition: 'TEXT' },
   // JSON SprintSettings: sprints turned on, and what the space calls them.

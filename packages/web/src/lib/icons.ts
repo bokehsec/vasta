@@ -2,24 +2,22 @@
 // vite.config.ts); the full set, which objects and types may use since the icon picker offers all
 // of it, is a separate 4.6 MB JSON file fetched the first time an icon outside the subset is shown
 // or the picker opens. The service worker caches it like any asset, so it also works offline.
-// Icons that had to wait for the full set are remembered in localStorage, so the next start shows
+// Icons that had to wait for the full set are remembered on this browser (a preference), so the next start shows
 // them at once without loading the set again.
 import { addCollection, type IconifyJSON } from '@iconify/vue'
 import fullSetUrl from '@iconify-json/ph/icons.json?url'
 import subset from 'virtual:phosphor-subset'
 import { ref } from 'vue'
+import { getPreference, setPreference } from './preferences.ts'
 
-const REMEMBERED_KEY = 'vasta.icons'
+const REMEMBERED_KEY = 'icons'
 const MAX_REMEMBERED = 400
 
 type IconData = IconifyJSON['icons'][string]
 
 function readRemembered(): Record<string, IconData> {
-  try {
-    return JSON.parse(localStorage.getItem(REMEMBERED_KEY) ?? '{}') as Record<string, IconData>
-  } catch {
-    return {}
-  }
+  const saved = getPreference('browser', REMEMBERED_KEY)
+  return saved && typeof saved === 'object' && !Array.isArray(saved) ? { ...(saved as Record<string, IconData>) } : {}
 }
 
 const remembered = readRemembered()
@@ -69,7 +67,5 @@ function remember(collection: IconifyJSON) {
   wanted.clear()
   const names = Object.keys(remembered)
   for (const name of names.slice(0, Math.max(0, names.length - MAX_REMEMBERED))) delete remembered[name]
-  try {
-    localStorage.setItem(REMEMBERED_KEY, JSON.stringify(remembered))
-  } catch {}
+  setPreference('browser', REMEMBERED_KEY, remembered)
 }

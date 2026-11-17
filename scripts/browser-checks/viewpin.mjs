@@ -51,7 +51,7 @@ await page.waitForSelector('nav', { timeout: 30000 })
 // A space of its own, with a "Today" view on its Tasks.
 const tag = `${engine}-${Date.now() % 100000}`
 const space = await post('/api/spaces', { name: `Views ${tag}` })
-await page.evaluate((id) => localStorage.setItem('vasta.space', id), space.id)
+await page.evaluate((id) => localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(id)), space.id)
 await page.reload()
 await page.waitForSelector('nav')
 if (!(await page.locator('aside').getByText(`Views ${tag}`).count())) {
@@ -119,8 +119,12 @@ await until(async () => (await sidebar())[0].items.includes(tasks.id), 'Tasks pi
 await until(async () => (await page.locator('nav a', { hasText: /^\s*Tasks/ }).count()) === 2, 'two Tasks rows')
 
 step('a view opened by default is not remembered, one picked is')
-const remembered = () => page.evaluate((key) => localStorage.getItem(key), `vasta.view.${tasks.id}`)
-await page.evaluate((key) => localStorage.removeItem(key), `vasta.view.${tasks.id}`)
+// The last view of a type is the account's (kept on the server a moment after it changes).
+const remembered = async () => {
+  await sleep(1500)
+  return ((await get('/api/auth/me')).preferences ?? {})[`type/${tasks.id}/last-view`] ?? null
+}
+await page.request.put(`${base}/api/auth/me`, { headers, data: { preferences: { [`type/${tasks.id}/last-view`]: null } } })
 await page.goto(`${base}/t/${tasks.id}`)
 await until(async () => (await page.locator('main [role=button].font-medium', { hasText: firstView.name }).count()) > 0, 'first view open')
 if ((await remembered()) !== null) throw new Error('the first view, never picked, was remembered')

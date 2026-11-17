@@ -45,38 +45,26 @@ import { isPhone } from '../lib/viewport.ts'
 import { openObject } from '../lib/open.ts'
 import { lateEntries } from '../lib/agenda.ts'
 import { mergeTaskDates, taskDateRole } from '../lib/calendar-tasks.ts'
+import { preference } from '../lib/preferences.ts'
 
 const route = useRoute()
 const router = useRouter()
 
-const VIEW_KEY = 'vasta.calendar.view'
-const HIDDEN_KEY = 'vasta.calendar.hidden'
-const CLOSED_KEY = 'vasta.calendar.showClosed'
-const PANEL_KEY = 'vasta.calendar.panel'
-const storage = {
-  get(key: string) {
-    try {
-      return localStorage.getItem(key)
-    } catch {
-      return null
-    }
-  },
-  set(key: string, value: string) {
-    try {
-      localStorage.setItem(key, value)
-    } catch {}
-  },
-}
+// The person's own choices, on every device of theirs (lib/preferences.ts).
+const savedView = preference<string>('calendar/view', '', { scope: 'account' })
+const hiddenSources = preference<string[]>('calendar/hidden', [], { scope: 'account', parse: (value) => (Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : undefined) })
+const savedShowClosed = preference<boolean>('calendar/show-closed', false, { scope: 'account' })
+const savedPanel = preference<boolean>('calendar/panel', true, { scope: 'account' })
 
 const isView = (value: unknown): value is CalendarView => CALENDAR_VIEWS.some((v) => v.id === value)
-const view = computed<CalendarView>(() => (isView(route.query.view) ? route.query.view : isView(storage.get(VIEW_KEY)) ? (storage.get(VIEW_KEY) as CalendarView) : isPhone.value ? 'three-days' : 'month'))
+const view = computed<CalendarView>(() => (isView(route.query.view) ? route.query.view : isView(savedView.value) ? savedView.value : isPhone.value ? 'three-days' : 'month'))
 const anchor = computed(() => (typeof route.query.date === 'string' && isValidDay(route.query.date) ? route.query.date : dayKey()))
 const days = computed(() => visibleDays(view.value, anchor.value))
 const title = computed(() => viewTitle(view.value, days.value, anchor.value))
 
 function go(next: { view?: CalendarView; date?: string }) {
   const nextView = next.view ?? view.value
-  storage.set(VIEW_KEY, nextView)
+  savedView.value = nextView
   void router.replace({ path: '/calendar', query: { view: nextView, date: next.date ?? anchor.value } })
 }
 
@@ -135,13 +123,13 @@ onBeforeUnmount(() => {
 
 // What is shown ---------------------------------------------------------------
 type Category = 'tasks' | 'objects' | `source:${string}`
-const hidden = reactive(new Set<string>(JSON.parse(storage.get(HIDDEN_KEY) ?? '[]') as string[]))
-watch(hidden, () => storage.set(HIDDEN_KEY, JSON.stringify([...hidden])))
+const hidden = reactive(new Set<string>(hiddenSources.value))
+watch(hidden, () => (hiddenSources.value = [...hidden]))
 const showDailyNotes = computed(() => !hidden.has('daily-notes'))
 // Closed tasks are their own choice, off by default: not in `hidden`, so a saved list of hidden
 // categories never brings them back.
-const showClosed = ref(storage.get(CLOSED_KEY) === '1')
-watch(showClosed, (show) => storage.set(CLOSED_KEY, show ? '1' : '0'))
+const showClosed = ref(savedShowClosed.value)
+watch(showClosed, (show) => (savedShowClosed.value = show))
 
 /** Whether the entry's object is closed (done, dropped) and closed tasks are not asked for. */
 function leftOut(entry: CalendarEntry): boolean {
@@ -299,8 +287,8 @@ async function startNote(text?: string, day = anchor.value) {
 }
 
 // The small month beside the week and day views ---------------------------------------
-const panelOpen = ref(storage.get(PANEL_KEY) !== '0')
-watch(panelOpen, (open) => storage.set(PANEL_KEY, open ? '1' : '0'))
+const panelOpen = ref(savedPanel.value)
+watch(panelOpen, (open) => (savedPanel.value = open))
 const showPanel = computed(() => view.value !== 'month' && !isPhone.value && panelOpen.value)
 
 const miniMonth = ref(`${anchor.value.slice(0, 7)}-01`)

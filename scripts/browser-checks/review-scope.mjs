@@ -82,12 +82,13 @@ try {
   const other = await make('Check design handoff', 'work', 'inbox', false)
   const outside = await make('Book a dentist appointment', 'personal', undefined, true, today)
   await page.goto(base, { waitUntil: 'networkidle' })
-  await page.evaluate(({ spaceId, typeId }) => {
-    localStorage.setItem('vasta.space', spaceId)
-    localStorage.setItem(`vasta.view.${typeId}`, 'work')
-    localStorage.setItem(`vasta.mine.${typeId}`, '1')
+  // The last view and Mine are the account's, the last space this device's.
+  await page.request.put(`${base}/api/auth/me`, { headers: { 'x-requested-with': 'vasta' }, data: { preferences: { [`type/${type.id}/last-view`]: 'work', [`type/${type.id}/mine`]: true } } })
+  await page.evaluate((spaceId) => {
+    localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(spaceId))
     localStorage.removeItem('vasta.review')
-  }, { spaceId: space.id, typeId: type.id })
+  }, space.id)
+  await page.reload({ waitUntil: 'networkidle' })
   await until(async () => {
     await page.goto(`${base}/t/${type.id}`)
     return page.locator('[data-review-tasks]').waitFor({ timeout: 2000 }).then(() => true, () => false)

@@ -1,8 +1,10 @@
 // Closed tasks in a type's views: Done and Dropped left out by the view's own filter, "Status is not
 // Done, Dropped", shown with its others but not counted (a phone list's first row is an open task
 // that swipes; one closed there stays until the view is left), "Show done and dropped" in the
-// phone's Filters sheet and the desktop's Filter menu removing it and adding it back, saved on the
-// view (kept on reload), the sheet's count of what is shown and its Done; a view whose filter names
+// phone's Filters sheet and the desktop's Filter menu removing it and adding it back, as the
+// person's own choice for the view (an account preference, kept on reload; the view itself is not
+// edited), the sheet's count of what is shown (the view's own filter is not counted) and its Done;
+// a view whose filter names
 // the status, and a board in status columns, list them as before; a new view starts with it.
 //   node closed.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode); SHOTS=<dir>: the sheet
 import { mkdtempSync } from 'node:fs'
@@ -173,20 +175,19 @@ try {
   await put(`/api/objects/${open.id}`, { ...reopened, props: { ...reopened.props, status: { kind: 'select', value: [todoId] } } })
   await sleep(1500)
 
-  step('phone: the Filters sheet lists the filter, counts only the others, and its switch removes it')
+  step('phone: the Filters sheet counts nothing of the view\'s own filter, and its switch shows closed tasks for this person only')
   await page.goto(page.url())
   await row(open).waitFor()
-  const count = (await page.locator('[data-filters-count]').textContent())?.trim()
-  if (count !== '1') throw new Error(`the filter button counts ${count}, not just the view's own filter`)
+  if (await page.locator('[data-filters-count]').count()) throw new Error('the filter button counts the view\'s own filter')
   await page.locator('[data-filters-button]').click()
+  const own = (await page.locator('[data-view-filter-text]').textContent())?.trim() ?? ''
+  if (!/ClosedCheck/.test(own) || /Done|Dropped/.test(own)) throw new Error(`the view's own filter reads "${own}" (the closed condition is the switch, not listed)`)
   if ((await page.locator('[data-show-closed]').getAttribute('aria-pressed')) !== 'false') throw new Error('the switch is on while they are left out')
   await page.locator('[data-show-closed]').filter({ hasText: 'Show done and dropped' }).click()
   await row(done).waitFor()
   await row(dropped).waitFor()
-  await until(async () => {
-    const view = await savedView(ids.list)
-    return !hides(view) && view?.filter?.items.length === 1
-  }, 'the filter removed, the others kept')
+  await until(async () => ((await get('/api/auth/me')).preferences ?? {})[`type/${taskType.id}/view/${ids.list}/show-closed`] === true, 'the choice kept for the person')
+  if (!hides(await savedView(ids.list))) throw new Error('showing closed tasks edited the view')
   await until(async () => /^3 tasks shown$/.test((await page.locator('[data-filters-shown]').textContent())?.trim() ?? ''), 'the sheet counts what is shown')
   if (process.env.SHOTS) await page.screenshot({ path: path.join(process.env.SHOTS, `filters-sheet-${engine}.png`) })
   await page.locator('[data-filters-done]').click()
@@ -213,7 +214,8 @@ try {
   await page.locator('main button', { hasText: /^\s*Filter/ }).first().click()
   await page.locator('[data-show-closed]').click()
   await until(async () => !(await row(done).count()) && !(await row(dropped).count()), 'closed rows hidden')
-  await until(async () => hides(await savedView(ids.list)), 'the filter added back')
+  await until(async () => ((await get('/api/auth/me')).preferences ?? {})[`type/${taskType.id}/view/${ids.list}/show-closed`] === false, 'the choice kept for the person')
+  if (!hides(await savedView(ids.list))) throw new Error('the view was edited')
 
   step('desktop: a new view starts with the filter')
   const before = (await get(`/api/types/${taskType.id}`)).views.map((v) => v.id)

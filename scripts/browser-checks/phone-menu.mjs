@@ -9,7 +9,7 @@ import { chromium, webkit } from 'playwright'
 
 const engine = process.argv[2] ?? 'chromium'
 const base = process.argv[3] ?? 'http://127.0.0.1:5183'
-assert.match(base, /^http:\/\/127\.0\.0\.1:518[34]$/)
+assert.match(base, /^http:\/\/127\.0\.0\.1:5[13]8[34]$/)
 const options = { viewport: { width: 390, height: 844 }, hasTouch: true, locale: 'en-US', timezoneId: 'America/Toronto' }
 const profile = engine === 'webkit' ? mkdtempSync(path.join(tmpdir(), 'vasta-phone-menu-')) : undefined
 const browser = engine === 'webkit' ? undefined : await chromium.launch()
@@ -83,9 +83,9 @@ try {
   await page.goto(`${base}/settings#appearance`)
   for (const name of ['Home', 'Tasks', 'Today', 'Search']) await settings.getByRole('button', { name: `Remove ${name}`, exact: true }).click()
   assert(await settings.getByRole('button', { name: `Remove ${type.pluralName}`, exact: true }).isDisabled())
-  const storageKey = await page.evaluate(() => Object.keys(localStorage).find((key) => key.startsWith('vasta.phone-menu:')))
-  assert(storageKey)
-  await page.evaluate((key) => localStorage.setItem(key, JSON.stringify(['type:missing'])), storageKey)
+  // The menu is the account's (kept on the server a moment after it changes): a damaged copy there is read as the default.
+  await page.waitForTimeout(1500)
+  await json(await page.request.put(`${base}/api/auth/me`, { headers, data: { preferences: { 'phone-menu': ['type:missing'] } } }))
   await page.reload({ waitUntil: 'domcontentloaded' })
   await settings.waitFor()
   await wait(async () => (await labels()).join() === 'Home', 'safe fallback')
@@ -96,18 +96,18 @@ try {
   assert.equal(await bar.locator('[data-tab="Settings"]').getAttribute('aria-current'), 'page')
   // Force another seeded space at the next app start; no shared-space data is changed.
   if (spaces.length > 1) {
-    await page.evaluate((id) => localStorage.setItem('vasta.space', id), spaces[1].id)
+    await page.evaluate((id) => localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(id)), spaces[1].id)
     await page.reload({ waitUntil: 'domcontentloaded' })
     await settings.waitFor()
     await wait(async () => (await labels()).includes('Settings') && !(await labels()).includes('Home'), 'another space shares the menu')
-    await page.evaluate((id) => localStorage.setItem('vasta.space', id), spaceId)
+    await page.evaluate((id) => localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(id)), spaceId)
     await page.reload({ waitUntil: 'domcontentloaded' })
     await settings.waitFor()
     await wait(async () => (await labels()).includes('Settings') && !(await labels()).includes('Home'), 'original space has the same menu')
   }
   await settings.getByRole('button', { name: 'Reset to defaults', exact: true }).click()
 
-  console.log('• 320px phone fits, controls stay 44px, desktop has no bottom bar or its setting')
+  console.log('• 320px phone fits, controls stay 44px, desktop has no bottom bar but can set it')
   await page.setViewportSize({ width: 320, height: 700 })
   await settings.scrollIntoViewIfNeeded()
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
@@ -116,7 +116,9 @@ try {
   await page.screenshot({ path: '/private/tmp/vasta-phone-menu.png' })
   await page.setViewportSize({ width: 1280, height: 900 })
   await wait(async () => !(await bar.count()), 'desktop hides phone bar')
-  assert(!(await settings.isVisible()), 'desktop hides the bottom menu setting')
+  assert(await settings.isVisible(), 'the desktop can set the phone menu too (it is the account\'s)')
+  // The menu is the account's and is sent a moment after it changes: let the last change out before the browser closes.
+  await page.waitForTimeout(1500)
   assert.deepEqual(errors, [])
   console.log(`PASS phone-menu (${engine}, ${process.env.MODE ?? 'replica'})`)
 } finally {

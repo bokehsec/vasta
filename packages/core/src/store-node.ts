@@ -16,6 +16,7 @@ function rowToUser(row: Row): User {
     ...(row.capture_space_id ? { captureSpaceId: row.capture_space_id as string } : {}),
     ...(row.telegram_user_id != null ? { telegramUserId: Number(row.telegram_user_id) } : {}),
     ...(row.inbox ? { inbox: JSON.parse(row.inbox as string) as InboxPreferences } : {}),
+    ...(row.preferences ? { preferences: JSON.parse(row.preferences as string) as Record<string, unknown> } : {}),
     createdAt: row.created_at as string,
   }
 }
@@ -77,13 +78,16 @@ export class NodeStore extends Store {
 
   /** Insert a user, or update everything but the password of an existing one. */
   putUser(user: User, passwordHash?: string) {
-    const values = [user.username, user.name, user.timeZone ?? null, user.captureSpaceId ?? null, user.telegramUserId ?? null, user.inbox ? JSON.stringify(user.inbox) : null]
+    const values = [
+      user.username, user.name, user.timeZone ?? null, user.captureSpaceId ?? null, user.telegramUserId ?? null,
+      user.inbox ? JSON.stringify(user.inbox) : null, user.preferences ? JSON.stringify(user.preferences) : null,
+    ]
     if (this.getUser(user.id)) {
-      this.db.prepare('UPDATE users SET username = ?, name = ?, time_zone = ?, capture_space_id = ?, telegram_user_id = ?, inbox = ? WHERE id = ?').run(...values, user.id)
+      this.db.prepare('UPDATE users SET username = ?, name = ?, time_zone = ?, capture_space_id = ?, telegram_user_id = ?, inbox = ?, preferences = ? WHERE id = ?').run(...values, user.id)
     } else {
       if (!passwordHash) throw new Error('a new user needs a password')
       this.db
-        .prepare('INSERT INTO users (id, username, name, time_zone, capture_space_id, telegram_user_id, inbox, created_at, password_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .prepare('INSERT INTO users (id, username, name, time_zone, capture_space_id, telegram_user_id, inbox, preferences, created_at, password_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(user.id, ...values, user.createdAt, passwordHash)
     }
     if (passwordHash) this.setPasswordHash(user.id, passwordHash)

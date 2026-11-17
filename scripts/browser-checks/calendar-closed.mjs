@@ -72,7 +72,13 @@ const anywhere = (title) => page.locator('[data-calendar-entry]', { hasText: `${
 const shown = async (title, day) => (await entry(title, day).count()) > 0
 const struck = async (title, day) => (await entry(title, day).first().locator('.line-through').count()) === 1
 const apiStatus = async (object) => (await get(`/api/objects/${object.id}`)).props.status?.value?.[0]
-const stored = () => page.evaluate(() => localStorage.getItem('vasta.calendar.showClosed'))
+// The person's choice is an account preference, sent to the server a moment after it is made.
+const stored = async () => {
+  await sleep(1500)
+  const value = ((await get('/api/auth/me')).preferences ?? {})['calendar/show-closed']
+  return value === undefined ? undefined : value ? '1' : '0'
+}
+const resetShowClosed = () => page.request.put(`${base}/api/auth/me`, { headers, data: { preferences: { 'calendar/show-closed': null } } })
 const openMenu = async () => {
   await page.getByRole('button', { name: /Show/ }).click()
   return page.getByLabel('Done and dropped tasks')
@@ -87,7 +93,7 @@ try {
   const dropped = closedIds[1] ? await task('Dropped', 12, closedIds[1]) : undefined
   const ticked = await task('Ticked', 15, doingId)
   await sleep(1500) // the replica pulls them
-  await page.evaluate(() => localStorage.removeItem('vasta.calendar.showClosed'))
+  await resetShowClosed()
 
   step('month: closed tasks are left out by default, open ones shown')
   await page.goto(month())
@@ -159,6 +165,6 @@ try {
   console.log('✓ calendar closed tasks check passed')
 } finally {
   for (const object of made) await del(object.id)
-  await page.evaluate(() => localStorage.removeItem('vasta.calendar.showClosed')).catch(() => {})
+  await resetShowClosed().catch(() => {})
   await browser.close()
 }

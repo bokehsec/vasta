@@ -1,12 +1,11 @@
 // Habit progress beside the Tracker. Where it shows (off, above the habits, or beside them; below
 // them on a phone), which of the two charts (a trend line or a calendar of done days) and over how
-// many weeks are kept on the habit type, so every device shows the same; they are picked where they
-// show (the Tracker's Display menu, the Progress tab). The numbers come from core's habitReport and
-// habitDayTotals, counted the same way everywhere.
-import { computed, type Ref } from 'vue'
-import { api } from './api.ts'
-import { clone } from './clone.ts'
-import { replaceType, unsavedTypes, workspace } from './state.ts'
+// many weeks are each person's own (an account preference, lib/preferences.ts), the habit type's
+// `habits` being only what shows until they pick; they are picked where they show (the Tracker's
+// Display menu, the Progress tab). The numbers come from core's habitReport and habitDayTotals,
+// counted the same way everywhere.
+import { computed, toValue, type MaybeRefOrGetter, type Ref } from 'vue'
+import { preference } from './preferences.ts'
 import { addDays, habitDayTotals, habitPausedOn, habitPercent, habitProgressSettings, habitReport, habitWeekPlan, mondayOf, type HabitChart, type HabitTally, type HabitTypeSettings, type ObjectType, type ObjectSummary } from '@vasta/core'
 
 export const CHARTS: { id: HabitChart; label: string; hint: string }[] = [
@@ -14,43 +13,21 @@ export const CHARTS: { id: HabitChart; label: string; hint: string }[] = [
   { id: 'calendar', label: 'Calendar', hint: 'Every day, darker when more got done' },
 ]
 
-/** A habit type's progress settings; older ones (more charts, picked separately) read as the nearest of today's two. */
-export const habitProgressOf = (type: Pick<ObjectType, 'habits'> | undefined): HabitTypeSettings => habitProgressSettings(type?.habits)
-
-// Send changes in order: an earlier response must not undo a later optimistic choice.
-const progressSaves = new Map<string, Promise<void>>()
-
-/** Saves a change to a habit type's progress (place, chart, range), for every device. */
-export function saveHabitProgress(type: ObjectType, patch: Partial<HabitTypeSettings>) {
-  const current = () => workspace.types.find((t) => t.id === type.id) ?? type
-  const next = clone(current())
-  next.habits = { ...habitProgressOf(next), ...patch }
-  unsavedTypes.set(type.id, next)
-  replaceType(next)
-  const previous = progressSaves.get(type.id) ?? Promise.resolve()
-  const save = previous.catch(() => {}).then(async () => {
-    // Preserve other type edits made while this request waited its turn.
-    const payload = clone(current())
-    payload.habits = next.habits
-    const saved = await api.saveType(payload)
-    if (progressSaves.get(type.id) === save && unsavedTypes.get(type.id) === next) {
-      unsavedTypes.delete(type.id)
-      replaceType(saved)
-    }
-  })
-  progressSaves.set(type.id, save)
-  void save.finally(() => {
-    if (progressSaves.get(type.id) === save) {
-      progressSaves.delete(type.id)
-      if (unsavedTypes.get(type.id) === next) unsavedTypes.delete(type.id)
-    }
-  }).catch(() => {})
-  return save
-}
-
-/** The type's progress, shown on every device alike. */
-export function useTypeHabitProgress(type: Ref<ObjectType | undefined>) {
-  return computed<HabitTypeSettings>(() => habitProgressOf(type.value))
+/**
+ * How this person sees a habit type's progress: their own picks over the type's starting values
+ * (older stored settings read as the nearest of today's two charts). `save` keeps a pick for them
+ * only, on every device.
+ */
+export function useHabitDisplay(type: MaybeRefOrGetter<Pick<ObjectType, 'id' | 'habits'> | undefined>) {
+  const own = preference<Partial<HabitTypeSettings> | undefined>(() => {
+    const t = toValue(type)
+    return t ? `type/${t.id}/habits` : undefined
+  }, undefined, { scope: 'account' })
+  const settings = computed<HabitTypeSettings>(() => habitProgressSettings({ ...toValue(type)?.habits, ...own.value }))
+  const save = (patch: Partial<HabitTypeSettings>) => {
+    own.value = { ...own.value, ...patch }
+  }
+  return { settings, save }
 }
 
 export const percentText = (tally: Pick<HabitTally, 'done' | 'expected'> | undefined) => {
