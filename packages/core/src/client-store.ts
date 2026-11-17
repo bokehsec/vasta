@@ -7,6 +7,7 @@
 // changed) in the outbox. Pulled rows merge field by field, the newer HLC winning, so a local
 // change not pushed yet survives an older one from the server. Rich text merges through Yjs.
 import { newId } from './ids.ts'
+import { applyTypePatch, type TypePatch } from './type-patch.ts'
 import { Y } from '@vasta/editor-schema/yjs'
 import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, settleTaskSave, dayReferences, objectEntries, type DayRange, type OccurrenceEdit } from './calendar.ts'
 import { calendarEntries, parseCalendar, type ParsedCalendar } from './ics.ts'
@@ -671,11 +672,16 @@ export class ClientStore extends Store {
     return type
   }
 
-  saveType(body: ObjectType, at: IsoDateTime): ObjectType {
-    const existing = this.requireType(body.id)
-    const type: ObjectType = { ...body, id: existing.id, spaceId: existing.spaceId, createdAt: existing.createdAt, updatedAt: at }
-    if (existing.system) type.system = existing.system
-    else delete type.system
+  /** Change some fields of a type (type-patch.ts); the others keep what the store has. */
+  patchType(id: Id, patch: TypePatch, at: IsoDateTime): ObjectType {
+    let type: ObjectType
+    try {
+      type = applyTypePatch(this.requireType(id), patch, at)
+    } catch (error) {
+      if (error instanceof NotFoundError) throw error
+      throw new InvalidError((error as Error).message)
+    }
+    if (!type.name.trim() || !type.pluralName.trim()) throw new InvalidError('a type needs a name')
     this.putType(type)
     return type
   }

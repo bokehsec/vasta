@@ -140,6 +140,12 @@ export interface User {
   telegramUserId?: number
   /** How the inbox shows items marked as dealt with (Settings › Inbox). */
   inbox?: InboxPreferences
+  /**
+   * Display choices that follow the person to every device (web `lib/preferences.ts`): folded
+   * groups, the phone's menu, the last view of a type… Keys are paths such as `type/<id>/mine`;
+   * values are any JSON. Kept whole in one column; the app sends changes, not the map.
+   */
+  preferences?: Record<string, unknown>
   createdAt: IsoDateTime
 }
 

@@ -88,7 +88,7 @@ onBeforeUnmount(() => {
       <QueryEditor :query="query" @update="edit" />
     </div>
     <div v-show="!hidden">
-      <QueryResults ref="results" :fold-scope="parentId && instanceId ? JSON.stringify(['embed', parentId, instanceId, objectId]) : undefined" :query="query" :parent-id="parentId" :limit="24" :readonly="readonly" bare @table="edit({ ...query, table: $event })" @board="edit({ ...query, board: $event })" />
+      <QueryResults ref="results" :fold-scope="parentId && instanceId ? `object/${parentId}/embed/${instanceId}/${objectId}` : undefined" :query="query" :parent-id="parentId" :limit="24" :readonly="readonly" bare @table="edit({ ...query, table: $event })" @board="edit({ ...query, board: $event })" />
     </div>
   </div>
 </template>

@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { newId } from '@vasta/core'
 // Edit a type: identity (name, icon, color, description) and its property definitions.
-// Changes are made on a draft and saved together.
+// Changes are made on a draft and saved together, as a patch of only the fields the dialog changed
+// (lib/type-patch.ts): the views and anything else changed meanwhile are not sent.
 import { computed, reactive, ref } from 'vue'
-import type { ColorName, DatePropertyDef, DateRole, FormulaPropertyDef, Icon, ObjectType, PropertyDef, QuickActions, SelectOption } from '@vasta/core'
+import type { ColorName, DatePropertyDef, DateRole, FormulaPropertyDef, Icon, ObjectType, PropertyDef, QuickActions, SelectOption, TypePatch } from '@vasta/core'
 import { FORMULA_BUILTIN_FIELDS, FORMULA_FUNCTIONS, checkFormula, eligibleParentFields, formulaFromNames, formulaKind, formulaToNames, formulaUses } from '@vasta/core'
 import { greyButton, mainButton } from '../lib/buttons.ts'
-import { api } from '../lib/api.ts'
 import { clone } from '../lib/clone.ts'
 import { chip, colorNames, iconTextClasses, swatchClasses } from '../lib/colors.ts'
 import { PROPERTY_KINDS, kindIcon, kindLabel, newPropertyDef } from '../lib/properties.ts'
 import { confirmDialog } from '../lib/overlays.ts'
-import { replaceType, workspace } from '../lib/state.ts'
+import { workspace } from '../lib/state.ts'
+import { patchType } from '../lib/type-patch.ts'
 import AppIcon from './AppIcon.vue'
 import ColorPicker from './ColorPicker.vue'
 import IconPicker from './IconPicker.vue'
@@ -25,6 +26,7 @@ const props = defineProps<{ type: ObjectType }>()
 const emit = defineEmits<{ close: [] }>()
 
 const draft = ref<ObjectType>(clone(props.type))
+const opened = clone(props.type)
 const original = JSON.stringify(props.type)
 const dirty = computed(() => JSON.stringify(draft.value) !== original)
 const saving = ref(false)
@@ -192,6 +194,9 @@ function insertField(def: FormulaPropertyDef, name: string) {
 
 const otherTypes = computed(() => [...workspace.types].sort((a, b) => a.name.localeCompare(b.name)))
 
+/** The fields this dialog edits: the others (the views) are changed where they are shown. */
+const EDITED = ['name', 'pluralName', 'description', 'icon', 'color', 'properties', 'openIn', 'quickActions', 'subtasks'] as const
+
 async function save() {
   if (!draft.value.name.trim()) {
     error.value = 'The type needs a name.'
@@ -203,14 +208,9 @@ async function save() {
     draft.value.name = draft.value.name.trim()
     draft.value.pluralName = draft.value.pluralName.trim() || draft.value.name
     for (const def of draft.value.properties) def.name = def.name.trim() || 'Untitled'
-    // Display choices are edited outside this draft; keep the latest synced value.
-    const next = clone(draft.value)
-    const current = workspace.types.find((t) => t.id === next.id)
-    if (current) {
-      if (current.habits) next.habits = clone(current.habits)
-      else delete next.habits
-    }
-    replaceType(await api.saveType(next))
+    const patch: TypePatch = {}
+    for (const field of EDITED) if (JSON.stringify(draft.value[field]) !== JSON.stringify(opened[field])) Object.assign(patch, { [field]: draft.value[field] ?? null })
+    if (Object.keys(patch).length) await patchType(props.type.id, patch)
     emit('close')
   } catch (e) {
     error.value = (e as Error).message

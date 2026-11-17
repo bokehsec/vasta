@@ -2,7 +2,7 @@
 // it runs, and by the server over HTTP otherwise. What only the server can do (fetch a page, store
 // a file, delete for good, members, subscriptions) always goes to it, with the replica synced
 // before and after.
-import type { PropertyValue, ActivityEntry, ApiToken, FlowMetrics, Backlink, CalendarEntry, CalendarSource, ColorName, DocNode, FoodEntry, FoodLineAnswer, Icon, Id, InboxPreferences, Invite, LogFoodInput, NutritionSettings, ObjectRecord, ObjectSummary, ObjectType, OpensOn, QueryDef, Space, SpaceRole, TokenScope, User } from '@vasta/core'
+import type { PropertyValue, ActivityEntry, ApiToken, FlowMetrics, Backlink, CalendarEntry, CalendarSource, ColorName, DocNode, FoodEntry, FoodLineAnswer, Icon, Id, InboxPreferences, Invite, LogFoodInput, NutritionSettings, ObjectRecord, ObjectSummary, ObjectType, OpensOn, QueryDef, Space, SpaceRole, TokenScope, TypePatch, User } from '@vasta/core'
 import { SYNC_PROTOCOL, dayIn, type CaptureDestinations } from '@vasta/core'
 import type { OccurrenceEdit } from '@vasta/core/calendar'
 import type { CaptureAnswer } from '@vasta/core/client'
@@ -187,6 +187,8 @@ export interface ProfileInput {
   captureSpaceId?: Id | null
   /** null: the defaults ("Reviewed", not faded). */
   inbox?: InboxPreferences | null
+  /** Display preferences to change (lib/preferences.ts): a key set, or null to remove it. */
+  preferences?: Record<string, unknown>
 }
 
 export const authApi = {
@@ -364,7 +366,8 @@ const http = {
   deleteObjectForever: (id: Id) => request<void>('DELETE', `/api/objects/${id}?forever=1`),
   type: (id: Id) => request<ObjectType>('GET', `/api/types/${id}`),
   createType: (data: { spaceId: Id; name: string; pluralName?: string; icon?: Icon }) => request<ObjectType>('POST', '/api/types', data),
-  saveType: (type: ObjectType) => request<ObjectType>('PUT', `/api/types/${type.id}`, type),
+  /** Some fields of a type (core type-patch.ts); null takes an optional one away. Callers go through lib/type-patch.ts. */
+  patchType: (id: Id, patch: TypePatch) => request<ObjectType>('PATCH', `/api/types/${id}`, patch),
   /** To the trash, with its objects. */
   deleteType: (id: Id) => request<void>('DELETE', `/api/types/${id}`),
   /** Out of the trash, with the objects deleted together with it. */
@@ -510,7 +513,7 @@ const local: Partial<Api> = {
   restoreObject: (id) => callStore('untrashObject', id, now()),
   type: pullingIfMissing((id) => callStore('requireType', id)),
   createType: (data) => callStore('createType', data, now()),
-  saveType: (type) => callStore('saveType', type, now()),
+  patchType: (id, patch) => callStore('patchType', id, patch, now()),
   deleteType: (id) => callStore('trashType', id, now()),
   restoreType: (id) => callStore('untrashType', id, now()),
   trash: (spaceId) => callStore('trash', spaceId),

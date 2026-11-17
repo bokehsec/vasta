@@ -34,10 +34,10 @@ function add(event: Event) {
 </script>
 
 <template>
-  <!-- Only where the bar is (phones): a choice made on a computer would stay on the computer. -->
-  <div id="phone-menu" class="md:hidden" role="group" aria-labelledby="phone-menu-title">
-    <span id="phone-menu-title" :class="label">Bottom menu, on this device</span>
-    <p class="mt-1 mb-2 text-sm text-ink-soft">Up to five places, in this order. The same in every space; a type shows in the spaces that have it.</p>
+  <!-- Yours on every device (an account preference), so a computer can set the phone's bar too. -->
+  <div id="phone-menu" role="group" aria-labelledby="phone-menu-title">
+    <span id="phone-menu-title" :class="label">Phone bottom menu</span>
+    <p class="mt-1 mb-2 text-sm text-ink-soft">Up to five places, in this order. Yours on every device, the same in every space; a type shows in the spaces that have it.</p>
     <ol class="divide-y divide-line rounded-lg border border-line" aria-label="Phone menu items">
       <li v-for="(place, index) in selected" :key="place.id" class="flex min-h-12 items-center gap-2 px-2" :data-phone-menu-item="place.id">
         <AppIcon :icon="place.icon" :fallback="place.fallback" :size="20" />

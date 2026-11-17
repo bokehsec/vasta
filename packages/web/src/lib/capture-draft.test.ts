@@ -1,14 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ObjectType } from '@vasta/core'
+import { startPreferences, stopPreferences } from './preferences.ts'
 import { clearDraft, readDraft, usedTypes, withType, writeDraft, writtenText } from './capture-draft.ts'
 
 const at = '2026-10-19T12:00:00.000Z'
 const type = (id: string, name: string): ObjectType => ({ id, spaceId: 's', name, pluralName: `${name}s`, createdAt: at, updatedAt: at, views: [], properties: [] })
 const types = [type('book', 'Book'), type('meeting', 'Meeting note')]
 
+vi.mock('./api.ts', () => ({ authApi: { updateProfile: async () => ({}) }, NetworkError: class extends Error {} }))
+
 const fake = () => {
   const data = new Map<string, string>()
-  return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v), removeItem: (k: string) => void data.delete(k), data }
+  return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v), removeItem: (k: string) => void data.delete(k), get length() { return data.size }, key: (i: number) => [...data.keys()][i] ?? null, data }
 }
 
 describe('withType', () => {
@@ -28,26 +31,36 @@ describe('writtenText', () => {
 })
 
 describe('draft storage', () => {
-  it('keeps a draft per user and space', () => {
-    const s = fake()
-    writeDraft('u', 'a', 'hello', s)
-    expect(readDraft('u', 'a', s)).toBe('hello')
-    expect(readDraft('u', 'b', s)).toBe('')
-    expect(readDraft('v', 'a', s)).toBe('')
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', fake())
+    startPreferences({ id: 'u' })
+  })
+  afterEach(() => {
+    stopPreferences()
+    vi.unstubAllGlobals()
+  })
+  it('keeps a draft per space, on this device for the person logged in', () => {
+    writeDraft('a', 'hello')
+    expect(readDraft('a')).toBe('hello')
+    expect(readDraft('b')).toBe('')
+    stopPreferences()
+    startPreferences({ id: 'v' })
+    expect(readDraft('a')).toBe('')
   })
   it('clears on a blank text or clearDraft', () => {
-    const s = fake()
-    writeDraft('u', 'a', 'hello', s)
-    writeDraft('u', 'a', '  ', s)
-    expect(readDraft('u', 'a', s)).toBe('')
-    writeDraft('u', 'a', 'again', s)
-    clearDraft('u', 'a', s)
-    expect(s.data.size).toBe(0)
+    writeDraft('a', 'hello')
+    writeDraft('a', '  ')
+    expect(readDraft('a')).toBe('')
+    writeDraft('a', 'again')
+    clearDraft('a')
+    expect(readDraft('a')).toBe('')
+    expect([...(localStorage as unknown as ReturnType<typeof fake>).data.keys()].filter((key) => key.includes('capture-draft'))).toEqual([])
   })
   it('survives storage that throws', () => {
-    const broken = { getItem: () => { throw new Error('blocked') }, setItem: () => { throw new Error('blocked') }, removeItem: () => { throw new Error('blocked') } }
-    expect(readDraft('u', 'a', broken)).toBe('')
-    expect(() => writeDraft('u', 'a', 'x', broken)).not.toThrow()
+    const blocked = () => { throw new Error('blocked') }
+    vi.stubGlobal('localStorage', { getItem: blocked, setItem: blocked, removeItem: blocked, length: 0, key: () => null })
+    expect(readDraft('a')).toBe('')
+    expect(() => writeDraft('a', 'x')).not.toThrow()
   })
 })
 

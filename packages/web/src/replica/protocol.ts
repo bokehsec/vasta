@@ -28,7 +28,7 @@ export const WRITE_METHODS = [
   'trashObject',
   'untrashObject',
   'createType',
-  'saveType',
+  'patchType',
   'trashType',
   'untrashType',
   'updateSpace',

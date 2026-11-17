@@ -338,6 +338,40 @@ describe('accounts', () => {
     expect(store.getUser(arie.id)!.inbox).toBeUndefined()
   })
 
+  it('keeps display preferences per person: changes set or remove keys, and the person gets them back with every login', async () => {
+    const { app, store, accounts } = setup()
+    const arie = await accounts.createUser({ username: 'arie', password: PASSWORD })
+    const ana = await accounts.createUser({ username: 'ana', password: PASSWORD })
+    const b = browser(app)
+    await b.login('arie', PASSWORD)
+    const put = (body: unknown) => b.request('/api/auth/me', { method: 'PUT', body: JSON.stringify(body) })
+    expect((await (await b.request('/api/auth/me')).json() as User).preferences).toBeUndefined()
+
+    const saved = (await (await put({ preferences: { 'phone-menu': ['home', 'search'], 'type/t1/mine': true, 'type/t1/view/v1/folds/status': ['done'] } })).json()) as User
+    expect(saved.preferences).toEqual({ 'phone-menu': ['home', 'search'], 'type/t1/mine': true, 'type/t1/view/v1/folds/status': ['done'] })
+    // A change names only the keys it sets; null removes one; the rest stay.
+    await put({ preferences: { 'type/t1/mine': false, 'type/t1/view/v1/folds/status': null } })
+    expect(store.getUser(arie.id)!.preferences).toEqual({ 'phone-menu': ['home', 'search'], 'type/t1/mine': false })
+    // Other profile fields are not touched by a preferences change, and the other way round.
+    await put({ name: 'Arie S' })
+    expect(store.getUser(arie.id)).toMatchObject({ name: 'Arie S', preferences: { 'phone-menu': ['home', 'search'], 'type/t1/mine': false } })
+    // Every device gets them with the user, and nobody else does.
+    const second = browser(app)
+    await second.login('arie', PASSWORD)
+    expect(((await (await second.request('/api/auth/me')).json()) as User).preferences).toMatchObject({ 'type/t1/mine': false })
+    expect(store.getUser(ana.id)!.preferences).toBeUndefined()
+
+    // Not preferences: a key that is not a path, a value that is too large, a map that is not one.
+    expect((await put({ preferences: { 'bad key with spaces': 1 } })).status).toBe(400)
+    expect((await put({ preferences: { big: 'x'.repeat(20_000) } })).status).toBe(400)
+    expect((await put({ preferences: 'nope' })).status).toBe(200)
+    expect(store.getUser(arie.id)!.preferences).toEqual({ 'phone-menu': ['home', 'search'], 'type/t1/mine': false })
+
+    // Removing every key leaves none.
+    await put({ preferences: { 'phone-menu': null, 'type/t1/mine': null } })
+    expect(store.getUser(arie.id)!.preferences).toBeUndefined()
+  })
+
   it('creates spaces and manages members; only owners manage, anyone may leave', async () => {
     const { app, store, accounts } = setup()
     await accounts.createUser({ username: 'arie', password: PASSWORD })

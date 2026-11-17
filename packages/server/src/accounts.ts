@@ -116,6 +116,32 @@ const linkCode = (length: number) => {
 /** How long an invite link works. */
 const INVITE_DAYS = 7
 
+const PREFERENCE_KEY = /^[\w./:@-]{1,300}$/
+const PREFERENCE_VALUE_LIMIT = 16 * 1024
+const PREFERENCES_LIMIT = 512 * 1024
+
+/**
+ * A person's display preferences with a change applied: keys are paths (`type/<id>/mine`), a value
+ * is any JSON up to 16 KB, null removes the key, and the whole map stays under 512 KB.
+ */
+export function mergePreferences(current: Record<string, unknown>, changes: Record<string, unknown>): Record<string, unknown> {
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes)) throw new AccountError('preferences must be an object')
+  const next = { ...current }
+  for (const [key, value] of Object.entries(changes)) {
+    if (!PREFERENCE_KEY.test(key)) throw new AccountError(`not a preference key: ${key.slice(0, 40)}`)
+    if (value === null) {
+      delete next[key]
+      continue
+    }
+    const text = JSON.stringify(value)
+    if (text === undefined) throw new AccountError(`the preference ${key} is not JSON`)
+    if (text.length > PREFERENCE_VALUE_LIMIT) throw new AccountError(`the preference ${key} is too large`)
+    next[key] = value
+  }
+  if (JSON.stringify(next).length > PREFERENCES_LIMIT) throw new AccountError('too many preferences stored')
+  return next
+}
+
 const publicSessionId = (id: string) => id.slice(0, 16)
 
 export class AccountService {
@@ -321,8 +347,12 @@ export class AccountService {
     return this.store.memberRole(spaceId, userId) === 'owner'
   }
 
-  /** Change a user's display name, time zone, capture space or inbox preferences; null clears the last three. */
-  updateProfile(userId: Id, changes: { name?: string; timeZone?: string | null; captureSpaceId?: Id | null; inbox?: InboxPreferences | null }): User {
+  /**
+   * Change a user's display name, time zone, capture space, inbox preferences or display
+   * preferences; null clears the capture space, time zone and inbox ones. `preferences` is a
+   * change to the map: a key set, or a key with null removed.
+   */
+  updateProfile(userId: Id, changes: { name?: string; timeZone?: string | null; captureSpaceId?: Id | null; inbox?: InboxPreferences | null; preferences?: Record<string, unknown> }): User {
     const user = this.store.getUser(userId)
     if (!user) throw new AccountError(`unknown user ${userId}`)
     const next: User = { ...user }
@@ -345,6 +375,11 @@ export class AccountService {
       const inbox: InboxPreferences = { ...(label ? { reviewedLabel: label } : {}), ...(changes.inbox?.fadeReviewed === true ? { fadeReviewed: true } : {}) }
       if (Object.keys(inbox).length) next.inbox = inbox
       else delete next.inbox
+    }
+    if (changes.preferences !== undefined) {
+      const preferences = mergePreferences(user.preferences ?? {}, changes.preferences)
+      if (Object.keys(preferences).length) next.preferences = preferences
+      else delete next.preferences
     }
     this.store.putUser(next)
     return next

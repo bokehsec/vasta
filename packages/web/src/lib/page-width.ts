@@ -1,28 +1,10 @@
 // How wide a page's text column may grow: Standard (the default), Wide or Full width. The choice is
-// per device (localStorage), like the theme, and read by object pages and the calendar's day.
-import { ref, watch } from 'vue'
+// per device (a device preference), like the theme, and read by object pages and the calendar's day.
+import { preference } from './preferences.ts'
 
 export type PageWidth = 'standard' | 'wide' | 'full'
 
-const PAGE_WIDTH_KEY = 'vasta.page-width'
-
-function stored(): PageWidth {
-  try {
-    const value = localStorage.getItem(PAGE_WIDTH_KEY)
-    return value === 'wide' || value === 'full' ? value : 'standard'
-  } catch {
-    return 'standard'
-  }
-}
-
-export const pageWidth = ref<PageWidth>(stored())
-
-watch(pageWidth, (value) => {
-  try {
-    if (value === 'standard') localStorage.removeItem(PAGE_WIDTH_KEY)
-    else localStorage.setItem(PAGE_WIDTH_KEY, value)
-  } catch {}
-})
+export const pageWidth = preference<PageWidth>('page-width', 'standard', { scope: 'device', parse: (value) => (value === 'wide' || value === 'full' ? value : undefined) })
 
 /** The max-width class per choice: text pages, and pages built with columns, which need room. */
 export const PAGE_WIDTH_CLASSES: Record<PageWidth, { prose: string; columns: string }> = {

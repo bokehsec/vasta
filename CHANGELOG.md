@@ -8,11 +8,23 @@ GitHub release page.
 
 ### Added
 
+- **Filters are a temporary narrowing.** On a phone's Filters sheet and a computer's Filter menu, what
+  you add narrows the view for this visit only and is gone when you leave the page. The view's own
+  filter is shown apart ("This view: Area is Work") and is not counted; the count and **Clear** cover
+  only what you narrowed with, plus search and Mine. **Save to view** (shown when you have narrowed)
+  adds it to the view's own filter for everyone who uses the view, and **Edit view filter** changes
+  that filter on purpose.
+- **Your display choices follow you.** Which groups and board columns you folded, Show done, Mine,
+  the view a type opens on, the phone bottom menu, the Habits display, the calendar's view and
+  Show menu, tips you hid, and the like are kept with your account, so they are the same on every
+  device and nothing you fold or hide changes what anyone else sees. Page width, a pane's width and
+  an unsaved capture stay per device. Values you already had on a device move over on first use.
+
 - **Fold grouped views.** Use the chevron beside a group to hide or show its items, or Collapse all
   and Expand all above the groups. Its name and matching count stay visible; tables keep one
   shared header. Works in lists, tables and cards, including embedded queries and phone rows.
-  Folds are remembered for this view on this device and account, without changing filters or
-  what Review covers. Embedded group counts include matches beyond the preview.
+  Folds are yours: remembered for this view on every device you use, without changing the view for
+  anyone else, its filters or what Review covers. A board's folded columns work the same way. Embedded group counts include matches beyond the preview.
 
 - **Habits from SparkyFitness.** Connect a space to your SparkyFitness server with a read-only
   API key, choose how much history to bring in, then preview seven days before linking a habit.
@@ -56,15 +68,16 @@ GitHub release page.
 - **Habit progress.** The Habits page has a **Progress** tab beside Tracker: how much of what your
   habits asked for got done over the last 4, 8 or 13 weeks, as a percent with "94 of 120", a bar
   per week and a row per habit with its goal. Days a habit was paused count as days off, so they
-  are not asked and not missed; the range is the Tracker's too, so both and every device cover the
-  same weeks. Beside the range you pick the chart (a trend line or a calendar of done days, the
-  same two as on the Tracker), kept for every device too, and each habit shows its own weeks as
+  are not asked and not missed; the range is the Tracker's too, so both cover the same weeks.
+  Beside the range you pick the chart (a trend line or a calendar of done days, the same two as on
+  the Tracker), your own choice on every device you use, and each habit shows its own weeks as
   small columns. It works offline. The agent tools' `list_habits` can add the same numbers
   (`weeks`) and reports the same last four weeks.
 - **Habit progress on the Tracker, your way.** The Habits Tracker shows how you are doing next to
   the habits. Its **Display** button, beside Filter, chooses where (above the habits, beside them — below them
   on a phone — or off), the chart (a trend line or a calendar of done days) and the range (4, 8 or
-  13 weeks), for every device alike. It starts with the calendar above; settings saved when there
+  13 weeks), your own choice on every device you use (the habit type's saved setting is only what
+  shows until you pick). It starts with the calendar above; settings saved when there
   were more charts read as the nearest of the two. On a phone each habit is one row, as in the Habit
   Tracker app: its whole name, "2 of 3 this week" or its streak, its last two weeks as ticks (a day
   a "3 a week" habit does not need is never shown as missed) and a round check for today; a long
@@ -81,10 +94,11 @@ GitHub release page.
   which opens the side menu from within reach of your thumb. The ☰ button at the top left still
   opens it too.
 
-- **Choose your phone bottom menu.** On a phone, Settings › Appearance › Bottom menu lets you pick one
+- **Choose your phone bottom menu.** Settings › Appearance › Phone bottom menu lets you pick one
   to five places (including Today, Settings and your object types), reorder them with arrows, or
-  reset to the original menu. Changes appear immediately, stay on this device, and are the same in
-  every space; a type shows in each space that has a type of that name.
+  reset to the original menu. Changes appear immediately, belong to you on every device (you can
+  set it from a computer too), and are the same in every space; a type shows in each space that has
+  a type of that name.
 
 - **A task you mark Done stays where it was until you leave.** On a type's page (Tasks views, in
   every layout: list, table, phone rows, cards and board, plus the Done button, swipe and menu), a
@@ -121,8 +135,8 @@ GitHub release page.
   statuses count as new. The page's ⋯ menu offers **Review all tasks in this space** for a full sweep.
 - **Search and filters in one place on a phone.** A type's page (Tasks and the rest) shows the view
   and a Filters button on one row, with a count of what is on, instead of a toolbar that scrolled
-  sideways. Filters opens a sheet with Search this view, Mine, the view's filters and Arrange (sort,
-  group, layout, fields), and Clear. Each task row has a ⋯ button with its actions, so nothing needs
+  sideways. Filters opens a sheet with Search this view, Mine, the filters and Arrange (sort,
+  group, layout, fields), and Clear (see Filters are a temporary narrowing). Each task row has a ⋯ button with its actions, so nothing needs
   a long press to be found.
 - **Quick capture made for a phone.** It says where the text will go, lets you pick Note or a type
   (no need to type "/Book"), and has a Save capture button above the keyboard (Return adds a line).
@@ -320,10 +334,11 @@ GitHub release page.
 - **Done and dropped tasks are hidden in every view, the calendar and embedded queries.** A task
   list shows what is still open, so the rows you can swipe come first. Views hide them with a filter
   you can see, **Status is not Done, Dropped**: new views and new queries of tasks start with it,
-  and your existing views and embedded queries got it once. Remove it, or turn on **Show done and
-  dropped** in a view's filters (Filters on a phone, Filter on a desktop), to list them again; the
-  filter count and **Clear** leave it alone. On the Calendar page, tick **Done and dropped tasks** in
-  the Filter menu to show them (remembered on this device). A task you finish stays on screen,
+  and your existing views and embedded queries got it once. Turn on **Show done and dropped** in a
+  view's filters (Filters on a phone, Filter on a desktop) to list them again: it is your own choice
+  for that view, on every device you use, and does not change the view for anyone else. The filter
+  count and **Clear** leave it alone. On the Calendar page, tick **Done and dropped tasks** in the
+  Filter menu to show them (remembered for you). A task you finish stays on screen,
   crossed out, until you leave the view, so Undo is still in reach. A view that asks for a closed
   status ("Status is Done") and a board with a Done column show them as before.
 - **The phone's Filters sheet has a Done button** and says how many tasks the filters leave, since
@@ -374,8 +389,9 @@ GitHub release page.
   a Do date on or before the day just done is cleared instead of left behind in the past.
 - **"Due for review" matches the review.** The filter shows the review's check-ins: open tasks that
   are not new. New tasks (which have their own review queue) and closed ones no longer match.
-- **Habit progress keeps your latest display choices.** Rapid changes save in order, and saving
-  an already-open Type settings window preserves newer progress choices.
+- **Saving a type never undoes another change.** Type settings, a view's settings, a new select
+  option or property, and a duplicated or renamed view each save only what they changed, in order, so
+  a view made while Type settings was open, or on another device, is no longer overwritten.
 
 - **A link to a type of another space** (its page, e.g. Habits) opens that space and shows the
   page, as a link to an object already did; it used to stay blank.

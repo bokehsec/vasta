@@ -57,6 +57,7 @@ import { cachedSummary, lastError, primeSummaries, systemType, typesById, ui, us
 import { isPhone } from '../../lib/viewport.ts'
 import { openMenuAt, promptDialog, type MenuItem } from '../../lib/overlays.ts'
 import { openObject } from '../../lib/open.ts'
+import { getPreference, preference, setPreference } from '../../lib/preferences.ts'
 import { displayTitle } from '../../lib/format.ts'
 import { kindIcon } from '../../lib/properties.ts'
 import { canvasElements, isMermaidFlowchart, mermaidElements } from '../../lib/board-actions.ts'
@@ -160,7 +161,7 @@ const remove = (ids: Id[]) => (removeBoardElements(props.doc, ids, LOCAL), now()
 const root = ref<HTMLElement | null>(null)
 const size = reactive({ w: 0, h: 0 })
 const camera = reactive({ x: 0, y: 0, zoom: 1 })
-const cameraKey = `vasta.board-camera.${props.boardId}`
+const cameraKey = `board/${props.boardId}/camera`
 
 /** A point of the view (from its top left) in board coordinates. */
 const toWorld = (sx: number, sy: number) => ({ x: (sx - camera.x) / camera.zoom, y: (sy - camera.y) / camera.zoom })
@@ -223,16 +224,12 @@ const viewCenter = () => toWorld(size.w / 2, size.h / 2)
 // Kept as the point in the middle of the view, so the board opens on the same place in a
 // narrower window (a phone, the page beside a sidebar).
 function loadCamera(): boolean {
-  try {
-    const saved = JSON.parse(localStorage.getItem(cameraKey) ?? 'null') as { cx: number; cy: number; zoom: number } | null
-    if (!saved || ![saved.cx, saved.cy, saved.zoom].every(Number.isFinite)) return false
-    camera.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, saved.zoom))
-    camera.x = size.w / 2 - saved.cx * camera.zoom
-    camera.y = size.h / 2 - saved.cy * camera.zoom
-    return true
-  } catch {
-    return false
-  }
+  const saved = getPreference('device', cameraKey) as { cx: number; cy: number; zoom: number } | null | undefined
+  if (!saved || ![saved.cx, saved.cy, saved.zoom].every(Number.isFinite)) return false
+  camera.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, saved.zoom))
+  camera.x = size.w / 2 - saved.cx * camera.zoom
+  camera.y = size.h / 2 - saved.cy * camera.zoom
+  return true
 }
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 watch(camera, () => {
@@ -240,9 +237,7 @@ watch(camera, () => {
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     const { x: cx, y: cy } = viewCenter()
-    try {
-      localStorage.setItem(cameraKey, JSON.stringify({ cx: Math.round(cx), cy: Math.round(cy), zoom: camera.zoom }))
-    } catch {}
+    setPreference('device', cameraKey, { cx: Math.round(cx), cy: Math.round(cy), zoom: camera.zoom })
   }, 300)
 })
 
@@ -418,26 +413,12 @@ const stopDrawingOn = () => {
   if (drawing.value) tool.value = 'select'
 }
 /** How fingers and a pen share the work (see the top of this file), kept on this device. */
-const DRAW_MODE_KEY = 'vasta.board-draw-mode'
 const DRAW_MODES: { id: DrawMode; label: string; hint: string }[] = [
   { id: 'auto', label: 'Auto', hint: 'Once a pen touches the board, the pen draws and fingers move the view' },
   { id: 'pencil', label: 'Pen draws', hint: 'The pen draws with any tool; fingers move the view, select with a tap' },
   { id: 'touch', label: 'Fingers draw', hint: 'Fingers draw with the pen tool, as a pen or mouse does' },
 ]
-const drawMode = ref<DrawMode>(readDrawMode())
-function readDrawMode(): DrawMode {
-  try {
-    const saved = localStorage.getItem(DRAW_MODE_KEY)
-    return saved === 'pencil' || saved === 'touch' ? saved : 'auto'
-  } catch {
-    return 'auto'
-  }
-}
-watch(drawMode, (mode) => {
-  try {
-    localStorage.setItem(DRAW_MODE_KEY, mode)
-  } catch {}
-})
+const drawMode = preference<DrawMode>('board/draw-mode', 'auto', { scope: 'device', parse: (value) => (value === 'pencil' || value === 'touch' ? value : undefined) })
 /** A pen touched the board (in Auto, it then draws and fingers navigate). */
 const penSeen = ref(false)
 const pencilOnly = computed(() => drawMode.value === 'pencil' || (drawMode.value === 'auto' && penSeen.value))

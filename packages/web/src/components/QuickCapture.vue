@@ -47,10 +47,10 @@ const where = computed(() => (toDaily.value ? `today’s note in ${space.value?.
 // What was not saved is kept as a draft: put back here, written as you type (a moment after) and
 // whenever the page is hidden or closed (an app reload keeps it), dropped once saved.
 const draftRestored = ref(false)
-const draftOwner = () => (session.user && space.value ? ([session.user.id, space.value.id] as const) : undefined)
+const draftOwner = () => (session.user && space.value ? space.value.id : undefined)
 {
   const owner = draftOwner()
-  const draft = owner ? readDraft(...owner) : ''
+  const draft = owner ? readDraft(owner) : ''
   if (draft) {
     text.value = draft
     draftRestored.value = true
@@ -61,7 +61,7 @@ let saved = false
 /** The text as the draft (a picked type alone is not one); a saved capture leaves none. */
 function keepDraft() {
   const owner = draftOwner()
-  if (owner && !saved) writeDraft(...owner, writtenText(types.value, text.value) ? text.value : '')
+  if (owner && !saved) writeDraft(owner, writtenText(types.value, text.value) ? text.value : '')
 }
 let typing: ReturnType<typeof setTimeout> | undefined
 watch(text, () => {
@@ -81,7 +81,7 @@ onBeforeUnmount(() => {
 
 function discardDraft() {
   const owner = draftOwner()
-  if (owner) clearDraft(...owner)
+  if (owner) clearDraft(owner)
   draftRestored.value = false
   text.value = ''
   field.value?.focus()
@@ -91,7 +91,7 @@ function discardDraft() {
 function done() {
   saved = true
   const owner = draftOwner()
-  if (owner) clearDraft(...owner)
+  if (owner) clearDraft(owner)
   close()
 }
 

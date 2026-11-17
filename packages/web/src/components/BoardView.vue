@@ -2,15 +2,17 @@
 // The board layout: a column per group of `groupField`, optionally in rows (swimlanes) by a second
 // field. Cards keep a manual order (core rank.ts) while `manual`, move by dragging (lib/board.ts:
 // a mouse at once, a finger after a long press), and are made with "+" at the bottom of a column.
-// Columns fold and can have a WIP limit; both are the view's settings (`board`). On a phone (without
-// swimlanes) a column is most of the screen wide and the board snaps from one to the next, with a
-// strip of the columns' names and counts above that jumps to one.
+// Columns fold and can have a WIP limit. The limit is the view's setting (`board`); which columns are
+// folded is each person's own (lib/group-folds.ts), the view's `collapsed` only what is folded until
+// they fold one. On a phone (without swimlanes) a column is most of the screen wide and the board
+// snaps from one to the next, with a strip of the columns' names and counts above that jumps to one.
 import { computed, inject, nextTick, onBeforeUnmount, ref } from 'vue'
 import type { BoardSettings, Id, NewItemValues, ObjectRecord, ObjectSummary, PropertyDef } from '@vasta/core'
 import { RANK_PROPERTY_ID, byRank, rankOf, rankBetween } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
 import { boardDrag, closeCard, closingColumn, moveCard, pressCard, type BoardAxis, type CardTarget } from '../lib/board.ts'
 import { chip } from '../lib/colors.ts'
+import { foldKey, useGroupFolds } from '../lib/group-folds.ts'
 import { openMenuAt, promptDialog } from '../lib/overlays.ts'
 import { newValues, useNewPlace } from '../lib/new-item.ts'
 import { groupObjects, movableField, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
@@ -27,6 +29,8 @@ const props = defineProps<{
   groupField: string
   typeIds: Id[]
   board?: BoardSettings
+  /** The view's or query's identity (a path), for the person's own column folds. */
+  foldScope?: string
   /** Cards in their manual order (the view has no sort of its own). */
   manual: boolean
 }>()
@@ -92,7 +96,7 @@ onBeforeUnmount(() => cancelAnimationFrame(frame))
 const shownKey = computed(() => current.value || columns.value[0]?.key)
 
 // Columns: folded ones and WIP limits ------------------------------------------
-const collapsed = computed(() => new Set(props.board?.collapsed ?? []))
+const { folded: collapsed, toggle: toggleFold } = useGroupFolds(() => foldKey('columns', props.foldScope, props.groupField), () => props.board?.collapsed)
 const wip = (column: Group) => props.board?.wip?.[column.key]
 const over = (column: Group) => (wip(column) ?? Infinity) < column.items.length
 
@@ -100,12 +104,6 @@ function setBoard(patch: Partial<BoardSettings>) {
   const next: BoardSettings = { ...(props.board ?? {}), ...patch }
   for (const key of Object.keys(next) as (keyof BoardSettings)[]) if (next[key] === undefined) delete next[key]
   emit('board', next)
-}
-function toggleFold(column: Group) {
-  const keys = new Set(collapsed.value)
-  if (keys.has(column.key)) keys.delete(column.key)
-  else keys.add(column.key)
-  setBoard({ collapsed: keys.size ? [...keys] : undefined })
 }
 async function setWip(column: Group) {
   const answer = await promptDialog({
@@ -125,7 +123,7 @@ async function setWip(column: Group) {
 }
 function columnMenu(event: MouseEvent, column: Group) {
   openMenuAt(event.clientX, event.clientY, [
-    { label: collapsed.value.has(column.key) ? 'Unfold column' : 'Fold column', icon: collapsed.value.has(column.key) ? 'ph:arrows-out-line-horizontal' : 'ph:arrows-in-line-horizontal', run: () => toggleFold(column) },
+    { label: collapsed.value.has(column.key) ? 'Unfold column' : 'Fold column', icon: collapsed.value.has(column.key) ? 'ph:arrows-out-line-horizontal' : 'ph:arrows-in-line-horizontal', run: () => toggleFold(column.key) },
     { label: wip(column) ? `WIP limit: ${wip(column)}…` : 'Set a WIP limit…', icon: 'ph:gauge', run: () => setWip(column) },
   ])
 }
@@ -277,7 +275,7 @@ async function addCard(column: Group, lane: Group) {
                 v-if="laneIndex === 0 || collapsed.has(column.key)"
                 class="group/col flex items-center gap-2 text-sm"
                 :class="collapsed.has(column.key) ? 'cursor-pointer flex-col py-1' : 'px-1 py-1'"
-                @click="collapsed.has(column.key) && toggleFold(column)"
+                @click="collapsed.has(column.key) && toggleFold(column.key)"
                 @contextmenu.prevent="columnMenu($event, column)"
               >
                 <template v-if="!collapsed.has(column.key)">

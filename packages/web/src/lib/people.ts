@@ -1,14 +1,15 @@
 // The people of the open space (its members): person properties, "assigned to me", and who made or
-// last changed an object. Loaded from the server and kept in localStorage, so names still show
+// last changed an object. Loaded from the server and kept on this browser (lib/preferences.ts), so names still show
 // offline; someone who left the space shows by the name last seen, else as "Former member".
 import { computed, reactive, watch } from 'vue'
 import type { ColorName, Id, Person } from '@vasta/core'
 import { api } from './api.ts'
 import { colorNames } from './colors.ts'
+import { getPreference, setPreference } from './preferences.ts'
 import { callStore, useReplica } from './replica.ts'
 import { workspace } from './state.ts'
 
-const KEY = 'vasta.people'
+const KEY = 'people'
 
 export const people = reactive({
   /** The user looking (set by session.ts). */
@@ -26,20 +27,15 @@ export const meId = (): Id | undefined => people.me || undefined
 export const sharedSpace = computed(() => people.list.length > 1)
 
 function readCache(): { spaces: Record<Id, Person[]>; known: Record<Id, Person> } {
-  try {
-    const raw = localStorage.getItem(KEY)
-    if (raw) return JSON.parse(raw)
-  } catch {}
-  return { spaces: {}, known: {} }
+  const saved = getPreference('browser', KEY) as { spaces?: Record<Id, Person[]>; known?: Record<Id, Person> } | undefined
+  return { spaces: saved?.spaces ?? {}, known: saved?.known ?? {} }
 }
 
 function writeCache(spaceId: Id, list: Person[]) {
-  try {
-    const cache = readCache()
-    cache.spaces[spaceId] = list
-    for (const person of list) cache.known[person.id] = person
-    localStorage.setItem(KEY, JSON.stringify(cache))
-  } catch {}
+  const cache = readCache()
+  cache.spaces[spaceId] = list
+  for (const person of list) cache.known[person.id] = person
+  setPreference('browser', KEY, cache)
 }
 
 /** Load the open space's members (after it changes, or members were added or removed). */

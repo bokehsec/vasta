@@ -3,14 +3,14 @@
 // check off (days off, paused ones, faded), and each habit's streak and its last 4 weeks (core's habitStats, counted as
 // the Progress view counts them); on a phone, rows as in the Habit Tracker app (HabitRows). Progress
 // shows above the habits or beside them (below on a phone), or not at all; where, which chart and
-// over how many weeks are the type's own (the Tracker's Display menu). Habits paused today sit at
+// over how many weeks are each person's own (the Tracker's Display menu). Habits paused today sit at
 // the bottom, faded.
 import { computed, toRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { addDays, habitDayState, habitPausedOn, habitStats, habitTarget, habitUnit, type ObjectType, type ObjectSummary } from '@vasta/core'
 import { swatchClasses } from '../lib/colors.ts'
 import { habitColor, useFoodHabits, useToday } from '../lib/habits.ts'
-import { percentText, useHabitProgress, useTypeHabitProgress } from '../lib/habit-progress.ts'
+import { percentText, useHabitDisplay, useHabitProgress } from '../lib/habit-progress.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import HabitCheck from './HabitCheck.vue'
@@ -22,8 +22,8 @@ const props = defineProps<{ habits: ObjectSummary[]; type?: ObjectType; filter?:
 const emit = defineEmits<{ menu: [event: MouseEvent, object: ObjectSummary] }>()
 
 const today = useToday()
-/** The type's progress (the Tracker's Display menu): where, which charts, the range; on every device alike. */
-const charts = useTypeHabitProgress(toRef(props, 'type'))
+/** The person's progress display (the Tracker's Display menu): where, which chart, the range; on every device of theirs. */
+const { settings: charts } = useHabitDisplay(() => props.type)
 const place = computed(() => charts.value.place)
 const beside = computed(() => place.value === 'beside')
 const weeks = computed(() => charts.value.weeks)

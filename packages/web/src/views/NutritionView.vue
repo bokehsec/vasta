@@ -2,7 +2,7 @@
 // The Nutrition page: the week's budget with its days, the last 7/30/90 days against the goal
 // (averages and streaks skip days not counted), and the goals over time with "New goal". The day
 // itself is logged in the Food block of each day; this page is for looking back and setting goals.
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import {
   addDays,
   goalForDay,
@@ -27,12 +27,11 @@ import AppIcon from '../components/AppIcon.vue'
 import BarChart, { type Bar } from '../components/charts/BarChart.vue'
 import WeekBudgetCard from '../components/nutrition/WeekBudgetCard.vue'
 import ObjectLink from '../components/ObjectLink.vue'
+import { preference } from '../lib/preferences.ts'
 
 const today = dayKey()
 const RANGES = [7, 30, 90] as const
-const RANGE_KEY = 'vasta.nutrition-range'
-const range = ref<number>(Number((() => { try { return localStorage.getItem(RANGE_KEY) } catch { return null } })()) || 30)
-watch(range, (value) => { try { localStorage.setItem(RANGE_KEY, String(value)) } catch {} })
+const range = preference<number>('nutrition/range', 30, { scope: 'account', parse: (value) => (RANGES as readonly unknown[]).includes(value) ? (value as number) : undefined })
 
 const { objects: goalObjects, goals, load: loadGoals } = useGoals()
 const notes = ref<ObjectSummary[]>([])

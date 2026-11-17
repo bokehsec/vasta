@@ -27,7 +27,7 @@ await page.waitForSelector('nav', { timeout: 30000 })
 
 const spaces = await get('/api/spaces')
 if (spaces.length < 2) throw new Error('needs two spaces')
-const current = await page.evaluate(() => localStorage.getItem('vasta.space'))
+const current = await page.evaluate(() => JSON.parse(localStorage.getItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)))))
 const other = spaces.find((s) => s.id !== current) ?? spaces[1]
 const { types } = await get(`/api/spaces/${other.id}`)
 const target = types.find((t) => t.key === 'habit') ?? types.find((t) => t.key === 'task') ?? types[0]
@@ -35,7 +35,7 @@ console.log(`• in ${current}, opening /t/${target.id} (${target.pluralName} of
 
 await page.goto(`${base}/t/${target.id}`)
 await page.getByRole('heading', { name: target.pluralName }).first().waitFor({ timeout: 15000 })
-const now = await page.evaluate(() => localStorage.getItem('vasta.space'))
+const now = await page.evaluate(() => JSON.parse(localStorage.getItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)))))
 if (now !== other.id) throw new Error(`space not switched: ${now}`)
 console.log(`• ${target.pluralName} shown, space switched to ${other.name}`)
 if (problems.length) throw new Error(problems.join('\n'))

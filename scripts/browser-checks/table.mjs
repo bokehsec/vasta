@@ -121,7 +121,11 @@ try {
   await page.keyboard.press('Enter')
   await page.locator('input[placeholder="Value"]').blur()
   await until(async () => (await rowTitles()).sort().join() === [`Both ${tag}`, `Dom Casmurro ${tag}`].join(), 'books with a Brazilian author')
-  await until(async () => (await savedView()).filter?.items[0]?.field === 'author.country', 'filter saved')
+  // A narrowing is for this visit only: the view is not edited until Save to view.
+  await sleep(1200)
+  if ((await savedView()).filter?.items.some((item) => item.field === 'author.country')) throw new Error('the narrowing was saved on the view')
+  await page.locator('[data-save-to-view]').click()
+  await until(async () => (await savedView()).filter?.items.some((item) => item.field === 'author.country'), 'filter saved by Save to view')
   await page.keyboard.press('Escape')
 
   step('the same filter in a query shown as a table')

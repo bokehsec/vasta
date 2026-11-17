@@ -7,6 +7,7 @@ import { connectEvents, disconnectEvents } from './events.ts'
 import { forgetNotifyToken, provideNotifyToken } from './platform.ts'
 import { replicaRefusedByServer, startReplica, stopReplica } from './replica.ts'
 import { people } from './people.ts'
+import { startPreferences, stopPreferences } from './preferences.ts'
 import { loadWorkspace, resetWorkspace } from './state.ts'
 
 export const session = reactive({
@@ -24,6 +25,7 @@ let replicaAllowed = true
 async function start(user: User) {
   session.user = user
   people.me = user.id
+  startPreferences(user)
   // The local replica answers the app when it can run here; otherwise the server does.
   if (replicaAllowed) await startReplica(user.id)
   else replicaRefusedByServer()
@@ -44,6 +46,7 @@ async function forgetOfflineData() {
 
 function stop() {
   session.user = null
+  stopPreferences()
   Object.assign(people, { me: '', list: [], known: {} })
   forgetNotifyToken()
   void forgetOfflineData()

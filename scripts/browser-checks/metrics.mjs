@@ -60,7 +60,7 @@ for (const title of ['Ship', 'Fix', 'Write', 'Plan']) {
   if (title === 'Ship' || title === 'Fix') await status(made.id, 'done')
 }
 
-await page.evaluate((id) => localStorage.setItem('vasta.space', id), space.id)
+await page.evaluate((id) => localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(id)), space.id)
 await page.reload()
 await page.waitForSelector('nav', { state: 'attached' })
 await until(async () => {

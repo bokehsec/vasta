@@ -3,13 +3,12 @@ import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, taskDatesOf, closedOptionsOf, closedStatusIds, defaultViewFilter, dueForReview, hidesClosed, isClosedTask, matchesFilter, needsTriage, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
+import { RANK_PROPERTY_ID, taskDatesOf, defaultViewFilter, dueForReview, isClosedTask, matchesFilter, needsTriage, parentFieldOf, quickActionsOf, reviewFieldOf, savedShowsClosed, savedWithNarrowing, shownFilter, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withSavedConditions } from '@vasta/core'
 import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
 import ColumnsMenu from '../components/ColumnsMenu.vue'
 import ListFieldsMenu from '../components/ListFieldsMenu.vue'
-import FilterGroupEditor from '../components/FilterGroupEditor.vue'
 import FlowMetrics from '../components/FlowMetrics.vue'
 import ObjectCollection from '../components/ObjectCollection.vue'
 import ProcessMode from '../components/ProcessMode.vue'
@@ -20,6 +19,7 @@ import HabitProgressMenu from '../components/HabitProgressMenu.vue'
 import TagTree from '../components/TagTree.vue'
 import PopoverMenu from '../components/PopoverMenu.vue'
 import TypeSettings from '../components/TypeSettings.vue'
+import ViewFilters from '../components/ViewFilters.vue'
 import { dayKey, deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu, removeFromSidebar, setProperties, viewItem } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { greyButton, tintedButton } from '../lib/buttons.ts'
@@ -32,7 +32,9 @@ import { confirmDialog, openContextMenu, openMenuAt, promptDialog, type MenuItem
 import { groupOptions, queryContext } from '../lib/query.ts'
 import { keysOf } from '../lib/shortcuts.ts'
 import { meId, sharedSpace } from '../lib/people.ts'
-import { loadWorkspace, primeSummaries, replaceType, typesById, unsavedTypes, workspace } from '../lib/state.ts'
+import { loadWorkspace, primeSummaries, typesById, workspace } from '../lib/state.ts'
+import { dropPreferences, preference } from '../lib/preferences.ts'
+import { patchViews } from '../lib/type-patch.ts'
 import { session } from '../lib/session.ts'
 import { readSession, startSession, undoOutcome, writeSession, workflowTitle, type WorkflowKind, type ReviewSession } from '../lib/review-session.ts'
 import { showsNewPlace, startNew } from '../lib/new-item.ts'
@@ -98,42 +100,17 @@ const progressActive = computed(() => hasProgress.value && activeViewId.value ==
 const trackerActive = computed(() => !!fixedView.value && activeViewId.value === fixedView.value.id)
 const fixedActive = computed(() => metricsActive.value || progressActive.value || trackerActive.value)
 
-// A type opens on the view last picked in it, per type, on this device.
-const viewKey = `vasta.view.${props.id}`
-function lastView() {
-  try {
-    return localStorage.getItem(viewKey) ?? ''
-  } catch {
-    return ''
-  }
-}
+// A type opens on the view last picked in it (this person's choice, on every device).
+const lastView = preference(() => `type/${props.id}/last-view`, '', { scope: 'account' })
 // Only a view picked is remembered, not one opened by default (the first view on a first visit).
 function pickView(id: string) {
   activeViewId.value = id
-  try {
-    localStorage.setItem(viewKey, id)
-  } catch {}
+  lastView.value = id
 }
 // On a phone a table view is drawn as rows, unless "Show as table on this phone" is ticked (per
-// view, on this device).
-const phoneTableKey = computed(() => `vasta.phoneTable.${props.id}.${activeViewId.value}`)
-const phoneTables = ref<Record<string, boolean>>({})
-function readPhoneTable(key: string) {
-  try {
-    return localStorage.getItem(key) === '1'
-  } catch {
-    return false
-  }
-}
-const phoneTable = computed(() => phoneTables.value[phoneTableKey.value] ?? readPhoneTable(phoneTableKey.value))
-function togglePhoneTable() {
-  const on = !phoneTable.value
-  phoneTables.value = { ...phoneTables.value, [phoneTableKey.value]: on }
-  try {
-    if (on) localStorage.setItem(phoneTableKey.value, '1')
-    else localStorage.removeItem(phoneTableKey.value)
-  } catch {}
-}
+// view, for this person).
+const phoneTable = preference(() => `type/${props.id}/view/${activeViewId.value}/phone-table`, false, { scope: 'account' })
+const togglePhoneTable = () => (phoneTable.value = !phoneTable.value)
 
 watch(activeViewId, (id) => {
   // Opened from a view pinned in the sidebar (?view=), then another view picked: the link goes.
@@ -151,7 +128,7 @@ watch(type, (t) => {
   const fixed = FIXED_VIEWS[t.system ?? '']
   if (!activeViewId.value) {
     if (queryView()) pickView(queryView())
-    else activeViewId.value = lastView() || fixed?.id || ''
+    else activeViewId.value = lastView.value || fixed?.id || ''
   }
   const metrics = activeViewId.value === METRICS_VIEW && !!statusProperty(t)
   const progress = activeViewId.value === PROGRESS_VIEW && t.system === 'habit'
@@ -166,36 +143,20 @@ const view = computed<ViewDef>(() => {
   return { id: 'default', name: 'All', layout: 'list', ...(filter ? { filter } : {}) }
 })
 
-// View settings are saved on the type, debounced. Until the save answers, the edited copy is the
-// type (unsavedTypes): a change event reloading the stored one meanwhile would undo the edit.
-let saveTimer: ReturnType<typeof setTimeout> | undefined
+// A view's settings are saved on the type as a patch of its views (lib/type-patch.ts): they show at
+// once, and changes made in quick succession go in one request.
 function updateView(patch: Partial<ViewDef>) {
   if (!type.value) return
-  const next = clone(type.value)
-  let target = next.views.find((v) => v.id === view.value.id)
-  if (!target) {
-    target = { ...view.value, id: `${next.id}:all` }
-    next.views.push(target)
-    activeViewId.value = target.id
-  }
-  Object.assign(target, patch)
-  for (const key of Object.keys(patch) as (keyof ViewDef)[]) if (patch[key] === undefined) delete target[key]
-  unsavedTypes.set(next.id, next)
-  replaceType(next)
-  clearTimeout(saveTimer)
-  saveTimer = setTimeout(async () => {
-    const sending = unsavedTypes.get(next.id)
-    if (!sending) return
-    try {
-      const saved = await api.saveType(sending)
-      if (unsavedTypes.get(next.id) !== sending) return
-      unsavedTypes.delete(next.id)
-      replaceType(saved)
-    } catch (error) {
-      if (unsavedTypes.get(next.id) === sending) unsavedTypes.delete(next.id)
-      throw error
+  void patchViews(type.value, (views) => {
+    let target = views.find((v) => v.id === view.value.id)
+    if (!target) {
+      target = { ...clone(view.value), id: `${props.id}:all` }
+      views.push(target)
+      activeViewId.value = target.id
     }
-  }, 400)
+    Object.assign(target, patch)
+    for (const key of Object.keys(patch) as (keyof ViewDef)[]) if (patch[key] === undefined) delete target[key]
+  }, { delay: 400 })
 }
 
 async function addView() {
@@ -203,12 +164,9 @@ async function addView() {
   const id = newId()
   const name = await promptDialog({ title: 'New view', value: 'New view', confirmLabel: 'Create' })
   if (!name || !type.value) return
-  const next = clone(type.value)
-  const filter = defaultViewFilter(next, { layout: view.value.layout })
-  next.views.push({ id, name, layout: view.value.layout, ...(filter ? { filter } : {}) })
-  replaceType(next)
+  const filter = defaultViewFilter(type.value, { layout: view.value.layout })
+  void saveViews((views) => views.push({ id, name, layout: view.value.layout, ...(filter ? { filter } : {}) }))
   pickView(id)
-  void api.saveType(next).then(replaceType)
 }
 
 // ---------------------------------------------------------------------------
@@ -230,19 +188,13 @@ function closeSettings() {
   if (route.query.settings) void router.replace({ query: {} })
 }
 
-function saveViews(mutate: (views: ViewDef[]) => void) {
-  if (!type.value) return
-  const next = clone(type.value)
-  mutate(next.views)
-  replaceType(next)
-  void api.saveType(next).then(replaceType)
-}
+const saveViews = (change: (views: ViewDef[]) => void) => (type.value ? patchViews(type.value, change) : Promise.resolve())
 
 async function renameView() {
   menuOpen.value = false
   const name = await promptDialog({ title: 'Rename view', value: view.value.name, confirmLabel: 'Rename' })
   if (!name) return
-  saveViews((views) => {
+  void saveViews((views) => {
     const target = views.find((v) => v.id === view.value.id)
     if (target) target.name = name
   })
@@ -251,7 +203,7 @@ async function renameView() {
 function duplicateView() {
   menuOpen.value = false
   const copy: ViewDef = { ...clone(view.value), id: newId(), name: `${view.value.name} copy` }
-  saveViews((views) => views.push(copy))
+  void saveViews((views) => views.push(copy))
   pickView(copy.id)
 }
 
@@ -260,8 +212,9 @@ async function deleteView() {
   if ((type.value?.views.length ?? 0) <= 1) return
   const id = view.value.id
   if (!(await confirmDialog({ title: `Delete the view “${view.value.name}”?`, confirmLabel: 'Delete view', danger: true }))) return
-  saveViews((views) => views.splice(views.findIndex((v) => v.id === id), 1))
+  void saveViews((views) => views.splice(views.findIndex((v) => v.id === id), 1))
   activeViewId.value = type.value?.views[0]?.id ?? ''
+  dropPreferences(`type/${props.id}/view/${id}/`)
   void removeFromSidebar(viewItem(props.id, id))
 }
 
@@ -460,25 +413,10 @@ function objectMenu(event: MouseEvent, object: ObjectSummary) {
 
 const valueProps = computed(() => (type.value?.properties ?? []).filter((p) => p.kind !== 'rich-text'))
 const selectProps = computed(() => valueProps.value.filter((p) => p.kind === 'select'))
-/** "Mine": only what one of the type's person fields (Assignee…) names the user in; per type, on this device. */
+/** "Mine": only what one of the type's person fields (Assignee…) names the user in; per type, for this person. */
 const personProps = computed(() => valueProps.value.filter((p) => p.kind === 'person'))
-const mineKey = computed(() => `vasta.mine.${props.id}`)
-const mineOnly = ref(false)
-watch(
-  mineKey,
-  (key) => {
-    try {
-      mineOnly.value = localStorage.getItem(key) === '1'
-    } catch {}
-  },
-  { immediate: true }
-)
-function toggleMine() {
-  mineOnly.value = !mineOnly.value
-  try {
-    localStorage.setItem(mineKey.value, mineOnly.value ? '1' : '0')
-  } catch {}
-}
+const mineOnly = preference(() => `type/${props.id}/mine`, false, { scope: 'account' })
+const toggleMine = () => (mineOnly.value = !mineOnly.value)
 const showMine = computed(() => sharedSpace.value && personProps.value.length > 0)
 const isMine = (o: ObjectSummary) => {
   const me = meId()
@@ -504,24 +442,20 @@ const groupField = computed(() => {
   if (view.value.layout === 'kanban') return view.value.groupBy?.[0]?.field ?? selectProps.value[0]?.id ?? 'tags'
   return view.value.groupBy?.[0]?.field ?? ''
 })
-// Closed tasks (Done, Dropped) are left out by a filter of the view's own, "Status is not Done,
-// Dropped", that new views start with (closed-filter.ts). The switch in its filters adds or removes
-// it; filter counts and Clear leave it out, as the view's resting state.
-const viewFilter = computed(() => view.value.filter)
-const canShowClosed = computed(() => closedStatusIds(type.value).length > 0)
-const closedHidden = computed(() => hidesClosed(type.value, view.value.filter))
-const closedLabel = computed(() => {
-  const names = closedOptionsOf(type.value).map((o) => o.label.toLowerCase())
-  return `Show ${new Intl.ListFormat('en', { type: 'conjunction' }).format(names)}`
-})
-const toggleClosed = () => updateView({ filter: closedHidden.value ? withClosedShown(type.value, view.value.filter) : withClosedHidden(type.value, view.value.filter) })
+// What the page filters with (core view-filter.ts): the view's saved filter, closed tasks (Done,
+// Dropped) shown or left out as this person chose for the view ("Show done", which starts as the view's
+// own "Status is not Done, Dropped"), and the narrowing made on this visit. Nothing here edits the view.
+const showClosed = preference(() => `type/${props.id}/view/${view.value.id}/show-closed`, () => savedShowsClosed(type.value, view.value.filter), { scope: 'account' })
+const narrowings = ref<Record<string, FilterGroup>>({})
+const narrowing = computed<FilterGroup>(() => narrowings.value[view.value.id] ?? { kind: 'group', operator: 'and', items: [] })
+const viewFilter = computed(() => shownFilter(type.value, view.value.filter, showClosed.value, narrowing.value))
 const completion = useCompletion({
   type: () => type.value,
   rows: () => visible.value,
   replace: moved,
   // A type page showing an agenda leaves its completions to the agenda.
   enabled: () => !agendaActive.value,
-  resetOn: () => JSON.stringify([props.id, activeViewId.value, view.value.filter, sort.value, groupField.value, view.value.layout, view.value.agenda, view.value.flat, view.value.list, view.value.table, view.value.board?.swimlanes, mineOnly.value]),
+  resetOn: () => JSON.stringify([props.id, activeViewId.value, view.value.filter, sort.value, groupField.value, view.value.layout, view.value.agenda, view.value.flat, view.value.list, view.value.table, view.value.board?.swimlanes, mineOnly.value, showClosed.value]),
 })
 
 const visible = computed(() => {
@@ -582,12 +516,19 @@ function moved(saved: ObjectRecord | ObjectSummary) {
   }
 }
 
-// Filter: saved on the view, applied with the same engine as queries.
+// Filter: the narrowing of this visit and the view's own conditions, applied with the same engine as queries.
 const filterAnchor = ref<HTMLElement | null>(null)
 const filterOpen = ref(false)
-const filterGroup = computed<FilterGroup>(() => view.value.filter ?? { kind: 'group', operator: 'and', items: [] })
-const filterCount = computed(() => filterGroup.value.items.length - Number(closedHidden.value))
-const setFilter = (group: FilterGroup) => updateView({ filter: group.items.length ? group : undefined })
+const filterCount = computed(() => narrowing.value.items.length)
+const setNarrowing = (group: FilterGroup) => (narrowings.value = { ...narrowings.value, [view.value.id]: group })
+const clearNarrowing = () => setNarrowing({ ...narrowing.value, items: [] })
+/** Save to view: the narrowing joins the view's own filter, for everyone, and the page narrows no more. */
+function saveNarrowing() {
+  updateView({ filter: savedWithNarrowing(view.value.filter, narrowing.value) })
+  clearNarrowing()
+}
+/** Edit view filter: the view's own conditions, changed on purpose. */
+const editViewFilter = (conditions: FilterGroup) => updateView({ filter: withSavedConditions(type.value, view.value.filter, conditions) })
 
 // ---------------------------------------------------------------------------
 // Menus
@@ -642,18 +583,18 @@ function setGroup(field: string) {
 
 const currentLayout = computed(() => layouts.find((l) => l.layout === view.value.layout) ?? layouts[0]!)
 
-// A phone's Filters sheet: search, Mine and the view's conditions, then Arrange (the menus the
+// A phone's Filters sheet: search, Mine and the filters (ViewFilters), then Arrange (the menus the
 // toolbar's buttons open on a desktop, each a sheet over this one). The button counts what is on.
 const filtersOpen = ref(false)
 const filtersAnchor = ref<HTMLElement | null>(null)
 const searching = computed(() => !agendaActive.value && !!filterText.value.trim())
 const mineOn = computed(() => showMine.value && mineOnly.value && !agendaActive.value && !fixedActive.value)
 const activeFilterCount = computed(() => Number(searching.value) + Number(mineOn.value) + (fixedActive.value ? 0 : filterCount.value))
-/** Clears search, Mine and the conditions; sort, grouping and layout stay. */
+/** Clears search, Mine and the narrowing; the view's own filter, sort, grouping and layout stay. */
 function clearFilters() {
   filterText.value = ''
-  if (mineOnly.value) toggleMine()
-  if (!fixedActive.value && filterCount.value) updateView({ filter: closedHidden.value ? withClosedHidden(type.value, undefined) : undefined })
+  mineOnly.value = false
+  clearNarrowing()
 }
 const arrangeRows = computed(() => {
   const layout = view.value.layout
@@ -852,15 +793,9 @@ async function newMenu(event: MouseEvent) {
             <AppIcon fallback="ph:user-circle" :size="16" class="text-ink-soft" /> Mine
             <AppIcon :fallback="mineOnly ? 'ph:check-square-fill' : 'ph:square'" :class="mineOnly ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
           </button>
-          <button v-if="canShowClosed && !fixedActive" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" :aria-pressed="!closedHidden" data-show-closed @click="toggleClosed">
-            <AppIcon fallback="ph:check-circle" :size="16" class="text-ink-soft" /> {{ closedLabel }}
-            <AppIcon :fallback="!closedHidden ? 'ph:check-square-fill' : 'ph:square'" :class="!closedHidden ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
-          </button>
           <template v-if="!fixedActive">
             <div class="px-2.5 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Filters</div>
-            <div class="p-1.5">
-              <FilterGroupEditor :group="filterGroup" :type-ids="[id]" @update="setFilter" />
-            </div>
+            <ViewFilters :type="type" :view="view" :narrowing="narrowing" :show-closed="showClosed" @update:narrowing="setNarrowing" @show-closed="showClosed = $event" @save="saveNarrowing" @edit-view="editViewFilter" />
             <div class="px-2.5 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Arrange</div>
             <button v-for="row in arrangeRows" :key="row.id" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left" :data-arrange="row.id" @click="row.open.value = true">
               <AppIcon :fallback="row.icon" :size="16" class="text-ink-soft" /> {{ row.label }}
@@ -977,13 +912,7 @@ async function newMenu(event: MouseEvent) {
         </template>
       </div>
       <PopoverMenu v-model:open="filterOpen" :anchor="filterAnchor" placement="bottom-end" width="34rem">
-        <button v-if="canShowClosed" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" :aria-pressed="!closedHidden" data-show-closed @click="toggleClosed">
-          <AppIcon fallback="ph:check-circle" class="text-ink-soft" /> {{ closedLabel }}
-          <AppIcon :fallback="!closedHidden ? 'ph:check-square-fill' : 'ph:square'" :class="!closedHidden ? 'text-accent' : 'text-ink-faint'" class="ml-auto" />
-        </button>
-        <div class="p-1.5">
-          <FilterGroupEditor :group="filterGroup" :type-ids="[id]" @update="setFilter" />
-        </div>
+        <ViewFilters :type="type" :view="view" :narrowing="narrowing" :show-closed="showClosed" clear @update:narrowing="setNarrowing" @show-closed="showClosed = $event" @save="saveNarrowing" @clear="clearNarrowing" @edit-view="editViewFilter" />
       </PopoverMenu>
       <PopoverMenu v-model:open="sortOpen" :anchor="sortAnchor" placement="bottom-end" width="13rem">
         <button v-for="f in sortFields" :key="f.field" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="setSort(f.field)">
@@ -1106,7 +1035,7 @@ async function newMenu(event: MouseEvent) {
       :objects="visible"
       :layout="view.layout"
       :group-field="groupField"
-      :fold-scope="JSON.stringify(['type', id, view.id])"
+      :fold-scope="`type/${id}/view/${view.id}`"
       :type-ids="[id]"
       :table="view.table"
       :board="view.board"

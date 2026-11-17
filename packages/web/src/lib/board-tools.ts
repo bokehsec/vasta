@@ -3,6 +3,7 @@
 // The toolbar (components/whiteboard/BoardToolbar.vue) changes them; the canvas reads them when it
 // makes something. Elements already on a board change through the selection bar instead.
 import { reactive, watch } from 'vue'
+import { getPreference, setPreference } from './preferences.ts'
 import type { ArrowPath, ArrowTip, ColorName, Dash, Fill, FontSize, ShapeName } from '@vasta/core'
 
 export interface PenPreset {
@@ -39,12 +40,12 @@ const DEFAULTS = (): ToolSettings => ({
   arrow: { start: 'none', end: 'arrow' },
 })
 
-const KEY = 'vasta.board-tools'
+const KEY = 'board/tools'
 
 function load(): ToolSettings {
   const defaults = DEFAULTS()
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<ToolSettings> | null
+    const saved = getPreference('browser', KEY) as Partial<ToolSettings> | null | undefined
     if (!saved || typeof saved !== 'object') return defaults
     const pens = Array.isArray(saved.pens) && saved.pens.length ? saved.pens.filter((p) => p && typeof p.size === 'number').slice(0, 6) : defaults.pens
     return {
@@ -63,11 +64,7 @@ function load(): ToolSettings {
 export const toolSettings = reactive<ToolSettings>(load())
 watch(
   toolSettings,
-  (settings) => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(settings))
-    } catch {}
-  },
+  (settings) => setPreference('browser', KEY, JSON.parse(JSON.stringify(settings))),
   { deep: true }
 )
 

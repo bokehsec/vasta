@@ -6,7 +6,7 @@ A space can have one member (a private space) or several (a shared one, e.g. "Ho
 
 | Table | What it holds |
 |-------|---------------|
-| `users` | username (unique, case-insensitive), display name, scrypt password hash, optional time zone, capture space and Telegram user id |
+| `users` | username (unique, case-insensitive), display name, scrypt password hash, optional time zone, capture space, Telegram user id, inbox preferences and display preferences (a JSON map the web app keeps for the person: folds, the phone menu, the last view of a type…; `PUT /api/auth/me` with `preferences` sets keys, null removes one) |
 | `space_members` | `(space, user, role)`; role `owner` or `editor` |
 | `sessions` | browser logins (SHA-256 of the cookie secret, user agent, created, last seen, expiry) |
 | `login_failures` | failed logins per username, for the throttle |

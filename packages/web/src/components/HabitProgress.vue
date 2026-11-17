@@ -2,12 +2,12 @@
 // The Habits page's Progress view: how much of what the habits asked for got done over the last
 // 4, 8 or 13 whole weeks (core habitReport: done ÷ expected, added up, never an average of
 // percents). A headline, the chart (a trend line or a calendar of done days, the same two as the
-// Tracker's) and a row per habit with its own weeks. The range and the chart are the habit type's:
-// the switches here change them, so every device shows the same (they are the Tracker's too). Days
+// Tracker's) and a row per habit with its own weeks. The range and the chart are the person's own
+// choice, the Tracker's too: the switches here change them on every device of theirs. Days
 // a habit was paused count as days off; habits paused today sit at the bottom, faded.
 import { computed, toRef } from 'vue'
 import { HABIT_WEEKS_RANGES, habitPausedOn, habitPercent, habitWeekdays, habitWeeklyTarget, type HabitChart, type HabitTally, type HabitTypeSettings, type ObjectSummary, type ObjectType } from '@vasta/core'
-import { CHARTS, dayLabel, habitProgressOf, percentText, saveHabitProgress, useHabitProgress } from '../lib/habit-progress.ts'
+import { CHARTS, dayLabel, percentText, useHabitDisplay, useHabitProgress } from '../lib/habit-progress.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { habitColor, useFoodHabits, useToday } from '../lib/habits.ts'
@@ -19,10 +19,9 @@ const props = defineProps<{ type: ObjectType; habits: ObjectSummary[]; filter?: 
 const emit = defineEmits<{ menu: [event: MouseEvent, object: ObjectSummary] }>()
 
 const RANGES = HABIT_WEEKS_RANGES
-const settings = computed(() => habitProgressOf(props.type))
+const { settings, save: setProgress } = useHabitDisplay(() => props.type)
 const weeks = computed(() => settings.value.weeks)
 const chart = computed(() => settings.value.chart)
-const setProgress = (patch: Partial<HabitTypeSettings>) => saveHabitProgress(props.type, patch)
 const setWeeks = (value: HabitTypeSettings['weeks']) => value !== weeks.value && setProgress({ weeks: value })
 const setChart = (value: HabitChart) => value !== chart.value && setProgress({ chart: value })
 

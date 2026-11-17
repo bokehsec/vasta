@@ -192,7 +192,7 @@ try {
   // Headless WebKit stalls on Settings (as in page-width.mjs): there the choice is stored and the app reloaded.
   const me = (await get('/api/auth/me')).id
   if (engine === 'webkit') {
-    await page.evaluate((me) => localStorage.setItem(`vasta.phone-menu:${me}`, JSON.stringify(['home', 'tasks', 'inbox', 'calendar', 'menu'])), me)
+    await page.request.put(`${base}/api/auth/me`, { headers, data: { preferences: { 'phone-menu': ['home', 'tasks', 'inbox', 'calendar', 'menu'] } } })
     await page.reload()
     await page.waitForSelector('main', { timeout: 30000 })
   } else {
@@ -206,7 +206,7 @@ try {
   await page.locator('[data-drawer-backdrop]').waitFor()
   await back()
   await until(async () => !(await drawerOpen()), 'Back closes the side menu')
-  await page.evaluate((me) => localStorage.removeItem(`vasta.phone-menu:${me}`), me)
+  await page.request.put(`${base}/api/auth/me`, { headers, data: { preferences: { 'phone-menu': null } } })
 
   if (problems.length) throw new Error(problems.join('\n'))
   console.log(`\nAll phone-history checks passed for ${engine}.`)

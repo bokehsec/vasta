@@ -81,7 +81,7 @@ try {
     await choices.waitFor()
     assert.equal(await choices.getByRole('radio', { checked: true }).textContent().then((s) => s.trim()), 'Standard')
     await choices.getByRole('radio', { name: 'Wide', exact: true }).click()
-    await until(() => page.evaluate(() => localStorage.getItem('vasta.page-width') === 'wide'), 'stored Wide')
+    await until(() => page.evaluate(() => Object.entries(localStorage).some(([k, v]) => /^vasta\.device\..+\.page-width$/.test(k) && JSON.parse(v) === 'wide')), 'stored Wide')
     await page.reload({ waitUntil: 'domcontentloaded' })
     await choices.getByRole('radio', { name: 'Wide', exact: true, checked: true }).waitFor()
   } else {

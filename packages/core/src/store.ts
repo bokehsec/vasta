@@ -526,10 +526,15 @@ export class Store {
   putType(type: ObjectType, clock?: FieldClock) {
     this.transaction(() => {
       const stamp = this.syncStamp('types', type.spaceId, this.syncRow('types', type.id), type, clock)
+      // An upsert, like putSpace: a column this build does not name (one a later build added) keeps its value.
       this.db
         .prepare(
-          `INSERT OR REPLACE INTO types (id, space_id, system, name, plural_name, description, icon, color, properties, views, open_in, quick_actions, subtasks, habits, created_at, updated_at, deleted_at, rev, clock)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO types (id, space_id, system, name, plural_name, description, icon, color, properties, views, open_in, quick_actions, subtasks, habits, created_at, updated_at, deleted_at, rev, clock)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (id) DO UPDATE SET space_id = excluded.space_id, system = excluded.system, name = excluded.name, plural_name = excluded.plural_name, description = excluded.description,
+             icon = excluded.icon, color = excluded.color, properties = excluded.properties, views = excluded.views, open_in = excluded.open_in, quick_actions = excluded.quick_actions,
+             subtasks = excluded.subtasks, habits = excluded.habits, created_at = excluded.created_at, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at,
+             rev = excluded.rev, clock = excluded.clock`
         )
         .run(
           type.id, type.spaceId, type.system ?? null, type.name, type.pluralName, type.description ?? null,

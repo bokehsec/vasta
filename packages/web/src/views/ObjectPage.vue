@@ -53,7 +53,9 @@ import { chip, iconTextClasses, swatchClasses } from '../lib/colors.ts'
 import { colorSource, tagAncestors, tagColor } from '../lib/tags.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
 import { PROPERTY_KINDS, formulaValue, kindIcon, newPropertyDef } from '../lib/properties.ts'
-import { lastError, loadWorkspace, primeFromObject, replaceType, systemType, typesById, ui, workspace } from '../lib/state.ts'
+import { lastError, loadWorkspace, primeFromObject, systemType, typesById, ui, workspace } from '../lib/state.ts'
+import { preference } from '../lib/preferences.ts'
+import { currentType, patchType } from '../lib/type-patch.ts'
 import { personName, sharedSpace } from '../lib/people.ts'
 import { openMenuAt, promptDialog, type MenuItem } from '../lib/overlays.ts'
 import { clearOtherDefaults, deleteTemplate, loadTemplates, previewTemplate, rememberTemplate, saveAsTemplate, templateFill, templatesOf } from '../lib/templates.ts'
@@ -188,21 +190,7 @@ watch(
  * the side pane and as a template it stays below the title as before.
  */
 const boardLayout = computed(() => isWhiteboard.value && !embedded.value && !inFrame.value && !info.value)
-const DETAILS_KEY = 'vasta.board-details'
-const detailsOpen = ref(readFlag(DETAILS_KEY))
-watch(detailsOpen, (open) => writeFlag(DETAILS_KEY, open))
-function readFlag(key: string) {
-  try {
-    return localStorage.getItem(key) === '1'
-  } catch {
-    return false
-  }
-}
-function writeFlag(key: string, on: boolean) {
-  try {
-    localStorage.setItem(key, on ? '1' : '0')
-  } catch {}
-}
+const detailsOpen = preference<boolean>('board/details', false, { scope: 'device' })
 /** Ids of the places the board and its details go in that layout (two pages can be open: the page and the pane). */
 const boardSlot = computed(() => `board-slot-${props.id}`)
 const detailsSlot = computed(() => `board-details-${props.id}`)
@@ -612,11 +600,11 @@ const KINDS = PROPERTY_KINDS
 
 async function addProperty() {
   if (!type.value || !newProperty.value.name.trim()) return
-  const next = clone(type.value)
+  const next = clone(currentType(type.value.id) ?? type.value)
   const def = newPropertyDef(newProperty.value.name.trim(), newProperty.value.kind)
   if (def.kind === 'formula') def.expression = formulaFromNames(newProperty.value.formula, next, workspace.types)
   next.properties.push(def)
-  replaceType(await api.saveType(next))
+  await patchType(next.id, { properties: next.properties })
   newProperty.value = { name: '', kind: 'text', formula: '' }
   addOpen.value = false
 }
@@ -1135,7 +1123,7 @@ async function startFrom(template: ObjectRecord) {
             <QueryEditor :query="object.query ?? { typeIds: [] }" @update="setQuery" />
           </div>
         </div>
-        <QueryResults :fold-scope="JSON.stringify(['query', object.id])" class="mt-4" :query="object.query ?? { typeIds: [] }" :parent-id="object.id" @table="setQuery({ ...(object.query ?? { typeIds: [] }), table: $event })" @board="setQuery({ ...(object.query ?? { typeIds: [] }), board: $event })" />
+        <QueryResults :fold-scope="`object/${object.id}/query`" class="mt-4" :query="object.query ?? { typeIds: [] }" :parent-id="object.id" @table="setQuery({ ...(object.query ?? { typeIds: [] }), table: $event })" @board="setQuery({ ...(object.query ?? { typeIds: [] }), board: $event })" />
       </section>
 
       <Teleport v-if="isWhiteboard && !embedded" defer :to="`#${boardSlot}`" :disabled="!boardLayout">

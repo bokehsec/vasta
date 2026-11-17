@@ -3,7 +3,6 @@
 import { computed } from 'vue'
 import type { Icon } from '@vasta/core'
 import { dayKey } from './actions.ts'
-import { people } from './people.ts'
 import { usePhoneMenu, type PhoneMenuItem } from './phone-menu.ts'
 import { systemType, workspace } from './state.ts'
 
@@ -15,7 +14,7 @@ export interface PhonePlace {
   to?: string
 }
 
-export const phoneMenu = usePhoneMenu(() => people.me)
+export const phoneMenu = usePhoneMenu()
 
 /** The menu's id for a type: its plural name, case aside (the same type in another space matches). */
 export const typeMenuItem = (pluralName: string): PhoneMenuItem => `type:${pluralName.trim().toLowerCase()}`

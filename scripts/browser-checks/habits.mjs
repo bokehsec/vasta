@@ -83,7 +83,7 @@ const specs = [
 const habits = []
 for (const spec of specs) habits.push(await post('/api/objects', { typeId: habitType.id, ...spec, title: process.env.PHONE ? `${spec.title} ${tag}` : spec.title }))
 
-await page.evaluate((id) => localStorage.setItem('vasta.space', id), space.id)
+await page.evaluate((id) => localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(id)), space.id)
 await page.reload()
 await page.waitForSelector('nav', { state: 'attached' })
 await until(async () => {
@@ -188,11 +188,11 @@ await progressSettings('[data-place="off"]')
 await until(async () => !(await main.locator('[data-progress-summary]').count()), 'progress off')
 await progressSettings('[data-place="above"]')
 await until(async () => (await main.locator('[data-progress-summary][data-layout="above"][data-chart="calendar"]').count()) === 1, 'back to the calendar above')
-// What the menu saved reached the server (synced to every device), with nothing refused.
+// What the menu saved is the person's own choice, kept with their account (every device of theirs); the type is not edited.
 await until(async () => {
-  const saved = (await get(`/api/types/${habitType.id}`)).habits
-  return saved?.place === 'above' && saved?.chart === 'calendar' && saved?.weeks === 8 && !('strip' in saved) && !('panel' in saved) && !('report' in saved)
-}, 'the progress settings on the server')
+  const saved = ((await get('/api/auth/me')).preferences ?? {})[`type/${habitType.id}/habits`]
+  return saved?.place === 'above' && saved?.chart === 'calendar' && saved?.weeks === 8
+}, 'the progress settings in the account')
 if (await page.getByText('did not take').count()) throw new Error('the server refused a change')
 if (process.env.SHOTS) {
   for (const theme of ['light', 'dark']) {
@@ -203,16 +203,18 @@ if (process.env.SHOTS) {
   await page.evaluate(() => document.documentElement.classList.remove('dark'))
 }
 
-step('Type settings: an old draft preserves a newer synced Display choice')
+step('Type settings: a draft opened earlier saves only its own fields, not a view added meanwhile')
 await page.goto(`${base}/t/${habitType.id}?settings=1`)
 await until(() => page.getByRole('button', { name: 'Save', exact: true }).count(), 'Type settings draft')
 const latestType = await get(`/api/types/${habitType.id}`)
-await put(`/api/types/${habitType.id}`, { ...latestType, habits: { ...latestType.habits, chart: 'line' } })
-await until(async () => (await main.locator('[data-progress-summary][data-chart="line"]').count()) === 1, 'remote Display choice received')
+await put(`/api/types/${habitType.id}`, { ...latestType, views: [...latestType.views, { id: `${habitType.id}:meanwhile`, name: 'Meanwhile', layout: 'list' }] })
 await page.getByLabel('Name', { exact: true }).fill(`${latestType.name} edited`)
 await page.getByRole('button', { name: 'Save', exact: true }).click()
 await until(async () => (await get(`/api/types/${habitType.id}`)).name === `${latestType.name} edited`, 'name saved')
-if ((await get(`/api/types/${habitType.id}`)).habits.chart !== 'line') throw new Error('Type settings overwrote Display')
+if (!(await get(`/api/types/${habitType.id}`)).views.some((v) => v.id.endsWith(':meanwhile'))) throw new Error('Type settings overwrote a view added meanwhile')
+await put(`/api/types/${habitType.id}`, { ...(await get(`/api/types/${habitType.id}`)), views: latestType.views })
+// The Display choice is personal: forget it, so the type's own (starting) settings show.
+await put('/api/auth/me', { preferences: { [`type/${habitType.id}/habits`]: null } })
 await page.goto(`${base}/t/${habitType.id}`)
 
 step('Settings saved with the old chart ids read as the nearest of the two')
@@ -258,22 +260,24 @@ if (!process.env.PHONE && (!rows.at(-1).includes('Swim') || !rows.at(-1).include
 if (!process.env.PHONE && !rows.some((r) => r.includes('3 a week'))) throw new Error('no "3 a week" goal')
 await until(() => main.locator('[data-report-chart][data-chart="calendar"] [data-habit-days]').count(), 'the calendar')
 
-step('range: 13 weeks, saved on the type, kept on reload')
+step('range: 13 weeks, the person\'s own choice, kept on reload')
 await page.locator('[data-range="13"]').click()
 await checkNumbers(13)
-// The switch is the Tracker's range too: saved on the type, for the Tracker and every device.
-await until(async () => (await get(`/api/types/${habitType.id}`)).habits?.weeks === 13, 'the range saved on the type')
+// The switch is the Tracker's range too: kept with the account, for the Tracker and every device of theirs.
+const mine = async () => ((await get('/api/auth/me')).preferences ?? {})[`type/${habitType.id}/habits`]
+await until(async () => (await mine())?.weeks === 13, 'the range saved in the account')
+if ((await get(`/api/types/${habitType.id}`)).habits?.weeks === 13) throw new Error('the range was saved on the type')
 await page.reload()
 await until(async () => (await page.locator('[data-range="13"]').getAttribute('aria-pressed').catch(() => null)) === 'true', '13 weeks kept')
 await checkNumbers(13)
 
-step('Progress: the chart is picked on the tab and saved on the type')
+step('Progress: the chart is picked on the tab and saved in the account')
 if (!(await main.locator('[data-progress-row] [data-habit-weeks] rect').count())) throw new Error('no weeks column')
 if ((await page.locator('[data-chart-picker="progress"] [data-chart]').count()) !== 2) throw new Error('not exactly two charts')
 for (const chart of ['line', 'calendar']) {
   await page.locator(`[data-chart-picker="progress"] [data-chart="${chart}"]`).click()
   await until(async () => (await main.locator(`[data-report-chart][data-chart="${chart}"]`).count()) === 1, `report chart ${chart}`)
-  await until(async () => (await get(`/api/types/${habitType.id}`)).habits?.chart === chart, `chart ${chart} saved on the type`)
+  await until(async () => (await mine())?.chart === chart, `chart ${chart} saved in the account`)
   if (process.env.SHOTS) await main.locator('[data-habit-progress]').screenshot({ path: path.join(process.env.SHOTS, `habits-report-${chart}${process.env.PHONE ? '-phone' : ''}.png`) })
 }
 if (await page.getByText('did not take').count()) throw new Error('the server refused a change')

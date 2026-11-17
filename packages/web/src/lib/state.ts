@@ -4,6 +4,7 @@ import { computed, reactive, ref, watch, type Ref } from 'vue'
 import type { Id, ObjectRecord, ObjectSummary, ObjectType, Space, SystemTypeKey } from '@vasta/core'
 import { docToPlainText } from '@vasta/core'
 import { api } from './api.ts'
+import { getPreference, preference, setPreference } from './preferences.ts'
 
 export const workspace = reactive({
   space: null as Space | null,
@@ -21,22 +22,14 @@ export const typesById = computed(() => new Map(workspace.types.map((t) => [t.id
 
 export const systemType = (key: SystemTypeKey) => workspace.types.find((t) => t.system === key)
 
-const SPACE_KEY = 'vasta.space'
-
-function rememberSpace(id: Id) {
-  try {
-    localStorage.setItem(SPACE_KEY, id)
-  } catch {}
-}
+/** The space this device opened last (for this person). */
+const LAST_SPACE = 'last-space'
 
 export async function loadWorkspace(spaceId?: Id) {
   try {
     const spaces = await api.spaces()
-    let stored: string | null = null
-    try {
-      stored = localStorage.getItem(SPACE_KEY)
-    } catch {}
-    const id = spaceId ?? (spaces.some((s) => s.id === stored) ? stored : spaces[0]?.id)
+    const stored = getPreference('device', LAST_SPACE)
+    const id = spaceId ?? (spaces.some((s) => s.id === stored) ? (stored as Id) : spaces[0]?.id)
     if (!id) {
       workspace.error = 'No space found. Import one with `pnpm import:capacities`.'
       return
@@ -48,7 +41,7 @@ export async function loadWorkspace(spaceId?: Id) {
     workspace.counts = bundle.counts
     workspace.trash = bundle.trash
     workspace.ready = true
-    rememberSpace(id)
+    setPreference('device', LAST_SPACE, id)
   } catch (error) {
     workspace.error = `Could not reach the Vasta server (${(error as Error).message}).`
   }
@@ -81,8 +74,8 @@ export async function refreshSpaces() {
 
 /**
  * Types edited here and not saved yet (a view's settings wait a moment before they are saved): a
- * reload of the stored copy meanwhile must not undo the edit. The editor clears its entry when the
- * save answers.
+ * reload of the stored copy meanwhile must not undo the edit. lib/type-patch.ts holds the entry
+ * until its save answers.
  */
 export const unsavedTypes = new Map<Id, ObjectType>()
 
@@ -166,16 +159,7 @@ export function useSummaries(ids: Ref<Id[]>) {
 // ---------------------------------------------------------------------------
 // UI flags shared across components
 
-const SIDEBAR_KEY = 'vasta.sidebar-collapsed'
-const CAPTURE_ASKS_KEY = 'vasta.capture-asks'
-
-function readFlag(key: string) {
-  try {
-    return localStorage.getItem(key) === '1'
-  } catch {
-    return false
-  }
-}
+const flag = (key: string) => preference<boolean>(key, false, { scope: 'device' })
 
 export const ui = reactive({
   paletteOpen: false,
@@ -189,38 +173,14 @@ export const ui = reactive({
   /** How far up from the bottom notices sit (px) while something keeps its buttons there (process mode on a phone); 0: the usual place. */
   noticeLift: 0,
   /** The sidebar put away on wider screens (⌘\), remembered on this device. */
-  sidebarCollapsed: readFlag(SIDEBAR_KEY),
+  sidebarCollapsed: flag('sidebar-collapsed'),
   /** The keyboard shortcuts dialog (⌘/). */
   shortcutsOpen: false,
   /** Quick capture asks a template's questions before it saves (Settings › Capture), on this device. */
-  captureAsks: readFlag(CAPTURE_ASKS_KEY),
-  captureDaily: readFlag('vasta.capture-daily'),
-  captureInbox: readFlag('vasta.capture-inbox'),
+  captureAsks: flag('capture/asks'),
+  captureDaily: flag('capture/daily'),
+  captureInbox: flag('capture/inbox'),
 })
-
-watch(
-  () => ui.sidebarCollapsed,
-  (collapsed) => {
-    try {
-      localStorage.setItem(SIDEBAR_KEY, collapsed ? '1' : '0')
-    } catch {}
-  }
-)
-
-for (const [flag, key] of [['captureDaily', 'vasta.capture-daily'], ['captureInbox', 'vasta.capture-inbox']] as const) {
-  watch(() => ui[flag], (on) => {
-    try { localStorage.setItem(key, on ? '1' : '0') } catch {}
-  })
-}
-
-watch(
-  () => ui.captureAsks,
-  (on) => {
-    try {
-      localStorage.setItem(CAPTURE_ASKS_KEY, on ? '1' : '0')
-    } catch {}
-  }
-)
 
 export const lastError = ref('')
 
