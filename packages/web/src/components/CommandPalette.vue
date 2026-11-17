@@ -8,6 +8,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { foodCommand, type ObjectSummary, type ObjectType } from '@vasta/core'
 import { completionSource, createObject, dayKey } from '../lib/actions.ts'
+import { closesOnBack } from '../lib/back.ts'
 import { api } from '../lib/api.ts'
 import { bareUrl } from '../lib/embeds.ts'
 import { displayTitle } from '../lib/format.ts'
@@ -59,6 +60,8 @@ const COMMANDS: Command[] = [
 ]
 
 const router = useRouter()
+// Back on a phone closes Search and stays on the page (lib/back.ts).
+closesOnBack(() => ui.paletteOpen, () => (ui.paletteOpen = false))
 const query = ref('')
 const objects = ref<ObjectSummary[]>([])
 const active = ref(0)
@@ -157,7 +160,7 @@ async function choose(result: Result | undefined) {
   if (result.kind === 'typed') return createObject(result.type.id, {}, true, result.line)
   if (result.kind === 'food') return logLine(result.line)
   if (result.kind === 'command') return result.command.run()
-  if (result.kind === 'object') await openObject(result.object.id)
+  if (result.kind === 'object') await openObject(result.object.id, { where: 'type' })
   else if (result.kind === 'type') await router.push(`/t/${result.type.id}`)
   else if (result.kind === 'weblink') await saveWeblink(result.url)
   else await createObject(result.type.id, { title: result.title })
@@ -182,7 +185,7 @@ async function saveWeblink(url: string) {
     const object = await api.saveWeblink(workspace.space.id, url)
     primeFromObject(object)
     void refreshCounts()
-    await openObject(object.id)
+    await openObject(object.id, { where: 'type' })
   } catch (error) {
     lastError.value = (error as Error).message
   }

@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { Icon, Id, ObjectType } from '@vasta/core'
 import {
-  createObjectHere,
   deleteObjectFlow,
   deleteSectionFlow,
   deleteTypeFlow,
@@ -22,6 +21,7 @@ import {
   viewItem,
 } from '../lib/actions.ts'
 import { displayTitle } from '../lib/format.ts'
+import { startNew } from '../lib/new-item.ts'
 import { api } from '../lib/api.ts'
 import { openContextMenu, openMenuAt, promptDialog, type MenuItem } from '../lib/overlays.ts'
 import { logOut, session } from '../lib/session.ts'
@@ -121,7 +121,7 @@ function typeMenu(event: MouseEvent, type: ObjectType, sectionId?: string) {
   const items: MenuItem[] = [
     { kind: 'heading', label: type.pluralName },
     { label: 'Open', icon: 'ph:arrow-square-out', run: () => router.push(`/t/${type.id}`) },
-    { label: `New ${type.name}`, icon: 'ph:plus', run: () => createObjectHere(type.id) },
+    { label: `New ${type.name}`, icon: 'ph:plus', run: () => startNew(type.id) },
     { label: 'Type settings…', icon: 'ph:gear-six', run: () => router.push({ path: `/t/${type.id}`, query: { settings: '1' } }) },
     { kind: 'separator' },
     pinMenu(type.id),
@@ -373,7 +373,7 @@ const initial = computed(() => (workspace.space?.name ?? '?').trim().charAt(0).t
 
 async function pickType(type: ObjectType) {
   newOpen.value = false
-  await createObjectHere(type.id)
+  await startNew(type.id)
 }
 </script>
 

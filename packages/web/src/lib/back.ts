@@ -1,7 +1,16 @@
-// On a phone, Back (the browser's button, the edge swipe, the Home Screen app's gesture) closes
-// what is open over the page (a sheet, a full-screen dialog, Triage, the side menu) instead of
-// leaving the page under it. Each of them says here while it is open; router.ts asks on Back and
-// cancels the navigation when something closed, so the history and the page stay where they were.
+// The Back rule. On a phone Back (the browser's button, the edge swipe, the Home Screen app's
+// gesture) must close what is open over the page, not change the page under it. Two kinds of
+// overlay, each with one way of being closed by Back:
+//   - Overlays kept in the address (?popup=, ?pane=, ?settings=) are part of history: Back pops
+//     that entry, which closes them (lib/open.ts closes by going back, or replaces when the entry
+//     before is another page). They never register here.
+//   - Transient layers (sheets and menus, dialogs, the side drawer, Review, Capture, the quick
+//     card, Search, a full-screen board) are not in the address. Each says here while it is open
+//     with closesOnBack(); router.ts asks on Back and cancels the navigation when one closed, so
+//     the history and the page stay where they were.
+// A new overlay is one of the two: put it in the address if a link or a reload should bring it
+// back, else register it. On a desktop Back is plain history, and App.vue closes the transient
+// layers when the page changes.
 import { onScopeDispose, watch, type WatchSource } from 'vue'
 
 /** What is open, the last opened on top: each closes its own (or steps back inside itself). */

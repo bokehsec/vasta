@@ -37,6 +37,27 @@ Drop are bordered, other statuses are underlined links, Decide later quiet. On a
 centred under the task, the plan in a column beside it; on a phone a 2×2 tray at the bottom. Navigation (sidebar, tab bar, calendar grids), segmented controls,
 chips, menu rows and the whiteboard keep their own looks; they are not buttons of these kinds.
 
+**Bottom sheets** (`components/BottomSheet.vue`): every menu, picker, question and card that comes up
+from the bottom of a phone is this one component: a dimmed page that closes on a tap, a rounded
+panel with the grabber (pulled down it closes), kept above the keyboard (`keyboardInset`, at most
+`sheetMaxHeight`) and clear of the home bar, 44px rows and 16px text boxes (`.vasta-sheet`), focus
+moved in and given back, Escape (the top sheet only) and Back. It only emits `close`; the owner
+decides. `desktop` draws the same content as a centred or top dialog on a wide screen; `tall` is the
+object window (under the top safe area); `layer` is `surface` (z-40: a page's card) or `menu` (z-50).
+Nothing else draws a bottom sheet.
+
+**Back** (`lib/back.ts`): on a phone Back closes what is open instead of changing the page. Overlays
+kept in the address (`?popup`, `?pane`, `?settings`) are closed by Back popping history, and closing
+them goes back too (or replaces the entry when the one before is another page); they never register.
+Transient layers (sheets, dialogs, the drawer, Review, Capture, the quick card, Search, a full-screen
+board) register with `closesOnBack`. On a desktop Back is plain history and App.vue closes the
+transient layers when the page changes.
+
+**One "+"** (`lib/new-item.ts`): every New asks core's `newItemValues` for its starting values (the
+view's filter, Mine, the day, the group, column and lane) and opens the quick card; nothing is made
+until Add. A phone has one "+", the floating one: on a type's page it opens the card for that type
+and view, elsewhere quick capture. A type's own New button is for wide screens.
+
 **The shell**: the sidebar runs the full height with the space switcher on top; the top bar holds
 back/forward and where you are (an object's type, then the object); the page is a rounded panel
 (`bg-surface`, border, faint shadow) sitting on the canvas. On phones the panel is flat and full

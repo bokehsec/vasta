@@ -1,20 +1,20 @@
 <script setup lang="ts">
 // Renders the context menu from lib/overlays.ts at the pointer, with keyboard navigation. A
 // submenu row opens a second panel beside its row (one level deep). On a phone it is a sheet from
-// the bottom with rows 44px high, and a submenu replaces the list inside it, with a Back row. The
-// sheet is modal: a tap on the dimmed area closes it (on the tap, so it does not reach the page
-// underneath), focus moves in and goes back to where it was.
+// the bottom (BottomSheet) with rows 44px high, and a submenu replaces the list inside it, with a
+// Back row; Back, Escape and the dimmed area step out of a submenu, then close.
 import { computePosition, flip, offset, shift, size } from '@floating-ui/dom'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ColorName, Icon } from '@vasta/core'
 import { blockBackgroundClasses, blockTextClasses, colorNames } from '../lib/colors.ts'
 import { closeContextMenu, contextMenu, type MenuItem } from '../lib/overlays.ts'
-import { closesOnBack } from '../lib/back.ts'
-import { isPhone, keyboardInset, sheetMaxHeight } from '../lib/viewport.ts'
+import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
-import SheetGrabber from './SheetGrabber.vue'
+import BottomSheet from './BottomSheet.vue'
 
 const panels: (HTMLElement | null)[] = [null, null]
+/** The phone's sheet, whose panel is the first one. */
+const sheetFrame = ref<InstanceType<typeof BottomSheet> | null>(null)
 /** The highlighted row of each panel, -1 for none. */
 const active = ref<[number, number]>([-1, -1])
 /** The main panel's row whose submenu is open. */
@@ -38,47 +38,13 @@ const reachable = (at: number) => itemsOf(at).flatMap((item, i) => ((isAction(it
 const sheet = computed(() => isPhone.value)
 /** The list the sheet shows: the submenu once one is open. */
 const sheetLevel = computed(() => (sub.value === null ? 0 : 1))
-// Back on a phone: out of a submenu to the menu, else the sheet closes.
-closesOnBack(() => contextMenu.open && sheet.value, () => (sub.value === null ? closeContextMenu() : closeSub()))
+/** Back, Escape or the dimmed area on a phone: out of a submenu to the menu, else the sheet closes. */
+const closeSheet = () => (sub.value === null ? closeContextMenu() : closeSub())
 
 const iconProps = (icon: string | Icon) => (typeof icon === 'string' ? { fallback: icon } : { icon })
 
 /** A menu taller than the room on either side scrolls instead of leaving the screen. */
 const fit = (element: HTMLElement) => size({ padding: 8, apply: ({ availableHeight }) => void (element.style.maxHeight = `${Math.max(160, availableHeight)}px`) })
-
-/** What had the focus when the sheet opened, to give it back when the sheet closes. */
-let opener: HTMLElement | null = null
-const isTextEntry = (el: HTMLElement) => el.matches('input, textarea, select, [contenteditable]')
-
-/** The dimmed area closes the sheet only when the press began on it too (the long-press that opened the sheet ends there). */
-let pressedBackdrop = false
-function onBackdropClick() {
-  if (pressedBackdrop) closeContextMenu()
-  pressedBackdrop = false
-}
-
-watch(
-  () => contextMenu.open,
-  (open) => {
-    if (open) {
-      pressedBackdrop = false
-      if (sheet.value && !opener) {
-        const focused = document.activeElement
-        opener = focused instanceof HTMLElement && focused !== document.body ? focused : null
-      }
-      return
-    }
-    const target = opener
-    opener = null
-    if (!target) return
-    void nextTick(() => {
-      // A dialog the choice opened may have the focus by now; and no keyboard pops up.
-      if (document.activeElement && document.activeElement !== document.body) return
-      if (target.isConnected && !isTextEntry(target)) target.focus({ preventScroll: true })
-    })
-  },
-  { flush: 'sync' }
-)
 
 watch(
   () => [contextMenu.open, contextMenu.x, contextMenu.y],
@@ -88,9 +54,9 @@ watch(
     sub.value = null
     level.value = 0
     await nextTick()
+    if (sheet.value) return
     const element = panels[0]
     if (!element) return
-    if (sheet.value) return element.focus({ preventScroll: true })
     const point = { getBoundingClientRect: () => new DOMRect(contextMenu.x, contextMenu.y, 0, 0) }
     const { x, y } = await computePosition(point, element, { placement: 'bottom-start', middleware: [offset(2), flip(), fit(element), shift({ padding: 8 })] })
     Object.assign(element.style, { left: `${x}px`, top: `${y}px` })
@@ -198,7 +164,7 @@ function onKey(event: KeyboardEvent) {
   event.stopPropagation()
 }
 
-const inMenu = (target: EventTarget | null) => panels.some((panel) => panel?.contains(target as Node))
+const inMenu = (target: EventTarget | null) => [...panels, sheetFrame.value?.panel].some((panel) => panel?.contains(target as Node))
 
 function onPointerDown(event: PointerEvent) {
   // A sheet closes from its dimmed backdrop, on the tap.
@@ -234,71 +200,57 @@ onBeforeUnmount(() => {
 <template>
   <Teleport to="body">
     <!-- A phone: one sheet; a submenu takes its place with a Back row. -->
-    <template v-if="contextMenu.open && sheet">
-      <div class="fixed inset-0 z-[54] bg-black/30" aria-hidden="true" data-menu-backdrop @pointerdown="pressedBackdrop = true" @pointercancel="pressedBackdrop = false" @click="onBackdropClick" />
-      <div
-        :ref="(el) => (panels[0] = el as HTMLElement | null)"
-        tabindex="-1"
-        role="menu"
-        aria-modal="true"
-        aria-label="Actions"
-        class="fixed inset-x-0 z-[55] overflow-y-auto rounded-t-2xl border border-b-0 border-line bg-surface px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-6px_24px_rgb(0_0_0/0.14)] outline-none"
-        :style="{ bottom: `${keyboardInset}px`, maxHeight: sheetMaxHeight }"
-        data-menu-sheet
-        @contextmenu.prevent
-      >
-        <SheetGrabber @close="closeContextMenu()" />
-        <button v-if="sheetLevel" class="flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[15px] font-medium text-ink-soft" data-menu-back @click="closeSub">
-          <AppIcon fallback="ph:caret-left" :size="16" /> {{ sub !== null && isSubmenu(contextMenu.items[sub]) ? (contextMenu.items[sub] as Submenu).label : 'Back' }}
-        </button>
-        <template v-for="(item, i) in itemsOf(sheetLevel)" :key="`${sheetLevel}-${i}`">
-          <div v-if="item.kind === 'separator'" class="my-1 border-t border-line" />
-          <div v-else-if="item.kind === 'heading'" class="truncate px-2.5 pb-1 pt-1.5 text-[13px] text-ink-faint">{{ item.label }}</div>
-          <div v-else-if="item.kind === 'colors'" class="px-1.5 pb-1" :data-colors="item.sample">
-            <div class="px-1 pb-1 pt-1.5 text-[13px] text-ink-faint">{{ item.label }}</div>
-            <div class="grid grid-cols-[repeat(10,1fr)] gap-1">
-              <button
-                v-for="color in swatches"
-                :key="color ?? 'none'"
-                class="grid h-9 place-items-center rounded-md text-sm font-medium"
-                :class="[
-                  item.sample === 'text' ? (color ? blockTextClasses[color] : '') : color ? blockBackgroundClasses[color] : 'text-ink-faint',
-                  item.current === color ? 'ring-2 ring-accent' : 'ring-1 ring-line',
-                ]"
-                :title="color ?? 'Default'"
-                @click="pick(item, color)"
-              >
-                <AppIcon v-if="item.sample === 'background' && !color" fallback="ph:prohibit" :size="13" />
-                <span v-else-if="item.sample === 'text'">A</span>
-              </button>
-            </div>
-          </div>
-          <button
-            v-else
-            :role="item.kind !== 'submenu' && typeof item.checked === 'boolean' ? 'menuitemcheckbox' : 'menuitem'"
-            :aria-checked="item.kind !== 'submenu' && typeof item.checked === 'boolean' ? item.checked : undefined"
-            :aria-haspopup="item.kind === 'submenu' ? 'menu' : undefined"
-            :data-row="i"
-            class="flex min-h-11 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[15px] active:bg-hover disabled:opacity-40"
-            :class="item.kind !== 'submenu' && item.danger ? 'text-red-600' : ''"
-            :disabled="item.kind !== 'submenu' && item.disabled"
-            @click="choose(sheetLevel, i)"
-          >
-            <AppIcon v-if="item.icon" v-bind="iconProps(item.icon)" :size="18" :class="item.kind !== 'submenu' && item.danger ? '' : 'text-ink-soft'" />
-            <span v-else class="w-[18px]" />
-            <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
-            <AppIcon v-if="item.kind === 'submenu'" fallback="ph:caret-right" :size="14" class="text-ink-faint" />
-            <span
-              v-else-if="typeof item.checked === 'boolean'"
-              class="ml-3 grid h-5 w-5 shrink-0 place-items-center rounded border"
-              :class="item.checked ? 'border-ink bg-ink text-surface' : 'border-line-strong'"
+    <BottomSheet v-if="contextMenu.open && sheet" ref="sheetFrame" role="menu" label="Actions" data-menu-sheet @close="closeSheet" @contextmenu.prevent>
+      <button v-if="sheetLevel" class="flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[15px] font-medium text-ink-soft" data-menu-back @click="closeSub">
+        <AppIcon fallback="ph:caret-left" :size="16" /> {{ sub !== null && isSubmenu(contextMenu.items[sub]) ? (contextMenu.items[sub] as Submenu).label : 'Back' }}
+      </button>
+      <template v-for="(item, i) in itemsOf(sheetLevel)" :key="`${sheetLevel}-${i}`">
+        <div v-if="item.kind === 'separator'" class="my-1 border-t border-line" />
+        <div v-else-if="item.kind === 'heading'" class="truncate px-2.5 pb-1 pt-1.5 text-[13px] text-ink-faint">{{ item.label }}</div>
+        <div v-else-if="item.kind === 'colors'" class="px-1.5 pb-1" :data-colors="item.sample">
+          <div class="px-1 pb-1 pt-1.5 text-[13px] text-ink-faint">{{ item.label }}</div>
+          <div class="grid grid-cols-[repeat(10,1fr)] gap-1">
+            <button
+              v-for="color in swatches"
+              :key="color ?? 'none'"
+              class="grid h-9 place-items-center rounded-md text-sm font-medium"
+              :class="[
+                item.sample === 'text' ? (color ? blockTextClasses[color] : '') : color ? blockBackgroundClasses[color] : 'text-ink-faint',
+                item.current === color ? 'ring-2 ring-accent' : 'ring-1 ring-line',
+              ]"
+              :title="color ?? 'Default'"
+              @click="pick(item, color)"
             >
-              <AppIcon v-if="item.checked" fallback="ph:check-bold" :size="12" />
-            </span>
-          </button>
-        </template>
-      </div>
-    </template>
+              <AppIcon v-if="item.sample === 'background' && !color" fallback="ph:prohibit" :size="13" />
+              <span v-else-if="item.sample === 'text'">A</span>
+            </button>
+          </div>
+        </div>
+        <button
+          v-else
+          :role="item.kind !== 'submenu' && typeof item.checked === 'boolean' ? 'menuitemcheckbox' : 'menuitem'"
+          :aria-checked="item.kind !== 'submenu' && typeof item.checked === 'boolean' ? item.checked : undefined"
+          :aria-haspopup="item.kind === 'submenu' ? 'menu' : undefined"
+          :data-row="i"
+          class="flex min-h-11 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[15px] active:bg-hover disabled:opacity-40"
+          :class="item.kind !== 'submenu' && item.danger ? 'text-red-600' : ''"
+          :disabled="item.kind !== 'submenu' && item.disabled"
+          @click="choose(sheetLevel, i)"
+        >
+          <AppIcon v-if="item.icon" v-bind="iconProps(item.icon)" :size="18" :class="item.kind !== 'submenu' && item.danger ? '' : 'text-ink-soft'" />
+          <span v-else class="w-[18px]" />
+          <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
+          <AppIcon v-if="item.kind === 'submenu'" fallback="ph:caret-right" :size="14" class="text-ink-faint" />
+          <span
+            v-else-if="typeof item.checked === 'boolean'"
+            class="ml-3 grid h-5 w-5 shrink-0 place-items-center rounded border"
+            :class="item.checked ? 'border-ink bg-ink text-surface' : 'border-line-strong'"
+          >
+            <AppIcon v-if="item.checked" fallback="ph:check-bold" :size="12" />
+          </span>
+        </button>
+      </template>
+    </BottomSheet>
     <template v-else-if="contextMenu.open">
       <div
         v-for="at in levels"

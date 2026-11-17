@@ -1,8 +1,10 @@
-// What a new object starts with so that it shows in the view it was made from (the quick card on
-// a type page): the values the view's filter asks for. Only what a filter states plainly fills a
-// field ("Area is Work", "Status is Next", "Sprint is the current one", "Do date is today"); what it
-// rules out ("is not", "is empty", "before") fills nothing. Of an "or", the first choice that
-// works with the rest of the view is used.
+// What a new object starts with so that it shows where it was made from. One function for every
+// "New" in context (newItemValues): the quick card, a type's default template, a board's "+", a
+// group's "+" and the sidebar's New all start from the same values: what the view's filter asks for
+// (fillFromFilter), the day the page is on, "Mine", then the group, column and lane it is added
+// into. Only what a filter states plainly fills a field ("Area is Work", "Status is Next", "Sprint
+// is the current one", "Do date is today"); what it rules out ("is not", "is empty", "before")
+// fills nothing. Of an "or", the first choice that works with the rest of the view is used.
 import type { DateValue, Filter, FilterGroup, Id, ObjectSummary, ObjectType, PropertyDef, PropertyValue } from './model.ts'
 import { matchesFilter, type QueryContext } from './query.ts'
 import { addDays } from './time.ts'
@@ -94,4 +96,55 @@ function valueFor(def: PropertyDef, filter: Filter, context: QueryContext): Prop
   if (def.kind === 'text' && typeof value.value === 'string') return { kind: 'text', value: value.value }
   if (def.kind === 'number' && typeof value.value === 'number') return { kind: 'number', value: value.value }
   return undefined
+}
+
+/** A group a new item is added into: its field and the group's value (an id), null for "no value". */
+export interface GroupPlacement {
+  field: string
+  value: Id | null
+}
+
+/** Where a new item is being made: the type, what the view around it shows, and the group it goes into. */
+export interface NewItemContext {
+  type: ObjectType
+  /** The filter of the view the item is made from. */
+  filter?: Filter | FilterGroup | undefined
+  query: QueryContext
+  /** The view shows only what is the user's own ("Mine"): a new item is assigned to them. */
+  mine?: boolean | undefined
+  /** The day of the page (today's page): the item gets it in the type's first date field. */
+  day?: string | undefined
+  /** The group, board column and lane it is added into, in this order. */
+  groups?: GroupPlacement[] | undefined
+}
+
+export interface NewItemValues {
+  props: Record<Id, PropertyValue>
+  tagIds: Id[]
+}
+
+/**
+ * The starting values of a new item made in a context. What a group or column names comes last
+ * and wins: an item added into a column is in that column, whatever the filter says.
+ */
+export function newItemValues(context: NewItemContext): NewItemValues {
+  const { type, query } = context
+  const props: Record<Id, PropertyValue> = { ...fillFromFilter(type, context.filter, query) }
+  let tagIds: Id[] = []
+  const date = type.properties.find((p) => p.kind === 'date')
+  if (context.day && date && !props[date.id]) props[date.id] = { kind: 'date', value: dayValue(context.day) }
+  const person = type.properties.find((p) => p.kind === 'person')
+  if (context.mine && query.me && person && !props[person.id]) props[person.id] = { kind: 'person', value: [query.me] }
+  for (const group of context.groups ?? []) {
+    if (group.field === 'tags') {
+      if (group.value) tagIds = [...new Set([...tagIds, group.value])]
+      continue
+    }
+    const def = type.properties.find((p) => p.id === group.field)
+    // A date's groups are places in time, not values; a type or an author is not chosen here.
+    if (def?.kind !== 'select' && def?.kind !== 'relation' && def?.kind !== 'person') continue
+    if (group.value) props[def.id] = { kind: def.kind, value: [group.value] }
+    else delete props[def.id]
+  }
+  return { props, tagIds }
 }

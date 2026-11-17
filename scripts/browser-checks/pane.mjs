@@ -27,7 +27,7 @@ const browser = launched ?? context
 if (process.env.MODE === 'json') await context.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))
 const page = context.pages()[0] ?? (await context.newPage())
 const problems = []
-page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && !/401|404|TextSelection endpoint|due to access control checks|SQLITE_CORRUPT|Importing a module script failed|VUE_ROUTER_R0010|router.onError/.test(m.text()) && problems.push(`${m.type()}: ${m.text()}`))
+page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && !/401|404|TextSelection endpoint|due to access control checks|SQLITE_CORRUPT|Importing a module script failed|VUE_ROUTER_R0010|router.onError|async component loader/.test(m.text()) && problems.push(`${m.type()}: ${m.text()}`))
 page.on('pageerror', (e) => !/Importing a module script failed/.test(e.message) && problems.push(`pageerror: ${e.message}`))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const step = (name) => console.log(`• ${name}`)

@@ -2,8 +2,8 @@
 import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, PropertyValue, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, taskDatesOf, closedOptionsOf, closedStatusIds, defaultViewFilter, dueForReview, fillFromFilter, hidesClosed, isClosedTask, matchesFilter, needsTriage, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
+import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
+import { RANK_PROPERTY_ID, taskDatesOf, closedOptionsOf, closedStatusIds, defaultViewFilter, dueForReview, hidesClosed, isClosedTask, matchesFilter, needsTriage, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
 import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -13,7 +13,6 @@ import FilterGroupEditor from '../components/FilterGroupEditor.vue'
 import FlowMetrics from '../components/FlowMetrics.vue'
 import ObjectCollection from '../components/ObjectCollection.vue'
 import ProcessMode from '../components/ProcessMode.vue'
-import QuickAdd from '../components/QuickAdd.vue'
 import WorkflowChooser from '../components/WorkflowChooser.vue'
 import HabitBoard from '../components/HabitBoard.vue'
 import HabitProgress from '../components/HabitProgress.vue'
@@ -36,7 +35,8 @@ import { meId, sharedSpace } from '../lib/people.ts'
 import { loadWorkspace, primeSummaries, replaceType, typesById, unsavedTypes, workspace } from '../lib/state.ts'
 import { session } from '../lib/session.ts'
 import { readSession, startSession, undoOutcome, writeSession, workflowTitle, type WorkflowKind, type ReviewSession } from '../lib/review-session.ts'
-import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
+import { showsNewPlace, startNew } from '../lib/new-item.ts'
+import { loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
 import { copyObjectLink, openObject } from '../lib/open.ts'
 import { quickActionMenuItems } from '../lib/quick-actions.ts'
 import { subtaskMenuItems } from '../lib/subtasks.ts'
@@ -216,14 +216,8 @@ async function addView() {
 
 const menuAnchor = ref<HTMLElement | null>(null)
 const menuOpen = ref(false)
-const quickAdd = ref(false)
-/** What the quick card's fields start with: what the view on show filters on (fillFromFilter). */
-const quickFill = ref<Record<string, PropertyValue>>({})
-function openQuickAdd() {
-  const t = type.value
-  quickFill.value = t ? fillFromFilter(t, view.value.filter, queryContext()) : {}
-  quickAdd.value = true
-}
+// New, here or from the phone's "+", starts from this view: its filter, Mine, the group (lib/new-item.ts).
+showsNewPlace({ typeId: props.id, filter: () => viewFilter.value, mine: () => showMine.value && mineOnly.value })
 const settingsOpen = ref(route.query.settings === '1')
 watch(
   () => route.query.settings,
@@ -445,7 +439,7 @@ function quickItems(object: ObjectSummary): MenuItem[] {
 function objectMenu(event: MouseEvent, object: ObjectSummary) {
   openContextMenu(event, [
     { kind: 'heading', label: displayTitle(object, type.value) },
-    { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(object.id) },
+    { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(object.id, { where: 'type' }) },
     { label: 'Copy link to page', icon: 'ph:link', run: () => copyObjectLink(object.id) },
     pinMenu(object.id),
     ...quickItems(object),
@@ -682,17 +676,11 @@ const arrangeRows = computed(() => {
 })
 
 // New: the quick card for a plain object (nothing is made until it is saved), or the type's default
-// template (lib/templates.ts); the chevron picks another, or none.
+// template (lib/new-item.ts); the chevron picks another, or none.
 const typeTemplates = computed(() => (type.value ? templatesOf(type.value.id) : []))
 const defaultTemplate = computed(() => typeTemplates.value.find((t) => t.template?.kind === 'template' && t.template.default))
 
-async function createNew() {
-  const t = type.value
-  if (!t) return
-  await currentTemplates()
-  if (defaultTemplate.value) void createFromTemplate(t, defaultTemplate.value)
-  else openQuickAdd()
-}
+const createNew = () => type.value && startNew(type.value.id)
 
 async function newMenu(event: MouseEvent) {
   if (!type.value) return
@@ -700,12 +688,12 @@ async function newMenu(event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   await loadTemplates()
   openMenuAt(rect.right - 224, rect.bottom + 4, [
-    { label: `Blank ${t.name.toLowerCase()}`, icon: 'ph:file', run: openQuickAdd },
+    { label: `Blank ${t.name.toLowerCase()}`, icon: 'ph:file', run: () => startNew(t.id, { template: 'blank' }) },
     ...typeTemplates.value.map((template) => ({
       label: template.template!.name,
       icon: template === defaultTemplate.value ? 'ph:star-fill' : 'ph:copy-simple',
       ...(template === defaultTemplate.value ? { hint: 'Default' } : {}),
-      run: () => createFromTemplate(t, template),
+      run: () => startNew(t.id, { template }),
     })),
     { kind: 'separator' as const },
     { label: 'New template…', icon: 'ph:plus', run: () => newTemplate(t) },
@@ -733,11 +721,15 @@ async function newMenu(event: MouseEvent) {
       <button ref="menuAnchor" class="rounded-lg p-2 text-ink-soft hover:bg-hover hover:text-ink max-md:p-3.5" title="More" @click="menuOpen = !menuOpen">
         <AppIcon fallback="ph:dots-three" :size="18" />
       </button>
-      <div class="flex shrink-0 items-stretch rounded-lg bg-ink text-sm font-medium text-surface max-md:min-h-11" data-new-split>
+      <!-- A phone has one "+", the floating one (PhoneTabBar): it starts New from this view. Templates stay here. -->
+      <button v-if="isPhone && typeTemplates.length" class="rounded-lg p-3.5 text-ink-soft hover:bg-hover hover:text-ink" title="New from a template" aria-label="New from a template" data-new-templates @click="newMenu">
+        <AppIcon fallback="ph:copy-simple" :size="18" />
+      </button>
+      <div v-else-if="!isPhone" class="flex shrink-0 items-stretch rounded-lg bg-ink text-sm font-medium text-surface" data-new-split>
         <button class="flex items-center gap-1.5 rounded-l-lg px-3 py-1.5 hover:opacity-90" :title="defaultTemplate ? `New ${type.name} from “${defaultTemplate.template!.name}”` : `New ${type.name}`" @click="createNew">
           <AppIcon fallback="ph:plus" /> <span :class="taskWorkflows ? 'max-lg:hidden' : 'max-sm:hidden'">New {{ type.name }}</span>
         </button>
-        <button class="grid place-items-center rounded-r-lg border-l border-surface/25 px-1.5 hover:opacity-90 max-md:min-w-11" title="Templates" aria-label="New from a template" @click="newMenu">
+        <button class="grid place-items-center rounded-r-lg border-l border-surface/25 px-1.5 hover:opacity-90" title="Templates" aria-label="New from a template" @click="newMenu">
           <AppIcon fallback="ph:caret-down" :size="13" />
         </button>
       </div>
@@ -1146,7 +1138,6 @@ async function newMenu(event: MouseEvent) {
       @end="endReview"
       @open="openFromReview"
     />
-    <QuickAdd v-if="quickAdd" :type="type" :initial="quickFill" @close="quickAdd = false" />
   </div>
   <div v-else class="grid h-full place-items-center text-sm text-ink-soft">Type not found.</div>
 </template>

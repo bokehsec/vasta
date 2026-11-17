@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // A shared header for table sections, lists and cards. Linked chips stay outside the fold
 // button so tags, relations and people still open normally (no nested interactive controls).
+// `addable` adds a "+" that makes a new item in this group (the group's value comes with it).
 import { computed } from 'vue'
 import { quietButton } from '../lib/buttons.ts'
 import { chip } from '../lib/colors.ts'
@@ -11,8 +12,8 @@ import AppIcon from './AppIcon.vue'
 import ObjectChip from './ObjectChip.vue'
 import PersonChip from './PersonChip.vue'
 
-const props = defineProps<{ group: Group; field: string; collapsed: boolean }>()
-const emit = defineEmits<{ toggle: [] }>()
+const props = defineProps<{ group: Group; field: string; collapsed: boolean; addable?: boolean }>()
+const emit = defineEmits<{ toggle: []; add: [] }>()
 const linked = computed(() => !!(props.group.objectId || props.group.personId))
 const label = computed(() => props.group.objectId ? displayTitle(summaryOf(props.group.objectId)) : props.group.label)
 </script>
@@ -31,5 +32,8 @@ const label = computed(() => props.group.objectId ? displayTitle(summaryOf(props
       <PersonChip v-else-if="group.personId" :id="group.personId" />
       <span class="text-xs tabular-nums text-ink-faint">{{ group.items.length }}</span>
     </template>
+    <button v-if="addable" type="button" :class="quietButton" :aria-label="`Add to ${label}`" :title="`Add to ${label}`" data-group-add @click="emit('add')">
+      <AppIcon fallback="ph:plus" :size="14" />
+    </button>
   </div>
 </template>

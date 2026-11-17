@@ -20,7 +20,7 @@ const blockLabel = computed(() => props.node.attrs.blockLabel as string | null)
 const day = computed(() => (/^daily-.+-(\d{4}-\d{2}-\d{2})$/.exec(objectId.value) ?? [])[1])
 function open() {
   if (!summary.value && day.value) return void openDay(day.value)
-  void openObject(objectId.value, { block: blockId.value ?? undefined })
+  void openObject(objectId.value, { block: blockId.value ?? undefined, where: 'type' })
 }
 </script>
 

@@ -2,16 +2,14 @@
 // The popup window: an object open over the page that is showing (lib/open.ts keeps which one in
 // the address). On a desktop it is a window in the middle of the page; Esc, clicking outside it
 // or Back closes it, and "Open full page" takes the object there. On a phone it is a sheet from
-// the bottom, pulled down to close (SheetGrabber). A new item opened here and never touched is
-// removed when it closes, so cancelling a New leaves nothing behind.
+// the bottom (BottomSheet: above the keyboard, under the top safe area), pulled down to close.
+// Closing goes back in history when the window was opened over the page (lib/open.ts), so the next
+// Back leaves the page and does not reopen it.
 import { defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { api } from '../lib/api.ts'
-import { closePopup, expandPopup, pageObjectId, popupBlockId, popupCursor, popupDefaultDate, popupIsNew, popupObjectId } from '../lib/open.ts'
-import { onObjectSave } from '../lib/object-saves.ts'
-import { forgetSummary, refreshCounts } from '../lib/state.ts'
+import { closePopup, expandPopup, pageObjectId, popupBlockId, popupCursor, popupIsNew, popupObjectId } from '../lib/open.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
-import SheetGrabber from './SheetGrabber.vue'
+import BottomSheet from './BottomSheet.vue'
 
 // The object page is its own chunk (router.ts); the pane waits for it the same way.
 const ObjectPage = defineAsyncComponent(() => import('../views/ObjectPage.vue'))
@@ -27,11 +25,13 @@ watch(
   { immediate: true }
 )
 
-// Focus goes into the window when it opens, and back to what opened it when it closes.
+// On a desktop, focus goes into the window when it opens, and back to what opened it when it closes
+// (a phone's sheet does that itself).
 let opener: HTMLElement | null = null
 watch(
   popupObjectId,
   async (id, before) => {
+    if (isPhone.value) return
     if (id && !before) {
       opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
       await nextTick()
@@ -44,85 +44,38 @@ watch(
   { immediate: true }
 )
 
-// The object the window is showing, and whether it was saved while it was: any save of it counts,
-// so an untouched new item can be told from one that got as far as a title.
-let openId: string | undefined
-let openNew = false
-let openDefaultDate: string | undefined
-let saved = false
-// The id whose saves count: the one shown, and — while it is being closed — the one that just
-// left, whose page flushes what it was saving as it goes (ObjectPage saves on unmount).
-let countsFor: string | undefined
-watch(
-  [popupObjectId, popupIsNew],
-  ([id, isNew]) => {
-    void (async () => {
-      const gone = openId
-      const wasNew = openNew
-      const defaultDate = openDefaultDate
-      openId = id
-      openNew = !!isNew
-      openDefaultDate = popupDefaultDate.value
-      countsFor = id
-      saved = false
-      // Closed, or another object took the window: a new one that was never touched goes away.
-      if (gone && wasNew) {
-        countsFor = gone
-        await nextTick()
-        if (!saved) await removeIfUntouched(gone, defaultDate)
-        countsFor = openId
-      }
-    })()
-  },
-  { immediate: true }
-)
-const stopSaves = onObjectSave((object) => {
-  // A save of the object being watched, started or finished, means it was touched.
-  if (countsFor && object.id === countsFor) saved = true
-  return undefined
-})
-onBeforeUnmount(stopSaves)
-
 // Escape closes the window wherever the focus is (the pane's Esc, lib/shortcuts.ts, is behind the
-// dialog check there; popovers and the editor inside handle their own Escape first).
+// dialog check there; popovers and the editor inside handle their own Escape first). A phone's
+// sheet does this itself.
 function onKey(event: KeyboardEvent) {
-  if (event.key === 'Escape' && !event.defaultPrevented && popupObjectId.value) {
+  if (event.key === 'Escape' && !event.defaultPrevented && popupObjectId.value && !isPhone.value) {
     event.preventDefault()
     void closePopup()
   }
 }
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
-
-/** An untouched blank draft goes away. Explicit content (templates, calendar choices) stays;
- * only the date automatically filled by New on Today can be ignored. */
-async function removeIfUntouched(id: string, defaultDate?: string) {
-  if (saved) return
-  let object
-  try {
-    object = await api.object(id)
-  } catch {
-    return // gone already (trashed from inside the window, or the like)
-  }
-  const hasProps = Object.entries(object.props ?? {}).some(([id, value]) => id !== defaultDate || value.kind !== 'date')
-  if (object.title || hasProps || Object.keys(object.content ?? {}).length || (object.tagIds ?? []).length) return
-  try {
-    await api.deleteObject(id)
-    await api.deleteObjectForever(id)
-  } catch {
-    return // it stays in the trash: still better than an "Untitled" in the list
-  }
-  forgetSummary(id)
-  void refreshCounts()
-}
 </script>
 
 <template>
-  <div v-if="popupObjectId" class="fixed inset-0 z-40" data-popup>
+  <!-- A phone has no room beside anything: the object comes up from the bottom, pulled down to close. -->
+  <BottomSheet v-if="popupObjectId && isPhone" label="Object sheet" tall flush in-address layer="surface" data-popup @close="closePopup()">
+    <div class="flex shrink-0 items-center justify-between px-1 text-ink-soft">
+      <button class="grid h-11 w-11 place-items-center rounded-lg active:bg-hover" title="Close" aria-label="Close" @click="closePopup()">
+        <AppIcon fallback="ph:x" :size="20" />
+      </button>
+      <button class="flex h-11 items-center gap-1.5 rounded-lg px-3 text-[15px] active:bg-hover" title="Open full page" @click="expandPopup()">
+        <AppIcon fallback="ph:arrows-out-simple" :size="16" />Open full page
+      </button>
+    </div>
+    <div class="min-h-0 flex-1 overflow-y-auto">
+      <ObjectPage :id="popupObjectId" :key="popupObjectId" variant="popup" :block="popupBlockId" :is-new="popupIsNew" :cursor="popupCursor" />
+    </div>
+  </BottomSheet>
+  <div v-else-if="popupObjectId" class="fixed inset-0 z-40" data-popup>
     <div class="absolute inset-0 bg-black/30" data-popup-backdrop aria-hidden="true" @click="closePopup()" />
     <!-- A window in the middle of the page; the page behind it stays where it is. -->
     <section
-      v-if="!isPhone"
       ref="box"
       tabindex="-1"
       role="dialog"
@@ -136,29 +89,6 @@ async function removeIfUntouched(id: string, defaultDate?: string) {
         </button>
         <button class="grid h-7 w-7 place-items-center rounded-md hover:bg-hover hover:text-ink" title="Close (Esc)" @click="closePopup()">
           <AppIcon fallback="ph:x" :size="15" />
-        </button>
-      </div>
-      <div class="min-h-0 flex-1 overflow-y-auto">
-        <ObjectPage :id="popupObjectId" :key="popupObjectId" variant="popup" :block="popupBlockId" :is-new="popupIsNew" :cursor="popupCursor" />
-      </div>
-    </section>
-    <!-- A phone has no room beside anything: the object comes up from the bottom, pulled down to close. -->
-    <section
-      v-else
-      ref="box"
-      tabindex="-1"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Object sheet"
-      class="vasta-sheet absolute inset-x-0 bottom-0 top-[6%] flex flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface shadow-[0_-6px_24px_rgb(0_0_0/0.14)] outline-none"
-    >
-      <SheetGrabber @close="closePopup()" />
-      <div class="flex shrink-0 items-center justify-between px-1 text-ink-soft">
-        <button class="grid h-11 w-11 place-items-center rounded-lg active:bg-hover" title="Close" aria-label="Close" @click="closePopup()">
-          <AppIcon fallback="ph:x" :size="20" />
-        </button>
-        <button class="flex h-11 items-center gap-1.5 rounded-lg px-3 text-[15px] active:bg-hover" title="Open full page" @click="expandPopup()">
-          <AppIcon fallback="ph:arrows-out-simple" :size="16" />Open full page
         </button>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto">

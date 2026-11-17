@@ -210,6 +210,22 @@ await until(async () => {
   return o.props.status?.value?.[0] === 'doing' && o.props.priority?.value?.[0] === 'low'
 }, 'Alpha in progress, low')
 
+step('"+" starts from the view\'s filter too: the new card stays in the view')
+made.Foxtrot = await post('/api/objects', { typeId: task.id, title: 'Foxtrot', props: { ...status('todo'), priority: { kind: 'select', value: ['high'] } } })
+const withViews = await get(`/api/types/${task.id}`)
+const highs = { kind: 'group', operator: 'and', items: [{ kind: 'filter', field: 'priority', operator: 'is', value: { kind: 'literal', value: ['high'] } }] }
+await put(`/api/types/${task.id}`, { ...withViews, views: [...withViews.views, { id: 'highs', name: 'Highs', layout: 'kanban', groupBy: [{ field: 'status' }], filter: highs }] })
+await sleep(2500) // the replica pulls the new view
+await page.goto(`${base}/t/${task.id}?view=highs`)
+await until(() => card('Foxtrot').count(), 'the Highs board', 20000)
+await toColumn('todo')
+await cellOf('todo').getByText('New').click()
+await page.keyboard.type('Golf')
+await page.keyboard.press('Enter')
+await until(async () => (await titlesIn('todo')).includes('Golf'), 'Golf stays on the Highs board')
+await until(async () => (await post(`/api/spaces/${space.id}/query`, { query: { typeIds: [task.id] } })).find((o) => o.title === 'Golf')?.props.priority?.value?.[0] === 'high', 'Golf saved as high priority (the view\'s filter)')
+await page.keyboard.press('Escape')
+
 if (problems.length) {
   console.log(problems.join('\n'))
   throw new Error('console problems')

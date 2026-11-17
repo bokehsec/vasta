@@ -6,13 +6,14 @@
 // swimlanes) a column is most of the screen wide and the board snaps from one to the next, with a
 // strip of the columns' names and counts above that jumps to one.
 import { computed, inject, nextTick, onBeforeUnmount, ref } from 'vue'
-import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef } from '@vasta/core'
+import type { BoardSettings, Id, NewItemValues, ObjectRecord, ObjectSummary, PropertyDef } from '@vasta/core'
 import { RANK_PROPERTY_ID, byRank, rankOf, rankBetween } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
 import { boardDrag, closeCard, closingColumn, moveCard, pressCard, type BoardAxis, type CardTarget } from '../lib/board.ts'
 import { chip } from '../lib/colors.ts'
 import { openMenuAt, promptDialog } from '../lib/overlays.ts'
-import { groupObjects, movableField, NO_VALUE, placeInGroup, typesOf, type Group } from '../lib/query.ts'
+import { newValues, useNewPlace } from '../lib/new-item.ts'
+import { groupObjects, movableField, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, typesById } from '../lib/state.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
@@ -193,6 +194,7 @@ const landing = (column: Group, lane: Group) => (boardDrag.active && boardDrag.t
 const cellKey = (column: Group, lane: Group) => `${column.key}|${lane.key}`
 
 // "+": a new card in a column (and lane), at its end -------------------------------
+const place = useNewPlace()
 const addingIn = ref('')
 const newTitle = ref('')
 const newInput = ref<HTMLInputElement[]>([])
@@ -210,9 +212,11 @@ async function addCard(column: Group, lane: Group) {
     addingIn.value = ''
     return
   }
-  const draft: Pick<ObjectRecord, 'typeId' | 'props' | 'tagIds'> = { typeId, props: {}, tagIds: [] }
-  placeInGroup(draft, props.groupField, column, columns.value)
-  if (laneField.value) placeInGroup(draft, laneField.value, lane, lanes.value)
+  const type = typesById.value.get(typeId)
+  // The same starting values as every New (lib/new-item.ts): the view's filter and Mine, so the card
+  // does not vanish, then this column and lane.
+  const groups = [{ field: props.groupField, group: column }, ...(laneField.value ? [{ field: laneField.value, group: lane }] : [])]
+  const draft: NewItemValues = type ? newValues(type, groups, place) : { props: {}, tagIds: [] }
   const last = cell(column, lane).at(-1)
   const lastRank = last && rankOf(last)
   if (props.manual && (lastRank || !last)) draft.props[RANK_PROPERTY_ID] = { kind: 'rank', value: rankBetween(lastRank) }

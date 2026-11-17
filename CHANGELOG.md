@@ -29,17 +29,26 @@ GitHub release page.
 - **Objects in a window over the page.** A click on an object in a list, table, board or query —
   and every New — opens it in a window over what you were looking at, a sheet from the bottom on a
   phone, instead of taking you to its page. In it the object is read and edited as on its page;
-  Esc, Back, a click outside or **Open full page** leaves the window. Type settings' **Open in**
+  Esc, Back, a click outside or **Open full page** leaves the window. Closing it goes back a step,
+  so the next Back leaves the page instead of opening the window again (reading three tasks costs
+  one Back), and **Open full page** takes the window's place, so one Back returns to the list. On a
+  phone the window sits above the keyboard and under the notch, and the calendar, Search,
+  notifications, mentions and a row menu's **Open** use it too. Type settings' **Open in**
   chooses the window (the default), the side pane or its own page, and a view's layout menu can
-  choose for itself. A New closed without anything in it is removed, as if it was never made.
-- **The quick card.** A type page's New button opens a small card over the list: a large title,
+  choose for itself. A New is never made before you add it, so there is nothing to clean up.
+- **The quick card.** Every New (a type page's New button, the sidebar's and the top bar's New, a
+  "+" on a group's header in a list or table, a board column's "+") starts from the same place: a
+  small card over the list: a large title,
   **Add a note**, and the type's fields as a row of chips (Status, Due, Priority…). Nothing is made
   until it is added. Enter adds it and the card stays for the next one, saying what was added
   (with Open and Undo); ⌘↩ or **Open** adds it and opens it in the window; Cancel, Esc or a click
-  outside leave nothing behind. On a phone it is a sheet from the bottom. Types with a default
-  template keep their flow; the menu's Blank choice uses the card.
-  The card starts with what the view you are on filters on (on a Work view, Area is Work), so what
-  you add shows there; on Today, a New from the sidebar or the top bar is dated today.
+  outside leave nothing behind. On a phone it is a sheet from the bottom, and the type page's own
+  New button gives way to the one round "+" (it opens this card for the type and the view, with a
+  "Capture a note instead" link; elsewhere "+" opens quick capture). Types with a default template
+  keep their flow on a computer, and a template button stays on a phone; the menu's Blank choice
+  uses the card. The card starts with what the view you are on filters on (on a Work view, Area is
+  Work), with you as Assignee while Mine is on, and with the group, column or lane you added into,
+  so what you add shows there; templates start from the same values; on Today, a New is dated today.
 - **Habits by the week.** A habit has a new field, **Times a week**: set it to 3 and the habit counts
   by the week (Monday to Sunday), on any days. Today's list, the Tracker, the habit's page,
   reminders and the agent tools say "2 of 3 this week", count streaks in weeks, and stop asking
@@ -117,7 +126,9 @@ GitHub release page.
   a long press to be found.
 - **Quick capture made for a phone.** It says where the text will go, lets you pick Note or a type
   (no need to type "/Book"), and has a Save capture button above the keyboard (Return adds a line).
-  Text you cancel is kept on this device and comes back next time, with Discard.
+  The types you make most (in the last 90 days, four) are offered first, the rest under More….
+  Text you have not saved is kept on this device and comes back next time, with Discard, also after
+  the app is reloaded, and on a computer too.
 - **Quick actions on any type.** Type settings › Quick actions, until now only on a task, works on
   every type: set up buttons that change its fields in one click, and they show on its objects'
   pages, as a view's row buttons, in the Quick actions column and in process mode. (A task still
@@ -394,11 +405,15 @@ GitHub release page.
   nothing. It now saves on this device and reaches the server when the connection is back, like
   the other changes made offline.
 - **Back on a phone closes what is open instead of leaving the page.** With a menu, a question such
-  as Defer, the Filters or View sheet, the side menu, Quick capture, Triage & review or a dialog
-  open, Back (the button, or swiping from the edge) closes it and you stay where you were; in a
+  as Defer, the Filters or View sheet, the side menu, Search, Quick capture, the quick card, a
+  full-screen whiteboard, Triage & review or a dialog open, Back (the button, or swiping from the edge) closes it and you stay where you were; in a
   menu's submenu it goes back to the menu. Before, the page behind changed and a sheet like Defer
   stayed open over another page. Quick capture keeps what you typed for next time. Every sheet's
-  bar at the top can now be pulled down to close it, as on iOS.
+  bar at the top can now be pulled down to close it, as on iOS. Every sheet is the same one now: the
+  same backdrop, the same safe space above the keyboard and under the home bar, tap outside to
+  close, and 44px rows. Escape closes the sheet on top only. Dialogs stay above the keyboard. On a
+  computer, Back puts away Quick capture and the quick card instead of leaving them over the page
+  that came back.
 - **Copy link works where the clipboard is blocked** (such as the server's plain-http address): it
   copies another way, and failing that opens the phone's share sheet or a box with the link to copy
   by hand, instead of only saying it could not.

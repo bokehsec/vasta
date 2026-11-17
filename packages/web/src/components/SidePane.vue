@@ -33,7 +33,7 @@ watch(
   [paneObjectId, pageObjectId, isPhone],
   ([pane, page, phone]) => {
     if (!pane) return
-    if (phone) void expandPane(true)
+    if (phone) void expandPane()
     else if (pane === page) void closePane(true)
   },
   { immediate: true }

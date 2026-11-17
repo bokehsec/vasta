@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Small link to an object (relations, tags). Optional remove button. A tag (or a relation to one)
 // takes the tag's color and shows its path, the parents faded: recipe/breakfast. Inside a view it
-// opens where the view opens things (VIEW_OPENS), elsewhere the object's page.
+// opens where the view opens things (VIEW_OPENS), elsewhere where its type says (ObjectLink).
 import { computed } from 'vue'
 import type { Id } from '@vasta/core'
 import { chip, iconTextClasses } from '../lib/colors.ts'

@@ -1,7 +1,8 @@
 // Back between pages on a phone (390×844, touch): a list comes back scrolled where it was left and
 // a page opened starts at its top; an edge swipe (the page sees a touch start at the left edge just
 // before Back) leaves the page and opens no side menu, while a swipe left on the open menu still
-// closes it; the place showing tapped again in the bottom bar adds no step for Back (Calendar goes
+// closes it; the object sheet costs no history step to read and close (a task opened from Search or
+// the row menu is in it too, and Back closes it); the place showing tapped again in the bottom bar adds no step for Back (Calendar goes
 // back to today, a list to its top); the bottom bar's optional Menu opens the side menu.
 //   node phone-history.mjs [chromium|webkit] [base]
 import { mkdtempSync } from 'node:fs'
@@ -41,6 +42,11 @@ const where = () => page.evaluate(() => location.pathname + location.search)
 const steps = () => page.evaluate(() => history.length)
 const scrolled = () => page.evaluate(() => document.querySelector('main').scrollTop)
 const scrollTo = (top) => page.evaluate((top) => (document.querySelector('main').scrollTop = top), top)
+/** A click in a list opens the task in the sheet; "Open full page" takes its place in history, so one Back returns to the list. */
+const openFull = async (href) => {
+  await page.locator(`main a[href="${href}"]`).first().click()
+  await page.locator('[data-popup]').getByTitle('Open full page').click()
+}
 const drawerOpen = async () => (await page.locator('[data-drawer-backdrop]').count()) > 0
 async function back() {
   await page.evaluate(() => history.back())
@@ -87,7 +93,7 @@ try {
     const top = document.querySelector('main').getBoundingClientRect().top
     return [...document.querySelectorAll('main a[href^="/o/"]')].find((a) => a.getBoundingClientRect().top > top + 40)?.getAttribute('href')
   })
-  await page.locator(`main a[href="${visible}"]`).first().click()
+  await openFull(visible)
   await until(async () => (await where()).startsWith('/o/'), 'the task page')
   await sleep(500)
   if ((await scrolled()) !== 0) throw new Error(`the task page opened scrolled: ${await scrolled()}`)
@@ -96,7 +102,7 @@ try {
   await until(async () => Math.abs((await scrolled()) - left) <= 2, `the list back at ${left} (is ${await scrolled()})`, 4000)
 
   step('an edge swipe: the page sees the touch, then Back; it leaves the task and opens no side menu')
-  await page.locator(`main a[href="${visible}"]`).first().click()
+  await openFull(visible)
   await until(async () => (await where()).startsWith('/o/'), 'the task page')
   await sleep(500)
   await swipe(4, 300)
@@ -110,6 +116,50 @@ try {
   await page.locator('[data-drawer-backdrop]').waitFor()
   await swipe(250, 100)
   await until(async () => !(await drawerOpen()), 'the swipe left closes the side menu')
+
+  step('the object sheet: reading three tasks (closed by X, Escape and a tap outside) costs no step; one Back leaves the list')
+  await page.locator('[data-tab="Home"]').click()
+  await page.locator('[data-tab="Tasks"]').click()
+  await until(async () => (await where()).startsWith(listPath), 'the Tasks list, reached inside the app')
+  const listAt = await where()
+  const position = () => page.evaluate(() => history.state.position)
+  const startAt = await position()
+  const rows = page.locator('main a[href^="/o/"]')
+  const sheet = page.locator('[data-popup]')
+  const read = async (index, close) => {
+    await rows.nth(index).click()
+    await sheet.waitFor()
+    if ((await position()) !== startAt + 1) throw new Error(`opening the sheet took ${(await position()) - startAt} steps`)
+    await close()
+    await until(async () => (await sheet.count()) === 0, 'the sheet closed')
+    await sleep(400)
+    if ((await position()) !== startAt || (await where()) !== listAt) throw new Error(`closing the sheet left step ${await position()} (${await where()}), not the list at ${startAt}`)
+  }
+  await read(0, () => sheet.getByTitle('Close').click())
+  await read(1, () => page.keyboard.press('Escape'))
+  await read(2, () => page.mouse.click(195, 20))
+  await back()
+  await until(async () => !(await where()).startsWith(listPath), 'one Back left the list (the sheet did not come back)')
+  await page.locator('[data-tab="Tasks"]').click()
+  await until(async () => (await where()).startsWith(listPath), 'the Tasks list again')
+
+  step('the sheet is also where Search and the row menu open a task; Back closes it and stays')
+  const listNow = await where()
+  await page.locator('[data-tab="Search"]').click()
+  await page.locator('input[placeholder="Search or create…"]').fill(`PhoneHistory ${tag} 05`)
+  await page.locator('[data-bottom-sheet-backdrop], .fixed button', { hasText: `PhoneHistory ${tag} 05` }).first().click()
+  await sheet.waitFor()
+  if (!(await where()).startsWith(listPath) || !(await where()).includes('popup=')) throw new Error(`a Search result did not open in the sheet: ${await where()}`)
+  await back()
+  await until(async () => (await sheet.count()) === 0 && (await where()) === listNow, 'Back closed the sheet from Search')
+  const row = page.locator(`main a[href="/o/${tasks[5].id}"]`).first()
+  await row.waitFor()
+  const box = await row.boundingBox()
+  await row.dispatchEvent('contextmenu', { clientX: 100, clientY: box.y + box.height / 2 })
+  await page.locator('[data-menu-sheet] button', { hasText: /^\s*Open\s*$/ }).click()
+  await sheet.waitFor()
+  await back()
+  await until(async () => (await sheet.count()) === 0 && (await where()) === listNow, 'Back closed the sheet from the row menu')
 
   step('Tasks tapped on Tasks: to the top, no step for Back')
   await scrollTo(800)

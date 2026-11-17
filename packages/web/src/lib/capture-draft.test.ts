@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ObjectType } from '@vasta/core'
-import { clearDraft, readDraft, withType, writeDraft, writtenText } from './capture-draft.ts'
+import { clearDraft, readDraft, usedTypes, withType, writeDraft, writtenText } from './capture-draft.ts'
 
 const at = '2026-10-19T12:00:00.000Z'
 const type = (id: string, name: string): ObjectType => ({ id, spaceId: 's', name, pluralName: `${name}s`, createdAt: at, updatedAt: at, views: [], properties: [] })
@@ -48,5 +48,35 @@ describe('draft storage', () => {
     const broken = { getItem: () => { throw new Error('blocked') }, setItem: () => { throw new Error('blocked') }, removeItem: () => { throw new Error('blocked') } }
     expect(readDraft('u', 'a', broken)).toBe('')
     expect(() => writeDraft('u', 'a', 'x', broken)).not.toThrow()
+  })
+})
+
+describe('usedTypes', () => {
+  const all = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => type(id, id.toUpperCase()))
+  const made = (...ids: string[]) => ids.map((typeId) => ({ typeId }))
+  const ids = (list: ObjectType[]) => list.map((t) => t.id)
+
+  it('shows the four most made types, most first, and the rest under More', () => {
+    const { shown, more } = usedTypes(all, made('c', 'c', 'c', 'e', 'e', 'a', 'f', 'd', 'd', 'b'))
+    expect(ids(shown)).toEqual(['c', 'd', 'e', 'a'])
+    expect(ids(more)).toEqual(['b', 'f'])
+  })
+  it('shows only the types that were made, when fewer than four were', () => {
+    const { shown, more } = usedTypes(all, made('e', 'e', 'b'))
+    expect(ids(shown)).toEqual(['e', 'b'])
+    expect(ids(more)).toEqual(['a', 'c', 'd', 'f'])
+  })
+  it('ignores objects of types it is not asked about (notes, daily notes)', () => {
+    expect(ids(usedTypes(all, made('daily', 'daily', 'daily', 'b')).shown)).toEqual(['b'])
+  })
+  it('starts with the first four types in a space where nothing was made', () => {
+    const { shown, more } = usedTypes(all, [])
+    expect(ids(shown)).toEqual(['a', 'b', 'c', 'd'])
+    expect(ids(more)).toEqual(['e', 'f'])
+  })
+  it('keeps the picked type in sight', () => {
+    const { shown, more } = usedTypes(all, made('a', 'b', 'c', 'd', 'a'), all[5])
+    expect(ids(shown)).toEqual(['a', 'b', 'c', 'd', 'f'])
+    expect(ids(more)).toEqual(['e'])
   })
 })

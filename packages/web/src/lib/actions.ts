@@ -13,24 +13,16 @@ import { loadTemplates, templates } from './templates.ts'
 import { router } from '../router.ts'
 import { closePane, closePopup, objectPath, openObject, pageObjectId, paneObjectId, popupObjectId } from './open.ts'
 
-/** With `line`, the title and properties are read from it, e.g. `Dune author:"Frank Herbert"`. */
+/**
+ * Makes an object and, by default, opens it in the window. A New made in context never calls this
+ * without a title: it goes through the quick card (lib/new-item.ts), where nothing is made until
+ * Add. With `line`, the title and properties are read from it, e.g. `Dune author:"Frank Herbert"`.
+ */
 export async function createObject(typeId: Id, data: Partial<ObjectRecord> = {}, open = true, line?: string): Promise<ObjectRecord> {
   const object = await api.createObject({ ...data, typeId }, line)
   primeFromObject(object)
   void refreshCounts()
   if (open) await openObject(object.id, { where: 'popup', query: { new: '1' } })
-  return object
-}
-
-/**
- * A New from the sidebar or the top bar, made for where the user is: on today's page it gets today
- * in the type's first date field (a task's Due), as the calendar's quick create does.
- */
-export async function createObjectHere(typeId: Id) {
-  const date = isTodayRoute(router.currentRoute.value) ? typesById.value.get(typeId)?.properties.find((p) => p.kind === 'date') : undefined
-  if (!date) return createObject(typeId)
-  const object = await createObject(typeId, { props: { [date.id]: { kind: 'date', value: { start: `${dayKey()}T00:00:00.000Z`, resolution: 'day' } } } }, false)
-  await openObject(object.id, { where: 'popup', query: { new: `date:${date.id}` } })
   return object
 }
 

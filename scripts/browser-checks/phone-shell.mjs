@@ -129,7 +129,9 @@ try {
   await page.locator('[data-filters-button]').click()
   await page.locator('[data-filters-search]').fill(`Shell ${tag}`)
   await page.keyboard.press('Escape')
+  // A list opens a task in the window; its full page is one tap further.
   await page.locator(`main a[href="/o/${task.id}"]`).first().click()
+  await page.locator('[data-popup]').getByTitle('Open full page').click()
   await page.waitForURL(new RegExp(`/o/${task.id}`))
   const menuBox = await page.locator('[data-top-menu]').boundingBox()
   const backBox = await page.locator('[data-top-back]').boundingBox()
@@ -167,8 +169,11 @@ try {
   if (arrange.some((a) => a[1] < 44)) throw new Error(`an Arrange row is under 44px: ${JSON.stringify(arrange)}`)
   await filters.locator('[data-arrange="sort"]').click()
   await page.locator('[data-sheet]').last().locator('button', { hasText: /^\s*Title\s*$/ }).waitFor()
+  // Escape closes the sheet on top only, as Back does; the next one closes the Filters sheet.
   await page.keyboard.press('Escape')
-  await until(async () => (await page.locator('[data-sheet]').count()) === 0, 'Escape closed the sheets')
+  await until(async () => (await page.locator('[data-sheet]').count()) === 1, 'Escape closed the sort sheet only')
+  await page.keyboard.press('Escape')
+  await until(async () => (await page.locator('[data-sheet]').count()) === 0, 'a second Escape closed the Filters sheet')
   if ((await rows.count()) !== 1 || (await badge.innerText()).trim() !== '1') throw new Error('closing the sheet dropped the search')
   await filtersButton.click()
   await page.locator('[data-filters-clear]').click()

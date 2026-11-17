@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fillFromFilter, matchesFilter, type Filter, type FilterGroup, type ObjectSummary, type ObjectType } from '../src/index.ts'
+import { fillFromFilter, matchesFilter, newItemValues, type Filter, type FilterGroup, type ObjectSummary, type ObjectType } from '../src/index.ts'
 import type { QueryContext } from '../src/query.ts'
 
 const at = '2026-11-16T12:00:00.000Z'
@@ -90,5 +90,43 @@ describe('fillFromFilter', () => {
 
   it('the first value for a field wins', () => {
     expect(fillFromFilter(task, and(f('list', 'is', lit(['work'])), f('list', 'is', lit(['home']))), ctx())).toEqual({ list: { kind: 'select', value: ['work'] } })
+  })
+})
+
+describe('newItemValues', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(at))
+  })
+  afterEach(() => vi.useRealTimers())
+  const make = (extra: Partial<Parameters<typeof newItemValues>[0]> = {}, query: Partial<QueryContext> = {}) => newItemValues({ type: task, query: ctx(query), ...extra })
+
+  it('starts from what the view filters on', () => {
+    expect(make({ filter: and(f('list', 'is', lit(['work'])), open) })).toEqual({ props: { list: { kind: 'select', value: ['work'] } }, tagIds: [] })
+  })
+
+  it('gives a task to the user while Mine is on, unless the view already names someone', () => {
+    expect(make({ mine: true }, { me: 'u1' }).props).toEqual({ assignee: { kind: 'person', value: ['u1'] } })
+    expect(make({ mine: false }, { me: 'u1' }).props).toEqual({})
+    expect(make({ mine: true })).toEqual({ props: {}, tagIds: [] })
+    expect(make({ mine: true, filter: f('assignee', 'contains', lit(['u2'])) }, { me: 'u1' }).props).toEqual({ assignee: { kind: 'person', value: ['u2'] } })
+  })
+
+  it("puts today's page's day in the first date field, unless the filter chose one", () => {
+    expect(make({ day: '2026-11-16' }).props).toEqual({ dodate: day('2026-11-16') })
+    expect(make({ day: '2026-11-16', filter: f('dodate', 'is', { kind: 'variable', name: 'today', offsetDays: 1 }) }).props).toEqual({ dodate: day('2026-11-17') })
+  })
+
+  it('a group, column or lane wins over the filter, and "no value" clears the field', () => {
+    const filter = and(f('status', 'is', lit(['next'])), f('list', 'is', lit(['work'])))
+    expect(make({ filter, groups: [{ field: 'status', value: 'done' }] }).props).toEqual({ status: { kind: 'select', value: ['done'] }, list: { kind: 'select', value: ['work'] } })
+    expect(make({ filter, groups: [{ field: 'list', value: null }] }).props).toEqual({ status: { kind: 'select', value: ['next'] } })
+    expect(make({ groups: [{ field: 'status', value: 'next' }, { field: 'list', value: 'home' }] }).props).toEqual({ status: { kind: 'select', value: ['next'] }, list: { kind: 'select', value: ['home'] } })
+  })
+
+  it('a tag group adds the tag; a date or unknown field adds nothing', () => {
+    expect(make({ groups: [{ field: 'tags', value: 't1' }] }).tagIds).toEqual(['t1'])
+    expect(make({ groups: [{ field: 'tags', value: null }] }).tagIds).toEqual([])
+    expect(make({ groups: [{ field: 'due', value: 'today' }, { field: 'nothing', value: 'x' }, { field: 'type', value: 'task' }] })).toEqual({ props: {}, tagIds: [] })
   })
 })

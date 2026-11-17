@@ -1,12 +1,13 @@
 <script setup lang="ts">
-// Centered dialog with a header and scrollable body. Closes on Escape or backdrop click.
+// Centered dialog with a header and scrollable body. Closes on Escape, Back or backdrop click. On a
+// phone it is full screen and shrinks to what the on-screen keyboard leaves, so its footer buttons
+// are always in sight.
 import { onBeforeUnmount, onMounted } from 'vue'
 import { closesOnBack } from '../lib/back.ts'
 import { isPhone, keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 
-// `keepAboveKeyboard`: on a phone, the dialog shrinks to what the on-screen keyboard leaves, so its footer stays in sight.
-defineProps<{ title: string; width?: string; keepAboveKeyboard?: boolean }>()
+defineProps<{ title: string; width?: string }>()
 const emit = defineEmits<{ close: [] }>()
 
 function onKey(event: KeyboardEvent) {
@@ -23,7 +24,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <!-- Full screen on phones. -->
     <div
       class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/25 md:px-4 md:py-[8vh]"
-      :style="keepAboveKeyboard && isPhone && keyboardInset ? { bottom: `${keyboardInset}px` } : undefined"
+      :style="isPhone && keyboardInset ? { bottom: `${keyboardInset}px` } : undefined"
       @mousedown.self="emit('close')"
     >
       <div

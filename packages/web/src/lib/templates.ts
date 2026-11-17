@@ -105,7 +105,7 @@ export async function createFromTemplate(type: ObjectType, template: ObjectRecor
     const answers = await askFor(template)
     if (!answers) return undefined
     made = applyTemplate(template, type, templateContext({ answers, ...(options.title ? { title: options.title } : {}) }))
-    data = { ...data, title: made.title, props: { ...made.props, ...data.props }, content: made.content, tagIds: [...template.tagIds], ...(template.icon ? { icon: template.icon } : {}) }
+    data = { ...data, title: made.title, props: { ...made.props, ...data.props }, content: made.content, tagIds: [...new Set([...template.tagIds, ...(data.tagIds ?? [])])], ...(template.icon ? { icon: template.icon } : {}) }
   }
   try {
     const object = await api.createObject({ ...data, typeId: type.id })
