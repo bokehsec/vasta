@@ -3,7 +3,7 @@
 // agenda), optionally grouped. Used by type pages, query pages and queries embedded in documents.
 import { computed, inject, nextTick, provide, ref, watch, type Directive } from 'vue'
 import type { AgendaSettings, BoardSettings, FilterGroup, Id, ListSettings, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { isClosedTask, nextStepFieldOf, outlineRows, parentFieldOf, parentIdOf, quickActionsOf, subtaskProgress, type OutlineRow, type QuickActionDef } from '@vasta/core'
+import { isClosedTask, nextStepFieldOf, outlineRows, parentFieldOf, parentIdOf, quickActionsOf, subtaskProgress, type OutlineRow } from '@vasta/core'
 import { addSelectOption, setProperties, setProperty } from '../lib/actions.ts'
 import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
 import { chip } from '../lib/colors.ts'
@@ -12,7 +12,7 @@ import { displayTitle, formatDate, formatDateShort, formatRelative } from '../li
 import { groupObjects, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById, workspace } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
-import { runQuickAction } from '../lib/quick-actions.ts'
+import { swipeActionsFor } from '../lib/quick-actions.ts'
 import { session } from '../lib/session.ts'
 import { groupFoldKey, useGroupFolds } from '../lib/group-folds.ts'
 import { quietButton } from '../lib/buttons.ts'
@@ -29,7 +29,7 @@ import ObjectChip from './ObjectChip.vue'
 import PropertyDisplay from './PropertyDisplay.vue'
 import PropertyValueEditor from './PropertyValueEditor.vue'
 import ObjectLink from './ObjectLink.vue'
-import SwipeRow, { type SwipeAction } from './SwipeRow.vue'
+import SwipeRow from './SwipeRow.vue'
 import TaskQuickActions from './TaskQuickActions.vue'
 import TaskCompletionCheck from './TaskCompletionCheck.vue'
 import TaskCompletionNote from './TaskCompletionNote.vue'
@@ -189,33 +189,11 @@ const swipeType = (object: ObjectSummary) => {
   const type = isTouch.value && !completion?.entries.has(object.id) ? actionType(object) : undefined
   return type && !isClosedTask(type, object) ? type : undefined
 }
-const rightActionOf = (actions: QuickActionDef[]) => actions.find((a) => a.id === 'defer') ?? actions[0]
 const saveRow = async (id: Id, values: Record<Id, PropertyValue | undefined>) => emit('moved', await setProperties(id, values))
-function swipeAction(type: ObjectType, object: ObjectSummary, action: QuickActionDef): SwipeAction {
-  return { id: action.id, label: action.name, icon: action.icon, tone: action.id === 'done' ? 'done' : action.id === 'defer' ? 'accent' : 'neutral', run: () => runQuickAction(type, object, action, { save: saveRow }) }
-}
-function swipeRight(object: ObjectSummary): SwipeAction | undefined {
+/** The swipes of a touch row (lib/quick-actions.ts): none where the row has no actions. */
+function swipesOf(object: ObjectSummary) {
   const type = swipeType(object)
-  const action = type && rightActionOf(quickActionsOf(type))
-  return type && action ? swipeAction(type, object, action) : undefined
-}
-function swipeLeft(object: ObjectSummary): SwipeAction[] {
-  const type = swipeType(object)
-  if (!type) return []
-  const actions = quickActionsOf(type)
-  const right = rightActionOf(actions)
-  const rest = actions.filter((a) => a !== right).sort((a, b) => Number(b.id === 'done') - Number(a.id === 'done'))
-  const more: SwipeAction = {
-    id: 'more',
-    label: 'More',
-    icon: { kind: 'icon', value: 'ph:dots-three' },
-    tone: 'more',
-    run: (anchor) => {
-      const box = anchor?.getBoundingClientRect()
-      rowMenu(new MouseEvent('contextmenu', { clientX: box?.left ?? 0, clientY: box?.bottom ?? 0 }), object)
-    },
-  }
-  return [...rest.slice(0, 3).map((a) => swipeAction(type, object, a)), more]
+  return type ? swipeActionsFor(type, object, { save: saveRow, menu: (event) => rowMenu(event, object) }) : { left: [] }
 }
 function rowMenu(event: MouseEvent, object: ObjectSummary) {
   emit('menu', event, object)
@@ -231,7 +209,7 @@ const rowButtons = (object: ObjectSummary) => !!quickType(object) && !(isPhone.v
 const swipeTip = computed(() => {
   if (!isPhone.value || !asList.value || swipeTipHidden.value) return ''
   const object = props.objects.find((o) => swipeType(o))
-  const right = object && swipeRight(object)
+  const right = object && swipesOf(object).right
   return right ? `Swipe right to ${right.label.toLowerCase()}, left for more` : ''
 })
 
@@ -486,7 +464,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
         <template v-if="!groupCollapsed(group)">
           <!-- List; on a phone a table too. -->
           <div v-if="asList" class="divide-y divide-line/70" :data-phone-rows="phoneRows || undefined">
-            <SwipeRow v-for="{ object, depth, hasChildren } in rowsOf(group)" :key="object.id" :enabled="!!swipeType(object)" :right="swipeRight(object)" :left="swipeLeft(object)">
+            <SwipeRow v-for="{ object, depth, hasChildren } in rowsOf(group)" :key="object.id" :enabled="!!swipeType(object)" :right="swipesOf(object).right" :left="swipesOf(object).left">
               <ObjectLink
                 :id="object.id"
                 class="group/row flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover max-md:py-2.5"

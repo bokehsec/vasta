@@ -13,18 +13,8 @@ const openRows = new Set<() => void>()
 // the screen's left edge is left to the browser's Back swipe. After a swipe the finger lifting does not
 // also open the row.
 import { computed, onBeforeUnmount, ref } from 'vue'
-import type { Icon } from '@vasta/core'
 import AppIcon from './AppIcon.vue'
-import { DECIDE, RUN, rowRelease, tracker } from '../lib/swipe.ts'
-
-export interface SwipeAction {
-  id: string
-  label: string
-  icon?: Icon
-  /** done: green; accent: the app's blue; otherwise a neutral grey (more: the darkest). */
-  tone?: 'done' | 'accent' | 'neutral' | 'more'
-  run: (anchor: HTMLElement | null) => unknown
-}
+import { DECIDE, RUN, rowRelease, tracker, type SwipeAction } from '../lib/swipe.ts'
 
 /** Without `enabled` the row is drawn as it is, with no swiping. */
 const props = defineProps<{ enabled?: boolean; right?: SwipeAction; left: SwipeAction[] }>()

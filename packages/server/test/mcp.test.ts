@@ -4,7 +4,7 @@ import path from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { describe, expect, it } from 'vitest'
-import { createBuiltinTypes, newObject, newType, setNutritionEnabled, type ObjectType } from '@vasta/core'
+import { createBuiltinTypes, newObject, newType, setNutritionEnabled, type ObjectType, type PropertyValue } from '@vasta/core'
 import { NodeMediaStore } from '@vasta/core/media-node'
 import { NodeStore } from '@vasta/core/node'
 import { createApp } from '../src/app.ts'
@@ -90,6 +90,21 @@ describe('MCP endpoint', () => {
     const bins = store.putObject(newObject(type, { title: 'Bins', props: { status: { kind: 'select', value: ['todo'] }, due: { kind: 'date', value: { start: '2026-11-02T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY' } } } }, 'bins', AT))
     await call('update_object', { id: bins.id, properties: { Status: 'Done' } })
     expect(store.getObject(bins.id)!.props).toMatchObject({ status: { value: ['todo'] }, due: { value: { start: '2026-11-09T00:00:00.000Z' } } })
+  })
+
+  it('marks a task reviewed when its status changes, unless the call sets the date', async () => {
+    const { store, call } = await setup()
+    const type = store.listTypes('s').find((t) => t.system === 'task')!
+    const todo: PropertyValue = { kind: 'select', value: ['todo'] }
+    const reviewed = (id: string) => store.getObject(id)!.props.reviewed
+    const task = store.putObject(newObject(type, { title: 'Water', props: { status: todo } }, 'water', AT))
+    await call('update_object', { id: task.id, title: 'Water the plants' })
+    expect(reviewed(task.id)).toBeUndefined()
+    await call('update_object', { id: task.id, properties: { Status: 'Done' } })
+    expect(reviewed(task.id)).toEqual({ kind: 'date', value: { start: '2026-10-19T00:00:00.000Z', resolution: 'day' } })
+    const other = store.putObject(newObject(type, { title: 'Dust', props: { status: todo } }, 'dust', AT))
+    await call('update_object', { id: other.id, properties: { Status: 'Done', 'Last reviewed': '2026-10-01' } })
+    expect(reviewed(other.id)).toMatchObject({ value: { start: '2026-10-01T00:00:00.000Z' } })
   })
 
   it('offers the tools, limited to the token user’s spaces', async () => {

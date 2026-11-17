@@ -72,6 +72,8 @@ describe('activity', () => {
       'arie created',
       'ana changed status: ["todo"] → ["doing"]',
       `ana changed assignee: ∅ → ["${ana.id}"]`,
+      // A changed status marks the task reviewed that day, a change of its own.
+      expect.stringMatching(/^ana changed reviewed: ∅ → \{"start":"\d{4}-\d{2}-\d{2}T00:00:00.000Z","resolution":"day"\}$/),
       'arie changed title: Fix the gate → Fix the garden gate',
       'ana changed status: ["doing"] → ["done"]',
       'ana trashed',

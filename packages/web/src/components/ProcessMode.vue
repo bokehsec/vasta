@@ -198,13 +198,13 @@ async function act(action: QuickActionDef, anchor: HTMLElement | null) {
   const stay = stays(action)
   busy.value = true
   try {
-    const saved = await runQuickAction(props.type, object, recordsDecision ? withReviewed(props.type, action) : action, {
+    const saved = await runQuickAction(props.type, object, recordsDecision ? withReviewed(props.type, action, object) : action, {
       anchor: isPhone.value ? null : anchor,
       save: props.save,
       submitLabel: stay ? 'Save' : `Save & next ${noun.value}`,
       onUndo: () => { if (recordsDecision) alive ? update((s) => undoOutcome(s, object.id, action.name)) : props.undone(object.id, action.name) },
     })
-    if (!saved.length || !alive) return
+    if (!saved || !alive) return
     breakingDown.value = false
     if (recordsDecision) update((s) => recordOutcome(s, object.id, action.name, at, !stay))
   } finally {

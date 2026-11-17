@@ -1,16 +1,18 @@
 // Running a task's quick actions (@vasta/core task-actions.ts) from anywhere: the buttons on a page
-// or row (TaskQuickActions), a row's menu, or a swipe. The runner accepts one or more objects. An action that asks
-// for a value asks once (QuickAskHost, mounted in App.vue: under the element pressed, or centred
-// without one or on a phone), then each object gets its own values; one notice with one Undo puts
-// every object's previous values back. A day asked for another date than the due date (Defer's Do
-// date) offers to move the due date too when the day is after it, so the task is not left overdue.
-// The question stays open, with what was typed or picked, until the values are saved: when nothing
-// could be saved it shows why and offers Retry or Cancel; while saving it takes no second answer.
+// or row (TaskQuickActions), a row's menu, a swipe, a circle, a board drop. The runner takes one
+// object. An action that asks for a value asks once (QuickAskHost, mounted in App.vue: under the
+// element pressed, or centred without one or on a phone); then the object is saved and one notice
+// with one Undo puts its previous values back. A day asked for another date than the due date
+// (Defer's Do date) offers to move the due date too when the day is after it, so the task is not
+// left overdue. The question stays open, with what was typed or picked, until the values are saved:
+// when nothing could be saved it shows why and offers Retry or Cancel; while saving it takes no
+// second answer. Without a question a failed save says so (lastError) and shows no notice.
 // An action that closes a task with open subtasks asks once whether to close them too (with Done, or
 // Drop for a dropped parent); the notice's one Undo then puts the parent and its subtasks back.
+// swipeActionsFor is the one swipe set-up every touch row has (lists, subtasks).
 import { reactive, shallowRef } from 'vue'
 import type { Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionDef } from '@vasta/core'
-import { DUE_PROPERTY_ID, askOf, closingOf, doneOptionOf, dropOptionOf, dueMovedTo, endsRepeat, isClosedTask, plainStatusAction, plannedDateFieldOf, quickActionEdits, quickActionMessage, quickActionsOf, statusActionOf, withAskCleared, type QuickActionContext, type QuickActionEdit } from '@vasta/core'
+import { DUE_PROPERTY_ID, askOf, closingOf, doneOptionOf, dropOptionOf, dueMovedTo, endsRepeat, isClosedTask, plainStatusAction, plannedDateFieldOf, quickActionEdit, quickActionMessage, quickActionsOf, statusActionOf, withAskCleared, type QuickActionContext, type QuickActionEdit } from '@vasta/core'
 import { dayKey, setProperties } from './actions.ts'
 import { nextWeekStart } from './calendar.ts'
 import { formatLongDay } from './format.ts'
@@ -18,6 +20,7 @@ import { choiceDialog, type MenuItem } from './overlays.ts'
 import { session } from './session.ts'
 import { lastError, notice } from './state.ts'
 import { openStepsOf } from './subtasks.ts'
+import type { SwipeAction } from './swipe.ts'
 
 /** An object an action runs on; its title, when given, names it in the question (a row's Defer). */
 type Target = Pick<ObjectRecord, 'id' | 'props'> & { title?: string }
@@ -43,26 +46,25 @@ export interface QuickAsk {
   action: QuickActionDef
   def: PropertyDef
   anchor: HTMLElement | null
-  /** How many objects the answer goes to, and what to call them ("5 tasks"; for one, RunOptions.scope). */
-  count: number
+  /** What the question says it applies to (RunOptions.scope: by default the object's title). */
   scope?: string
   /** The button that saves ("Save" unless RunOptions.submitLabel). */
   submitLabel: string
-  /** With a custom submit label: whether saving also closes the objects (a status the action sets), so the box can say so. */
+  /** With a custom submit label: whether saving also closes the object (a status the action sets), so the box can say so. */
   closes?: boolean
-  /** The day picked on the calendar at first (one object's own, else none), and the due date shown beside it (one object). */
+  /** The day picked on the calendar at first (the object's own, else none), and the due date shown beside it. */
   day?: string
   due?: string
-  /** The text in the box at first (one object's current value). */
+  /** The text in the box at first (the object's current value). */
   text: string
   /**
-   * How many of the objects have a due date a later day could take along (a day asked for another
-   * date, such as Defer's Do date; not a due date that repeats): the question offers "Move the due
+   * Whether a later day could take the due date along (a day asked for another date, such as
+   * Defer's Do date, and a due date that does not repeat): the question offers "Move the due
    * date too", off at first so deadlines stay put unless explicitly moved.
    */
-  dueMovable: number
-  /** What a day would do to the due dates when they move along: how many move, and, for one object, to which day. */
-  dueMoves: (day: string) => { count: number; to?: string }
+  dueMovable: boolean
+  /** The day the due date would move to when the day picked is after it; undefined when it stays. */
+  dueMoves: (day: string) => string | undefined
   /** Whether the answer is being saved (no second one is taken), and why nothing was saved after the last try. */
   state: { saving: boolean; error: string }
   /** Saves an answer: a value, 'clear' (an empty line) or null (cancel, ignored while saving). Resolves once the question is over. */
@@ -94,99 +96,78 @@ export function textAnswer(def: PropertyDef, typed: string, initial: string, onl
   return { kind: def.kind === 'url' ? 'url' : 'text', value }
 }
 
-/** Runs `run` over the items, at most `limit` at a time. */
-async function eachLimited<T>(items: readonly T[], limit: number, run: (item: T) => Promise<void>) {
-  let next = 0
-  const worker = async () => {
-    while (next < items.length) await run(items[next++]!)
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
-}
-
 export interface RunOptions {
   /** Where the question opens; without one it is centred. */
   anchor?: HTMLElement | null
-  /** How each object's values are saved (default setProperties); Undo saves through it too. */
+  /** How the values are saved (default setProperties); Undo saves through it too. */
   save?: QuickSave
-  /** The notice's word for several objects ("5 tasks"). */
-  noun?: (count: number) => string
-  /** The question's save button ("Save & next task" in a review); default "Save". With it the question says whether saving leaves the objects open. */
+  /** The question's save button ("Save & next task" in a review); default "Save". With it the question says whether saving leaves the task open. */
   submitLabel?: string
-  /** What the question says it applies to when there is one object (default its title, if given; '' for nothing); several are "5 tasks". */
+  /** What the question says it applies to (default the object's title, if given; '' for nothing). */
   scope?: string
-  /** Called with the edits saved, once, after the notice is up (the returned edits are the same). */
-  onSaved?: (edits: QuickActionEdit[]) => void
-  onFailed?: (retry: () => Promise<QuickActionEdit[]>) => void
-  /** Called after Undo with the edits it put back: only the ones restored, not the ones that failed to. */
-  onUndo?: (edits: QuickActionEdit[]) => void
+  /** Called with the edit saved, once, after the notice is up. */
+  onSaved?: (edit: QuickActionEdit) => void
+  /** Called after Undo has put the values back. */
+  onUndo?: (edit: QuickActionEdit) => void
 }
 
-/** Saves each edit (four at a time): the ones that were, how many were not, and the first reason. */
-async function saveEdits(edits: readonly QuickActionEdit[], save: QuickSave) {
+/** Saves each edit in turn: the ones that were, and the first reason one was not. */
+async function saveEach(edits: readonly QuickActionEdit[], save: QuickSave) {
   const saved: QuickActionEdit[] = []
-  let failed = 0
   let error = ''
-  await eachLimited(edits, 4, async (edit) => {
+  for (const edit of edits) {
     try {
       await save(edit.id, edit.values)
       saved.push(edit)
     } catch (error_) {
-      failed++
       error ||= (error_ as Error).message || 'Could not save'
     }
-  })
-  // In the order given, for the message (the first one's days) and a stable Undo.
-  const order = new Map(edits.map((e, i) => [e.id, i]))
-  saved.sort((a, b) => order.get(a.id)! - order.get(b.id)!)
-  return { saved, failed, error }
+  }
+  return { saved, error }
 }
 
 /**
- * Runs an action on one object or many: asks once if it asks (the question stays open until the
- * values are saved), saves each object's values (four at a time), then one notice with one Undo.
- * Returns the edits saved; nothing when cancelled or when nothing could be saved.
+ * Runs an action on an object: asks once if it asks (the question stays open until the values are
+ * saved), saves them, then one notice with one Undo. Returns the edit saved; nothing when cancelled
+ * or when it could not be saved.
  */
-export async function runQuickAction(type: ObjectType, objects: Target | readonly Target[], action: QuickActionDef, options: RunOptions = {}): Promise<QuickActionEdit[]> {
-  const targets = Array.isArray(objects) ? (objects as readonly Target[]) : [objects as Target]
-  if (!targets.length) return []
+export async function runQuickAction(type: ObjectType, target: Target, action: QuickActionDef, options: RunOptions = {}): Promise<QuickActionEdit | undefined> {
   const save = options.save ?? ((id: Id, values: Values) => setProperties(id, values))
   const context = { today: dayKey(), nextWeek: nextWeekStart(), me: session.user?.id, dayOfTime }
-  let completed: QuickActionEdit[] = []
+  let completed: QuickActionEdit | undefined
   let stepsClosed: QuickActionEdit[] = []
   let undoing = false
   /** Tells the person what was saved: the notice with its Undo (which puts back only what a try restores, once at a time). */
-  const finish = async (saved: QuickActionEdit[], failed: number): Promise<QuickActionEdit[]> => {
-    completed.push(...saved)
-    const steps = await closeOpenSteps(type, closedBy(type, targets, saved), context)
+  const finish = async (saved: QuickActionEdit): Promise<QuickActionEdit> => {
+    completed = saved
+    const steps = await closeOpenSteps(type, closedBy(type, target, saved), target, context)
     stepsClosed.push(...steps.closed)
-    const message = quickActionMessage(type, action, completed, { longDay, dayOfTime, due: targets.length === 1 ? targets[0]!.props[DUE_PROPERTY_ID] : undefined, failed, noun: options.noun })
+    const message = quickActionMessage(type, action, saved, { longDay, dayOfTime, due: target.props[DUE_PROPERTY_ID] })
     const undo = async () => {
       if (undoing) return
       undoing = true
-      const restored: QuickActionEdit[] = []
-      const beforeUndo = [...completed]
-      await eachLimited(beforeUndo, 4, async (edit) => {
+      const restoring = completed
+      if (restoring) {
         try {
-          await save(edit.id, edit.before)
-          restored.push(edit)
+          await save(restoring.id, restoring.before)
+          completed = undefined
         } catch (error) {
           lastError.value = (error as Error).message
         }
-      })
-      completed = completed.filter((edit) => !restored.includes(edit))
-      // The subtasks closed with them: each puts its status back as the parent's own save did.
-      const stepsBack: QuickActionEdit[] = []
-      await eachLimited([...stepsClosed], 4, async (edit) => {
+      }
+      // The subtasks closed with it: each puts its status back as the parent's own save did.
+      const back: QuickActionEdit[] = []
+      for (const edit of stepsClosed) {
         try {
           await setProperties(edit.id, edit.before)
-          stepsBack.push(edit)
+          back.push(edit)
         } catch (error) {
           lastError.value = (error as Error).message
         }
-      })
-      stepsClosed = stepsClosed.filter((edit) => !stepsBack.includes(edit))
+      }
+      stepsClosed = stepsClosed.filter((edit) => !back.includes(edit))
       undoing = false
-      if (restored.length) options.onUndo?.(beforeUndo.filter((edit) => restored.includes(edit)))
+      if (restoring && !completed) options.onUndo?.(restoring)
     }
     const note = steps.left ? `${count(steps.left)} still open` : steps.closed.length ? `${count(steps.closed.length)} closed too` : undefined
     notice.value = { message: note ? `${message} · ${note}` : message, action: { label: 'Undo', run: undo } }
@@ -194,26 +175,21 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
     return saved
   }
 
-  const attempt = async (edits: readonly QuickActionEdit[]): Promise<QuickActionEdit[]> => {
-    const { saved, failed, error } = await saveEdits(edits, save)
-    if (failed) {
-      lastError.value = error
-      const savedIds = new Set(saved.map((edit) => edit.id))
-      options.onFailed?.(() => attempt(edits.filter((edit) => !savedIds.has(edit.id))))
-    }
-    return saved.length ? await finish(saved, failed) : []
-  }
-
   const asked = askOf(type, action)
   if (!asked) {
-    const edits = quickActionEdits(type, targets, action, context)
-    if (!edits.length) return []
-    return attempt(edits)
+    const edit = quickActionEdit(type, target, action, context)
+    if (!edit) return undefined
+    try {
+      await save(edit.id, edit.values)
+    } catch (error) {
+      lastError.value = (error as Error).message || 'Could not save'
+      return undefined
+    }
+    return finish(edit)
   }
 
-  const one = targets.length === 1 ? targets[0] : undefined
-  const dueOf = (day: string) => (object: Target) => dueMovedTo(type, object, day, dayOfTime)
-  const closes = options.submitLabel ? closedBy(type, targets, quickActionEdits(type, targets, action, context, sampleAnswer(asked.def))).length > 0 : undefined
+  const dueMoves = (day: string) => dayOf(dueMovedTo(type, target, day, dayOfTime))
+  const closes = options.submitLabel ? closedBy(type, target, quickActionEdit(type, target, action, context, sampleAnswer(asked.def))) !== undefined : undefined
   quickAsk.value?.answer(null)
   return new Promise((resolve) => {
     const state = reactive({ saving: false, error: '' })
@@ -222,47 +198,40 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
       action,
       def: plannedDateFieldOf(type)?.id === asked.def.id ? { ...asked.def, name: 'Planned for' } : asked.def,
       anchor: options.anchor ?? null,
-      count: targets.length,
-      scope: targets.length > 1 ? (options.noun ? options.noun(targets.length) : `${targets.length} tasks`) : (options.scope ?? (one?.title || undefined)),
+      scope: options.scope ?? (target.title || undefined),
       submitLabel: options.submitLabel ?? 'Save',
       closes,
-      day: one && asked.def.kind === 'date' ? dayOf(one.props[asked.def.id]) : undefined,
-      due: one && asked.def.id !== DUE_PROPERTY_ID ? dayOf(one.props[DUE_PROPERTY_ID]) : undefined,
-      text: one ? textOf(one.props[asked.def.id]) : '',
+      day: asked.def.kind === 'date' ? dayOf(target.props[asked.def.id]) : undefined,
+      due: asked.def.id !== DUE_PROPERTY_ID ? dayOf(target.props[DUE_PROPERTY_ID]) : undefined,
+      text: textOf(target.props[asked.def.id]),
       // Any later day would move it: a due date there is, that does not repeat.
-      dueMovable: asked.def.kind === 'date' && asked.def.id !== DUE_PROPERTY_ID ? targets.filter((o) => dueOf('9999-12-31')(o)).length : 0,
-      dueMoves: (day) => {
-        const moved = targets.flatMap((o) => dueOf(day)(o) ?? [])
-        return { count: moved.length, to: moved.length === 1 && one ? dayOf(moved[0]) : undefined }
-      },
+      dueMovable: asked.def.kind === 'date' && asked.def.id !== DUE_PROPERTY_ID && !!dueMoves('9999-12-31'),
+      dueMoves,
       state,
       answer: async (answer, moveDue) => {
         if (state.saving) return
-        const over = (edits: QuickActionEdit[]) => {
+        const over = (edit?: QuickActionEdit) => {
           if (quickAsk.value === self) quickAsk.value = null
-          resolve(edits)
+          resolve(edit)
         }
-        if (answer === null) return over([])
+        if (answer === null) return over()
         const run = answer === 'clear' ? withAskCleared(type, action) : action
-        const edits = quickActionEdits(type, targets, run, { ...context, moveDue: !!moveDue }, answer === 'clear' ? undefined : answer)
-        if (!edits.length) return over([])
+        const edit = quickActionEdit(type, target, run, { ...context, moveDue: !!moveDue }, answer === 'clear' ? undefined : answer)
+        if (!edit) return over()
         state.saving = true
         state.error = ''
-        const { saved, failed, error } = await saveEdits(edits, save)
-        state.saving = false
-        // Nothing saved: the question stays, with what was typed or picked, to try again or cancel.
-        if (!saved.length) {
-          state.error = error || 'Could not save'
+        try {
+          await save(edit.id, edit.values)
+        } catch (error) {
+          // The question stays, with what was typed or picked, to try again or cancel.
+          state.saving = false
+          state.error = (error as Error).message || 'Could not save'
           return
         }
-        if (failed) {
-          lastError.value = error
-          const savedIds = new Set(saved.map((edit) => edit.id))
-          options.onFailed?.(() => attempt(edits.filter((edit) => !savedIds.has(edit.id))))
-        }
+        state.saving = false
         // The question is over before a follow-up one (open subtasks) is asked.
         if (quickAsk.value === self) quickAsk.value = null
-        resolve(await finish(saved, failed))
+        resolve(await finish(edit))
       },
     }
     quickAsk.value = self
@@ -270,12 +239,12 @@ export async function runQuickAction(type: ObjectType, objects: Target | readonl
 }
 
 /**
- * The objects these edits closed (open before, closed by the values saved), and how: a task done
- * that repeats goes on to its next occurrence, still open. A page may have changed the object
- * itself by now, so its values before are the edit's own.
+ * How the object was closed by these values (open before, closed by the values saved): Done, or
+ * dropped; none for a task done that repeats, which goes on to its next occurrence, still open. A
+ * page may have changed the object itself by now, so its values before are the edit's own.
  */
-function closedBy(type: ObjectType, targets: readonly Target[], saved: readonly QuickActionEdit[]): { object: Target; closing: 'done' | 'dropped' }[] {
-  const byId = new Map(targets.map((t) => [t.id, t]))
+function closedBy(type: ObjectType, object: Target, saved: QuickActionEdit | undefined): 'done' | 'dropped' | undefined {
+  if (!saved) return undefined
   const withValues = (props: Target['props'], values: QuickActionEdit['values']) => {
     const out = { ...props }
     for (const [field, value] of Object.entries(values)) {
@@ -284,14 +253,9 @@ function closedBy(type: ObjectType, targets: readonly Target[], saved: readonly 
     }
     return out
   }
-  return saved.flatMap((edit) => {
-    const object = byId.get(edit.id)
-    if (!object) return []
-    const before = withValues(object.props, edit.before)
-    if (isClosedTask(type, { props: before }) || endsRepeat(type, { props: before }, edit.values)) return []
-    const closing = closingOf(type, { props: withValues(before, edit.values) })
-    return closing ? [{ object, closing }] : []
-  })
+  const before = withValues(object.props, saved.before)
+  if (isClosedTask(type, { props: before }) || endsRepeat(type, { props: before }, saved.values)) return undefined
+  return closingOf(type, { props: withValues(before, saved.values) })
 }
 
 const count = (n: number) => `${n} subtask${n === 1 ? '' : 's'}`
@@ -304,26 +268,22 @@ function stepAction(type: ObjectType, closing: 'done' | 'dropped'): QuickActionD
 }
 
 /**
- * Asks once whether to close the open subtasks of parents just closed, and closes them if so.
+ * Asks once whether to close the open subtasks of a parent just closed, and closes them if so.
  * Returns the edits saved and how many subtasks stay open (left open, or not saved).
  */
-async function closeOpenSteps(type: ObjectType, closed: { object: Target; closing: 'done' | 'dropped' }[], context: QuickActionContext) {
-  const open = new Map<Id, { step: Target; closing: 'done' | 'dropped' }>()
-  for (const { object, closing } of closed) for (const step of await openStepsOf(type, object.id)) open.set(step.id, { step, closing })
-  if (!open.size) return { closed: [] as QuickActionEdit[], left: 0 }
+async function closeOpenSteps(type: ObjectType, closing: 'done' | 'dropped' | undefined, parent: Target, context: QuickActionContext) {
+  const open = closing ? await openStepsOf(type, parent.id) : []
+  if (!closing || !open.length) return { closed: [] as QuickActionEdit[], left: 0 }
   const answer = await choiceDialog({
-    title: `Close ${closed.length === 1 ? 'its' : 'their'} ${open.size === 1 ? 'open subtask' : `${open.size} open subtasks`} too?`,
+    title: `Close its ${open.length === 1 ? 'open subtask' : `${open.length} open subtasks`} too?`,
     choices: [{ value: 'close', label: 'Close them too' }, { value: 'leave', label: 'Leave open' }],
   })
-  if (answer !== 'close') return { closed: [] as QuickActionEdit[], left: open.size }
-  const edits = (['done', 'dropped'] as const).flatMap((closing) => {
-    const action = stepAction(type, closing)
-    const steps = [...open.values()].filter((o) => o.closing === closing).map((o) => o.step)
-    return action && steps.length ? quickActionEdits(type, steps, action, context) : []
-  })
-  const { saved, error } = await saveEdits(edits, (id, values) => setProperties(id, values))
+  if (answer !== 'close') return { closed: [] as QuickActionEdit[], left: open.length }
+  const action = stepAction(type, closing)
+  const edits = action ? open.flatMap((step) => quickActionEdit(type, step, action, context) ?? []) : []
+  const { saved, error } = await saveEach(edits, (id, values) => setProperties(id, values))
   if (error) lastError.value = error
-  return { closed: saved, left: open.size - saved.length }
+  return { closed: saved, left: open.length - saved.length }
 }
 
 /** The quick actions of an open task as menu items (a row's menu, long-press on a phone). */
@@ -334,4 +294,34 @@ export function quickActionMenuItems(type: ObjectType | undefined, object: Targe
     icon: action.icon ?? 'ph:lightning',
     run: () => runQuickAction(type, object, action, options),
   }))
+}
+
+/**
+ * The swipes every touch row has (lists, subtasks): right runs the type's Defer, else its first
+ * action; left uncovers up to three others, Done first, then More (`menu`: the row's own menu, from
+ * the button's corner). None for a type without actions.
+ */
+export function swipeActionsFor(type: ObjectType, object: Target, options: { save: QuickSave; menu: (event: MouseEvent) => void }): { right?: SwipeAction; left: SwipeAction[] } {
+  const actions = quickActionsOf(type)
+  const right = actions.find((a) => a.id === 'defer') ?? actions[0]
+  if (!right) return { left: [] }
+  const make = (action: QuickActionDef): SwipeAction => ({
+    id: action.id,
+    label: action.name,
+    icon: action.icon,
+    tone: action.id === 'done' ? 'done' : action.id === 'defer' ? 'accent' : 'neutral',
+    run: () => runQuickAction(type, object, action, { save: options.save }),
+  })
+  const more: SwipeAction = {
+    id: 'more',
+    label: 'More',
+    icon: { kind: 'icon', value: 'ph:dots-three' },
+    tone: 'more',
+    run: (anchor) => {
+      const box = anchor?.getBoundingClientRect()
+      options.menu(new MouseEvent('contextmenu', { clientX: box?.left ?? 0, clientY: box?.bottom ?? 0 }))
+    },
+  }
+  const rest = actions.filter((a) => a !== right).sort((a, b) => Number(b.id === 'done') - Number(a.id === 'done'))
+  return { right: make(right), left: [...rest.slice(0, 3).map(make), more] }
 }

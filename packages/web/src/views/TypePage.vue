@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { newId } from '@vasta/core'
-import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, PropertyValue, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { RANK_PROPERTY_ID, closedOptionsOf, closedStatusIds, defaultViewFilter, dueForReview, fillFromFilter, hidesClosed, isClosedTask, matchesFilter, needsTriage, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
@@ -41,9 +41,7 @@ import { copyObjectLink, openObject } from '../lib/open.ts'
 import { quickActionMenuItems } from '../lib/quick-actions.ts'
 import { subtaskMenuItems } from '../lib/subtasks.ts'
 import { isPhone } from '../lib/viewport.ts'
-import { COMPLETION_FEEDBACK, createCompletionFeedback } from '../lib/completion-feedback.ts'
-import { onObjectSave } from '../lib/object-saves.ts'
-import { notice } from '../lib/state.ts'
+import { useCompletion } from '../lib/use-completion.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -521,29 +519,18 @@ const closedLabel = computed(() => {
   return `Show ${new Intl.ListFormat('en', { type: 'conjunction' }).format(names)}`
 })
 const toggleClosed = () => updateView({ filter: closedHidden.value ? withClosedShown(type.value, view.value.filter) : withClosedHidden(type.value, view.value.filter) })
-const completion = createCompletionFeedback({
+const completion = useCompletion({
   type: () => type.value,
   rows: () => visible.value,
   replace: moved,
-  save: setProperties,
-  failed: (retry) => {
-    notice.value = { message: 'The task was not saved. Try again.', action: { label: 'Retry', run: () => retry().catch(() => {}) } }
-  },
+  // A type page showing an agenda leaves its completions to the agenda.
+  enabled: () => !agendaActive.value,
+  resetOn: () => JSON.stringify([props.id, activeViewId.value, view.value.filter, sort.value, groupField.value, view.value.layout, view.value.agenda, view.value.flat, view.value.list, view.value.table, view.value.board?.swimlanes, mineOnly.value]),
 })
-provide(COMPLETION_FEEDBACK, completion)
-const stopSaves = onObjectSave((object, base) => agendaActive.value ? undefined : completion.observe(object, base))
-onBeforeUnmount(stopSaves)
-watch(
-  () => JSON.stringify([props.id, activeViewId.value, view.value.filter, sort.value, groupField.value, view.value.layout, view.value.agenda, view.value.flat, view.value.list, view.value.table, view.value.board?.swimlanes, mineOnly.value]),
-  () => completion.clear(),
-  { flush: 'sync' }
-)
 
 const visible = computed(() => {
   const context = queryContext()
-  const list = objects.value.filter(
-    (o) => completion.entries.has(o.id) || (matchesFilter(o, viewFilter.value, context) && (!showMine.value || !mineOnly.value || isMine(o)))
-  )
+  const list = completion.keep(objects.value.filter((o) => matchesFilter(o, viewFilter.value, context) && (!showMine.value || !mineOnly.value || isMine(o))))
   const { field, direction } = sort.value
   const factor = direction === 'asc' ? 1 : -1
   // Keys are read once per object (a formula would otherwise run at every comparison); titles

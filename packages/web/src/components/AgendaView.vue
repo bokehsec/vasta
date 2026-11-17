@@ -10,23 +10,21 @@
 // (lib/calendar-drag.ts); a notice says where it went, with Undo for a single date. On touch,
 // dragging near the top or bottom of the scrolling page scrolls it, so days off screen can be
 // reached (markDragScroll).
-import { computed, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
-import type { AgendaSettings, CalendarEntry, CalendarSource, FilterGroup, Id, ObjectRecord, ObjectSummary } from '@vasta/core'
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import type { AgendaSettings, CalendarEntry, CalendarSource, FilterGroup, Id } from '@vasta/core'
 import { addDays } from '@vasta/core'
-import { dayKey, setProperties } from '../lib/actions.ts'
+import { dayKey } from '../lib/actions.ts'
 import { agendaDays, isPast, nowIndex, placeEntries, selectEntries, splitAllDay } from '../lib/agenda.ts'
 import { api } from '../lib/api.ts'
 import { changeEntryTimes, formatDayShort, formatWeekday, movedTimes, viewerTimeZone } from '../lib/calendar.ts'
 import { ENTRY_DRAGGING, drag, markDragScroll, type DropTarget } from '../lib/calendar-drag.ts'
-import { ENTRY_COMPLETION, createCompletionFeedback, type RetainedCompletion } from '../lib/completion-feedback.ts'
 import { onChange } from '../lib/events.ts'
-import { onObjectSave } from '../lib/object-saves.ts'
+import { useEntryCompletion } from '../lib/use-completion.ts'
 import { queryContext } from '../lib/query.ts'
-import { cachedSummary, lastError, notice, primeSummaries, summaryOf, typesById, workspace } from '../lib/state.ts'
+import { cachedSummary, lastError, notice, primeSummaries, summaryOf, workspace } from '../lib/state.ts'
 import CalendarEntryItem from './calendar/CalendarEntryItem.vue'
 import EventDetails from './calendar/EventDetails.vue'
 import OccurrenceDetails from './calendar/OccurrenceDetails.vue'
-import { taskEntryCheckable } from '../lib/calendar-tasks.ts'
 import PopoverMenu from './PopoverMenu.vue'
 
 const props = defineProps<{
@@ -61,13 +59,7 @@ async function load() {
     if (id !== requestId) return
     primeSummaries(data.objects)
     entries.value = data.entries
-    // What the agenda kept after a completion: an entry whose task was deleted goes with it, and
-    // one whose completion was undone (or failed) keeps its place only until this fresh feed says
-    // where the task now is.
-    for (const [key, entry] of kept) {
-      if (!entry.objectId || !cachedSummary(entry.objectId) || !completion.entries.has(entry.objectId)) kept.delete(key)
-    }
-    completion.prune(new Set([...kept.values()].map((entry) => entry.objectId!)))
+    settle()
     failed.value = false
   } catch {
     if (id === requestId) failed.value = true
@@ -122,66 +114,16 @@ const selected = computed(() =>
   })
 )
 
-// Completion feedback (lib/completion-feedback.ts), as on type pages: a task marked Done here
-// saves, then its entry stays where it was, checked and struck, through the background reloads
-// this page makes; only a fresh look at the agenda (a reload, another filter or range) drops it.
-// The filter would drop the task, so the entry it had is kept here and merged back where it was
-// (its own times put it back on its day, among its neighbours); a repeating task's entry stays at
-// the occurrence just done, its note saying the next one. Only entries the agenda shows when the
-// completion happens are kept.
-const kept = reactive(new Map<string, CalendarEntry>())
-function replace(object: ObjectRecord | ObjectSummary) {
-  if (!completion.entries.has(object.id)) return
-  if ([...kept.values()].some((entry) => entry.objectId === object.id)) return
-  for (const entry of selected.value) {
-    if (entry.objectId !== object.id || !taskEntryCheckable(entry, typesById.value.get(object.typeId), object)) continue
-    kept.set(entry.key, { ...entry })
-  }
-}
-const completion = createCompletionFeedback({
-  type: (object) => typesById.value.get(object.typeId),
-  rows: () => {
-    // The summaries behind what is shown, kept completions included (an undone one reaches
-    // observe only if its row is still here, as on a type page).
-    const summaries: ObjectSummary[] = []
-    const seen = new Set<Id>()
-    for (const entry of [...selected.value, ...kept.values()]) {
-      if (!entry.objectId || seen.has(entry.objectId)) continue
-      seen.add(entry.objectId)
-      const summary = cachedSummary(entry.objectId)
-      if (summary) summaries.push(summary)
-    }
-    return summaries
-  },
-  replace,
-  save: setProperties,
-  failed: (retry) => {
-    notice.value = { message: 'The task was not saved. Try again.', action: { label: 'Retry', run: () => retry().catch(() => {}) } }
-  },
+// Completion feedback (lib/use-completion.ts, as on the Calendar page): a task marked Done here
+// stays where it was, checked and struck, through the background reloads this page makes; only a
+// fresh look at the agenda (a reload, another filter or range) drops it. The source of a fresh
+// look is one string: an array would be new on every re-run and clear what it should not.
+const { completion, merge, moving, settle } = useEntryCompletion({
+  selected: () => selected.value,
+  resetOn: () => [JSON.stringify(props.filter), JSON.stringify(props.agenda), props.typeIds.join(), props.parentId, days.value[0], days.value.at(-1)].join('\u0000'),
 })
-/** What a kept entry's checkbox asks: the completion it is kept for, and its Undo. */
-provide(ENTRY_COMPLETION, {
-  retained: (entry: CalendarEntry): RetainedCompletion | undefined => (kept.has(entry.key) ? completion.entries.get(entry.objectId ?? '') : undefined),
-  undo: (objectId: Id) => void completion.undo(objectId),
-})
-const stopSaves = onObjectSave((object, base) => completion.observe(object, base))
-onBeforeUnmount(stopSaves)
-// A fresh look at the agenda (another filter, date field or range) drops what it kept. The source
-// is one string: an array would be new on every re-run and clear what it should not.
-watch(
-  () => [JSON.stringify(props.filter), JSON.stringify(props.agenda), props.typeIds.join(), props.parentId, days.value[0], days.value.at(-1)].join('\u0000'),
-  () => {
-    completion.clear()
-    kept.clear()
-  },
-  { flush: 'sync' }
-)
 
-const placed = computed(() => {
-  const fresh = selected.value
-  const held = [...kept.values()].filter((entry) => !fresh.some((one) => one.key === entry.key))
-  return placeEntries([...fresh, ...held], days.value)
-})
+const placed = computed(() => placeEntries(merge(selected.value), days.value))
 
 /** "Today · Thu Nov 12", "Tomorrow · Fri Nov 13", then "Sat Nov 14". */
 function heading(day: string): { lead?: string; date: string } {
@@ -202,18 +144,13 @@ function rowsOf(day: string, timed: CalendarEntry[]) {
 // time of day. Events of subscribed calendars never move, and neither does anything in a readonly
 // embed.
 const movable = (entry: CalendarEntry) => !props.readonly && (entry.kind === 'property' || entry.kind === 'object')
-/** A drag moves the task on purpose: the entry a completion kept goes with it (suppressed while it saves). */
-async function forget<T>(objectId: Id, run: () => Promise<T>): Promise<T> {
-  for (const [key, entry] of kept) if (entry.objectId === objectId) kept.delete(key)
-  return await completion.moving(objectId, run)
-}
 async function drop(entry: CalendarEntry, mode: 'move' | 'resize', target: DropTarget) {
   if (mode !== 'move') return
   const times = movedTimes(entry, target)
   if (times.start === entry.start && (times.end ?? '') === (entry.end ?? '')) return
   try {
     const move = () => changeEntryTimes(entry, times)
-    const changed = await (entry.objectId && completion.entries.has(entry.objectId) ? forget(entry.objectId, move) : move())
+    const changed = await (entry.objectId && completion.entries.has(entry.objectId) ? moving(entry.objectId, move) : move())
     if (!changed) return
     announceMove(entry, target.day)
   } catch (error) {

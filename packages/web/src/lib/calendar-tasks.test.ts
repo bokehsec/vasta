@@ -5,7 +5,7 @@ import { dayTaskGroups, taskDateRole, taskEntryCheckable } from './calendar-task
 
 const at = '2026-11-16T12:00:00.000Z'
 const base = createBuiltinTypes('space', at).find((t) => t.system === 'task')!
-const task = { ...base, properties: [...base.properties, { id: 'work', kind: 'date' as const, name: 'Do date' }], quickActions: { deferField: 'work' } }
+const task = { ...base, properties: [...base.properties, { id: 'work', kind: 'date' as const, name: 'Do date' }, { id: 'checkback', kind: 'date' as const, name: 'Check back' }], quickActions: { deferField: 'work' } }
 const types = new Map([[task.id, task]])
 const day = (n: number): DateValue => ({ start: `2026-11-${n}T00:00:00.000Z`, resolution: 'day' })
 const timed = (hour: string): DateValue => ({ start: `2026-11-15T${hour}:00.000Z`, resolution: 'time' })
@@ -57,9 +57,12 @@ describe('task calendar dates', () => {
   })
   it('keeps administrative dates separate from planned work and deadlines', () => {
     const o = object()
-    o.props.reviewed = { kind: 'date', value: day(15) }
+    o.props.checkback = { kind: 'date', value: day(15) }
     expect(groups(o).scheduled).toHaveLength(1)
     expect(groups(o).planned).toHaveLength(0)
+    // The Last reviewed day, set by every status change, is not on the calendar at all.
+    o.props.reviewed = { kind: 'date', value: day(16) }
+    expect(entries(o).map((e) => e.field)).not.toContain('reviewed')
   })
   it('only completes the current repeating due occurrence, never a stale plan', () => {
     const o = object(day(15), { ...day(15), rrule: 'FREQ=WEEKLY;COUNT=3' })

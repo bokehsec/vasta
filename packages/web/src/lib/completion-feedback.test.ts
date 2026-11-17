@@ -163,6 +163,28 @@ describe('placement and pin order', () => {
   })
 })
 
+describe('keeping rows a view no longer lists', () => {
+  it('adds the retained rows its list lacks, as they show now, and none once released', () => {
+    const { feedback, complete, rows } = setup([summary('a'), summary('b')])
+    complete('a')!.saved!(asRecord(summary('a'), { status: status('done') }))
+    // A filter that hides done tasks lists only b: the kept completion comes back, checked.
+    const listed = rows().filter((row) => row.id === 'b')
+    expect(feedback.keep(listed).map((row) => row.id)).toEqual(['b', 'a'])
+    expect(feedback.keep(listed).at(-1)!.props.status).toEqual(status('done'))
+    // Listed already: not twice.
+    expect(feedback.keep(rows()).map((row) => row.id)).toEqual(['a', 'b'])
+    feedback.clear()
+    expect(feedback.keep(listed)).toBe(listed)
+  })
+
+  it('keeps the row’s preview, which an object saved does not carry', () => {
+    const { feedback, complete } = setup([{ ...summary('a'), preview: 'Call about the roof' } as ObjectSummary])
+    const { preview: _preview, ...record } = asRecord(summary('a'), { status: status('done') }) as ObjectRecord & { preview?: string }
+    complete('a')!.saved!(record as ObjectRecord)
+    expect(feedback.keep([])[0]).toMatchObject({ id: 'a', preview: 'Call about the roof' })
+  })
+})
+
 describe('save success', () => {
   it('stops being pending and keeps the row with the real saved props', () => {
     const { feedback, complete, replace } = setup([summary('a', 'todo', day('2026-11-20'))])
@@ -230,6 +252,13 @@ describe('undo', () => {
     complete('a')!.saved!(asRecord(summary('a'), { status: status('todo'), due: day('2026-11-27', 'FREQ=WEEKLY') }))
     await feedback.undo('a')
     expect(save).toHaveBeenCalledWith('a', { status: status('doing'), due: day('2026-11-20', 'FREQ=WEEKLY') })
+  })
+
+  it('also writes back what the save itself changed, such as the Last reviewed day a new status sets', async () => {
+    const { feedback, complete, save } = setup([summary('a', 'doing')])
+    complete('a')!.saved!(asRecord(summary('a'), { status: status('done'), reviewed: day('2026-11-16') }))
+    await feedback.undo('a')
+    expect(save).toHaveBeenCalledWith('a', { status: status('doing'), reviewed: undefined })
   })
 
   it('does nothing while the completion is still pending or when nothing is retained', async () => {

@@ -1,6 +1,7 @@
 // Subtasks in the open space (@vasta/core subtasks.ts): for each type with a parent field, which
 // objects are steps of which, kept loaded once something asks (a list nesting its rows, a page's
-// Subtasks panel) and reloaded when one of the type's objects changes. Progress counts every step,
+// Subtasks panel) and kept in step as the type's objects change: each one saved or changed is put
+// where its parent field says, without loading the type again. Progress counts every step,
 // not only those a view's filter lets through. Also the actions on steps: adding them under a
 // parent (taking its selects, relations, people and tags), moving one under another, taking one out.
 import { reactive } from 'vue'
@@ -58,12 +59,61 @@ export function loadSubtasks(typeId: Id | undefined, fresh = false): Promise<voi
   return run
 }
 
+/** Puts an object where its parent field says (out of the index when it is gone), steps of a parent oldest first. */
+function place(typeId: Id, id: Id, object: ObjectSummary | undefined) {
+  const type = typesById.value.get(typeId)
+  const index = indexes.get(typeId)
+  if (!index) return
+  const parent = object && !object.deletedAt ? parentIdOf(type, object) : undefined
+  const old = index.parents.get(id)
+  if (old && old !== parent) {
+    const rest = (index.children.get(old) ?? []).filter((step) => step.id !== id)
+    if (rest.length) index.children.set(old, rest)
+    else index.children.delete(old)
+    index.parents.delete(id)
+  }
+  if (!object || !parent || parent === id) return
+  index.parents.set(id, parent)
+  const steps = index.children.get(parent) ?? []
+  const at = steps.findIndex((step) => step.id === id)
+  if (at >= 0) steps[at] = object
+  else index.children.set(parent, [...steps, object].sort((a, b) => a.createdAt.localeCompare(b.createdAt)))
+}
+
+/** Keeps the index in step with an object just saved (the record a save gives back, without its text). */
+export function noteSaved(saved: ObjectRecord | ObjectSummary) {
+  const { content: _content, ...rest } = saved as ObjectRecord
+  place(saved.typeId, saved.id, { preview: '', ...rest })
+}
+
+// Objects changed anywhere (the change event carries their ids): the summaries of those of an
+// indexed type are fetched together, once the burst of events is over, not the whole type again.
+const changed = new Map<Id, Set<Id>>()
 const timers = new Map<Id, ReturnType<typeof setTimeout>>()
+async function refreshChanged() {
+  const batches = [...changed]
+  changed.clear()
+  for (const [typeId, ids] of batches) {
+    const wanted = [...ids]
+    for (let from = 0; from < wanted.length; from += 100) {
+      const asked = wanted.slice(from, from + 100)
+      try {
+        const found = new Map((await api.summaries(asked)).map((summary) => [summary.id, summary]))
+        primeSummaries([...found.values()])
+        for (const id of asked) place(typeId, id, found.get(id))
+      } catch {}
+    }
+  }
+}
 onChange((event) => {
-  const typeId = event.kind === 'object' ? event.typeId : event.kind === 'type' ? event.id : undefined
-  if (!typeId || !indexes.has(typeId)) return
-  clearTimeout(timers.get(typeId))
-  timers.set(typeId, setTimeout(() => void loadSubtasks(typeId, true), 300))
+  // A type's own change (its parent field) can regroup every step: load it again.
+  if (event.kind === 'type' && indexes.has(event.id)) {
+    clearTimeout(timers.get(event.id))
+    timers.set(event.id, setTimeout(() => void loadSubtasks(event.id, true), 300))
+  } else if (event.kind === 'object' && indexes.has(event.typeId)) {
+    if (!changed.size) queueMicrotask(() => void refreshChanged())
+    changed.set(event.typeId, (changed.get(event.typeId) ?? new Set()).add(event.id))
+  }
 })
 
 /** The steps of an object (all of them, oldest first); empty while they load. */
@@ -125,7 +175,7 @@ export async function addSubtask(type: ObjectType, parent: Pick<ObjectRecord, 'i
   const { props, tagIds } = inheritedValues(type, parent)
   props[field.id] = { kind: 'relation', value: [parent.id] }
   const created = await createObject(type.id, { title: title.trim(), props, tagIds }, false)
-  await loadSubtasks(type.id, true)
+  noteSaved(created)
   return created
 }
 
@@ -134,7 +184,7 @@ export async function setParent(type: ObjectType, id: Id, parentId: Id | undefin
   const field = parentFieldOf(type)
   if (!field || (parentId && !canBeParent(type, id, parentId))) return undefined
   const saved = await setProperties(id, { [field.id]: parentId ? { kind: 'relation', value: [parentId] } : undefined })
-  await loadSubtasks(type.id, true)
+  noteSaved(saved)
   return saved
 }
 

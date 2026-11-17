@@ -41,7 +41,7 @@ try {
   const space = (await get('/api/spaces'))[0], bundle = await get(`/api/spaces/${space.id}`)
   original = await get('/api/types/' + bundle.types.find(t => t.system === 'task').id)
   const status = original.properties.find(p => p.id === 'status'), open = status.options.find(o => o.status === 'todo').id, done = status.options.find(o => o.status === 'done').id
-  const type = { ...original, properties: [...original.properties.filter(p => p.id !== 'work'), { id: 'work', name: 'Do date', kind: 'date' }].map(p => p.id === 'status' ? { ...p, options: [...p.options.filter(o => o.id !== 'drop'), { id: 'drop', label: 'Dropped', status: 'done' }] } : p), quickActions: { deferField: 'work' } }
+  const type = { ...original, properties: [...original.properties.filter(p => p.id !== 'work' && p.id !== 'checkback'), { id: 'work', name: 'Do date', kind: 'date' }, { id: 'checkback', name: 'Check back', kind: 'date' }].map(p => p.id === 'status' ? { ...p, options: [...p.options.filter(o => o.id !== 'drop'), { id: 'drop', label: 'Dropped', status: 'done' }] } : p), quickActions: { deferField: 'work' } }
   await put('/api/types/' + type.id, type)
   async function make(name, props) { const o = await post('/api/objects', { typeId: type.id, title: tag + ' ' + name, props: { status: { kind: 'select', value: [open] }, ...props } }); objects.push(o); return o }
   const planned = await make('Planned', { work: dateValue(15), due: dateValue(22) })
@@ -49,6 +49,7 @@ try {
   await make('Deadline', { work: dateValue(22), due: dateValue(15) })
   await make('Done', { work: dateValue(15), status: { kind: 'select', value: [done] } })
   await make('Dropped', { work: dateValue(15), status: { kind: 'select', value: ['drop'] } })
+  await make('Checkback', { checkback: dateValue(15) })
   await make('Reviewed', { reviewed: dateValue(15) })
   const repeat = await make('Repeat', { work: dateValue(15), due: { ...dateValue(15), value: { ...dateValue(15).value, rrule: 'FREQ=WEEKLY;COUNT=3' } } })
   await go()
@@ -62,8 +63,10 @@ try {
   assert.equal(await entry('Planned').locator('button[title="Mark as done"]').count(), 1)
   assert.equal(await entry('PlanOnly').locator('button[title="Mark as done"]').count(), 1)
   assert.match(await section('due').innerText(), /Planned after deadline/)
-  assert.equal(await entry('Reviewed').locator('button[title="Mark as done"]').count(), 0)
-  assert.match(await entry('Reviewed').innerText(), /Last reviewed/)
+  assert.equal(await entry('Checkback').locator('button[title="Mark as done"]').count(), 0)
+  assert.match(await entry('Checkback').innerText(), /Check back/)
+  // The Last reviewed day (set by every status change) is bookkeeping, not a calendar entry.
+  assert.equal(await entry('Reviewed').count(), 0)
   await page.screenshot({ path: path.join(shots, `calendar-planned-${engine}-desktop.png`), fullPage: true })
   console.log('• plan-only completion is retained, then undone in place')
   await entry('PlanOnly').locator('button[title="Mark as done"]').click()

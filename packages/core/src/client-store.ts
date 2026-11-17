@@ -8,7 +8,7 @@
 // change not pushed yet survives an older one from the server. Rich text merges through Yjs.
 import { newId } from './ids.ts'
 import { Y } from '@vasta/editor-schema/yjs'
-import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, completeRepeat, dayReferences, objectEntries, type DayRange, type OccurrenceEdit } from './calendar.ts'
+import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, settleTaskSave, dayReferences, objectEntries, type DayRange, type OccurrenceEdit } from './calendar.ts'
 import { calendarEntries, parseCalendar, type ParsedCalendar } from './ics.ts'
 import type { CalendarEntry, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, OpensOn, Person, Space } from './model.ts'
 import { QuoteError, recordCapture, standaloneCapture, type CaptureDestinations, applyEdit, createQuote, findOrCreateDailyNote, writeDailyText, listInbox, newObject, newType, querySpace, setCaptureDone, withOpensOn, type InboxItem } from './operations.ts'
@@ -652,7 +652,8 @@ export class ClientStore extends Store {
    * Save the fields of an object. Only fields that differ from `base` (the copy the caller
    * edited, when it kept one for a while) are written, so a change pulled meanwhile is not
    * undone. Rich text and media are left alone: text changes through the open Y.Doc. A repeating
-   * task done is due next time instead (completeRepeat, in the device's zone).
+   * task done is due next time instead, and a changed status marks it reviewed (settleTaskSave,
+   * in the device's zone).
    */
   saveObject(object: ObjectRecord, at: IsoDateTime, base?: ObjectRecord): ObjectRecord {
     const stored = this.requireObject(object.id)
@@ -660,7 +661,7 @@ export class ClientStore extends Store {
     const next = applyEdit(stored, object, base ?? stored)
     if (!next) return stored
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    return this.putObject({ ...completeRepeat(next, stored, this.getType(next.typeId), timeZone, base ?? stored), content: stored.content, updatedAt: at })
+    return this.putObject({ ...settleTaskSave(next, stored, this.getType(next.typeId), timeZone, at, base ?? stored), content: stored.content, updatedAt: at })
   }
 
   createType(data: { spaceId: Id; name: string; pluralName?: string; icon?: Icon }, at: IsoDateTime): ObjectType {

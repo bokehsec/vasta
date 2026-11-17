@@ -80,9 +80,10 @@ describe('vasta CLI', () => {
     const id = /\/o\/(\S+)/.exec(created)![1]!
     expect(created).toBe(`Created Write the docs: https://notes.example/o/${id}`)
     await vasta(['append', id], '- step one\n- step two')
+    // A changed status marks the task reviewed that day.
     await vasta(['set', id, 'status=done', '--title', 'Write the agent docs'])
     expect(await vasta(['show', `https://notes.example/o/${id}`])).toBe(
-      [`# Write the agent docs`, `Task · Notes · https://notes.example/o/${id}`, 'Pinned: no', 'Status: Done', 'Priority: High', '', 'For **agents**.', '', '- step one', '- step two'].join('\n')
+      [`# Write the agent docs`, `Task · Notes · https://notes.example/o/${id}`, 'Pinned: no', 'Status: Done', 'Priority: High', 'Last reviewed: 2026-10-19', '', 'For **agents**.', '', '- step one', '- step two'].join('\n')
     )
     expect(await vasta(['search', 'agents'])).toBe(`Write the agent docs  · Task  ${id}`)
     expect(await vasta(['query', '--type', 'Task', '--where', 'status is Done'])).toBe(`Write the agent docs  · Task  ${id}`)

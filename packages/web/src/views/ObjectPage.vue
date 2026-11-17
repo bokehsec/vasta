@@ -13,7 +13,7 @@ import TaskDateOptions from '../components/TaskDateOptions.vue'
 import { parentFieldOf, quickActionsOf } from '@vasta/core'
 import { setProperties } from '../lib/actions.ts'
 import { isPhone } from '../lib/viewport.ts'
-import { loadSubtasks, withDescendants } from '../lib/subtasks.ts'
+import { withDescendants } from '../lib/subtasks.ts'
 import { pickObject } from '../lib/pick.ts'
 import type { QuickSave } from '../lib/quick-actions.ts'
 import DateValueEditor from '../components/DateValueEditor.vue'
@@ -211,9 +211,19 @@ function toggleBoardFull() {
 /** Editors wait for the text session when the replica runs. */
 const editorsReady = ref(false)
 
-async function save() {
+let saving: Promise<void> | undefined
+/** Sends what changed; `strict` rejects when it could not be saved (a quick action's runner reports that). */
+function save(strict = false): Promise<void> {
   clearTimeout(timer)
-  if (!object.value || status.value !== 'unsaved') return
+  if (!object.value || status.value !== 'unsaved') return Promise.resolve()
+  const run = send(strict)
+  const tracked = run.catch(() => {}).finally(() => saving === tracked && (saving = undefined))
+  saving = tracked
+  return run
+}
+
+async function send(strict: boolean) {
+  if (!object.value) return
   status.value = 'saving'
   try {
     const sent = clone(object.value)
@@ -227,8 +237,9 @@ async function save() {
     if (object.value) assignChanged(object.value, afterSave(object.value, sent, saved))
     if (status.value !== 'saving') return // edited while saving: the next save sends that
     status.value = 'saved'
-  } catch {
+  } catch (error) {
     status.value = 'unsaved'
+    if (strict) throw error
   }
 }
 
@@ -462,7 +473,7 @@ function setProp(def: PropertyDef, value: PropertyValue | undefined) {
 const parentField = computed(() => parentFieldOf(type.value))
 const hiddenReverse = computed(() => (type.value && parentField.value ? `${type.value.id}/${parentField.value.id}` : undefined))
 /** This page's object saves through the page (its editor holds the copy); others straight away. */
-const pageSave: QuickSave = (id, values) => (object.value?.id === id ? setProps(values) : setProperties(id, values))
+const pageSave: QuickSave = (id, values) => (object.value?.id === id ? saveProps(values) : setProperties(id, values))
 /** Makes this object a step of another (picked among its type, not itself or its own steps), or a top-level one. */
 async function moveUnder(pick: boolean) {
   menuOpen.value = false
@@ -471,7 +482,6 @@ async function moveUnder(pick: boolean) {
   const parent = pick ? await pickObject({ title: 'Make a subtask of…', typeIds: [type.value.id], exclude: withDescendants(type.value, object.value.id) }) : null
   if (pick && !parent) return
   setProps({ [field.id]: parent ? { kind: 'relation', value: [parent.id] } : undefined })
-  setTimeout(() => type.value && void loadSubtasks(type.value.id, true), 800)
 }
 const hasParent = computed(() => {
   const value = parentField.value && object.value?.props[parentField.value.id]
@@ -487,7 +497,7 @@ const summaryFields = computed(() => visibleFields.value.filter((def) => hasValu
 /** A type with quick actions (its own list, or the task defaults) shows them on its objects' pages. */
 const hasQuickActions = computed(() => !!type.value && quickActionsOf(type.value).length > 0)
 
-/** Several properties at once (a task's quick actions), saved together. */
+/** Several properties at once, saved together shortly. */
 function setProps(values: Record<Id, PropertyValue | undefined>) {
   if (!object.value) return
   for (const [id, value] of Object.entries(values)) {
@@ -495,6 +505,17 @@ function setProps(values: Record<Id, PropertyValue | undefined>) {
     else delete object.value.props[id]
   }
   changed()
+}
+
+/**
+ * A quick action's values, saved now: resolves once they are stored and rejects when they are not,
+ * so the runner (lib/quick-actions.ts) tells the person only what was saved. A save under way
+ * finishes first.
+ */
+async function saveProps(values: Record<Id, PropertyValue | undefined>) {
+  setProps(values)
+  while (saving) await saving
+  await save(true)
 }
 
 async function addOption(def: PropertyDef, option: SelectOption) {
@@ -959,7 +980,7 @@ async function startFrom(template: ObjectRecord) {
         <ObjectPicker :type-ids="tagType ? [tagType.id] : []" :exclude="object.tagIds" create-label="New tag" @pick="addTag" @create="createTag" />
       </PopoverMenu>
 
-      <TaskQuickActions v-if="type && hasQuickActions && !info && !object.deletedAt" :type="type" :object="object" @set="setProps" />
+      <TaskQuickActions v-if="type && hasQuickActions && !info && !object.deletedAt" :type="type" :object="object" @set="saveProps" />
       <button
         v-if="foldFields"
         class="mt-4 flex w-full items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-left text-sm"

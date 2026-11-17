@@ -138,7 +138,9 @@ GitHub release page.
   fine as it is: it records today in the task's new Last reviewed field and moves on, so a task kept
   for later without a date no longer has to be deferred or skipped. Three buttons decide: Done,
   Defer… and Next step…; More holds the rest (Drop, On hold when the status has it, your own actions,
-  Break into steps). Any decision counts as reviewed too. A next step is saved with Save and keeps
+  Break into steps). Any decision counts as reviewed too: a status change marks a task reviewed wherever
+  it is made (see "A changed status counts as a review" below), and the ones that leave the status as it is (Keep, a next
+  step) record it themselves. A next step is saved with Save and keeps
   the task on screen (Next goes on); Done, Defer and the others move on. The task's whole notes show
   (and its other text fields), scrolling under the buttons. Skip and Back move without changing
   anything. Close the review, open a task's details, or reload, and it waits for you: Back from the
@@ -160,7 +162,8 @@ GitHub release page.
   parent.
 - **Tasks on a phone: swipe a row.** Swipe right to defer a task (pick the day in the sheet that
   rises from the bottom); swipe left for Done, Drop, Next step and More. Long-press a row for the
-  same actions in its menu. On a tablet the buttons stay and the swipes work too.
+  same actions in its menu. On a tablet the buttons stay and the swipes work too. A subtask in a
+  task's page swipes the same way and has the same ⋯ button and long-press menu as any other row.
 - **Tables fit a phone.** A table view is drawn as rows on a phone, with its columns as a short
   line under each title, so nothing scrolls sideways. "Show as table on this phone" in the layout
   menu keeps the table for that view on that phone.
@@ -218,6 +221,16 @@ GitHub release page.
   the circle, as on the calendar, instead of looking just like Done. A subtask's circle is the same
   one lists have. "All subtasks done" in a task's page offers the type's Done, not whatever action
   comes first.
+- **A changed status counts as a review.** Whenever a task's status changes (Done, a board drag, a
+  status picked on its page, the agent tools, a device working offline), its Last reviewed day
+  becomes today in your time zone, unless that save sets the day itself. Undo puts the earlier day
+  back with the status. Review's own decisions that leave the status as it is (Keep, a next step)
+  still record it. In a task's history the change shows as "Last reviewed" next to the status. The Last reviewed
+  day is not an entry on the calendar or in agendas.
+- **Quick actions on the task page say what happened after it is saved.** Done, Defer and the
+  others on a task's page save at once instead of after a short pause, so a failed save says so and
+  shows no "Done" notice. Moving a task under another and saving a subtask no longer reload every
+  task of the type: only what changed is updated.
 - **Closing a task with open subtasks asks.** Whatever closes it (Done, Drop, a board drag, a
   review) asks once "Close its 3 open subtasks too?" with **Close them too** or **Leave open**; they
   close with Done, or Drop when the task was dropped, and one Undo puts the task and its subtasks
@@ -273,7 +286,7 @@ GitHub release page.
   (a Tasks view or a list in a page laid out as days) stays on its day, checked and struck through,
   until you leave or reload; a repeating one says "Done this time · Next: …". Its checkbox undoes it,
   back to its exact status. Marking a subtask done shows a notice with Undo, and the subtask's
-  checkbox also puts back the status it had. The Calendar page already kept done tasks in view.
+  checkbox also puts back the status it had. The Calendar page already kept done tasks in view; dragging one to another day moves it there, on the Calendar page as in an agenda.
 - **Done tasks stay put in lists inside pages too.** A task marked done in a list embedded in a page
   (Home's Today, a project page, a dashboard) stays where it was, checked and struck through, until
   you leave or reload the page; Undo puts back its exact status. A list whose last open task you

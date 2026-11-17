@@ -4,7 +4,8 @@
 // parent by itself), and says "still open" when the parent is closed early; a list nests the steps
 // under their parent with a caret that folds them and a "2/4" chip, "Nest subtasks" off lists them
 // flat, a step whose parent is not listed names it; "Make subtask of…" leaves out the task's own
-// steps (no loops); a row's menu takes a step out of its parent; a phone shows the panel at 16px.
+// steps (no loops); a row's menu takes a step out of its parent; a phone shows the panel at 16px, and a
+// step there has the ⋯ menu every row has.
 //   node subtasks.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -243,6 +244,15 @@ try {
   if (size < 16) throw new Error(`the Add subtask box is ${size}px on a phone`)
   const wide = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.querySelector('main').scrollWidth))
   if (wide > 392) throw new Error(`the page scrolls sideways: ${wide}px`)
+
+  step("on a phone a step has a ⋯ with the row's menu, like any row, and it takes the step out of its parent")
+  const more = panel.locator('[data-subtask] [data-row-more]')
+  await until(async () => (await more.count()) > 0, 'the ⋯ on a step')
+  const shown = await panel.locator('[data-subtask]').count()
+  await more.first().click()
+  await page.locator('button', { hasText: /^\s*Open\s*$/ }).waitFor()
+  await page.locator('button', { hasText: /^\s*Remove from parent\s*$/ }).click()
+  await until(async () => (await panel.locator('[data-subtask]').count()) === shown - 1, 'the step left the panel without a reload')
 
   if (problems.length) throw new Error(problems.join('\n'))
   console.log(`\nAll subtasks checks passed for ${engine}.`)

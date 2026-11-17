@@ -93,6 +93,19 @@ describe('server API', () => {
     expect((await put(done(next))).props).toMatchObject({ status: { value: ['done'] }, due: { value: { start: '2026-11-09T00:00:00.000Z' } } })
   })
 
+  it('marks a task reviewed when its status changes, unless the save sets the date', async () => {
+    const { app } = setup()
+    const task = (await (await app.request('/api/objects', json({ typeId: builtinTypeId('s', 'task'), title: 'Bins', props: { status: { kind: 'select', value: ['todo'] } } }))).json()) as ObjectRecord
+    const put = async (body: unknown) => (await app.request(`/api/objects/${task.id}`, { ...json(body), method: 'PUT' })).json() as Promise<ObjectRecord>
+    const renamed = await put({ ...task, title: 'Bins out', base: task })
+    expect(renamed.props.reviewed).toBeUndefined()
+    const done = await put({ ...renamed, props: { ...renamed.props, status: { kind: 'select', value: ['done'] } }, base: renamed })
+    expect(done.props.reviewed).toEqual({ kind: 'date', value: { start: '2026-01-01T00:00:00.000Z', resolution: 'day' } })
+    const own = { kind: 'date', value: { start: '2025-12-20T00:00:00.000Z', resolution: 'day' } }
+    const reopened = await put({ ...done, props: { ...done.props, status: { kind: 'select', value: ['todo'] }, reviewed: own }, base: done })
+    expect(reopened.props.reviewed).toEqual(own)
+  })
+
   it('does not do a repeating task’s next occurrence when two devices set the same one done', async () => {
     const { app } = setup()
     const due = { start: '2026-11-02T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY' }

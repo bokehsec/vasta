@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
-import { createBuiltinTypes, newObject, type DateValue, type ObjectRecord, type ObjectSummary, type ObjectType } from '../src/index.ts'
-import { calendarObjects, changeOccurrence, changeOneOccurrence, changeSeries, completeRepeat, currentOccurrence, dayReferences, objectEntries, occurrences, pruneExceptions, spanOf, splitSeries } from '../src/calendar.ts'
+import { createBuiltinTypes, newObject, type DateValue, type ObjectRecord, type ObjectSummary, type ObjectType, type PropertyValue } from '../src/index.ts'
+import { calendarObjects, changeOccurrence, changeOneOccurrence, changeSeries, completeRepeat, currentOccurrence, dayReferences, objectEntries, occurrences, pruneExceptions, settleTaskSave, spanOf, splitSeries } from '../src/calendar.ts'
 import { Store } from '../src/store.ts'
 import { calendarEntries, parseCalendar } from '../src/ics.ts'
 import { addDays, instantOf, wallTimeIn } from '../src/time.ts'
@@ -286,6 +286,24 @@ describe('completing a repeating task', () => {
   })
 })
 
+describe('settling a task save', () => {
+  const task = createBuiltinTypes('s', at).find((t) => t.system === 'task')!
+  const weekly: DateValue = { start: '2026-11-02T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY' }
+  const make = (props: ObjectRecord['props']): ObjectRecord => newObject(task, { title: 'Pay rent', props }, 'rent', at)
+  const todo = { kind: 'select' as const, value: ['todo'] }
+  const done = { kind: 'select' as const, value: ['done'] }
+
+  it('marks a changed status reviewed on the saving day in the user’s zone, a repeating one too', () => {
+    const stored = make({ status: todo, due: { kind: 'date', value: weekly } })
+    const saved = settleTaskSave({ ...stored, props: { ...stored.props, status: done } }, stored, task, NY, '2026-11-17T02:00:00.000Z')
+    // 02:00 UTC is still the evening of the 16th in New York; the repeat went on to its next occurrence.
+    expect(saved.props.reviewed).toEqual({ kind: 'date', value: { start: '2026-11-16T00:00:00.000Z', resolution: 'day' } })
+    expect(saved.props).toMatchObject({ status: { value: ['todo'] }, due: { value: { start: '2026-11-09T00:00:00.000Z' } } })
+    const plain = make({ status: todo })
+    expect(settleTaskSave({ ...plain, title: 'Rent' }, plain, task, NY, '2026-11-17T02:00:00.000Z').props.reviewed).toBeUndefined()
+  })
+})
+
 describe('object entries', () => {
   const event: ObjectType = {
     id: 'event', spaceId: 's', name: 'Event', pluralName: 'Events', views: [], createdAt: at, updatedAt: at,
@@ -313,6 +331,12 @@ describe('object entries', () => {
       ['party', 'property', 'when', '2026-10-09', true],
       ['party', 'property', 'when', '2026-10-10', true],
     ])
+  })
+
+  it('leaves out a task’s Last reviewed day: every status change sets it, it is not planned', () => {
+    const day = (value: string): PropertyValue => ({ kind: 'date', value: { start: `${value}T00:00:00.000Z`, resolution: 'day' } })
+    const entries = objectEntries([obj('bins', 'task:s', { props: { due: day('2026-10-08'), reviewed: day('2026-10-05') } })], types, { from: '2026-10-01', to: '2026-10-31' }, SP)
+    expect(entries.map((e) => e.field)).toEqual(['due'])
   })
 
   it('marks the occurrence a repeating date is at', () => {

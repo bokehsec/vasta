@@ -5,6 +5,7 @@ import { newId } from './ids.ts'
 import ICAL from 'ical.js'
 import type { CalendarEntry, DateException, DateValue, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType } from './model.ts'
 import { copyObject } from './operations.ts'
+import { reviewFieldOf, reviewedByStatusChange } from './task-review.ts'
 import { doneOptionOf, reopenOptionOf } from './task-status.ts'
 import type { Store } from './store.ts'
 import { addDays, dayIn, daysBetween, instantOf, isValidTimeZone, wallTimeIn } from './time.ts'
@@ -362,6 +363,15 @@ export function completeRepeat(object: ObjectRecord, stored: ObjectRecord | unde
   return { ...object, props: { ...object.props, status: { kind: 'select', value: [todo.id] }, due: { kind: 'date', value: rest } } }
 }
 
+/**
+ * What every save of a task goes through: a repeating one done goes on to its next occurrence
+ * (completeRepeat), and a changed status marks it reviewed today in `timeZone` (reviewedByStatusChange;
+ * `at` is the instant of the save). The server's PUT, a device's replica and the agent tools all call it.
+ */
+export function settleTaskSave(object: ObjectRecord, stored: ObjectRecord | undefined, type: ObjectType | undefined, timeZone: string, at: IsoDateTime, base: ObjectRecord | undefined = stored): ObjectRecord {
+  return completeRepeat(reviewedByStatusChange(object, stored, type, dayIn(at, timeZone)), stored, type, timeZone, base)
+}
+
 /** The date of an object's field: its own date ("date") or a date property. */
 export function dateOf(object: ObjectRecord, field: string): DateValue | undefined {
   if (field === 'date') return object.date
@@ -449,7 +459,7 @@ export function calendarObjects(store: Store, spaceId: Id, types: Map<Id, Object
 
 /**
  * Calendar entries of a space's objects in a range: daily notes, objects' own dates (date objects
- * with notes, events) and every date property (task due dates, meeting times…).
+ * with notes, events) and every date property (task due dates, meeting times…; not a task's Last reviewed).
  */
 export function objectEntries(objects: ObjectSummary[], types: Map<Id, ObjectType>, range: DayRange, timeZone: string): CalendarEntry[] {
   const entries: CalendarEntry[] = []
@@ -476,9 +486,11 @@ export function objectEntries(objects: ObjectSummary[], types: Map<Id, ObjectTyp
       if (type.system === 'daily-note') add(object, 'daily-note', 'date', { start: object.date.start, resolution: 'day' })
       else if (showsOwnDate(object, type)) add(object, 'object', 'date', object.date)
     }
+    // A task's Last reviewed day is bookkeeping (every status change sets it), not something planned.
+    const reviewed = reviewFieldOf(type)?.id
     for (const def of type.properties) {
       const value = object.props[def.id]
-      if (def.kind === 'date' && value?.kind === 'date') add(object, 'property', def.id, value.value)
+      if (def.kind === 'date' && value?.kind === 'date' && def.id !== reviewed) add(object, 'property', def.id, value.value)
     }
   }
   return entries

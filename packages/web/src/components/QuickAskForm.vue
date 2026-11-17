@@ -41,17 +41,11 @@ const dueLine = computed(() => {
   const { ask } = props
   const day = picked.value
   if (ask.def.id === DUE_PROPERTY_ID) return undefined
-  if (ask.count > 1) {
-    if (!day || !ask.dueMovable) return undefined
-    const { count } = ask.dueMoves(day)
-    if (!count) return 'No due dates change'
-    return moveDue.value ? `${count} due ${count === 1 ? 'date moves' : 'dates move'} to ${longDay(day)}` : 'Due dates stay where they are'
-  }
   if (!ask.due) return undefined
   const due = `Due ${longDay(ask.due)}`
   if (!day || day <= ask.due) return due
   const moves = ask.dueMoves(day)
-  if (moves.to && moveDue.value) return `${due} → ${longDay(moves.to)}`
+  if (moves && moveDue.value) return `${due} → ${longDay(moves)}`
   if (!ask.dueMovable) return `${due} (repeats, so it stays)`
   return `${due} — planned after the deadline`
 })
@@ -59,11 +53,11 @@ const dueLine = computed(() => {
 // A plan after its unchanged deadline needs a visible warning, including repeating deadlines.
 const afterDue = computed(() => {
   const { ask } = props
-  return ask.def.kind === 'date' && ask.def.id !== DUE_PROPERTY_ID && !!ask.due && !!picked.value && picked.value > ask.due && (!moveDue.value || !ask.dueMoves(picked.value).count)
+  return ask.def.kind === 'date' && ask.def.id !== DUE_PROPERTY_ID && !!ask.due && !!picked.value && picked.value > ask.due && (!moveDue.value || !ask.dueMoves(picked.value))
 })
 
 const problem = computed(() => (props.ask.def.kind === 'date' ? undefined : textProblem(props.ask.def, text.value)))
-const stays = computed(() => (props.ask.closes === undefined ? undefined : props.ask.closes ? 'Saving also closes it.' : props.ask.count > 1 ? 'Saving does not mark them done.' : 'Saving does not mark it done.'))
+const stays = computed(() => (props.ask.closes === undefined ? undefined : props.ask.closes ? 'Saving also closes it.' : 'Saving does not mark it done.'))
 
 function pick(day: string) {
   if (!saving.value) picked.value = day
@@ -72,7 +66,7 @@ const canSave = computed(() => !saving.value && (props.ask.def.kind === 'date' ?
 
 function save() {
   if (!canSave.value) return
-  if (props.ask.def.kind === 'date') void props.ask.answer({ kind: 'date', value: { start: `${picked.value}T00:00:00.000Z`, resolution: 'day' } }, props.ask.dueMovable > 0 && moveDue.value)
+  if (props.ask.def.kind === 'date') void props.ask.answer({ kind: 'date', value: { start: `${picked.value}T00:00:00.000Z`, resolution: 'day' } }, props.ask.dueMovable && moveDue.value)
   else void props.ask.answer(textAnswer(props.ask.def, text.value, props.ask.text, props.ask.action.changes.length === 1))
 }
 const cancel = () => props.ask.answer(null)
@@ -99,7 +93,7 @@ const saveClass = [mainButton, 'flex-1']
     </p>
     <label v-if="ask.dueMovable" class="flex items-start gap-2 text-xs text-ink-soft max-md:min-h-11 max-md:items-center max-md:text-sm" data-move-due>
       <input v-model="moveDue" type="checkbox" :disabled="saving" class="mt-px shrink-0 accent-[var(--color-accent)] max-md:h-5 max-md:w-5" />
-      <span>{{ ask.count === 1 ? 'Also move the due date, if the new day is after it' : 'Also move due dates, where the new day is after them' }}</span>
+      <span>Also move the due date, if the new day is after it</span>
     </label>
     <p v-if="stays" class="text-xs text-ink-faint">{{ stays }}</p>
     <p v-if="failed" class="text-xs text-red-600" role="alert" data-ask-error>Not saved: {{ failed }}</p>

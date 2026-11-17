@@ -20,8 +20,9 @@ const props = defineProps<{
   object: Pick<ObjectRecord, 'id' | 'props'>
   variant?: 'page' | 'row'
   /**
-   * Applies this task's values (`@set`). A prop rather than an emit so a save that fails reaches the
-   * runner, which counts it and says so instead of showing a success notice.
+   * Saves this task's values (`@set`) and resolves once they are stored. A prop rather than an emit so
+   * the runner awaits it: a save that fails reaches the runner, which says so and shows no success
+   * notice (the task page saves at once for it, not after its usual pause).
    */
   onSet?: (values: Record<Id, PropertyValue | undefined>) => unknown
 }>()

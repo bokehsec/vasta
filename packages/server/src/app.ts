@@ -44,7 +44,7 @@ import {
   withOpensOn,
   writeDailyText,
 } from '@vasta/core'
-import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, completeRepeat, dayReferences, objectEntries, type OccurrenceEdit } from '@vasta/core/calendar'
+import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, dayReferences, objectEntries, settleTaskSave, type OccurrenceEdit } from '@vasta/core/calendar'
 import { checkMediaKey, mediaKey, RangeNotSatisfiableError, type MediaStore } from '@vasta/core/media'
 import { mapExport } from '@vasta/importer-capacities/export'
 import type { NodeStore } from '@vasta/core/node'
@@ -1441,7 +1441,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
         updatedAt: now(),
       }
     }
-    const stored = store.putObject(completeRepeat(object, existing, store.getType(object.typeId), userOf(c).timeZone ?? 'UTC', base && typeof base === 'object' ? base : existing))
+    const stored = store.putObject(settleTaskSave(object, existing, store.getType(object.typeId), userOf(c).timeZone ?? 'UTC', object.updatedAt, base && typeof base === 'object' ? base : existing))
     changed(stored)
     return c.json(stored)
   })

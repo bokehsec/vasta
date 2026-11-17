@@ -4,7 +4,7 @@ import type { ObjectType, PropertyDef, PropertyValue, QuickActionDef } from '../
 import { completeRepeat } from '../src/calendar.ts'
 import type { ObjectRecord } from '../src/model.ts'
 import { isClosedTask } from '../src/task-status.ts'
-import { askOf, defaultQuickActions, nextStepFieldOf, quickActionChanges, quickActionEdits, quickActionMessage, quickActionsOf, withAskCleared } from '../src/task-actions.ts'
+import { askOf, defaultQuickActions, nextStepFieldOf, quickActionChanges, quickActionEdit, quickActionMessage, quickActionsOf, withAskCleared } from '../src/task-actions.ts'
 
 const AT = '2026-11-13T12:00:00.000Z'
 const types = createBuiltinTypes('s', AT)
@@ -97,8 +97,8 @@ describe('quick actions on a type that is not a task', () => {
 
   it('run as a task’s do, with Undo values and a message', () => {
     expect(quickActionChanges(project, { props: {} }, reviewed, context)).toEqual({ nextreview: day('2026-11-20') })
-    const edits = quickActionEdits(project, [{ id: 'p1', props: {} }], reviewed, context)
-    expect(edits).toEqual([{ id: 'p1', values: { nextreview: day('2026-11-20') }, before: { nextreview: undefined } }])
+    const edit = quickActionEdit(project, { id: 'p1', props: {} }, reviewed, context)
+    expect(edit).toEqual({ id: 'p1', values: { nextreview: day('2026-11-20') }, before: { nextreview: undefined } })
   })
 
   it('hide behind a status option meaning done, as a task’s do', () => {
@@ -162,7 +162,7 @@ describe('isClosedTask', () => {
   })
 })
 
-describe('an action on many objects', () => {
+describe('an action on an object', () => {
   const type = triageTask({ deferField: 'dodate', deferStatus: 'scheduled' })
   const defer = quickActionsOf(type).find((a) => a.id === 'defer')!
   const objects: { id: string; props: Record<string, PropertyValue> }[] = [
@@ -172,56 +172,51 @@ describe('an action on many objects', () => {
   ]
   const format = { longDay: (d: string) => `<${d}>`, dayOfTime: (iso: string) => iso.slice(0, 10) }
 
-  it('uses one answer for all, each keeping its own repeat rule, with the values before', () => {
-    const edits = quickActionEdits(type, objects, defer, context, day('2026-11-20'))
-    expect(edits.map((e) => e.id)).toEqual(['a', 'b', 'c'])
-    expect(edits[0]!.values).toEqual({ dodate: day('2026-11-20'), status: status('scheduled') })
-    expect(edits[1]!.values.dodate).toEqual(day('2026-11-20', 'FREQ=WEEKLY'))
-    expect(edits[0]!.before).toEqual({ dodate: day('2026-11-01'), status: status('todo') })
-    expect(edits[2]!.before).toEqual({ dodate: undefined, status: undefined })
+  it('writes its values, a date that repeats keeping its own rule, with the values before', () => {
+    const [a, b, c] = objects.map((o) => quickActionEdit(type, o, defer, context, day('2026-11-20'))!)
+    expect(a!.values).toEqual({ dodate: day('2026-11-20'), status: status('scheduled') })
+    expect(b!.values.dodate).toEqual(day('2026-11-20', 'FREQ=WEEKLY'))
+    expect(a!.before).toEqual({ dodate: day('2026-11-01'), status: status('todo') })
+    expect(c!.before).toEqual({ dodate: undefined, status: undefined })
   })
 
   it('writes nothing without the answer it asks for', () => {
-    expect(quickActionEdits(type, objects, defer, context)).toEqual([])
+    expect(quickActionEdit(type, objects[0]!, defer, context)).toBeUndefined()
   })
 
   it('clears the asked field for an empty answer', () => {
     const nextStep = quickActionsOf(triageTask({ nextStepField: 'next' })).find((a) => a.id === 'next-step')!
-    const edits = quickActionEdits(type, [{ id: 'a', props: { next: { kind: 'text', value: 'Call' } } }], withAskCleared(type, nextStep), context)
-    expect(edits).toEqual([{ id: 'a', values: { next: undefined }, before: { next: { kind: 'text', value: 'Call' } } }])
+    const edit = quickActionEdit(type, { id: 'a', props: { next: { kind: 'text', value: 'Call' } } }, withAskCleared(type, nextStep), context)
+    expect(edit).toEqual({ id: 'a', values: { next: undefined }, before: { next: { kind: 'text', value: 'Call' } } })
   })
 
   it('keeps the due date of a repeating task in Undo when Done closes it, as completeRepeat moves it', () => {
     const done = quickActionsOf(type).find((a) => a.id === 'done')!
     const weekly = day('2026-11-13', 'FREQ=WEEKLY')
-    const objects: { id: string; props: Record<string, PropertyValue> }[] = [
-      { id: 'r', props: { status: status('todo'), due: weekly } },
-      { id: 'p', props: { status: status('todo'), due: day('2026-11-13') } },
-      { id: 'n', props: { status: status('todo') } },
-    ]
-    const edits = quickActionEdits(type, objects, done, context)
-    expect(edits[0]!.before).toEqual({ status: status('todo'), due: weekly })
-    expect(edits[1]!.before).toEqual({ status: status('todo') })
-    expect(edits[2]!.before).toEqual({ status: status('todo') })
+    const repeating = { id: 'r', props: { status: status('todo'), due: weekly } as Record<string, PropertyValue> }
+    const edit = quickActionEdit(type, repeating, done, context)!
+    expect(edit.before).toEqual({ status: status('todo'), due: weekly })
+    expect(quickActionEdit(type, { id: 'p', props: { status: status('todo'), due: day('2026-11-13') } }, done, context)!.before).toEqual({ status: status('todo') })
+    expect(quickActionEdit(type, { id: 'n', props: { status: status('todo') } }, done, context)!.before).toEqual({ status: status('todo') })
     // Saving Done really moves the date; the edit's `before` puts both fields back.
-    const stored = { id: 'r', typeId: task.id, title: 'T', props: objects[0]!.props } as unknown as ObjectRecord
-    const saved = completeRepeat({ ...stored, props: { ...stored.props, ...edits[0]!.values } } as ObjectRecord, stored, task, 'UTC')
+    const stored = { id: 'r', typeId: task.id, title: 'T', props: repeating.props } as unknown as ObjectRecord
+    const saved = completeRepeat({ ...stored, props: { ...stored.props, ...edit.values } } as ObjectRecord, stored, task, 'UTC')
     expect(saved.props.due).not.toEqual(weekly)
-    expect({ ...saved.props, ...edits[0]!.before }).toEqual(stored.props)
+    expect({ ...saved.props, ...edit.before }).toEqual(stored.props)
     // Not for an action that leaves the task open, nor for a type that is not a task.
     const reopen: QuickActionDef = { id: 'r', name: 'R', changes: [{ field: 'status', value: { kind: 'value', value: status('scheduled') } }] }
-    expect(quickActionEdits(type, objects.slice(0, 1), reopen, context)[0]!.before).toEqual({ status: status('todo') })
+    expect(quickActionEdit(type, repeating, reopen, context)!.before).toEqual({ status: status('todo') })
   })
 
   it('takes the due date along when the day asked for another date is after it (moveDue)', () => {
     const moving = { ...context, moveDue: true }
     const late = { id: 'l', props: { due: day('2026-11-18') } }
     // After the due date: both move; Undo has both.
-    const [edit] = quickActionEdits(type, [late], defer, moving, day('2026-11-20'))
-    expect(edit!.values.dodate).toEqual(day('2026-11-20'))
-    expect(edit!.values.due).toEqual(day('2026-11-20'))
-    expect(edit!.before).toMatchObject({ dodate: undefined, due: day('2026-11-18') })
-    expect(quickActionMessage(type, defer, [edit!], { ...format, due: day('2026-11-18') })).toBe('Defer · Do date <2026-11-20> · due date moved too')
+    const edit = quickActionEdit(type, late, defer, moving, day('2026-11-20'))!
+    expect(edit.values.dodate).toEqual(day('2026-11-20'))
+    expect(edit.values.due).toEqual(day('2026-11-20'))
+    expect(edit.before).toMatchObject({ dodate: undefined, due: day('2026-11-18') })
+    expect(quickActionMessage(type, defer, edit, { ...format, due: day('2026-11-18') })).toBe('Defer · Do date <2026-11-20> · due date moved too')
     // On or before the due date, without a due date, or with the box off: the due date stays.
     expect('due' in quickActionChanges(type, late, defer, moving, day('2026-11-18'))!).toBe(false)
     expect('due' in quickActionChanges(type, late, defer, moving, day('2026-11-15'))!).toBe(false)
@@ -232,24 +227,27 @@ describe('an action on many objects', () => {
     // A timed due date keeps its time of day, and a span its length.
     const timed: PropertyValue = { kind: 'date', value: { start: '2026-11-18T15:30:00.000Z', end: '2026-11-18T16:30:00.000Z', resolution: 'time' } }
     expect(quickActionChanges(type, { props: { due: timed } }, defer, moving, day('2026-11-20'))!.due).toEqual({ kind: 'date', value: { start: '2026-11-20T15:30:00.000Z', end: '2026-11-20T16:30:00.000Z', resolution: 'time' } })
-    // Many: only the ones it is late for, and the notice counts them.
-    const many = quickActionEdits(type, [late, { id: 'm', props: { due: day('2026-11-25') } }, { id: 'n', props: {} }], defer, moving, day('2026-11-20'))
-    expect(many.map((e) => 'due' in e.values)).toEqual([true, false, false])
-    expect(quickActionMessage(type, defer, many, format)).toBe('Defer · Do date <2026-11-20> · 3 tasks · 1 due date moved too')
     // Defer that sets the due date itself has nothing to take along.
     const dueDefer = quickActionsOf(task)[1]!
     expect(quickActionChanges(task, late, dueDefer, moving, day('2026-11-20'))).toEqual({ due: day('2026-11-20') })
   })
 
-  it('says the days set, the count, a day past the due date and failures', () => {
-    const one = quickActionEdits(type, objects.slice(0, 1), defer, context, day('2026-11-20'))
-    expect(quickActionMessage(type, defer, one, { ...format, due: day('2026-11-18') })).toBe('Defer · Do date <2026-11-20> (after its due date, <2026-11-18>)')
-    const all = quickActionEdits(type, objects, defer, context, day('2026-11-20'))
-    expect(quickActionMessage(type, defer, all, { ...format, due: day('2026-11-18'), failed: 1 })).toBe('Defer · Do date <2026-11-20> · 3 tasks · 1 not saved')
+  it('says the days set and a day past the due date', () => {
+    const edit = quickActionEdit(type, objects[0]!, defer, context, day('2026-11-20'))!
+    expect(quickActionMessage(type, defer, edit, { ...format, due: day('2026-11-18') })).toBe('Defer · Do date <2026-11-20> (after its due date, <2026-11-18>)')
 
     // A button named for what it does ("Mark done") says what happened ("Done").
     const markDone = quickActionsOf(task)[0]!
     expect(markDone.name).toBe('Mark done')
-    expect(quickActionMessage(task, markDone, quickActionEdits(task, objects, markDone, context), format)).toBe('Done · 3 tasks')
+    expect(quickActionMessage(task, markDone, quickActionEdit(task, objects[0]!, markDone, context)!, format)).toBe('Done')
+  })
+
+  it('puts the Last reviewed day back in Undo when it sets a status', () => {
+    const markDone = quickActionsOf(task)[0]!
+    const reviewedBefore = day('2026-11-01')
+    expect(quickActionEdit(task, { id: 'a', props: { status: status('todo'), reviewed: reviewedBefore } }, markDone, context)!.before).toEqual({ status: status('todo'), reviewed: reviewedBefore })
+    expect(quickActionEdit(task, { id: 'a', props: {} }, markDone, context)!.before).toEqual({ status: undefined, reviewed: undefined })
+    // Not for an action that leaves the status alone.
+    expect(quickActionEdit(type, objects[0]!, quickActionsOf(triageTask({ nextStepField: 'next' })).find((a) => a.id === 'next-step')!, context, { kind: 'text', value: 'x' })!.before).toEqual({ next: undefined })
   })
 })

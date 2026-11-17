@@ -8,6 +8,8 @@ type Values = Record<Id, PropertyValue | undefined>
 
 export interface RetainedCompletion {
   before: ObjectSummary
+  /** The row as it shows now, checked and struck: what a view that no longer lists the task keeps (`keep`). */
+  row: ObjectSummary
   /** The values the completion changed, as they were: what its Undo puts back (the notice's Undo does the same). */
   restore: Values
   index: number
@@ -35,11 +37,29 @@ export function createCompletionFeedback(options: {
     for (const key of new Set([...Object.keys(from.props), ...Object.keys(changed.props)])) if (!same(from.props[key], changed.props[key])) out[key] = from.props[key] && clone(from.props[key])
     return out
   }
+  /** Shows an object in its row; a retained one also remembers it as the row it keeps. */
+  const show = (object: ObjectRecord | ObjectSummary) => {
+    const entry = entries.get(object.id)
+    if (entry) {
+      const { content: _content, ...row } = object as ObjectRecord
+      entry.row = { ...row, preview: 'preview' in object ? object.preview : entry.row.preview }
+    }
+    options.replace(object)
+  }
   const feedback = {
     entries,
     done: (object: ObjectSummary) => entries.has(object.id) || done(object),
     busy: (id: Id) => entries.get(id)?.pending ?? false,
     placement: (object: ObjectSummary) => placements.get(object.id)?.before ?? object,
+    /**
+     * `rows` with the rows of retained completions they no longer list (a filter, or a query, drops a
+     * task once it is done), for a view to show them where `pin` puts them.
+     */
+    keep(rows: ObjectSummary[]) {
+      const listed = new Set(rows.map((row) => row.id))
+      const held = [...entries].filter(([id]) => !listed.has(id)).map(([, entry]) => entry.row)
+      return held.length ? [...rows, ...held] : rows
+    },
     pin(rows: ObjectSummary[]) {
       const placed = rows.filter((object) => !placements.has(object.id))
       const retained = rows.filter((object) => placements.has(object.id)).sort((left, right) => placements.get(left.id)!.index - placements.get(right.id)!.index)
@@ -64,26 +84,26 @@ export function createCompletionFeedback(options: {
           failed: (retry) => {
             if (started !== generation || entries.has(object.id)) return
             entries.set(object.id, existing)
-            options.replace(before)
+            show(before)
             options.failed(retry)
           },
         }
       }
       if (existing || !done(object) || isClosedTask(type, before)) return
       const previousPlacement = placements.get(object.id)
-      const entry: RetainedCompletion = { before: clone(before), restore: changes(base ?? before, object), index: rows.indexOf(before), pending: true, repeat: false }
+      const entry: RetainedCompletion = { before: clone(before), row: clone(before), restore: changes(base ?? before, object), index: rows.indexOf(before), pending: true, repeat: false }
       placements.set(object.id, previousPlacement ?? { before: clone(before), index: entry.index })
       entries.set(object.id, entry)
       const current = entries.get(object.id)!
-      options.replace(object)
+      show(object)
       return {
         saved: (saved) => {
           if (entries.get(object.id) !== current) return
           current.pending = false
           current.repeat = !done(saved) && !same(saved.props.due, current.before.props.due)
-          // A repeating task's due date moved on: Undo puts it back too.
-          if (current.repeat) current.restore.due = current.before.props.due && clone(current.before.props.due)
-          options.replace(saved)
+          // What the save changed beyond the edit (a repeating task's due date moved on, the Last reviewed day a new status sets): Undo puts it back too.
+          for (const key of Object.keys(changes(object, saved))) if (!(key in current.restore)) current.restore[key] = current.before.props[key] && clone(current.before.props[key])
+          show(saved)
         },
         failed: (retry) => {
           if (entries.get(object.id) !== current) return
@@ -128,9 +148,9 @@ export type CompletionFeedback = ReturnType<typeof createCompletionFeedback>
 export const COMPLETION_FEEDBACK: InjectionKey<CompletionFeedback> = Symbol('completion-feedback')
 
 /**
- * What a calendar entry's checkbox asks the view that kept it after a completion (the agenda
- * layout): the completion the entry is still shown for, and its Undo. Only an agenda that keeps
- * entries provides it; the Calendar page does not, so its checkboxes work straight on the object.
+ * What a calendar entry's checkbox asks the view that kept it after a completion (an agenda, the
+ * Calendar page: lib/entry-completion.ts): the completion the entry is still shown for, and its
+ * Undo. Only a view that keeps entries provides it; elsewhere the checkboxes work straight on the object.
  */
 export interface EntryCompletion {
   /** The completion this entry is kept for, if it is (another entry of the same task is not). */

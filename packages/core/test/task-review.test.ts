@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes } from '../src/builtin-types.ts'
-import type { ObjectType, PropertyValue } from '../src/model.ts'
+import type { ObjectRecord, ObjectType, PropertyValue, QuickActionDef } from '../src/model.ts'
 import type { ObjectSummary } from '../src/model.ts'
 import { fieldKind, matchesFilter } from '../src/query.ts'
-import { quickActionEdits, quickActionMessage } from '../src/task-actions.ts'
-import { dueForReview, holdAction, holdOptionOf, reviewEveryOf, reviewFieldOf, reviewedAction, withReviewed } from '../src/task-review.ts'
+import { quickActionEdit, quickActionMessage } from '../src/task-actions.ts'
+import { dueForReview, holdAction, holdOptionOf, reviewEveryOf, reviewFieldOf, reviewedAction, reviewedByStatusChange, withReviewed } from '../src/task-review.ts'
 
 const AT = '2026-11-14T12:00:00.000Z'
 const types = createBuiltinTypes('s', AT)
@@ -38,18 +38,44 @@ describe('review dates', () => {
     expect(dueForReview(page, reviewedOn('2026-11-14'), '2026-11-14')).toBe(true)
   })
 
-  it('Reviewed sets today, and an action made in a review sets it too, without saying so in the notice', () => {
+  it('Reviewed sets today; a decision that leaves the status alone sets it too, without saying so in the notice', () => {
     const reviewed = reviewedAction(task)!
-    const [edit] = quickActionEdits(task, [{ id: 'a', props: {} }], reviewed, context)
+    const edit = quickActionEdit(task, { id: 'a', props: {} }, reviewed, context)
     expect(edit!.values).toEqual({ reviewed: day('2026-11-14') })
     expect(edit!.before).toEqual({ reviewed: undefined })
-    const done = withReviewed(task, { id: 'done', name: 'Done', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['done'] } } }] })
-    expect(done.changes.map((c) => c.field)).toEqual(['status', 'reviewed'])
-    expect(withReviewed(task, reviewed)).toBe(reviewed)
-    expect(withReviewed(page, done)).toBe(done)
-    const edits = quickActionEdits(task, [{ id: 'a', props: {} }], done, context)
-    expect(quickActionMessage(task, done, edits, { longDay: (d) => d, dayOfTime: (iso) => iso.slice(0, 10) })).toBe('Done')
+    const next: QuickActionDef = { id: 'next', name: 'Next step', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['todo'] } } }] }
+    const kept = withReviewed(task, next, { props: { status: { kind: 'select', value: ['todo'] } } })
+    expect(kept.changes.map((c) => c.field)).toEqual(['status', 'reviewed'])
+    expect(withReviewed(task, reviewed, { props: {} })).toBe(reviewed)
+    expect(withReviewed(page, next, { props: {} })).toBe(next)
+    // An action that changes the status is saved as reviewed anyway: nothing is added.
+    const done: QuickActionDef = { id: 'done', name: 'Done', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['done'] } } }] }
+    expect(withReviewed(task, done, { props: { status: { kind: 'select', value: ['todo'] } } })).toBe(done)
+    expect(withReviewed(task, done, { props: {} })).toBe(done)
+    expect(quickActionMessage(task, kept, quickActionEdit(task, { id: 'a', props: {} }, kept, context)!, { longDay: (d) => d, dayOfTime: (iso) => iso.slice(0, 10) })).toBe('Next step')
     expect(reviewedAction(page)).toBeUndefined()
+  })
+
+  it('a changed status marks the task reviewed on the saving day, unless the save sets the date', () => {
+    const obj = (props: Record<string, PropertyValue>) => ({ id: 'a', typeId: task.id, title: 'T', props }) as unknown as ObjectRecord
+    const todo: PropertyValue = { kind: 'select', value: ['todo'] }
+    const stored = obj({ status: todo, reviewed: day('2026-11-01') })
+    const today = '2026-11-16'
+    const closed = reviewedByStatusChange(obj({ status: { kind: 'select', value: ['done'] }, reviewed: day('2026-11-01') }), stored, task, today)
+    expect(closed.props.reviewed).toEqual(day(today))
+    // Status unchanged, a field other than the status changed, no stored copy, or no date on the type: left alone.
+    const renamed = obj({ status: todo, reviewed: day('2026-11-01'), due: day('2026-11-20') })
+    expect(reviewedByStatusChange(renamed, stored, task, today)).toBe(renamed)
+    expect(reviewedByStatusChange(closed, undefined, task, today)).toBe(closed)
+    const bare = obj({ status: { kind: 'select', value: ['done'] } })
+    expect(reviewedByStatusChange(bare, obj({ status: todo }), page, today)).toBe(bare)
+    // A save that sets the date itself keeps it, even to clear it.
+    const own = obj({ status: { kind: 'select', value: ['done'] }, reviewed: day('2026-11-05') })
+    expect(reviewedByStatusChange(own, stored, task, today)).toBe(own)
+    const cleared = obj({ status: { kind: 'select', value: ['done'] } })
+    expect(reviewedByStatusChange(cleared, stored, task, today)).toBe(cleared)
+    // Setting a status on a task without one counts as a change.
+    expect(reviewedByStatusChange(obj({ status: todo }), obj({}), task, today).props.reviewed).toEqual(day(today))
   })
 })
 

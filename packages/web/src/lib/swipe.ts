@@ -2,6 +2,18 @@
 // iOS a swipe is judged by where the finger lifted and how fast it was going: a short flick counts
 // as much as a long drag, so a deliberate swipe does not spring back.
 
+import type { Icon } from '@vasta/core'
+
+/** A button a row's swipe runs or uncovers. */
+export interface SwipeAction {
+  id: string
+  label: string
+  icon?: Icon
+  /** done: green; accent: the app's blue; otherwise a neutral grey (more: the darkest). */
+  tone?: 'done' | 'accent' | 'neutral' | 'more'
+  run: (anchor: HTMLElement | null) => unknown
+}
+
 /** Pixels a finger moves before its touch is a swipe or a scroll. */
 export const DECIDE = 10
 /** Pixels a slow swipe moves to open a row (about a tenth of a phone), or to close an open one. */

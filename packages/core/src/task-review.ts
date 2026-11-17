@@ -1,10 +1,11 @@
 // Review dates, as in OmniFocus: a task's Last reviewed day (the built-in `reviewed` date) and how
 // often it comes up in Review again (Type settings › Quick actions, `reviewEvery`: 7 days unless
 // set; 0 every time). A review shows the open tasks due for one, never reviewed or last reviewed
-// that many days ago or more, and Reviewed (or any decision made in it) sets the day to today, so
-// a task that is fine as it is needs nothing else. Hold puts a task aside without a date (a status
-// such as "On hold"); it still comes up in its turn. A type without the date reviews every open
-// task every time, as before.
+// that many days ago or more, and Reviewed sets the day to today, so a task that is fine as it is
+// needs nothing else; so does any change of its status, wherever it is made (reviewedByStatusChange,
+// on every save). A review's other decisions (Keep, a next step) record it themselves. Hold puts a
+// task aside without a date (a status such as "On hold"); it still comes up in its turn. A type
+// without the date reviews every open task every time, as before.
 import { REVIEWED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
 import type { DatePropertyDef, ObjectRecord, ObjectType, QuickActionDef, SelectOption } from './model.ts'
 import { daysBetween } from './time.ts'
@@ -48,11 +49,30 @@ export function reviewedAction(type: ObjectType | undefined): QuickActionDef | u
   return field ? { id: 'reviewed', name: 'Reviewed', icon: { kind: 'icon', value: 'ph:check' }, changes: [{ field: field.id, value: { kind: 'day', days: 0 } }] } : undefined
 }
 
-/** An action made in a review also marks the object reviewed today (unless it sets that date itself). */
-export function withReviewed(type: ObjectType | undefined, action: QuickActionDef): QuickActionDef {
+/**
+ * A review's decision that leaves the task's status as it is (a next step, Defer on a task already
+ * where Defer puts it) also marks it reviewed today, unless the action sets that date itself. One
+ * that changes the status needs nothing added: saving it marks the task reviewed (reviewedByStatusChange).
+ */
+export function withReviewed(type: ObjectType | undefined, action: QuickActionDef, object: Pick<ObjectRecord, 'props'>): QuickActionDef {
   const field = reviewFieldOf(type)
   if (!field || action.changes.some((c) => c.field === field.id)) return action
+  const status = action.changes.find((c) => c.field === STATUS_PROPERTY_ID)
+  const current = JSON.stringify(object.props[STATUS_PROPERTY_ID])
+  if (status && (status.value.kind === 'clear' ? current !== undefined : status.value.kind === 'value' && JSON.stringify(status.value.value) !== current)) return action
   return { ...action, changes: [...action.changes, { field: field.id, value: { kind: 'day', days: 0 } }] }
+}
+
+/**
+ * A task whose status changes in this save counts as reviewed: its Last reviewed day becomes `today`
+ * (the saving user's), unless the save sets that date itself. `stored` is the task being replaced;
+ * nothing without one, without the date, or when the status is as it was.
+ */
+export function reviewedByStatusChange(object: ObjectRecord, stored: ObjectRecord | undefined, type: ObjectType | undefined, today: string): ObjectRecord {
+  const field = reviewFieldOf(type)
+  const same = (key: string) => JSON.stringify(object.props[key]) === JSON.stringify(stored?.props[key])
+  if (!field || !stored || same(STATUS_PROPERTY_ID) || !same(field.id)) return object
+  return { ...object, props: { ...object.props, [field.id]: { kind: 'date', value: { start: `${today}T00:00:00.000Z`, resolution: 'day' } } } }
 }
 
 /** The status option Hold sets: the type's setting, else one called "On hold"; never one meaning done. */

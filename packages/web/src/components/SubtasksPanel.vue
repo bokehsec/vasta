@@ -6,24 +6,26 @@
 // the type's status select (core statusProperty, as the progress does), so any type with one has
 // them and a type without one shows no checkbox. A step's circle is the one lists have
 // (TaskCompletionCheck): it runs the type's Done, offers an Undo, and its circle undoes it too, both
-// putting the exact values back; a dropped step shows as dropped. Once every step is closed and
+// putting the exact values back; a dropped step shows as dropped. On touch a step swipes and has a
+// ⋯, like any row (lib/quick-actions.ts swipeActionsFor). Once every step is closed and
 // the parent is open, a line says so with a button for the type's Done action; the parent is never
 // closed by itself.
-import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { ObjectRecord, ObjectSummary, ObjectType, QuickActionDef } from '@vasta/core'
-import { DUE_PROPERTY_ID, doneActionOf, isClosedTask, quickActionsOf, statusProperty, subtaskProgress } from '@vasta/core'
+import { DUE_PROPERTY_ID, doneActionOf, isClosedTask, statusProperty, subtaskProgress } from '@vasta/core'
 import { mainButton, tintedButton } from '../lib/buttons.ts'
 import { setProperties } from '../lib/actions.ts'
 import { displayTitle, formatDateShort } from '../lib/format.ts'
-import { COMPLETION_FEEDBACK, createCompletionFeedback } from '../lib/completion-feedback.ts'
-import { onObjectSave } from '../lib/object-saves.ts'
-import { runQuickAction, type QuickSave } from '../lib/quick-actions.ts'
-import { lastError, notice } from '../lib/state.ts'
-import { addSubtask, loadSubtasks, subtasksOf } from '../lib/subtasks.ts'
-import { isTouch } from '../lib/viewport.ts'
+import { openContextMenu } from '../lib/overlays.ts'
+import { copyObjectLink, openObject } from '../lib/open.ts'
+import { quickActionMenuItems, runQuickAction, swipeActionsFor, type QuickSave } from '../lib/quick-actions.ts'
+import { lastError } from '../lib/state.ts'
+import { addSubtask, noteSaved, subtaskMenuItems, subtasksOf } from '../lib/subtasks.ts'
+import { useCompletion } from '../lib/use-completion.ts'
+import { isPhone, isTouch } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectLink from './ObjectLink.vue'
-import SwipeRow, { type SwipeAction } from './SwipeRow.vue'
+import SwipeRow from './SwipeRow.vue'
 import TaskCompletionCheck from './TaskCompletionCheck.vue'
 
 const props = defineProps<{ type: ObjectType; object: Pick<ObjectRecord, 'id' | 'props' | 'tagIds'>; save: QuickSave }>()
@@ -37,7 +39,7 @@ const dueOf = (step: ObjectSummary) => {
   return value?.kind === 'date' ? formatDateShort(value.value) : ''
 }
 
-const saveStep: QuickSave = (id, values) => setProperties(id, values).then(() => loadSubtasks(props.type.id, true))
+const saveStep: QuickSave = (id, values) => setProperties(id, values).then(noteSaved)
 
 // Completion feedback (lib/completion-feedback.ts), as on type pages: a step marked Done here
 // saves and stays in place (steps always are), and its circle or the notice's Undo puts its exact
@@ -47,20 +49,14 @@ function replaceStep(saved: ObjectRecord | ObjectSummary) {
   const index = steps.value.findIndex((step) => step.id === saved.id)
   if (index >= 0) steps.value[index] = { ...saved, preview: steps.value[index]!.preview } as ObjectSummary
 }
-const completion = createCompletionFeedback({
+const completion = useCompletion({
   type: () => props.type,
   rows: () => steps.value,
   replace: replaceStep,
-  save: setProperties,
-  failed: (retry) => {
-    notice.value = { message: 'The subtask was not saved. Try again.', action: { label: 'Retry', run: () => retry().catch(() => {}) } }
-  },
+  noun: 'subtask',
+  resetOn: () => props.object.id,
 })
-const stopSaves = onObjectSave((object, base) => completion.observe(object, base))
-onBeforeUnmount(stopSaves)
 watch(steps, (list) => completion.prune(new Set(list.map((step) => step.id))))
-
-provide(COMPLETION_FEEDBACK, completion)
 
 // Adding ------------------------------------------------------------------------
 const title = ref('')
@@ -95,16 +91,24 @@ function closeParent(event: MouseEvent) {
   if (closeAction.value) void runQuickAction(props.type, props.object, closeAction.value, { anchor: event.currentTarget as HTMLElement, save: props.save })
 }
 
-// Swipes on a step: as on rows in lists (right: Defer, left: the others).
-function swipes(step: ObjectSummary): { right?: SwipeAction; left: SwipeAction[] } {
-  if (!isTouch.value || isClosedTask(props.type, step)) return { left: [] }
-  const actions = quickActionsOf(props.type)
-  const right = actions.find((a) => a.id === 'defer') ?? actions[0]
-  const make = (a: QuickActionDef): SwipeAction => ({ id: a.id, label: a.name, icon: a.icon, tone: a.id === 'done' ? 'done' : a.id === 'defer' ? 'accent' : 'neutral', run: () => runQuickAction(props.type, step, a, { save: saveStep }) })
-  const left = actions.filter((a) => a !== right).sort((a, b) => Number(b.id === 'done') - Number(a.id === 'done')).slice(0, 3).map(make)
-  return { right: right && make(right), left }
+// Swipes on a step, as on rows in lists; a ⋯ at the row's end (and a long press) opens its menu.
+function swipes(step: ObjectSummary) {
+  return isTouch.value && !isClosedTask(props.type, step) ? swipeActionsFor(props.type, step, { save: saveStep, menu: (event) => stepMenu(event, step) }) : { left: [] }
 }
-
+function stepMenu(event: MouseEvent, step: ObjectSummary) {
+  openContextMenu(event, [
+    { kind: 'heading', label: displayTitle(step, props.type) },
+    { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(step.id) },
+    { label: 'Copy link to page', icon: 'ph:link', run: () => copyObjectLink(step.id) },
+    ...(completion.entries.has(step.id) ? [] : quickActionMenuItems(props.type, step, { save: saveStep })),
+    ...subtaskMenuItems(props.type, step, noteSaved),
+  ])
+}
+/** A phone's ⋯ at a step's end: its menu, from the button's corner. */
+function stepMore(event: MouseEvent, step: ObjectSummary) {
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  stepMenu(new MouseEvent('contextmenu', { clientX: box.left, clientY: box.bottom }), step)
+}
 </script>
 
 <template>
@@ -120,12 +124,22 @@ function swipes(step: ObjectSummary): { right?: SwipeAction; left: SwipeAction[]
     </header>
     <div class="divide-y divide-line/70 border-y border-line/70">
       <SwipeRow v-for="step in steps" :key="step.id" :enabled="!!swipes(step).right" :right="swipes(step).right" :left="swipes(step).left">
-        <div class="flex items-start gap-2 px-1 py-1.5 max-md:py-2.5" data-subtask>
+        <div class="flex items-start gap-2 px-1 py-1.5 max-md:py-2.5" data-subtask @contextmenu="stepMenu($event, step)">
           <TaskCompletionCheck v-if="statusDef" :object="step" :type="type" class="mt-px" data-subtask-check />
           <ObjectLink :id="step.id" class="min-w-0 flex-1 text-sm hover:underline max-md:text-base max-md:leading-snug" :class="completion.done(step) ? 'text-ink-faint line-through' : ''">
             {{ displayTitle(step, type) }}
           </ObjectLink>
           <span v-if="dueOf(step)" class="shrink-0 pt-0.5 text-xs text-ink-faint max-md:text-[13px]">{{ dueOf(step) }}</span>
+          <!-- A phone: a visible way to the step's menu, 44px to touch (a long press is not found by looking). -->
+          <button
+            v-if="isPhone"
+            class="-my-2.5 -mr-1 grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ink-soft active:bg-hover"
+            :aria-label="`More actions for ${displayTitle(step, type)}`"
+            data-row-more
+            @click.prevent.stop="stepMore($event, step)"
+          >
+            <AppIcon fallback="ph:dots-three" :size="20" />
+          </button>
         </div>
       </SwipeRow>
       <form class="flex items-center gap-2 px-1 py-1 max-md:py-1.5" @submit.prevent="add([title])">

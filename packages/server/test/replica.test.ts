@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { BODY_PROPERTY_ID, builtinTypeId, createBuiltinTypes, dailyNoteId, dayEntries, dayTotals, newObject, type Doc, type DocNode, type ObjectRecord, type ObjectType } from '@vasta/core'
+import { BODY_PROPERTY_ID, builtinTypeId, createBuiltinTypes, dailyNoteId, dayIn, dayEntries, dayTotals, newObject, type Doc, type DocNode, type ObjectRecord, type ObjectType } from '@vasta/core'
 import { NodeMediaStore } from '@vasta/core/media-node'
 import { NodeStore } from '@vasta/core/node'
 import { Y, readContent, writeContent, type JsonDoc } from '@vasta/editor-schema/yjs'
@@ -393,6 +393,23 @@ describe('local replica', () => {
     expect(saved.props).toMatchObject({ status: { value: ['todo'] }, due: { value: { start: '2026-11-09T00:00:00.000Z' } } })
     await phone.sync.sync()
     expect((await serverObject(user.request, task.id)).props).toMatchObject({ status: { value: ['todo'] }, due: { value: { start: '2026-11-09T00:00:00.000Z' } } })
+  })
+
+  it('marks a task reviewed on the device when its status changes, as the server does', async () => {
+    const { user, phone } = setup()
+    const task = (await (await user.request('/api/objects', json({ typeId: builtinTypeId('s', 'task'), title: 'Bins', props: { status: { kind: 'select', value: ['todo'] } } }))).json()) as ObjectRecord
+    await phone.sync.sync()
+    const base = phone.store.getObject(task.id)!
+    const at = now()
+    const saved = phone.store.saveObject({ ...base, props: { ...base.props, status: { kind: 'select', value: ['done'] } } }, at, base)
+    // The device's day, in its own zone, as an all-day date: the shape the server gives it too.
+    const today = dayIn(at, Intl.DateTimeFormat().resolvedOptions().timeZone)
+    expect(saved.props.reviewed).toEqual({ kind: 'date', value: { start: `${today}T00:00:00.000Z`, resolution: 'day' } })
+    await phone.sync.sync()
+    expect((await serverObject(user.request, task.id)).props.reviewed).toEqual(saved.props.reviewed)
+    // A change that leaves the status alone does not move it.
+    const again = phone.store.getObject(task.id)!
+    expect(phone.store.saveObject({ ...again, title: 'Bins out' }, now(), again).props.reviewed).toEqual(saved.props.reviewed)
   })
 
   it('deletes a type with its objects offline, follows purges, and drops a space the user left', async () => {

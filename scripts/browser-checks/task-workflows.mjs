@@ -315,6 +315,21 @@ try {
   await page.locator('[data-process-mode]').waitFor({ state: 'detached' })
   // A finished review is not offered to resume.
   await until(async () => (await reviewButton.innerText()).trim() === 'Review', 'no Resume after a finished review')
+  // Any status change counts as reviewed, wherever it is made: Done on the task's page (saved at once, awaited), and
+  // a rename leaves the date alone. (The replica uses this device's day, the server the user's: allow either side of midnight.)
+  step('a status changed on the task page marks it reviewed; a rename does not')
+  const day = (value) => value?.value.start.slice(0, 10)
+  const near = (value) => [yesterday, today, tomorrow].includes(day(value))
+  const k = await make('K finished on its page', 'next')
+  await put(`/api/objects/${k.id}`, { ...(await get(`/api/objects/${k.id}`)), title: 'K renamed' })
+  assert.equal((await propsOf(k.id)).reviewed, undefined, 'a rename is not a review')
+  await page.goto(`${base}/o/${k.id}`)
+  await page.locator('[data-quick-actions] [data-action="done"]').click()
+  await until(async () => (await propsOf(k.id)).status?.value[0] === 'done', 'Done saved')
+  assert(near((await propsOf(k.id)).reviewed), 'Done marked it reviewed')
+  await page.locator('[role=status]').filter({ hasText: /Done/ }).getByRole('button', { name: 'Undo' }).click()
+  await until(async () => (await propsOf(k.id)).status?.value[0] === 'next', 'Undo put the status back')
+  assert.equal((await propsOf(k.id)).reviewed, undefined, 'Undo put the review day back too')
   assert.deepEqual(errors, [])
   console.log(`Task workflow checks passed: ${engine}, ${process.env.MODE === 'json' ? 'HTTP' : 'replica'}.`)
 } catch (error) {

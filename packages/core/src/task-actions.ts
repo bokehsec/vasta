@@ -11,6 +11,7 @@
 import { DUE_PROPERTY_ID, REVIEWED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
 import type { DatePropertyDef, Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActionValue, SelectOption, TextPropertyDef } from './model.ts'
 import { statusProperty } from './metrics.ts'
+import { reviewFieldOf } from './task-review.ts'
 import { doneOptionOf, dropOptionOf, reopenOptionOf } from './task-status.ts'
 import { addDays } from './time.ts'
 
@@ -250,26 +251,26 @@ export interface QuickActionEdit {
 }
 
 /**
- * An action run on one or many objects, with one answer for all: each object's own values (a date
- * that repeats keeps its own rule) and what they were before. Objects it writes nothing on (an
- * unanswered ask) are left out.
+ * An action run on an object: the values it writes (a date that repeats keeps its own rule) and
+ * what they were before; undefined when it writes nothing (an unanswered ask).
  */
-export function quickActionEdits(
+export function quickActionEdit(
   type: ObjectType,
-  objects: readonly Pick<ObjectRecord, 'id' | 'props'>[],
+  object: Pick<ObjectRecord, 'id' | 'props'>,
   action: QuickActionDef,
   context: QuickActionContext,
   answer?: PropertyValue
-): QuickActionEdit[] {
-  return objects.flatMap((object) => {
-    const values = quickActionChanges(type, object, action, context, answer)
-    if (!values) return []
-    const before = Object.fromEntries(Object.keys(values).map((key) => [key, object.props[key]]))
-    // Done on a repeating task is saved as its next occurrence (completeRepeat moves the due date and
-    // puts the status back), so Undo has to put the due date back too, not only the status.
-    if (!(DUE_PROPERTY_ID in before) && endsRepeat(type, object, values)) before[DUE_PROPERTY_ID] = object.props[DUE_PROPERTY_ID]
-    return [{ id: object.id, values, before }]
-  })
+): QuickActionEdit | undefined {
+  const values = quickActionChanges(type, object, action, context, answer)
+  if (!values) return undefined
+  const before = Object.fromEntries(Object.keys(values).map((key) => [key, object.props[key]]))
+  // Done on a repeating task is saved as its next occurrence (completeRepeat moves the due date and
+  // puts the status back), so Undo has to put the due date back too, not only the status.
+  if (!(DUE_PROPERTY_ID in before) && endsRepeat(type, object, values)) before[DUE_PROPERTY_ID] = object.props[DUE_PROPERTY_ID]
+  // A new status marks the task reviewed when saved (reviewedByStatusChange): Undo puts that day back too.
+  const reviewed = reviewFieldOf(type)
+  if (reviewed && STATUS_PROPERTY_ID in values && !(reviewed.id in before)) before[reviewed.id] = object.props[reviewed.id]
+  return { id: object.id, values, before }
 }
 
 /** Whether `values` do a task whose due date repeats (Done, not Drop): what completeRepeat rewrites when saved, the task going on to its next occurrence. */
@@ -287,42 +288,35 @@ function dayOfValue(value: PropertyValue | undefined, dayOfTime: (iso: string) =
   return value.value.resolution === 'day' ? value.value.start.slice(0, 10) : dayOfTime(value.value.start)
 }
 
-/**
- * The notice after an action: its name and the days it set ("Defer · Do date Fri Nov 20"), the
- * number of objects when there are several, a day set past one object's due date, and how many
- * failed to save.
- */
 /** An action's name said once it is done, in notices and counts: "Mark done" is "Done". */
 export function quickActionDoneName(name: string): string {
   return name.replace(/^mark\s+(\S)/i, (_, c: string) => c.toUpperCase())
 }
 
+/**
+ * The notice after an action: its name and the days it set ("Defer · Do date Fri Nov 20"), a day
+ * set past the object's due date, and a due date taken along.
+ */
 export function quickActionMessage(
   type: ObjectType,
   action: QuickActionDef,
-  edits: readonly QuickActionEdit[],
-  options: { longDay: (day: string) => string; dayOfTime: (iso: string) => string; due?: PropertyValue; failed?: number; noun?: (count: number) => string }
+  edit: QuickActionEdit,
+  options: { longDay: (day: string) => string; dayOfTime: (iso: string) => string; due?: PropertyValue }
 ): string {
-  const first = edits[0]
   // A due date the action does not name was taken along by the day asked for (moveDue): said in words, not as a day of its own.
   const takesDue = !action.changes.some((c) => c.field === DUE_PROPERTY_ID)
-  const movedDue = takesDue ? edits.filter((e) => e.values[DUE_PROPERTY_ID]).length : 0
-  const days = first
-    ? Object.entries(first.values).flatMap(([field, value]) => {
-        // The Last reviewed day a review adds to every action goes without saying.
-        if ((takesDue && field === DUE_PROPERTY_ID) || field === REVIEWED_PROPERTY_ID) return []
-        const day = dayOfValue(value, options.dayOfTime)
-        const def = type.properties.find((p) => p.id === field)
-        return day && def ? [{ field, day, name: def.name }] : []
-      })
-    : []
-  const parts = [quickActionDoneName(action.name), ...days.map((d) => `${d.name} ${options.longDay(d.day)}`)]
-  if (edits.length > 1) parts.push(options.noun ? options.noun(edits.length) : `${edits.length} tasks`)
-  let message = parts.join(' · ')
-  const due = edits.length === 1 && !movedDue ? dayOfValue(options.due, options.dayOfTime) : undefined
+  const movedDue = takesDue && !!edit.values[DUE_PROPERTY_ID]
+  const days = Object.entries(edit.values).flatMap(([field, value]) => {
+    // The Last reviewed day a review adds to every action goes without saying.
+    if ((takesDue && field === DUE_PROPERTY_ID) || field === REVIEWED_PROPERTY_ID) return []
+    const day = dayOfValue(value, options.dayOfTime)
+    const def = type.properties.find((p) => p.id === field)
+    return day && def ? [{ field, day, name: def.name }] : []
+  })
+  let message = [quickActionDoneName(action.name), ...days.map((d) => `${d.name} ${options.longDay(d.day)}`)].join(' · ')
+  const due = movedDue ? undefined : dayOfValue(options.due, options.dayOfTime)
   const late = due && days.find((d) => d.field !== DUE_PROPERTY_ID && d.day > due)
   if (late && due) message += ` (after its due date, ${options.longDay(due)})`
-  if (movedDue) message += edits.length === 1 ? ' · due date moved too' : ` · ${movedDue} due ${movedDue === 1 ? 'date' : 'dates'} moved too`
-  if (options.failed) message += ` · ${options.failed} not saved`
+  if (movedDue) message += ' · due date moved too'
   return message
 }
