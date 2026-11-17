@@ -8,6 +8,12 @@ GitHub release page.
 
 ### Added
 
+- **Upgraded our installation to Vasta 0.11.** Adds agent visibility, context and required-field
+  settings, agent attribution, and persistent reminders while keeping our phone navigation,
+  scoped reviews, task date roles, synced preferences, weekly habits and SparkyFitness imports.
+  Completing a reminder follows the same review, recurring-task and habit rules as the app;
+  imported habits are acknowledged without replacing their imported amounts.
+
 - **A paused review keeps its place for each type, and says where it is.** Pausing a review of
   Tasks no longer gets lost or replaced when you review another type; each type keeps its own, on
   this device, and starting another review of the same type asks first. While one is paused the
@@ -487,6 +493,100 @@ GitHub release page.
   row at the top of the sidebar. Pinned, Tasks now also show in that section. New spaces no longer
   pin Tasks, since they have that row; in an older space, Tasks may show once under Pinned (Remove
   from Pinned takes it away).
+
+## 0.11.0 (2026-11-17)
+
+### Added
+
+- **Reminders have styles.** Pick how a reminder reaches you: **Pop-up** (a window of the desktop
+  app floats over everything until you answer), **Full screen**, **Notification**, **Escalating**
+  or **Relentless**, or set its steps yourself with **Custom**. The pop-up needs Vasta for desktop
+  0.11; it has rounded corners like the rest of Vasta.
+- **Once you answer a pop-up or full-screen reminder, Vasta gets out of the way**: the app you were
+  in comes back. Or pick a note for it to open instead (**Once I answer › Open a note…**).
+- **Agents can set up reminders.** Claude Code, Codex and other agents connected through the MCP
+  can list your reminders with their stats, make and change them (by style or step by step,
+  showing a tag or a saved query by name), remove them, and start one right now so you can see how
+  it feels.
+
+### Changed
+
+- **Insistent reminders are now just Reminders**, in Settings › Reminders, with their editor in
+  parts: when it starts, what it shows, how it reaches you, how you answer it. The channels they
+  and the habit, event and food reminders go through are Settings › Reminder channels.
+
+### Fixed
+
+- **A reminder answered by typing waits for Enter.** It took the phrase as soon as most of it was
+  typed, before you finished.
+- **Edit** and **New reminder…** in Settings did nothing once a reminder had been opened for
+  editing.
+- **Desktop (macOS): clicking a reminder's notification opens it.** The app now sends
+  notifications through macOS's current notification system, which reports the click; macOS may ask
+  once to allow Vasta's notifications.
+
+## 0.10.0 (2026-11-17)
+
+### Added
+
+- **Insistent reminders.** A reminder that keeps asking until it gets a real answer. Set one on
+  any habit, task, event or note with **Remind me…** in its menu, or on its own in Settings ›
+  Insistent reminders ("an affirmation every morning"). It starts at the object's own time, at a
+  time of day, or the first time you are at the computer after an hour; it shows the object,
+  random notes with a tag or from a query, or today's tasks; and it stops only when you answer:
+  OK, doing the habit or task, typing its text, or saying it out loud (which also marks the habit
+  done). Until then it repeats every few minutes and climbs a ladder of channels you choose:
+  phone, desktop, ntfy (up to its highest priority), Telegram (with buttons, or reply with the
+  text), and at the top the desktop app taking the whole screen, which always offers a way out
+  after a few seconds. Snoozing works, but every few snoozes climb a step; "Not today" asks why.
+  Quiet hours hold everything. Each reminder has honest stats: how often it was done, snoozed,
+  skipped (with your reasons) or ignored, so you can tune it.
+
+### Fixed
+
+- **Updating the desktop app looked like it did nothing.** After Install and Restart, the update
+  downloaded with no sign of it, which takes minutes when GitHub serves it slowly. The window now
+  shows how far the download is, then that it is installing; clicking again while it downloads
+  no longer starts a second download.
+
+## 0.9.0 (2026-11-17)
+
+### Added
+
+- **Instructions for agents.** Settings › Agents has a text box per space ("read the page About
+  me first; save quotes as Echo with an Author") that every agent connecting through the MCP
+  receives, so you no longer set up a CLAUDE.md or AGENTS.md on each machine.
+- **Agent context and recall.** Mark any object as agent context from its ⋯ menu (a profile, your
+  preferences, a project page). The new MCP tool `recall` gives an agent, in one call, the space's
+  instructions, those objects with their text, and what matches a topic (`vasta recall` in the CLI).
+- **Keep things from agents.** Per space, in Settings › Agents: make the space read-only for
+  agents, hide it from them entirely, or hide every object with certain tags (and the tags nested
+  under them) from search, queries, backlinks and recall.
+- **See what agents wrote.** What an agent creates or changes is marked with its token's name:
+  "Edited by arie via Claude Code" on the object and in its activity. Queries can filter on
+  "Created by agent" and "Last edited by agent".
+- **Required properties, covers and tags.** Make any property of a type required (in its
+  settings, next to "Hide when empty"), and ask for a cover or at least one tag in the type's
+  Rules. Agents and API scripts can't save an object without them (the error says what is
+  missing); in the app the object shows a warning instead, so you are never stopped mid-edit.
+- **Agents can move objects to the trash** (`trash_object`, `restore_object`; `vasta trash` and
+  `vasta restore`), never delete them for good: you can restore them for 30 days.
+- **"Copy link to page" in object menus**: the right-click menu of an object in the sidebar, a
+  type view or query results, and the ⋯ More menu of an object's page and side pane now have a
+  "Copy link to page" action. It copies `<server>/o/<id>` in the browser and `vasta://o/<id>`
+  in the desktop app, matching existing block-link behaviour.
+
+### Changed
+
+- **Type descriptions reach agents**: an agent reading or creating an object gets its type's
+  description with it, and follows the conventions you wrote there.
+
+### Fixed
+
+- **"Pin to sidebar" on Tasks did nothing**: the sidebar left Tasks out of its sections, as they
+  have their own row at the top. Pinned to a section, Tasks now show there too. New spaces no
+  longer pin Tasks, since they have that row; in an older space, Tasks may show once under Pinned
+  (Remove from Pinned takes it away).
 
 ## 0.8.0 (2026-11-08)
 

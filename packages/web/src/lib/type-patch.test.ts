@@ -96,6 +96,22 @@ describe('patchType', () => {
     for (const [, patch] of patchTypeCall.mock.calls) expect(Object.keys(patch).every((field) => ['views', 'name'].includes(field))).toBe(true)
   })
 
+  it('queues Rules, a view edit and custom settings without reverting a concurrent answer', async () => {
+    let finish!: (type: ObjectType) => void
+    patchTypeCall.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const rules = patchType('t', { rules: { tags: true } })
+    await vi.waitFor(() => expect(patchTypeCall).toHaveBeenCalledTimes(1))
+    const views = patchViews(state.types[0]!, (list) => list.push(view('b')))
+    const custom = patchType('t', { quickActions: { nextStepField: 'next' }, review: { every: 14 } })
+    stored = { ...stored, rules: { tags: true } }
+    finish(stored)
+    await Promise.all([rules, views, custom])
+    expect(state.types[0]).toMatchObject({ rules: { tags: true }, quickActions: { nextStepField: 'next' }, review: { every: 14 } })
+    expect(state.types[0]!.views.map((v) => v.id)).toEqual(['a', 'b'])
+    expect(patchTypeCall).toHaveBeenCalledTimes(2)
+    expect(patchTypeCall.mock.calls[1]![1]).not.toHaveProperty('rules')
+  })
+
   it('puts the stored copy back and rejects every caller when the save fails', async () => {
     patchTypeCall.mockRejectedValueOnce(new Error('network'))
     const first = patchType('t', { name: 'One' })

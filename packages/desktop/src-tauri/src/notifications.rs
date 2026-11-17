@@ -62,28 +62,18 @@ pub fn show(app: &AppHandle, key: String, title: String, body: String, path: Opt
     app.notification().builder().id(id).title(title).body(body).show().map_err(|error| error.to_string())
 }
 
-/// macOS: show reminders as banners while Vasta is the app in front too. The notification
-/// library's delegate (mac-notification-sys) has no `userNotificationCenter:shouldPresentNotification:`,
-/// so macOS sent them straight to Notification Center then. Added to its class before any
-/// notification sets the delegate.
+/// macOS: ask once for permission to show notifications (UNUserNotificationCenter, which also
+/// shows them while Vasta is the app in front and reports their clicks). macOS asks the user only
+/// the first time; afterwards this answers at once.
 #[cfg(target_os = "macos")]
-pub fn banner_in_front() {
-    use objc2::encode::Encode;
-    use objc2::runtime::{AnyClass, AnyObject, Bool, Imp, Sel};
-    use objc2::sel;
-
-    extern "C-unwind" fn present(_: &AnyObject, _: Sel, _: &AnyObject, _: &AnyObject) -> Bool {
-        Bool::YES
-    }
-    let Some(class) = AnyClass::get(c"NotificationCenterDelegate") else {
-        eprintln!("Notifications: no NotificationCenterDelegate class");
-        return;
-    };
-    let types = std::ffi::CString::new(format!("{}@:@@", Bool::ENCODING)).unwrap();
-    unsafe {
-        let imp: Imp = std::mem::transmute(present as extern "C-unwind" fn(_, _, _, _) -> _);
-        objc2::ffi::class_addMethod(class as *const AnyClass as *mut AnyClass, sel!(userNotificationCenter:shouldPresentNotification:), imp, types.as_ptr());
-    }
+pub fn ask_permission() {
+    tauri::async_runtime::spawn(async {
+        match notify_rust::request_auth().await {
+            Ok(true) => {}
+            Ok(false) => eprintln!("Notifications: not allowed in System Settings"),
+            Err(error) => eprintln!("Notifications: {error}"),
+        }
+    });
 }
 
 /// The page a clicked notification opens; None when it is not one of ours.
@@ -96,6 +86,10 @@ pub struct Hooks {
     pub credentials: fn(&AppHandle) -> Option<(url::Url, String)>,
     /// The server refused the token: forget it, so the web app makes another.
     pub refused: fn(&AppHandle),
+    /// An insistent reminder takes the screen (takeover.rs).
+    pub takeover: fn(&AppHandle, crate::takeover::Takeover),
+    /// A reminder was answered (anywhere) or snoozed: its takeover closes.
+    pub dismiss: fn(&AppHandle, String),
 }
 
 enum Ended {
@@ -124,7 +118,7 @@ pub fn start(app: AppHandle, hooks: Hooks) {
                 restart.notified().await;
                 continue;
             };
-            match listen(&app, &client, &server, &token, &mut wait).await {
+            match listen(&app, &client, &server, &token, &mut wait, &hooks).await {
                 Ended::Restart => {}
                 Ended::Refused => {
                     (hooks.refused)(&app);
@@ -144,8 +138,9 @@ pub fn start(app: AppHandle, hooks: Hooks) {
     });
 }
 
-async fn listen(app: &AppHandle, client: &reqwest::Client, server: &url::Url, token: &str, wait: &mut Duration) -> Ended {
-    let Ok(address) = server.join("api/notifications") else { return Ended::Lost };
+async fn listen(app: &AppHandle, client: &reqwest::Client, server: &url::Url, token: &str, wait: &mut Duration, hooks: &Hooks) -> Ended {
+    // `takeover=1`: this app can take the screen for insistent reminders (older ones only hear `notify`).
+    let Ok(address) = server.join("api/notifications?takeover=1") else { return Ended::Lost };
     let restart = &app.state::<Notifications>().inner().restart;
     let request = client.get(address).bearer_auth(token).header("accept", "text/event-stream").send();
     let mut response = tokio::select! {
@@ -167,11 +162,26 @@ async fn listen(app: &AppHandle, client: &reqwest::Client, server: &url::Url, to
         tokio::select! {
             chunk = tokio::time::timeout(SILENCE, response.chunk()) => match chunk {
                 Ok(Ok(Some(bytes))) => {
-                    for data in events.push(&String::from_utf8_lossy(&bytes)) {
-                        let Ok(reminder) = serde_json::from_str::<Reminder>(&data) else { continue };
-                        let path = reminder.url.as_deref().and_then(|url| url.strip_prefix(server.as_str())).map(str::to_string);
-                        if let Err(error) = show(app, reminder.key, reminder.title, reminder.message, path) {
-                            eprintln!("Could not show a notification: {error}");
+                    for (event, data) in events.push(&String::from_utf8_lossy(&bytes)) {
+                        match event.as_str() {
+                            "notify" => {
+                                let Ok(reminder) = serde_json::from_str::<Reminder>(&data) else { continue };
+                                let path = reminder.url.as_deref().and_then(|url| url.strip_prefix(server.as_str())).map(str::to_string);
+                                if let Err(error) = show(app, reminder.key, reminder.title, reminder.message, path) {
+                                    eprintln!("Could not show a notification: {error}");
+                                }
+                            }
+                            "takeover" => {
+                                if let Ok(takeover) = serde_json::from_str::<crate::takeover::Takeover>(&data) {
+                                    (hooks.takeover)(app, takeover);
+                                }
+                            }
+                            "dismiss" => {
+                                if let Ok(Dismiss { id }) = serde_json::from_str::<Dismiss>(&data) {
+                                    (hooks.dismiss)(app, id);
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -182,14 +192,22 @@ async fn listen(app: &AppHandle, client: &reqwest::Client, server: &url::Url, to
     }
 }
 
-/// Server-Sent Events read as they arrive: the data of each complete `notify` event.
+#[derive(Deserialize)]
+struct Dismiss {
+    id: String,
+}
+
+/// The events the app acts on.
+const EVENTS: [&str; 3] = ["notify", "takeover", "dismiss"];
+
+/// Server-Sent Events read as they arrive: the name and data of each complete event the app acts on.
 #[derive(Default)]
 struct Events {
     buffer: String,
 }
 
 impl Events {
-    fn push(&mut self, text: &str) -> Vec<String> {
+    fn push(&mut self, text: &str) -> Vec<(String, String)> {
         self.buffer.push_str(&text.replace("\r\n", "\n"));
         let mut found = Vec::new();
         while let Some(end) = self.buffer.find("\n\n") {
@@ -203,8 +221,8 @@ impl Events {
                     data.push(value.strip_prefix(' ').unwrap_or(value));
                 }
             }
-            if event == "notify" && !data.is_empty() {
-                found.push(data.join("\n"));
+            if EVENTS.contains(&event) && !data.is_empty() {
+                found.push((event.to_string(), data.join("\n")));
             }
         }
         found
@@ -219,7 +237,7 @@ mod tests {
     fn reads_notify_events_split_anywhere() {
         let mut events = Events::default();
         assert!(events.push(": ping\n\nevent: noti").is_empty());
-        assert_eq!(events.push("fy\r\ndata: {\"key\":\"a\"}\r\n\r\nevent: other\ndata: x\n\n"), vec!["{\"key\":\"a\"}".to_string()]);
+        assert_eq!(events.push("fy\r\ndata: {\"key\":\"a\"}\r\n\r\nevent: other\ndata: x\n\nevent: dismiss\ndata: {\"id\":\"n\"}\n\n"), vec![("notify".to_string(), "{\"key\":\"a\"}".to_string()), ("dismiss".to_string(), "{\"id\":\"n\"}".to_string())]);
         assert!(events.buffer.is_empty());
     }
 }

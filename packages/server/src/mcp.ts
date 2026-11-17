@@ -5,7 +5,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { z } from 'zod'
 import { COLOR_NAMES } from '@vasta/core'
-import { AgentError, type AgentTools } from './agent.ts'
+import { AgentError, type AgentReminderInput, type AgentTools } from './agent.ts'
+import { NAG_CHANNELS } from './insistent.ts'
 import { ICON_HELP } from './icons.ts'
 
 const INSTRUCTIONS = `Vasta is a notes app: everything is an object (a page, a daily note, a task, a book…) of a type,
@@ -27,7 +28,18 @@ goal) and tasks a Sprint field: set it by the sprint's title, or "current" for t
 Types may have templates (list_templates): create_object starts from a type's default template,
 or the one named by "template", with its questions answered by "answers". Whiteboards (type
 "Whiteboard") hold cards of objects, text, sticky notes, shapes, frames and arrows: read one with
-get_board, change it with edit_board (a Mermaid flowchart becomes a board there too).`
+get_board, change it with edit_board (a Mermaid flowchart becomes a board there too).
+Types may have a description the user wrote (list_types; typeDescription in get_object): follow it
+when writing objects of that type. Properties may be required, and types may ask for a cover or a tag
+(every object must have them): a write without them is refused with what is missing. Start a session with
+recall: the user's instructions for agents, the objects they marked as agent context, and what
+matches a topic. Objects are never deleted for good: trash_object moves one to the trash, where
+the user can restore it. What an agent writes is recorded as made through its token
+(createdVia, updatedVia: query "createdVia is-not-empty" finds what agents wrote).`
+
+const REMINDER_INSTRUCTIONS = `Reminders ask until answered, in a style: a desktop pop-up, the whole screen, notifications, or
+escalating through channels: list_reminders, set_reminder (ask the user before making or loosening
+one), start_reminder to try one now.`
 
 const space = z.string().optional().describe('Space id or name; the default space when omitted')
 const properties = z
@@ -55,13 +67,61 @@ const READ = { readOnlyHint: true, openWorldHint: false }
 const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false }
 
 export function mcpServer(tools: AgentTools, version: string): McpServer {
-  const server = new McpServer({ name: 'vasta', version }, { instructions: INSTRUCTIONS })
+  // The user's own instructions (each space's, Settings › Agents) come after Vasta's.
+  const own = tools.instructions()
+  const base = tools.remindersOn ? `${INSTRUCTIONS}\n${REMINDER_INSTRUCTIONS}` : INSTRUCTIONS
+  const server = new McpServer({ name: 'vasta', version }, { instructions: own ? `${base}\n\n${own}` : base })
 
-  server.registerTool('list_spaces', { title: 'List spaces', description: "The user's spaces; the default one is marked.", annotations: READ }, () => run(() => tools.spaces()))
+  server.registerTool(
+    'recall',
+    {
+      title: 'Recall',
+      description:
+        "Get your bearings in a space in one call: the user's instructions for agents, the objects they marked as agent context (with their properties and text), and with a topic, the objects that match it. Call it first in a session, and with a topic before working on one.",
+      inputSchema: { topic: z.string().optional().describe('Words to find related objects by'), space, limit: z.number().int().min(1).max(50).optional().describe('How many related objects (10 by default)') },
+      annotations: READ,
+    },
+    (input) => run(() => tools.recall(strip(input)))
+  )
+
+  server.registerTool(
+    'set_agent_context',
+    {
+      title: 'Set agent context',
+      description: 'Mark an object as agent context (recall returns it to every agent first: a profile, preferences, a project page), or unmark it. Ask the user before marking.',
+      inputSchema: { id: z.string(), on: z.boolean() },
+      annotations: WRITE,
+    },
+    ({ id, on }) => run(() => tools.setAgentContext(id, on))
+  )
+
+  server.registerTool(
+    'trash_object',
+    {
+      title: 'Move to trash',
+      description: 'Move an object to the trash (e.g. after turning it into another object). The user can restore it for 30 days; nothing is deleted for good.',
+      inputSchema: { id: z.string() },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    ({ id }) => run(() => tools.trash(id))
+  )
+
+  server.registerTool(
+    'restore_object',
+    {
+      title: 'Restore from trash',
+      description: 'Take an object out of the trash (its id from trash_object).',
+      inputSchema: { id: z.string() },
+      annotations: WRITE,
+    },
+    ({ id }) => run(() => tools.restore(id))
+  )
+
+  server.registerTool('list_spaces', { title: 'List spaces', description: "The user's spaces; the default one is marked, and those read-only for agents. Each space's instructions for agents come with it.", annotations: READ }, () => run(() => tools.spaces()))
 
   server.registerTool(
     'list_types',
-    { title: 'List types', description: 'The types of objects in a space, with their properties (and select options) and how many objects each has.', inputSchema: { space }, annotations: READ },
+    { title: 'List types', description: "The types of objects in a space: the user's description of each (how they want its objects written), whether its objects need a cover or a tag (rules), its properties (required ones marked, select options) and how many objects each has.", inputSchema: { space }, annotations: READ },
     ({ space }) => run(() => tools.types(space))
   )
 
@@ -194,7 +254,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     'get_object',
     {
       title: 'Get object',
-      description: "An object: type, icon, color, properties, tags (nested ones as paths, \"recipe/breakfast\"), its text fields as Markdown, and what links to it (backlinks). The id is in vasta://o/<id> links and in other tools' results.",
+      description: "An object: type (and the user's description of it), icon, color, properties, tags (nested ones as paths, \"recipe/breakfast\"), its text fields as Markdown, what links to it (backlinks: id, title, kind), who wrote it and through which agent (createdVia, updatedVia), and what its type's rules say it lacks (missing). The id is in vasta://o/<id> links and in other tools' results.",
       inputSchema: { id: z.string() },
       annotations: READ,
     },
@@ -228,7 +288,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     {
       title: 'Query objects',
       description:
-        'Objects of some types, filtered and sorted, like a query in the app. Fields are property names, "Relation.Field" through a relation, or title, tags, createdAt, updatedAt, createdBy, updatedBy, date, type, host, and "Due for review" (is-checked: a task in Review\'s check-ins, open and not new, not reviewed in its type\'s number of days). People by username or name, "me" for the user ("Assignee contains me"). Operators: is, is-not, contains, not-contains, starts-with, is-empty, is-not-empty, is-checked, is-not-checked, gt, gte, lt, lte, before, after. Dates as YYYY-MM-DD.',
+        'Objects of some types, filtered and sorted, like a query in the app. Fields are property names, "Relation.Field" through a relation, or title, tags, createdAt, updatedAt, createdBy, updatedBy, createdVia, updatedVia (the agent an object was written through), date, type, host, and "Due for review" (is-checked: a task in Review\'s check-ins, open and not new, not reviewed in its type\'s number of days). People by username or name, "me" for the user ("Assignee contains me"). Operators: is, is-not, contains, not-contains, starts-with, is-empty, is-not-empty, is-checked, is-not-checked, gt, gte, lt, lte, before, after. Dates as YYYY-MM-DD.',
       inputSchema: {
         space,
         types: z.array(z.string()).optional().describe('Type names or ids; all types when omitted'),
@@ -431,7 +491,96 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     ({ text, space }) => run(() => tools.capture({ text, ...(space ? { space } : {}) }))
   )
 
+  // Reminders (docs/reminders.md), when the server sends reminders.
+  if (tools.remindersOn) registerReminderTools(server, tools)
+
   return server
+}
+
+function registerReminderTools(server: McpServer, tools: AgentTools) {
+  const clock = z.string().describe('HH:MM, 24 h')
+  const weekdays = z.array(z.number().int().min(0).max(6)).optional().describe('0 Sunday … 6 Saturday; every day when omitted')
+  const reminderShape = {
+    title: z.string().optional().describe('Its own title (needed for a reminder about nothing); the object’s otherwise'),
+    when: z
+      .discriminatedUnion('kind', [
+        z.object({ kind: z.literal('object'), before: z.number().int().min(0).optional().describe('Minutes before a task’s or event’s start') }).describe('The object’s own time: a habit’s "Remind at" on its days, a task’s or event’s start'),
+        z.object({ kind: z.literal('daily'), at: clock, days: weekdays }).describe('A time of day'),
+        z.object({ kind: z.literal('wake'), after: clock, latest: clock.optional().describe('Start then anyway, wherever the user is'), days: weekdays }).describe('The first time the user is at the computer (the desktop app) from `after` on'),
+      ])
+      .optional(),
+    content: z
+      .discriminatedUnion('kind', [
+        z.object({ kind: z.literal('target') }).describe('The object itself'),
+        z.object({ kind: z.literal('tasks') }).describe('Tasks due today or overdue'),
+        z.object({ kind: z.literal('tag'), tag: z.string().describe('Tag title or path'), count: z.number().int().min(1).max(5).optional() }).describe('Random objects with the tag (or a sub-tag)'),
+        z.object({ kind: z.literal('query'), query: z.string().describe('A saved query (Query object) by title or id'), count: z.number().int().min(1).max(5).optional() }).describe('Random objects the query finds'),
+      ])
+      .optional()
+      .describe('What the reminder shows, so even an ignored notification gets read'),
+    ack: z.enum(['ok', 'done', 'type', 'say']).optional().describe('How it is answered: OK, doing the habit or task, typing its text word for word, or saying it out loud (typing or saying it on a habit marks the habit done)'),
+    style: z
+      .enum(['popup', 'fullscreen', 'notification', 'escalating', 'relentless'])
+      .optional()
+      .describe('How it reaches the user: popup (a desktop window floating over everything until answered), fullscreen (the desktop app over the whole screen), notification (every 30 min, notifications only), escalating (every 15 min, louder at each step, the screen at 45), relentless (every 5 min, Telegram at 10, the screen at 15)'),
+    repeat: z.number().int().nullable().optional().describe('Minutes between repeats (2, 5, 10, 15, 20, 30, 45, 60, 90 or 120); null: only at the ladder’s steps'),
+    steps: z
+      .array(z.object({ after: z.number().int().min(0).describe('Minutes after it starts; the first step is 0'), channels: z.array(z.enum(NAG_CHANNELS)).min(1), urgent: z.boolean().optional().describe('ntfy priority 5, Web Push that stays, Telegram with sound') }))
+      .min(1)
+      .max(6)
+      .optional()
+      .describe('A ladder of its own (wins over style). Channels: push (phones and browsers), desktop (the desktop app’s notification), ntfy, telegram, popup (a desktop window floating over everything), takeover (the desktop app over the whole screen)'),
+    snooze: z.number().int().optional().describe('Minutes a snooze lasts (5, 10, 15, 30 or 60)'),
+    climbAfter: z.number().int().min(1).nullable().optional().describe('Snoozes that climb one step; null: snoozing never climbs'),
+    escapeAfter: z.number().int().min(0).optional().describe('Seconds before the takeover offers its way out'),
+    paused: z.boolean().optional(),
+    openAfter: z.string().nullable().optional().describe('An object (id) the desktop app opens once it is answered; null: none, the default (the app stays out of the way)'),
+  }
+
+  server.registerTool(
+    'list_reminders',
+    {
+      title: 'List reminders',
+      description: "The user's reminders (about one object, with object): when each starts, what it shows, how it is answered, its ladder, and honest stats of the last 30 days (answered how and how fast, snoozes, skips with reasons, ignored). askingNow: the ones going on.",
+      inputSchema: { object: z.string().optional().describe('Only the reminders about this object') },
+      annotations: READ,
+    },
+    (input) => run(() => tools.listReminders(strip(input)))
+  )
+
+  server.registerTool(
+    'set_reminder',
+    {
+      title: 'Set a reminder',
+      description:
+        'Make a reminder (without id) or change one: it asks until it gets a real answer, in a style (a desktop pop-up, the whole screen, notifications, or escalating through channels). On an object (a habit, task, event, or any object to be reminded of) or about nothing (with a title). Unset fields get what fits the object: a habit at its "Remind at", answered by doing it. Ask the user before making or loosening one.',
+      inputSchema: { id: z.string().optional().describe('The reminder to change'), object: z.string().optional().describe('What a new reminder is about'), space, ...reminderShape },
+      annotations: WRITE,
+    },
+    (input) => run(() => tools.setReminder(strip(input) as unknown as AgentReminderInput))
+  )
+
+  server.registerTool(
+    'start_reminder',
+    {
+      title: 'Start a reminder now',
+      description: 'Start a reminder now, whatever its time, to try it out: its first step goes out at once, then it repeats and climbs until answered, snoozed or skipped. Only when the user asks to see one.',
+      inputSchema: { id: z.string() },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    ({ id }) => run(() => tools.startReminder(id))
+  )
+
+  server.registerTool(
+    'remove_reminder',
+    {
+      title: 'Remove a reminder',
+      description: 'Remove a reminder and its history (pausing it with set_reminder keeps them). Ask the user first.',
+      inputSchema: { id: z.string() },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    ({ id }) => run(() => tools.removeReminder(id))
+  )
 }
 
 /** Optional fields left out rather than undefined (the tools' options use exactOptionalPropertyTypes). */

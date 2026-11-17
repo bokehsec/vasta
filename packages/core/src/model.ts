@@ -29,11 +29,30 @@ export interface Space {
   sprints?: SprintSettings
   /** The page Vasta opens on in this space (HomeView); absent = the first sidebar item. */
   opensOn?: OpensOn
+  /** Owner-controlled agent visibility, permissions and context; absent: unrestricted. */
+  agents?: AgentSettings
   createdAt: IsoDateTime
 }
 
 /** What a space opens on: today's day view, or one object's page. */
 export type OpensOn = { kind: 'today' } | { kind: 'object'; id: Id }
+
+/**
+ * A space as agents meet it through the MCP. Set by the space's owners; the server applies it to
+ * every agent of every member.
+ */
+export interface AgentSettings {
+  /** Written by the user, sent to agents when they connect ("read About me first…"). */
+  instructions?: string
+  /** Agents do not see the space at all. */
+  hidden?: boolean
+  /** Agents may read the space but not change anything in it. */
+  readOnly?: boolean
+  /** Objects with these tags (or tags nested under them) are hidden from agents, and the tags too. */
+  hiddenTagIds?: Id[]
+  /** Objects marked as agent context: what agents read first (the MCP's recall), like pinned objects. */
+  context?: Id[]
+}
 
 /** A space's food tracking: on or off (turning it off hides it and keeps the data) and its meals. */
 export interface NutritionSettings {
@@ -230,10 +249,22 @@ export interface ObjectType {
   subtasks?: SubtaskSettings
   /** The Tracker's progress: where it shows, its charts and range; unset: the defaults. Habit types only. */
   habits?: HabitTypeSettings
+  /** A cover or a tag each of its objects must have; agents and API writes are refused without it, the app warns. */
+  rules?: TypeRules
   createdAt: IsoDateTime
   updatedAt: IsoDateTime
   /** Set when the type is in the trash; its objects are trashed with it. */
   deletedAt?: IsoDateTime
+}
+
+/**
+ * What every object of a type must have besides its required properties (PropertyDef.required),
+ * which are not properties: a cover, a tag (agents.ts typeRuleProblems).
+ */
+export interface TypeRules {
+  cover?: boolean
+  /** At least one tag. */
+  tags?: boolean
 }
 
 export type PropertyDef =
@@ -254,6 +285,8 @@ interface PropertyDefBase {
   description?: string
   icon?: Icon
   hideWhenEmpty?: boolean
+  /** Every object of the type must have a value (agents.ts): agent and API writes without one are refused, the app warns. */
+  required?: boolean
 }
 
 export interface TextPropertyDef extends PropertyDefBase { kind: 'text' }
@@ -436,6 +469,9 @@ export interface ObjectRecord {
    */
   createdBy?: Id
   updatedBy?: Id
+  /** The agent the write was made through (an MCP token's name, "Claude Code"), when it was one. */
+  createdVia?: string
+  updatedVia?: string
 }
 
 /**

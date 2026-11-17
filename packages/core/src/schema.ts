@@ -50,6 +50,13 @@ export const ADDED_COLUMNS: { table: string; column: string; definition: string 
   { table: 'types', column: 'habits', definition: 'TEXT' },
   // JSON ReviewSettings: how often a task comes up in Review and which statuses are new (ObjectType.review).
   { table: 'types', column: 'review', definition: 'TEXT' },
+  // Agents (core agents.ts): a space's AgentSettings and a type's TypeRules (JSON), and the agent
+  // an object was made or last changed through, also on its activity.
+  { table: 'spaces', column: 'agents', definition: 'TEXT' },
+  { table: 'types', column: 'rules', definition: 'TEXT' },
+  { table: 'objects', column: 'created_via', definition: 'TEXT' },
+  { table: 'objects', column: 'updated_via', definition: 'TEXT' },
+  { table: 'activity', column: 'via', definition: 'TEXT' },
 ]
 
 /** Indexes on added columns; run after ADDED_COLUMNS, since an older table may lack them before. */

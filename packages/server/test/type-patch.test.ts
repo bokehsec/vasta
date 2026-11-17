@@ -37,6 +37,27 @@ describe('PATCH /api/types/:id', () => {
     expect(store.getType(task)!.properties).toEqual(before.properties)
   })
 
+  it('normalizes Rules while independent view and custom-setting saves keep each other', async () => {
+    const { store, user, task } = setup()
+    const before = store.getType(task)!
+    const quickActions = { nextStepField: 'next-step' }
+    const results = await Promise.all([
+      user.request(`/api/types/${task}`, json({ rules: { cover: true, tags: false, unknown: true } })),
+      user.request(`/api/types/${task}`, json({ views: [...before.views, view('new')] })),
+      user.request(`/api/types/${task}`, json({ quickActions, review: { every: 12 }, subtasks: { parentField: 'parent' } })),
+    ])
+    expect(results.map((r) => r.status)).toEqual([200, 200, 200])
+    expect(store.getType(task)).toMatchObject({ rules: { cover: true }, quickActions, review: { every: 12 }, subtasks: { parentField: 'parent' } })
+    expect(store.getType(task)!.rules).toEqual({ cover: true })
+    expect(store.getType(task)!.views.map((v) => v.id)).toContain('new')
+    const put = await user.request(`/api/types/${task}`, json({ ...store.getType(task), rules: { tags: true, cover: 'yes' } }, 'PUT'))
+    expect(put.status).toBe(200)
+    expect(store.getType(task)!.rules).toEqual({ tags: true })
+    await user.request(`/api/types/${task}`, json({ rules: { cover: false } }))
+    expect(store.getType(task)!.rules).toBeUndefined()
+    expect(store.getType(task)!.quickActions).toEqual(quickActions)
+  })
+
   it('takes an optional field away with null, and refuses fields that are not the type\'s own to change', async () => {
     const { store, user, task } = setup()
     await user.request(`/api/types/${task}`, json({ openIn: 'pane' }))
@@ -66,7 +87,7 @@ describe('patchType on a replica', () => {
     phone.online = false
     laptop.online = false
     phone.store.patchType(task, { views }, now())
-    laptop.store.patchType(task, { name: 'Chores', pluralName: 'Chores' }, now())
+    laptop.store.patchType(task, { name: 'Chores', pluralName: 'Chores', rules: { tags: true }, review: { every: 14 } }, now())
     phone.online = true
     laptop.online = true
     await phone.sync.sync()
@@ -75,6 +96,8 @@ describe('patchType on a replica', () => {
 
     for (const type of [store.getType(task)!, phone.store.getType(task)!, laptop.store.getType(task)!]) {
       expect(type.name).toBe('Chores')
+      expect(type.rules).toEqual({ tags: true })
+      expect(type.review).toEqual({ every: 14 })
       expect(type.views.map((v) => v.id)).toContain('mine')
     }
   })

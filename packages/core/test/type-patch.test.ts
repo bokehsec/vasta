@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes } from '../src/builtin-types.ts'
 import type { ObjectType } from '../src/model.ts'
+import { isPushable } from '../src/sync.ts'
 import { NodeStore } from '../src/store-node.ts'
 import { TYPE_PATCH_FIELDS, applyTypePatch } from '../src/type-patch.ts'
 
@@ -35,6 +36,21 @@ describe('applyTypePatch', () => {
 })
 
 describe('the server store\'s putType', () => {
+  it('round-trips the combined fork and upstream settings and keeps agent settings owner-controlled', () => {
+    const store = new NodeStore(':memory:')
+    const space = { id: 's', name: 's', sidebar: [], createdAt: AT, opensOn: { kind: 'today' as const }, agents: { instructions: 'Read context first', readOnly: true } }
+    store.putSpace(space)
+    const combined: ObjectType = { ...task, rules: { tags: true }, quickActions: { nextStepField: 'next' }, review: { every: 12 }, subtasks: { parentField: 'parent' }, habits: { place: 'above', chart: 'calendar', weeks: 4 } }
+    store.putType(combined)
+    expect(store.getSpace('s')).toEqual(space)
+    expect(store.getType(task.id)).toEqual(combined)
+    store.putType(applyTypePatch(store.getType(task.id)!, { name: 'Chores' }, LATER))
+    expect(store.getType(task.id)).toEqual({ ...combined, name: 'Chores', updatedAt: LATER })
+    expect(isPushable('spaces', 'agents')).toBe(false)
+    expect(isPushable('spaces', 'opensOn')).toBe(true)
+    expect(isPushable('types', 'rules')).toBe(true)
+  })
+
   it('keeps a column this build does not name (a later build\'s) instead of blanking it', () => {
     const store = new NodeStore(':memory:')
     store.putSpace({ id: 's', name: 's', sidebar: [], createdAt: AT })

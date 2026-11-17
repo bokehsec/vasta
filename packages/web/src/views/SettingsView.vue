@@ -14,11 +14,13 @@ import NutritionSettings from '../components/settings/NutritionSettings.vue'
 import SnippetSettings from '../components/settings/SnippetSettings.vue'
 import SprintSettings from '../components/settings/SprintSettings.vue'
 import ReminderSettings from '../components/settings/ReminderSettings.vue'
+import InsistentSettings from '../components/settings/InsistentSettings.vue'
 import ServerAccountsSettings from '../components/settings/ServerAccountsSettings.vue'
 import SessionSettings from '../components/settings/SessionSettings.vue'
 import SpaceSettings from '../components/settings/SpaceSettings.vue'
 import TelegramSettings from '../components/settings/TelegramSettings.vue'
 import TokenSettings from '../components/settings/TokenSettings.vue'
+import AgentSettings from '../components/settings/AgentSettings.vue'
 import { SECTIONS } from '../components/settings/sections.ts'
 import { isDesktop } from '../lib/platform.ts'
 
@@ -91,9 +93,11 @@ onBeforeUnmount(() => scroller?.removeEventListener('scroll', onScroll))
       <SprintSettings />
       <InboxSettings />
       <NutritionSettings />
+      <InsistentSettings />
       <ReminderSettings />
       <ChannelSettings />
       <TokenSettings />
+      <AgentSettings />
       <TelegramSettings />
       <SessionSettings />
     </div>
