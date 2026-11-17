@@ -86,7 +86,7 @@ describe('the migration giving task dates their roles (2026-11-16)', () => {
     expect(actions.find((a) => a.id === 'defer')?.changes).toEqual([{ field: 'work', value: { kind: 'ask' } }])
     // Only Defer: an action of the type's own that asks for the deadline keeps doing so.
     expect(actions.find((a) => a.id === 'deadline')?.changes).toEqual([{ field: 'due', value: { kind: 'ask' } }])
-    expect(actions.find((a) => a.id === 'done')?.changes).toEqual(own[0].changes)
+    expect(actions.find((a) => a.id === 'done')?.changes).toEqual(own[0]!.changes)
     // A type without a plan date gets one, and its Defer asks for it.
     const none = run(legacy({ actions: own }, (p) => p.filter((x) => x.id !== 'work'))).type
     expect(quickActionsOf(none).find((a) => a.id === 'defer')?.changes).toEqual([{ field: 'dodate', value: { kind: 'ask' } }])
