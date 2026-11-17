@@ -44,7 +44,7 @@ import {
   withOpensOn,
   writeDailyText,
 } from '@vasta/core'
-import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, dayReferences, objectEntries, settleTaskSave, type OccurrenceEdit } from '@vasta/core/calendar'
+import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, dayReferences, objectEntries, overdueEntries, settleTaskSave, type OccurrenceEdit } from '@vasta/core/calendar'
 import { checkMediaKey, mediaKey, RangeNotSatisfiableError, type MediaStore } from '@vasta/core/media'
 import { mapExport } from '@vasta/importer-capacities/export'
 import type { NodeStore } from '@vasta/core/node'
@@ -870,9 +870,10 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
 
   /**
    * Everything dated between two days (inclusive, "YYYY-MM-DD" in `timeZone`): daily notes, objects'
-   * dates and date properties (repeats expanded) and events of subscribed calendars. `objects` holds
-   * the summaries the entries point to, `references` how many objects link to each day (its note or
-   * date objects).
+   * dates and date properties (repeats expanded) and events of subscribed calendars. `overdue` holds
+   * the tasks late on `today` (the client's day), when that is in the range. `objects` holds the
+   * summaries the entries point to, `references` how many objects link to each day (its note or date
+   * objects).
    */
   api.get('/spaces/:id/calendar', (c) => {
     const space = store.getSpace(c.req.param('id'))
@@ -887,8 +888,10 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     const range = { from, to }
     const objects = calendarObjects(store, space.id, types, range)
     const entries = [...objectEntries(objects, types, range, timeZone), ...calendarService.entries(space.id, range, timeZone)].sort(compareEntries)
-    const used = new Set(entries.map((e) => e.objectId).filter(Boolean))
-    return c.json({ entries, objects: objects.filter((o) => used.has(o.id)), references: dayReferences(objects, types, range, timeZone, (ids) => store.linkCounts(ids)) })
+    const today = c.req.query('today') ?? ''
+    const overdue = isValidDay(today) && today >= from && today <= to ? overdueEntries(objects, types, today, timeZone) : []
+    const used = new Set([...entries, ...overdue].map((e) => e.objectId).filter(Boolean))
+    return c.json({ entries, overdue, objects: objects.filter((o) => used.has(o.id)), references: dayReferences(objects, types, range, timeZone, (ids) => store.linkCounts(ids)) })
   })
 
   // Inbox ---------------------------------------------------------------------

@@ -94,6 +94,9 @@ export const formatDayShort = (day: string) => shortDay.format(utc(day))
 export const formatClock = (iso: string) => timeShort.format(new Date(iso))
 export const isToday = (day: string) => day === dayKey()
 
+/** A day that has passed, in words: "Tue" within the last week, else "Nov 3". */
+export const pastDay = (day: string, today = dayKey()) => (daysBetween(day, today) < 7 ? formatWeekday(day) : formatDayShort(day))
+
 /** "9:00 – 10:30", or "" for all-day entries. */
 export function entryTime(entry: CalendarEntry): string {
   if (entry.allDay) return ''

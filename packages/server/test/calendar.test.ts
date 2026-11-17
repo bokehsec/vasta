@@ -97,6 +97,22 @@ describe('calendar API', () => {
     expect(range.entries.some((e) => e.title === 'Standup')).toBe(true)
   })
 
+  it('lists the tasks late today, only when the range holds today', async () => {
+    const { app, store } = setup(() => new Response(ics))
+    const task = store.listTypes('s').find((t) => t.system === 'task')!
+    const day = (d: string) => ({ kind: 'date' as const, value: { start: `${d}T00:00:00.000Z`, resolution: 'day' as const } })
+    const base = { spaceId: 's', aliases: [], tagIds: [], collectionIds: [], createdAt: at, updatedAt: at, content: {} }
+    store.putObject({ ...base, id: 'missed', typeId: task.id, title: 'Missed', props: { due: day('2026-10-10') } })
+    store.putObject({ ...base, id: 'ahead', typeId: task.id, title: 'Ahead', props: { due: day('2026-10-30') } })
+    const get = async (query: string) => (await (await app.request(`/api/spaces/s/calendar?${query}`)).json()) as { overdue: CalendarEntry[]; objects: ObjectSummary[] }
+    const today = await get('from=2026-10-26&to=2026-11-01&today=2026-10-28')
+    expect(today.overdue.map((e) => [e.objectId, e.overdue])).toEqual([['missed', [{ field: 'due', day: '2026-10-10' }]]])
+    // The object comes along though its date is far from the range.
+    expect(today.objects.map((o) => o.id)).toContain('missed')
+    expect((await get('from=2026-10-26&to=2026-11-01&today=2026-11-05')).overdue).toEqual([])
+    expect((await get('from=2026-10-26&to=2026-11-01')).overdue).toEqual([])
+  })
+
   it('rejects bad input', async () => {
     const { app } = setup(() => new Response('<html></html>'))
     expect((await app.request('/api/spaces/s/calendar?from=2026-10-05&to=2026-10-01')).status).toBe(400)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes, builtinTypeId, type CalendarEntry, type FilterGroup, type ObjectSummary, type QueryContext } from '@vasta/core'
-import { agendaDays, agendaLength, isPast, nowIndex, placeEntries, selectEntries, splitAllDay, tidyAgenda } from './agenda.ts'
+import { agendaDays, agendaLength, isPast, lateEntries, nowIndex, placeEntries, selectEntries, splitAllDay, tidyAgenda } from './agenda.ts'
 
 const at = '2026-11-12T12:00:00.000Z'
 const task = builtinTypeId('s', 'task')
@@ -73,6 +73,13 @@ describe('which entries the agenda shows', () => {
     expect(select([rent, start])).toEqual([rent, start])
   })
 
+  it('lists a late task when one of its late dates is the chosen field', () => {
+    const lateDue = entry({ objectId: 't1', key: 'overdue:t1', startDay: '2026-11-03', endDay: '2026-11-03', overdue: [{ field: 'due', day: '2026-11-03' }, { field: 'work', day: '2026-11-05' }] })
+    expect(select([lateDue], { settings: { field: 'work' } })).toEqual([lateDue])
+    expect(select([lateDue], { settings: { field: 'start' } })).toEqual([])
+    expect(select([lateDue], { typeIds: [page] })).toEqual([])
+  })
+
   it('drops entries of objects it does not know', () => {
     expect(select([entry({ objectId: 'gone' })])).toEqual([])
   })
@@ -108,6 +115,21 @@ describe('placing entries on days', () => {
     const placed = placeEntries([morning, night], days)
     expect(placed[0]!.timed).toEqual([night])
     expect(placed[1]!.timed).toEqual([night, morning])
+  })
+})
+
+describe('late tasks', () => {
+  const lateOne = (key: string, ...days: string[]) => entry({ objectId: 't1', key, startDay: days[0]!, endDay: days[0]!, overdue: days.map((day) => ({ field: 'due', day })) })
+
+  it('are no day’s: placing leaves them out', () => {
+    const placed = placeEntries([lateOne('overdue:a', '2026-11-12')], ['2026-11-12', '2026-11-13'])
+    expect(placed.every((d) => !d.allDay.length && !d.timed.length)).toBe(true)
+  })
+
+  it('are listed apart, the longest overdue first', () => {
+    const newer = lateOne('overdue:newer', '2026-11-10')
+    const older = lateOne('overdue:older', '2026-11-11', '2026-11-02')
+    expect(lateEntries([entry({ objectId: 't2' }), newer, older])).toEqual([older, newer])
   })
 })
 

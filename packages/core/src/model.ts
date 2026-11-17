@@ -707,6 +707,13 @@ export interface CalendarEntry {
   occurrence?: IsoDateTime
   /** Objects' repeating dates: the first occurrence not cancelled, the one a repeating task is done on (completeRepeat). */
   current?: boolean
+  /**
+   * Tasks that are late (overdueEntries): the dates of the task that are before today, each with the
+   * day it is on. The entry stands for the task, not for a day of the calendar.
+   */
+  overdue?: { field: string; day: string }[]
+  /** A task's plan and deadline on the same day are one entry: the field of the other date it stands for (mergeTaskDates). */
+  alsoField?: string
   /** External events only. */
   sourceId?: Id
   title?: string

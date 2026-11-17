@@ -451,8 +451,9 @@ describe('local replica', () => {
     await phone.sync.sync()
     phone.online = false
     const server = (await (await user.request('/api/spaces/s/calendar?from=2026-10-26&to=2026-11-01&timeZone=America/Sao_Paulo')).json()) as { entries: { key: string }[] }
-    const local = phone.store.calendar('s', { from: '2026-10-26', to: '2026-11-01' }, 'America/Sao_Paulo')
+    const local = phone.store.calendar('s', { from: '2026-10-26', to: '2026-11-01' }, 'America/Sao_Paulo', '2026-10-28')
     expect(local.entries.map((e) => e.key)).toEqual(server.entries.map((e) => e.key))
+    expect(local.overdue).toEqual([])
     expect(local.entries.some((e) => e.kind === 'external' && e.sourceId === source.id)).toBe(true)
   })
 

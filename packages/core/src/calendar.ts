@@ -6,7 +6,7 @@ import ICAL from 'ical.js'
 import type { CalendarEntry, DateException, DateValue, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType } from './model.ts'
 import { copyObject } from './operations.ts'
 import { reviewFieldOf, reviewedByStatusChange } from './task-review.ts'
-import { doneOptionOf, reopenOptionOf } from './task-status.ts'
+import { doneOptionOf, isClosedTask, reopenOptionOf } from './task-status.ts'
 import type { Store } from './store.ts'
 import { taskDatesOf } from './task-dates.ts'
 import { addDays, dayIn, dayOfDate, daysBetween, instantOf, isValidTimeZone, moveDateToDay, wallTimeIn } from './time.ts'
@@ -514,6 +514,50 @@ export function objectEntries(objects: ObjectSummary[], types: Map<Id, ObjectTyp
     }
   }
   return entries
+}
+
+/**
+ * The tasks that are late on `today` (in `timeZone`): open ones with a deadline or a plan on a day
+ * before it. A date that spans days is late once it has ended; a time earlier today is not late
+ * yet; a date that repeats counts only at its current occurrence (the one a repeating task is done
+ * on), moved or not. One entry per task, the deadline's when it is late (it owns a repeating task's
+ * checkbox), else the plan's; `overdue` lists the late dates, the deadline first.
+ */
+export function overdueEntries(objects: ObjectSummary[], types: Map<Id, ObjectType>, today: string, timeZone: string): CalendarEntry[] {
+  const entries: CalendarEntry[] = []
+  for (const object of objects) {
+    const type = types.get(object.typeId)
+    if (object.deletedAt || type?.system !== 'task' || type.deletedAt || isClosedTask(type, object)) continue
+    const { plan, deadline } = taskDatesOf(type)
+    const late: { field: string; day: string; entry: CalendarEntry }[] = []
+    for (const def of [deadline, plan]) {
+      const value = def && object.props[def.id]
+      if (!def || value?.kind !== 'date') continue
+      const occurrence = value.value.rrule ? currentOccurrence(value.value, timeZone) : undefined
+      if (value.value.rrule && !occurrence) continue
+      const times = occurrence ? currentTimes(value.value, occurrence) : { start: value.value.start, ...(value.value.end ? { end: value.value.end } : {}) }
+      const days = spanOf({ ...times, resolution: value.value.resolution }, timeZone)
+      if (days.endDay >= today) continue
+      late.push({
+        field: def.id,
+        day: days.endDay,
+        entry: {
+          key: `overdue:${object.id}:${def.id}:${occurrence ?? times.start}`,
+          kind: 'property',
+          objectId: object.id,
+          field: def.id,
+          ...times,
+          ...days,
+          allDay: value.value.resolution === 'day',
+          ...(occurrence ? { recurring: true, occurrence, current: true } : {}),
+        },
+      })
+    }
+    if (late.length) entries.push({ ...late[0]!.entry, overdue: late.map(({ field, day }) => ({ field, day })) })
+  }
+  // The longest overdue first.
+  const since = (entry: CalendarEntry) => entry.overdue!.map((l) => l.day).sort()[0]!
+  return entries.sort((a, b) => since(a).localeCompare(since(b)) || a.key.localeCompare(b.key))
 }
 
 /** Order for display: all-day first, then by start, longer first. */

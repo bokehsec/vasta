@@ -9,21 +9,20 @@
 import { computed, inject } from 'vue'
 import type { CalendarEntry, CalendarSource } from '@vasta/core'
 import { closingOf, isClosedTask, taskDatesOf } from '@vasta/core'
-import { dayOfValue, entryTime, formatClock } from '../../lib/calendar.ts'
+import { entryTime, formatClock, pastDay, viewerTimeZone } from '../../lib/calendar.ts'
 import { ENTRY_DRAGGING, drag, pressEntry } from '../../lib/calendar-drag.ts'
 import { ENTRY_COMPLETION } from '../../lib/completion-feedback.ts'
 import { blockTextClasses, chip } from '../../lib/colors.ts'
 import { displayTitle, formatDateShort } from '../../lib/format.ts'
 import { lastError, summaryOf, typesById } from '../../lib/state.ts'
 import { setTaskDone } from '../../lib/task-completion.ts'
-import { taskDate, taskDateRole, taskEntryCheckable, type TaskDateRole } from '../../lib/calendar-tasks.ts'
+import { entryBadges, entryNote, plannedAfterDeadline, taskDateRole, taskEntryCheckable } from '../../lib/calendar-tasks.ts'
 import AppIcon from '../AppIcon.vue'
 import ObjectLink from '../ObjectLink.vue'
 
 const props = defineProps<{
   entry: CalendarEntry
   variant: 'chip' | 'block' | 'row' | 'day-task'
-  taskRole?: TaskDateRole
   source?: CalendarSource | undefined
   /** The entry started on an earlier day (multi-day chips repeat on each day). */
   continued?: boolean
@@ -31,6 +30,14 @@ const props = defineProps<{
   continues?: boolean
 }>()
 const emit = defineEmits<{ details: [entry: CalendarEntry, element: HTMLElement] }>()
+
+const BADGE_TONES = {
+  plan: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200',
+  deadline: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200',
+  late: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200',
+  done: 'bg-hover text-ink-soft',
+  field: 'bg-hover text-ink-soft',
+}
 
 const dragging = inject(ENTRY_DRAGGING, undefined)
 const movable = computed(() => !!dragging?.movable(props.entry))
@@ -41,8 +48,8 @@ const kept = inject(ENTRY_COMPLETION, undefined)
 
 const summary = computed(() => (props.entry.objectId ? summaryOf(props.entry.objectId) : undefined))
 const type = computed(() => typesById.value.get(summary.value?.typeId ?? ''))
-const role = computed(() => props.taskRole ?? taskDateRole(type.value, props.entry.field))
-const isTask = computed(() => !!taskDateRole(type.value, props.entry.field))
+const role = computed(() => taskDateRole(type.value, props.entry.field))
+const isTask = computed(() => !!role.value)
 // A repeating task is done one occurrence at a time, the one it is at (completeRepeat): the others have no checkbox.
 const checkable = computed(() => taskEntryCheckable(props.entry, type.value, summary.value))
 /** The completion this entry is kept for, when the view kept it (another occurrence is not it). */
@@ -50,10 +57,9 @@ const retained = computed(() => (props.entry.objectId ? kept?.retained(props.ent
 const done = computed(() => isTask.value && (!!retained.value || (!!summary.value && isClosedTask(type.value, summary.value))))
 const dropped = computed(() => !!summary.value && closingOf(type.value, summary.value) === 'dropped')
 const dates = computed(() => taskDatesOf(type.value))
-const plan = computed(() => taskDate(summary.value, dates.value.plan?.id))
-const due = computed(() => taskDate(summary.value, dates.value.deadline?.id))
-const afterDeadline = computed(() => !done.value && !!plan.value && !!due.value && dayOfValue(plan.value) > dayOfValue(due.value))
-const taskNote = computed(() => role.value === 'planned' ? (due.value ? `Due by ${formatDateShort(due.value)}` : 'No deadline') : (plan.value ? `Planned for ${formatDateShort(plan.value)}` : 'No work date planned'))
+const afterDeadline = computed(() => !done.value && plannedAfterDeadline(summary.value, type.value, viewerTimeZone()))
+const badges = computed(() => entryBadges(props.entry, type.value, dropped.value ? 'dropped' : done.value ? 'done' : undefined, pastDay))
+const taskNote = computed(() => entryNote(props.entry, type.value, summary.value, formatDateShort))
 /** A kept repeating task's note: the next occurrence's day, from the due date the completion moved it to. */
 const nextDue = computed(() => {
   const deadline = dates.value.deadline?.id
@@ -62,7 +68,7 @@ const nextDue = computed(() => {
 })
 const title = computed(() => (props.entry.kind === 'external' ? (props.entry.title ?? '') : displayTitle(summary.value, type.value)))
 const color = computed(() => (props.entry.kind === 'external' ? (props.source?.color ?? 'sky') : (type.value?.color ?? 'gray')))
-const fieldName = computed(() => role.value === 'planned' ? 'Planned for' : role.value === 'due' ? 'Due by' : (props.entry.field && props.entry.field !== 'date' ? type.value?.properties.find((p) => p.id === props.entry.field)?.name : undefined))
+const fieldName = computed(() => (role.value === 'plan' ? 'Planned for' : role.value === 'deadline' ? 'Due by' : props.entry.field && props.entry.field !== 'date' ? type.value?.properties.find((p) => p.id === props.entry.field)?.name : undefined))
 const time = computed(() => entryTime(props.entry))
 /** What a row says after the title, faint: the calendar an event is from, else the object's type. */
 const origin = computed(() => (props.entry.kind === 'external' ? props.source?.name : type.value?.name))
@@ -122,7 +128,7 @@ function onContextMenu(event: MouseEvent) {
     @pointerdown="onPointerDown($event, 'move')"
     @contextmenu="onContextMenu"
   >
-    <span v-if="variant === 'row'" class="w-[4.25rem] shrink-0 pt-px text-xs tabular-nums text-ink-soft">{{ entry.allDay ? '' : formatClock(entry.start) }}</span>
+    <span v-if="variant === 'row'" class="w-[4.25rem] shrink-0 pt-px text-xs tabular-nums text-ink-soft">{{ entry.allDay || entry.overdue ? '' : formatClock(entry.start) }}</span>
     <!-- A row wraps its title (an agenda sits in narrow columns); chips and blocks cut it short. -->
     <span class="flex min-w-0 gap-1" :class="variant === 'day-task' ? 'w-full items-start gap-2' : variant === 'row' ? 'items-start' : 'items-center'">
       <button
@@ -144,7 +150,7 @@ function onContextMenu(event: MouseEvent) {
       <span v-if="variant === 'chip' && time && !continued" class="shrink-0 tabular-nums opacity-70">{{ time.split(' – ')[0] }}</span>
       <span v-if="variant === 'day-task'" class="min-w-0 flex-1">
         <span class="block break-words font-medium" :class="done ? 'line-through' : ''">{{ title }}</span>
-        <span class="mt-1 block text-xs text-ink-soft">{{ time ? `${time} · ` : '' }}{{ taskNote }}</span>
+        <span v-if="(time && !entry.overdue) || taskNote" class="mt-1 block text-xs text-ink-soft">{{ time && !entry.overdue ? `${time}${taskNote ? ' · ' : ''}` : '' }}{{ taskNote }}</span>
         <span v-if="afterDeadline" class="mt-1 block text-xs text-amber-700 dark:text-amber-400">Planned after deadline</span>
         <span v-if="nextDue" data-completion-note class="mt-1 block text-xs text-ink-soft">Done this time · Next: {{ formatDateShort(nextDue) }}</span>
       </span>
@@ -154,8 +160,8 @@ function onContextMenu(event: MouseEvent) {
         ><span v-if="nextDue" data-completion-note class="block text-xs text-ink-soft">Done this time · Next: {{ formatDateShort(nextDue) }}</span></span
       >
       <span v-else class="truncate font-medium" :class="done ? 'line-through' : ''">{{ title }}</span>
-      <span v-if="role" class="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium" :class="role === 'planned' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200' : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200'">{{ dropped ? 'Dropped' : done ? 'Done' : role === 'planned' ? 'Planned' : 'Due' }}</span>
-      <span v-else-if="type?.system === 'task' && fieldName" class="text-[10px] opacity-80">{{ fieldName }}</span>
+      <span v-for="badge in badges" :key="badge.label" data-entry-badge class="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium" :class="BADGE_TONES[badge.tone]">{{ badge.label }}</span>
+      <AppIcon v-if="afterDeadline && variant !== 'day-task'" fallback="ph:warning" :size="12" class="shrink-0 text-amber-700 dark:text-amber-400" title="Planned after its deadline" aria-label="Planned after its deadline" data-after-deadline />
       <AppIcon v-if="entry.recurring" fallback="ph:repeat" :size="11" class="shrink-0 opacity-60" />
     </span>
     <span v-if="variant === 'block' && time" class="truncate tabular-nums opacity-70">{{ time }}</span>

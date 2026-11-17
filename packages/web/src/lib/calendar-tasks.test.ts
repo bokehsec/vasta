@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes, newObject, taskDatesOf, type CalendarEntry, type DateValue, type ObjectSummary } from '@vasta/core'
 import { objectEntries } from '@vasta/core/calendar'
-import { dayTaskGroups, taskDateRole, taskEntryCheckable } from './calendar-tasks.ts'
+import { dayTaskGroups, entryBadges, entryNote, mergeTaskDates, plannedAfterDeadline, taskDateRole, taskEntryCheckable } from './calendar-tasks.ts'
 
 const at = '2026-11-16T12:00:00.000Z'
 const base = createBuiltinTypes('space', at).find((t) => t.system === 'task')!
@@ -11,12 +11,13 @@ const day = (n: number): DateValue => ({ start: `2026-11-${n}T00:00:00.000Z`, re
 const timed = (hour: string): DateValue => ({ start: `2026-11-15T${hour}:00.000Z`, resolution: 'time' })
 const object = (plan?: DateValue, due?: DateValue, status = 'todo'): ObjectSummary => ({ ...newObject(task, { title: 'Task', props: { status: { kind: 'select', value: [status] }, ...(plan ? { work: { kind: 'date', value: plan } } : {}), ...(due ? { due: { kind: 'date', value: due } } : {}) } }, 'task', at), preview: '' })
 const entries = (o: ObjectSummary) => objectEntries([o], types, { from: '2026-11-15', to: '2026-11-30' }, 'America/Toronto')
-const groups = (o: ObjectSummary, on = '2026-11-15', retained = (_e: CalendarEntry) => false) => dayTaskGroups(entries(o).filter((e) => e.startDay <= on && e.endDay >= on), () => o, types, retained)
+const merged = (o: ObjectSummary) => mergeTaskDates(entries(o), () => o, types)
+const groups = (o: ObjectSummary, on = '2026-11-15', retained = (_e: CalendarEntry) => false) => dayTaskGroups(merged(o).filter((e) => e.startDay <= on && e.endDay >= on), () => o, types, retained)
 
 describe('task calendar dates', () => {
   it('uses the configured plan field, not arbitrary date properties or the type icon', () => {
-    expect(taskDateRole(task, 'work')).toBe('planned')
-    expect(taskDateRole(task, 'due')).toBe('due')
+    expect(taskDateRole(task, 'work')).toBe('plan')
+    expect(taskDateRole(task, 'due')).toBe('deadline')
     expect(taskDateRole(task, 'reviewed')).toBeUndefined()
     expect(taskDateRole(task, 'checkback')).toBeUndefined()
     expect(taskDatesOf(task).plan?.id).toBe('work')
@@ -40,10 +41,13 @@ describe('task calendar dates', () => {
     expect(groups(moved).due).toHaveLength(1)
     expect(groups(moved, '2026-11-22').planned).toHaveLength(1)
   })
-  it('keeps distinct timed appointments, even for the same task and day', () => {
-    const g = groups(object(timed('14:00'), timed('18:00')))
+  it('combines a plan and a deadline of the same day in any slot: one entry, the timed one kept', () => {
+    const g = groups(object(day(15), timed('18:00')))
     expect(g.planned).toHaveLength(1)
-    expect(g.due).toHaveLength(1)
+    expect(g.due).toHaveLength(0)
+    expect(g.planned[0]).toMatchObject({ field: 'due', allDay: false, alsoField: 'work' })
+    expect(groups(object(timed('14:00'), timed('18:00'))).planned[0]).toMatchObject({ field: 'due', alsoField: 'work' })
+    expect(groups(object(timed('14:00'), day(15))).planned[0]).toMatchObject({ field: 'work', alsoField: 'due' })
   })
   it('retains completed plans without needing a due date, and distinguishes Dropped', () => {
     expect(groups(object(day(15), undefined, 'done')).completed).toHaveLength(1)
@@ -74,20 +78,84 @@ describe('task calendar dates', () => {
     expect(due.map((e) => taskEntryCheckable(e, task, o))).toEqual([true, false, false])
     const g = groups(o)
     expect(g.planned).toHaveLength(1)
-    expect(g.planned[0]?.entry.field).toBe('due')
-    expect(taskEntryCheckable(g.planned[0]!.entry, task, o)).toBe(true)
+    expect(g.planned[0]?.field).toBe('due')
+    expect(taskEntryCheckable(g.planned[0]!, task, o)).toBe(true)
   })
   it('does not collapse multiple same-time repeats into a single plan', () => {
     const o = object(day(15), day(15)), feed = entries(o)
     const deadline = feed.find((e) => e.field === 'due')!
     const second = { ...deadline, key: deadline.key + ':other', occurrence: 'other', recurring: true }
-    const g = dayTaskGroups([...feed, second], () => o, types, () => false)
+    const g = dayTaskGroups(mergeTaskDates([...feed, second], () => o, types), () => o, types, () => false)
     expect(g.planned.length + g.due.length).toBe(2)
   })
   it('does not close a whole repeating plan from its first occurrence', () => {
     const o = object({ ...day(15), rrule: 'FREQ=WEEKLY;COUNT=3' })
     expect(entries(o).map((e) => taskEntryCheckable(e, task, o))).toEqual([false, false, false])
     const withDue = object({ ...day(15), rrule: 'FREQ=WEEKLY;COUNT=3' }, day(15))
-    expect(groups(withDue).planned[0]?.entry.field).toBe('due')
+    expect(groups(withDue).planned[0]?.field).toBe('due')
+  })
+})
+
+describe('one entry per task per day', () => {
+  it('merges a plan and a deadline on the same day only, once each', () => {
+    expect(merged(object(day(15), day(15)))).toHaveLength(1)
+    expect(merged(object(day(15), day(22)))).toHaveLength(2)
+    // A span covering the deadline's day keeps being a span.
+    expect(merged(object({ start: day(15).start, end: day(18).start, resolution: 'day' }, day(16)))).toHaveLength(2)
+    // Two plans of one day, two deadlines: each deadline pairs with one plan.
+    const o = object(day(15), day(15))
+    const [plan, deadline] = entries(o)
+    const more = [plan!, deadline!, { ...plan!, key: 'other-plan' }]
+    expect(mergeTaskDates(more, () => o, types)).toHaveLength(2)
+  })
+  it('keeps the checkable repeating deadline and marks the plan it stands for', () => {
+    const o = object(day(15), { ...day(15), rrule: 'FREQ=WEEKLY;COUNT=3' })
+    const feed = merged(o)
+    expect(feed).toHaveLength(3)
+    expect(feed[0]).toMatchObject({ field: 'due', alsoField: 'work', current: true })
+    expect(feed.filter((e) => e.alsoField)).toHaveLength(1)
+  })
+  it('leaves other objects, role-less dates and late entries alone', () => {
+    const o = object(day(15), day(15))
+    o.props.checkback = { kind: 'date', value: day(15) }
+    expect(merged(o)).toHaveLength(2)
+    expect(mergeTaskDates(entries(o).map((e) => ({ ...e, overdue: [{ field: e.field!, day: '2026-11-14' }] })), () => o, types)).toHaveLength(3)
+  })
+})
+
+describe('what an entry says', () => {
+  const say = (day: string) => day
+  const feed = (o: ObjectSummary) => Object.fromEntries(merged(o).map((e) => [e.field!, e]))
+  it('names the role, both when merged, the date for a plain date, Done once closed', () => {
+    const o = object(day(15), day(22))
+    o.props.checkback = { kind: 'date', value: day(17) }
+    const e = feed(o)
+    expect(entryBadges(e.work!, task, undefined, say).map((b) => b.label)).toEqual(['Planned'])
+    expect(entryBadges(e.due!, task, undefined, say).map((b) => b.label)).toEqual(['Due'])
+    expect(entryBadges(e.checkback!, task, undefined, say).map((b) => b.label)).toEqual(['Check back'])
+    expect(entryBadges(merged(object(day(15), day(15)))[0]!, task, undefined, say).map((b) => b.label)).toEqual(['Planned', 'Due'])
+    expect(entryBadges(e.work!, task, 'done', say).map((b) => b.label)).toEqual(['Done'])
+    expect(entryBadges(e.work!, task, 'dropped', say).map((b) => b.label)).toEqual(['Dropped'])
+  })
+  it('says what is late, the deadline first, and notes the dates that are not late', () => {
+    const o = object(day(15), day(22))
+    const late = { ...entries(o)[0]!, overdue: [{ field: 'due', day: '2026-11-10' }, { field: 'work', day: '2026-11-12' }] }
+    expect(entryBadges(late, task, undefined, (d) => `on ${d}`).map((b) => b.label)).toEqual(['Due on 2026-11-10', 'Planned on 2026-11-12'])
+    expect(entryNote({ ...late, overdue: [late.overdue[0]!] }, task, o, () => 'X')).toBe('Planned for X')
+    expect(entryNote({ ...late, overdue: [late.overdue[1]!] }, task, o, () => 'X')).toBe('Due by X')
+    expect(entryNote(late, task, o, () => 'X')).toBe('')
+  })
+  it('notes the other date of a plan or a deadline', () => {
+    const o = object(day(15), day(22))
+    const e = feed(o)
+    expect(entryNote(e.work!, task, o, () => 'X')).toBe('Due by X')
+    expect(entryNote(e.due!, task, o, () => 'X')).toBe('Planned for X')
+    expect(entryNote(feed(object(day(15)))['work']!, task, object(day(15)), () => 'X')).toBe('No deadline')
+    expect(entryNote(feed(object(undefined, day(15)))['due']!, task, object(undefined, day(15)), () => 'X')).toBe('No work date planned')
+  })
+  it('warns when the plan is after the deadline', () => {
+    expect(plannedAfterDeadline(object(day(20), day(15)), task, 'America/Toronto')).toBe(true)
+    expect(plannedAfterDeadline(object(day(15), day(15)), task, 'America/Toronto')).toBe(false)
+    expect(plannedAfterDeadline(object(day(20)), task, 'America/Toronto')).toBe(false)
   })
 })

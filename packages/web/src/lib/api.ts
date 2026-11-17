@@ -156,6 +156,8 @@ export interface ReminderChanges {
 
 export interface CalendarData {
   entries: CalendarEntry[]
+  /** The tasks late on `today`, when the range holds it (core calendar.ts overdueEntries). */
+  overdue: CalendarEntry[]
   objects: ObjectSummary[]
   /** Per day, how many objects link to its daily note (date references). */
   references: Record<string, number>
@@ -417,8 +419,8 @@ const http = {
   createToken: (name: string, scope: TokenScope) => request<{ token: ApiToken; secret: string }>('POST', '/api/tokens', { name, scope }),
   revokeToken: (id: Id) => request<void>('DELETE', `/api/tokens/${id}`),
   /** Everything dated between two days (inclusive) in the viewer's zone. */
-  calendar: (spaceId: Id, from: string, to: string, timeZone: string) =>
-    request<CalendarData>('GET', `/api/spaces/${spaceId}/calendar?from=${from}&to=${to}&timeZone=${encodeURIComponent(timeZone)}`),
+  calendar: (spaceId: Id, from: string, to: string, timeZone: string, today: string) =>
+    request<CalendarData>('GET', `/api/spaces/${spaceId}/calendar?from=${from}&to=${to}&timeZone=${encodeURIComponent(timeZone)}&today=${today}`),
   previewSparkyFitness: (id: Id, data: { rule: string; workouts: string; target?: number; unit?: string }) => request<SparkyPreviewDay[]>('POST', `/api/objects/${id}/sparkyfitness/preview`, data),
   sparkyFitness: (spaceId: Id) => request<SparkyFitnessStatus | null>('GET', `/api/spaces/${spaceId}/sparkyfitness`),
   connectSparkyFitness: (spaceId: Id, data: { baseUrl: string; apiKey?: string; history: number; timeZone?: string }) => request<SparkyFitnessStatus>('PUT', `/api/spaces/${spaceId}/sparkyfitness`, data),
@@ -531,7 +533,7 @@ const local: Partial<Api> = {
   },
   saveSpace: (space) => callStore('updateSpace', space.id, space),
   updateSpace: (id, data) => callStore('updateSpace', id, data),
-  calendar: (spaceId, from, to, timeZone) => callStore('calendar', spaceId, { from, to }, timeZone),
+  calendar: (spaceId, from, to, timeZone, today) => callStore('calendar', spaceId, { from, to }, timeZone, today),
   calendarSources: (spaceId) => callStore('listCalendarSources', spaceId),
   saveWeblink: viaServer(http.saveWeblink),
   setWeblinkUrl: viaServer(http.setWeblinkUrl),

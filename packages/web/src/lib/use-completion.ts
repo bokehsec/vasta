@@ -111,10 +111,11 @@ export function useEntryCompletion(view: { selected: () => CalendarEntry[]; rese
     },
     /** The view's entries with the kept ones it no longer lists back in. */
     merge: (fresh: CalendarEntry[]) => [...fresh, ...[...kept.values()].filter((entry) => !fresh.some((one) => one.key === entry.key))],
-    /** A drag moves the task on purpose: the entry a completion kept goes with it (suppressed while it saves). */
-    async moving<T>(objectId: Id, run: () => Promise<T>): Promise<T> {
-      for (const [key, entry] of kept) if (entry.objectId === objectId) kept.delete(key)
-      return await completion.moving(objectId, run)
+    /** A task changed on purpose (a drag, a move to today): the entry a completion kept for it goes with it (suppressed while it saves). */
+    async moveEntry<T>(entry: CalendarEntry, run: () => Promise<T>): Promise<T> {
+      if (!entry.objectId || !completion.entries.has(entry.objectId)) return await run()
+      for (const [key, one] of kept) if (one.objectId === entry.objectId) kept.delete(key)
+      return await completion.moving(entry.objectId, run)
     },
   }
 }

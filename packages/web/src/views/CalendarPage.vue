@@ -4,7 +4,10 @@
 // its own (DayPage), and Today opens it. Beside the week and day views, a small month calendar marks
 // what each day holds. The view and day live in the URL (?view=week&date=2026-10-18). Closed tasks
 // (Done, Dropped) are left out unless asked for; one marked Done here stays where it was, checked
-// and struck, until the calendar is looked at afresh (lib/use-completion.ts, as in an agenda).
+// and struck, until the calendar is looked at afresh (lib/use-completion.ts, as in an agenda). Today
+// (the day view of today) starts with the tasks that are late. A task's plan and deadline on one day
+// are one entry (lib/calendar-tasks.ts), and a drop moves a task's plan, not its deadline
+// (lib/calendar-drop.ts).
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { CalendarEntry, CalendarSource, Id, ObjectSummary } from '@vasta/core'
@@ -25,9 +28,6 @@ import { nutritionOn } from '../lib/nutrition.ts'
 import { api } from '../lib/api.ts'
 import {
   CALENDAR_VIEWS,
-  changeEntryTimes,
-  instantAt,
-  movedTimes,
   stepAnchor,
   viewerTimeZone,
   viewTitle,
@@ -36,13 +36,15 @@ import {
   type DayMarks,
 } from '../lib/calendar.ts'
 import { ENTRY_DRAGGING, type DropTarget } from '../lib/calendar-drag.ts'
+import { dropEntry } from '../lib/calendar-drop.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { onChange } from '../lib/events.ts'
 import { useEntryCompletion } from '../lib/use-completion.ts'
 import { cachedSummary, lastError, primeFromObject, primeSummaries, refreshCounts, typesById, workspace } from '../lib/state.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { openObject } from '../lib/open.ts'
-import { taskDateRole } from '../lib/calendar-tasks.ts'
+import { lateEntries } from '../lib/agenda.ts'
+import { mergeTaskDates, taskDateRole } from '../lib/calendar-tasks.ts'
 
 const route = useRoute()
 const router = useRouter()
@@ -80,6 +82,8 @@ function go(next: { view?: CalendarView; date?: string }) {
 
 // Data -----------------------------------------------------------------------
 const entries = ref<CalendarEntry[]>([])
+/** The tasks late today, when the range holds today. */
+const overdue = ref<CalendarEntry[]>([])
 const sources = ref<CalendarSource[]>([])
 const loading = ref(false)
 const sourcesById = computed(() => new Map(sources.value.map((s) => [s.id, s])))
@@ -91,10 +95,11 @@ async function load() {
   const range = days.value
   loading.value = true
   try {
-    const data = await api.calendar(workspace.space.id, range[0]!, range.at(-1)!, viewerTimeZone())
+    const data = await api.calendar(workspace.space.id, range[0]!, range.at(-1)!, viewerTimeZone(), dayKey())
     if (id !== requestId) return
     primeSummaries(data.objects)
     entries.value = data.entries
+    overdue.value = data.overdue
     settle()
   } catch (error) {
     lastError.value = (error as Error).message
@@ -169,23 +174,27 @@ const dayKcal = computed(() => {
   return map
 })
 
-const selected = computed(() => entries.value.filter((entry) => entry.kind !== 'daily-note' && !hidden.has(categoryOf(entry)) && !leftOut(entry)))
+const selected = computed(() => mergeTaskDates([...entries.value, ...overdue.value].filter((entry) => entry.kind !== 'daily-note' && !hidden.has(categoryOf(entry)) && !leftOut(entry)), cachedSummary, typesById.value))
 
 // Completion feedback (lib/use-completion.ts, as in an agenda): a task marked Done here stays where
 // it was, checked and struck, through the background reloads; only a fresh look (a reload, another
 // range, view or filter) drops it. Closed tasks are left out, so the entry it had is kept and merged
 // back. The source of a fresh look is one string: an array would be new on every re-run and clear
 // what it should not.
-const { completion, merge, moving, settle } = useEntryCompletion({
+const { merge, moveEntry, settle } = useEntryCompletion({
   selected: () => selected.value,
   resetOn: () => [view.value, days.value[0], days.value.at(-1), showClosed.value, [...hidden].join()].join('\u0000'),
 })
 
+const shown = computed(() => merge(selected.value))
+/** The late tasks, for today's page. */
+const late = computed(() => lateEntries(shown.value))
 const entriesByDay = computed(() => {
   const map = new Map<string, CalendarEntry[]>()
   const first = days.value[0]!
   const last = days.value.at(-1)!
-  for (const entry of merge(selected.value)) {
+  for (const entry of shown.value) {
+    if (entry.overdue) continue
     for (let day = entry.startDay < first ? first : entry.startDay; day <= entry.endDay && day <= last; day = addDays(day, 1)) {
       const list = map.get(day) ?? []
       list.push(entry)
@@ -209,16 +218,7 @@ const movable = (entry: CalendarEntry) => entry.kind === 'property' || entry.kin
 const resizable = (entry: CalendarEntry) => movable(entry) && !entry.allDay && entry.startDay === entry.endDay
 
 async function drop(entry: CalendarEntry, mode: 'move' | 'resize', target: DropTarget) {
-  const times = mode === 'resize' ? { start: entry.start, end: instantAt(entry.startDay, target.minutes ?? 0) } : movedTimes(entry, target)
-  if (times.start === entry.start && (times.end ?? '') === (entry.end ?? '')) return
-  try {
-    const move = () => changeEntryTimes(entry, times)
-    // A drag moves the task on purpose: the entry a completion kept goes with it.
-    if (!(await (entry.objectId && completion.entries.has(entry.objectId) ? moving(entry.objectId, move) : move()))) return
-  } catch (error) {
-    lastError.value = (error as Error).message
-  }
-  await load()
+  if (await dropEntry(entry, mode, target, moveEntry)) await load()
 }
 provide(ENTRY_DRAGGING, { movable, resizable, drop: (entry, mode, target) => void drop(entry, mode, target) })
 
@@ -312,14 +312,15 @@ async function loadMini() {
   const id = ++miniRequest
   const range = visibleDays('month', miniMonth.value)
   try {
-    const data = await api.calendar(workspace.space.id, range[0]!, range.at(-1)!, viewerTimeZone())
+    const data = await api.calendar(workspace.space.id, range[0]!, range.at(-1)!, viewerTimeZone(), dayKey())
     if (id !== miniRequest) return
     primeSummaries(data.objects)
     const marks = new Map<string, DayMarks>()
     const mark = (day: string) => marks.get(day) ?? (marks.set(day, {}), marks.get(day)!)
     const withText = new Set(data.objects.filter((o) => o.preview.trim()).map((o) => o.id))
-    const taskDays = new Set<string>()
-    for (const entry of data.entries) {
+    // As in the grid, a task's plan and deadline on one day count once.
+    const dated = mergeTaskDates(data.entries, cachedSummary, typesById.value)
+    for (const entry of dated) {
       if (entry.kind === 'daily-note') {
         if (showDailyNotes.value && withText.has(entry.objectId ?? '')) mark(entry.startDay).note = true
         continue
@@ -328,11 +329,6 @@ async function loadMini() {
       if (hidden.has(category) || leftOut(entry)) continue
       const key = category === 'tasks' ? 'tasks' : category === 'objects' ? 'dated' : 'events'
       for (let day = entry.startDay < range[0]! ? range[0]! : entry.startDay; day <= entry.endDay && day <= range.at(-1)!; day = addDays(day, 1)) {
-        if (key === 'tasks') {
-          const taskDay = `${day}:${entry.objectId}`
-          if (taskDays.has(taskDay)) continue
-          taskDays.add(taskDay)
-        }
         const marks = mark(day)
         marks[key] = (marks[key] ?? 0) + 1
       }
@@ -464,6 +460,7 @@ const openNote = (day: string) => {
           :day="anchor"
           :note-id="noteOf(anchor)"
           :entries="entriesByDay.get(anchor) ?? []"
+          :overdue="anchor === dayKey() ? late : []"
           :sources="sourcesById"
           :created="createdToday"
           :starting="starting"
@@ -471,6 +468,7 @@ const openNote = (day: string) => {
           @details="showDetails"
           @create="(element) => createInMonth(anchor, element)"
           @start-note="startNote"
+          @moved="load"
         />
         <TimeGrid
           v-else

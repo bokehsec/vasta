@@ -1,4 +1,5 @@
-// Calendar task plans/deadlines, completion feedback, safe repeats and explicit linked dates.
+// Calendar task plans/deadlines, completion feedback, safe repeats and explicit linked dates; a plan and
+// deadline of one day are one chip with both badges, the after-deadline mark, dragging moves the plan.
 // Isolated seeded apps only: node calendar-planned.mjs [chromium|webkit] [base]; MODE=json.
 import { chromium, webkit } from 'playwright'
 import { mkdtempSync, mkdirSync } from 'node:fs'
@@ -113,6 +114,38 @@ try {
   await go(22)
   assert.equal(await entry('SameDay').count(), 0)
   assert.equal(await entry('Repeat').locator('button[title="Mark as done"]').count(), 0)
+  console.log('• month: one chip per task per day with both badges, the after-deadline mark, a drag moves the plan and a deadline asks first')
+  const monthSame = await make('MonthSame', { work: dateValue(16), due: dateValue(16) })
+  await make('MonthLate', { work: dateValue(20), due: dateValue(17) })
+  const monthDrag = await make('MonthDrag', { work: dateValue(18), due: dateValue(25) })
+  await page.goto(`${base}/calendar?view=month&date=2027-03-01`)
+  const chips = name => page.locator('[data-day] [data-calendar-entry]', { hasText: tag + ' ' + name })
+  await until(async () => (await chips('MonthSame').count()) === 1, 'one chip for a plan and deadline of the same day')
+  const sameText = await chips('MonthSame').innerText()
+  assert.match(sameText, /Planned/); assert.match(sameText, /Due/)
+  assert.equal(await chips('MonthLate').count(), 2)
+  assert.equal(await chips('MonthLate').locator('[data-after-deadline]').count(), 2)
+  assert.equal(await chips('MonthDrag').locator('[data-after-deadline]').count(), 0)
+  const drag = async (from, to) => {
+    const a = await from.boundingBox(), b = await page.locator(`[data-day="${day(to)}"]`).first().boundingBox()
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2); await page.mouse.down()
+    for (let i = 1; i <= 8; i++) await page.mouse.move(a.x + a.width / 2 + ((b.x + b.width / 2 - a.x - a.width / 2) * i) / 8, a.y + a.height / 2 + ((b.y + b.height / 2 - a.y - a.height / 2) * i) / 8)
+    await page.mouse.up()
+  }
+  const plannedChip = () => chips('MonthDrag').filter({ hasText: 'Planned' })
+  const dueChip = () => chips('MonthDrag').filter({ hasText: 'Due' })
+  await drag(plannedChip(), 19)
+  await until(async () => (await stored(monthDrag)).work.value.start.startsWith(day(19)), 'the plan moved')
+  assert.ok((await stored(monthDrag)).due.value.start.startsWith(day(25)))
+  await page.locator('[role=status]', { hasText: /Planned for / }).waitFor()
+  await drag(dueChip(), 26)
+  await page.getByText('Move the deadline?').waitFor()
+  await page.locator('form', { hasText: 'Move the deadline?' }).locator('button', { hasText: /^\s*Move deadline\s*$/ }).click()
+  await until(async () => (await stored(monthDrag)).due.value.start.startsWith(day(26)), 'the deadline moved after asking')
+  assert.ok((await stored(monthDrag)).work.value.start.startsWith(day(19)))
+  await page.locator('[role=status]', { hasText: /Deadline moved to / }).locator('button', { hasText: 'Undo' }).click()
+  await until(async () => (await stored(monthDrag)).due.value.start.startsWith(day(25)), 'Undo put the deadline back')
+  assert.equal(monthSame.id.length > 0, true)
   console.log('• phone layout, no row action clutter, completion and Undo')
   await page.setViewportSize({ width: 390, height: 844 }); await go(); await page.emulateMedia({ colorScheme: 'dark' })
   await page.screenshot({ path: path.join(shots, `calendar-planned-${engine}-phone-dark.png`), fullPage: true })

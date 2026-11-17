@@ -1,5 +1,6 @@
-// The calendar's repeating dates in the test env: drag and resize with the mouse, the "This event /
-// This and following / All events" question, the occurrence popover, multi-day bars in the month,
+// The calendar's dates in the test env: drag and resize with the mouse (pages with a date of their
+// own: a task's drag moves its plan, calendar-planned.mjs), the "This event / This and following /
+// All events" question for a repeating one, the occurrence popover, multi-day bars in the month,
 // a repeating task's checkbox (on the occurrence it is at, done moves it to the next one), and on a phone profile a long press that drags (a quick swipe still scrolls).
 //   node calendar.mjs [chromium|webkit] [base] [phone]
 // The phone run needs Chromium (touch moves go through CDP).
@@ -43,7 +44,7 @@ async function until(check, what, timeout = 10000) {
 const headers = { 'x-requested-with': 'vasta' }
 const get = async (url) => (await page.request.get(`${base}${url}`)).json()
 const post = async (url, data) => (await page.request.post(`${base}${url}`, { headers, data })).json()
-const dueOf = (object) => object.props.due?.value
+const dueOf = (object) => object.date ?? object.props.due?.value
 
 await page.goto(base)
 await page.fill('#login-username', 'tester')
@@ -66,15 +67,15 @@ for (const prefix of ['Sync', 'Dentist', 'Trip', 'Popme', 'Touchme', 'Bins', 'En
 const tag = `${engine}${phone ? '-phone' : ''}-${Date.now() % 100000}`
 const at = (day, time) => new Date(`${day}T${time}:00-03:00`).toISOString()
 const weekly = await post('/api/objects', {
-  typeId: task.id,
+  typeId: pageType.id,
   title: `Sync ${tag}`,
-  props: { due: { kind: 'date', value: { start: at('2027-03-01', '10:00'), end: at('2027-03-01', '11:00'), resolution: 'time', rrule: 'FREQ=WEEKLY;COUNT=6', timeZone: 'America/Sao_Paulo' } } },
+  date: { start: at('2027-03-01', '10:00'), end: at('2027-03-01', '11:00'), resolution: 'time', rrule: 'FREQ=WEEKLY;COUNT=6', timeZone: 'America/Sao_Paulo' },
   content: { body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Agenda' }] }] } },
 })
 const dentist = await post('/api/objects', {
-  typeId: task.id,
+  typeId: pageType.id,
   title: `Dentist ${tag}`,
-  props: { due: { kind: 'date', value: { start: at('2027-03-02', '14:00'), end: at('2027-03-02', '15:00'), resolution: 'time' } } },
+  date: { start: at('2027-03-02', '14:00'), end: at('2027-03-02', '15:00'), resolution: 'time' },
 })
 const trip = await post('/api/objects', { typeId: pageType.id, title: `Trip ${tag}`, date: { start: '2027-03-03T00:00:00.000Z', end: '2027-03-05T00:00:00.000Z', resolution: 'day' } })
 await sleep(1500) // the replica pulls them

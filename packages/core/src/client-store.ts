@@ -8,7 +8,7 @@
 // change not pushed yet survives an older one from the server. Rich text merges through Yjs.
 import { newId } from './ids.ts'
 import { Y } from '@vasta/editor-schema/yjs'
-import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, settleTaskSave, dayReferences, objectEntries, type DayRange, type OccurrenceEdit } from './calendar.ts'
+import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, settleTaskSave, dayReferences, objectEntries, overdueEntries, type DayRange, type OccurrenceEdit } from './calendar.ts'
 import { calendarEntries, parseCalendar, type ParsedCalendar } from './ics.ts'
 import type { CalendarEntry, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, OpensOn, Person, Space } from './model.ts'
 import { QuoteError, recordCapture, standaloneCapture, type CaptureDestinations, applyEdit, createQuote, findOrCreateDailyNote, writeDailyText, listInbox, newObject, newType, querySpace, setCaptureDone, withOpensOn, type InboxItem } from './operations.ts'
@@ -524,8 +524,8 @@ export class ClientStore extends Store {
     this.setMeta('sync.calendars', JSON.stringify(this.staleCalendars().filter((c) => c !== id)))
   }
 
-  /** Everything dated between two days (inclusive) in `timeZone`, as the server's calendar route answers. */
-  calendar(spaceId: Id, range: DayRange, timeZone: string): { entries: CalendarEntry[]; objects: ObjectSummary[]; references: Record<string, number> } {
+  /** Everything dated between two days (inclusive) in `timeZone`, and the tasks late on `today` when it is in the range, as the server's calendar route answers. */
+  calendar(spaceId: Id, range: DayRange, timeZone: string, today?: string): { entries: CalendarEntry[]; overdue: CalendarEntry[]; objects: ObjectSummary[]; references: Record<string, number> } {
     const types = new Map(this.listTypes(spaceId).map((t) => [t.id, t]))
     const objects = calendarObjects(this, spaceId, types, range)
     const subscribed = this.listCalendarSources(spaceId)
@@ -535,8 +535,9 @@ export class ClientStore extends Store {
         return calendar ? calendarEntries(calendar, source.id, range, timeZone) : []
       })
     const entries = [...objectEntries(objects, types, range, timeZone), ...subscribed].sort(compareEntries)
-    const used = new Set(entries.map((e) => e.objectId).filter(Boolean))
-    return { entries, objects: objects.filter((o) => used.has(o.id)), references: dayReferences(objects, types, range, timeZone, (ids) => this.linkCounts(ids)) }
+    const overdue = today && today >= range.from && today <= range.to ? overdueEntries(objects, types, today, timeZone) : []
+    const used = new Set([...entries, ...overdue].map((e) => e.objectId).filter(Boolean))
+    return { entries, overdue, objects: objects.filter((o) => used.has(o.id)), references: dayReferences(objects, types, range, timeZone, (ids) => this.linkCounts(ids)) }
   }
 
   private parsedCalendar(id: Id): ParsedCalendar | undefined {

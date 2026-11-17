@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes, newObject, type DateValue, type ObjectRecord, type ObjectSummary, type ObjectType, type PropertyValue } from '../src/index.ts'
-import { calendarObjects, changeOccurrence, changeOneOccurrence, changeSeries, completeRepeat, currentOccurrence, dayReferences, moveOccurrenceTo, objectEntries, occurrences, pruneExceptions, settleTaskSave, spanOf, splitSeries } from '../src/calendar.ts'
+import { calendarObjects, changeOccurrence, changeOneOccurrence, changeSeries, completeRepeat, currentOccurrence, dayReferences, moveOccurrenceTo, objectEntries, occurrences, overdueEntries, pruneExceptions, settleTaskSave, spanOf, splitSeries } from '../src/calendar.ts'
 import { Store } from '../src/store.ts'
 import { calendarEntries, parseCalendar } from '../src/ics.ts'
 import { addDays, instantOf, wallTimeIn } from '../src/time.ts'
@@ -386,6 +386,67 @@ describe('object entries', () => {
       ['2026-10-13', true],
       ['2026-10-19', false],
     ])
+  })
+})
+
+describe('overdue tasks', () => {
+  const base = createBuiltinTypes('s', at).find((t) => t.system === 'task')!
+  const types = new Map([[base.id, base]])
+  const day = (d: string, extra: Partial<DateValue> = {}): PropertyValue => ({ kind: 'date', value: { start: `${d}T00:00:00.000Z`, resolution: 'day', ...extra } })
+  const timed = (instant: string): PropertyValue => ({ kind: 'date', value: { start: instant, resolution: 'time' } })
+  const task = (id: string, props: ObjectSummary['props'], data: Partial<ObjectSummary> = {}): ObjectSummary => ({
+    id, spaceId: 's', typeId: base.id, title: id, aliases: [], tagIds: [], collectionIds: [], props: { status: { kind: 'select', value: ['todo'] }, ...props }, createdAt: at, updatedAt: at, preview: '', ...data,
+  })
+  const late = (objects: ObjectSummary[], today = '2026-11-16', zone = 'America/Toronto') => overdueEntries(objects, types, today, zone)
+  const doneId = base.properties.find((p) => p.id === 'status')?.kind === 'select' ? (base.properties.find((p) => p.id === 'status') as { options: { id: string; status?: string }[] }).options.find((o) => o.status === 'done')!.id : ''
+
+  it('lists open tasks with a deadline or a plan before today, one entry each, the deadline first', () => {
+    const entries = late([
+      task('missed', { due: day('2026-11-10'), dodate: day('2026-11-12') }),
+      task('unplanned', { dodate: day('2026-11-14') }),
+      task('fine', { due: day('2026-11-20'), dodate: day('2026-11-16') }),
+      task('nothing', {}),
+    ])
+    expect(entries.map((e) => [e.objectId, e.field, e.overdue])).toEqual([
+      ['missed', 'due', [{ field: 'due', day: '2026-11-10' }, { field: 'dodate', day: '2026-11-12' }]],
+      ['unplanned', 'dodate', [{ field: 'dodate', day: '2026-11-14' }]],
+    ])
+  })
+
+  it('leaves out closed and deleted tasks, and other objects', () => {
+    const closed = task('closed', { due: day('2026-11-10'), status: { kind: 'select', value: [doneId] } })
+    const gone = task('gone', { due: day('2026-11-10') }, { deletedAt: at })
+    const page = { ...task('page', { due: day('2026-11-10') }), typeId: 'page:s' }
+    expect(late([closed, gone, page])).toEqual([])
+  })
+
+  it('counts a day by the time zone, and a time earlier today is not late', () => {
+    // 2026-11-16 02:00 UTC is still the 15th in Toronto.
+    expect(late([task('a', { due: timed('2026-11-16T02:00:00.000Z') })], '2026-11-16')).toHaveLength(1)
+    expect(late([task('a', { due: timed('2026-11-16T02:00:00.000Z') })], '2026-11-15')).toHaveLength(0)
+    expect(late([task('b', { due: timed('2026-11-16T14:00:00.000Z') })], '2026-11-16')).toHaveLength(0)
+  })
+
+  it('a span is late once it has ended', () => {
+    const span: PropertyValue = { kind: 'date', value: { start: '2026-11-13T00:00:00.000Z', end: '2026-11-16T00:00:00.000Z', resolution: 'day' } }
+    expect(late([task('span', { dodate: span })])).toHaveLength(0)
+    expect(late([task('span', { dodate: span })], '2026-11-17').map((e) => e.overdue)).toEqual([[{ field: 'dodate', day: '2026-11-16' }]])
+  })
+
+  it('counts a repeating date only at its current occurrence, where it was moved to', () => {
+    const rule = { rrule: 'FREQ=WEEKLY;COUNT=4' }
+    const first = task('weekly', { due: day('2026-11-02', rule) })
+    expect(late([first]).map((e) => [e.startDay, e.recurring, e.current, e.overdue])).toEqual([['2026-11-02', true, true, [{ field: 'due', day: '2026-11-02' }]]])
+    // The first one is cancelled, the next is moved to today: nothing is late.
+    const moved = task('weekly', { due: day('2026-11-02', { ...rule, exceptions: { '2026-11-02T00:00:00.000Z': { cancelled: true }, '2026-11-09T00:00:00.000Z': { start: '2026-11-16T00:00:00.000Z' } } }) })
+    expect(late([moved])).toHaveLength(0)
+    const none = task('weekly', { due: day('2026-11-02', { rrule: 'FREQ=WEEKLY;COUNT=1', exceptions: { '2026-11-02T00:00:00.000Z': { cancelled: true } } }) })
+    expect(late([none])).toHaveLength(0)
+  })
+
+  it('lists the longest overdue first', () => {
+    const entries = late([task('newer', { due: day('2026-11-14') }), task('older', { dodate: day('2026-11-02') })])
+    expect(entries.map((e) => e.objectId)).toEqual(['older', 'newer'])
   })
 })
 

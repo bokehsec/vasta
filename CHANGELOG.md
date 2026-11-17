@@ -134,9 +134,9 @@ GitHub release page.
   pages, as a view's row buttons, in the Quick actions column and in process mode. (A task still
   gets Done, Defer, Drop and Next step until you edit them; another type starts empty.)
 - **Drag in the agenda.** In an Agenda view or query, drag a task or an event of your own to another
-  day (after a long press on a phone) to move its date there; a timed one keeps its time of day.
-  A notice says where it went, with Undo, and dragging near the top or bottom scrolls to days off
-  screen.
+  day (after a long press on a phone) to move it there; a timed one keeps its time of day. A task's
+  plan moves, never its deadline by accident (see "Dragging a task moves its plan" below). A notice
+  says where it went, with Undo, and dragging near the top or bottom scrolls to days off screen.
 - **A phone layout that fits the hand.** On a phone a bar at the bottom goes to Home, Tasks, Inbox,
   Calendar and Search, with a round Capture button above it. Pickers and menus (a status, a date, a
   long-press menu) rise from the bottom with larger rows, and stay above the keyboard. A type's views
@@ -257,8 +257,20 @@ GitHub release page.
   Quick actions); To do tasks are check-ins.
 - **Calendar plans and deadlines are clear.** The Day view separates planned work, deadlines,
   completed tasks and dropped tasks. Empty circles mean unfinished work; a checkmark means done.
-  Matching plan and deadline entries share one row, and each task shows its other date. Change
-  dates by opening the task; there are no extra Reschedule buttons on the calendar.
+  A task's plan and deadline on the same day are one entry with both badges (Planned, Due) on the
+  Day view, week, month, agendas and the small month's dots alike, and each task shows its other
+  date. A date that is neither (a "Check back") shows its own name. Planned after the deadline is
+  marked with a warning on every chip and row, not just the Day view. There are no extra
+  Reschedule buttons on the calendar.
+- **Dragging a task moves its plan.** On the calendar (month, week, three days) and in agendas,
+  dragging a task moves its Do date, never the deadline by accident: a task with only a deadline
+  gets a plan on that day. Dragging a task's deadline when it has a plan asks "Move the deadline?"
+  (Move deadline, Plan for that day instead, Cancel). The notice says what moved ("Planned for
+  Thu", "Deadline moved to Thu") with Undo; a repeating date moves only the occurrence you dragged.
+- **Overdue.** Today (the calendar's Day view for today) and every agenda start with an Overdue
+  section: open tasks whose deadline or plan is before today, each saying what is late ("Due Tue",
+  "Planned Mon") with a one-tap **Move to today** that plans it for today, keeps the deadline, and
+  can be undone. A repeating task counts only at its current occurrence.
 - **A task's dates mean something.** Each task type has a **Do date** (the day you will work on it)
   and a **Due** date (the deadline); Type settings › a date's Meaning says which is which (a new
   Task starts with both, and your existing task types were given them: the date your Defer set, or

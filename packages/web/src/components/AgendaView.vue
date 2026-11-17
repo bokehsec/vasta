@@ -4,27 +4,31 @@
 // may be limited) and, if asked, the events of subscribed calendars. All-day items come first,
 // then timed ones in time order, a thin line marking now on today. A task marked Done here stays
 // where it was, checked and struck, until the agenda is looked at afresh (lib/completion-feedback.ts).
-// It reloads when the Calendar page would (changes anywhere) and when the day turns. An entry the
-// page allows moves by dragging (after a long press on touch): dropping it on another day sets the
-// date field the agenda places it by (a task's due, an event's time), as the Calendar page does
-// (lib/calendar-drag.ts); a notice says where it went, with Undo for a single date. On touch,
-// dragging near the top or bottom of the scrolling page scrolls it, so days off screen can be
-// reached (markDragScroll).
+// Above the days, tasks that are late (a missed deadline, an unfinished plan) are listed as Overdue,
+// each with Move to today (OverdueSection). It reloads when the Calendar page would (changes
+// anywhere) and when the day turns. An entry the page allows moves by dragging (after a long press
+// on touch): dropping it on another day moves it as on the Calendar page (lib/calendar-drop.ts: a
+// task's plan, an event's time); a notice says where it went, with Undo. On touch, dragging near
+// the top or bottom of the scrolling page scrolls it, so days off screen can be reached
+// (markDragScroll).
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import type { AgendaSettings, CalendarEntry, CalendarSource, FilterGroup, Id } from '@vasta/core'
 import { addDays } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
-import { agendaDays, isPast, nowIndex, placeEntries, selectEntries, splitAllDay } from '../lib/agenda.ts'
+import { agendaDays, isPast, lateEntries, nowIndex, placeEntries, selectEntries, splitAllDay } from '../lib/agenda.ts'
 import { api } from '../lib/api.ts'
-import { changeEntryTimes, formatDayShort, formatWeekday, movedTimes, viewerTimeZone } from '../lib/calendar.ts'
+import { formatDayShort, formatWeekday, viewerTimeZone } from '../lib/calendar.ts'
+import { dropEntry } from '../lib/calendar-drop.ts'
+import { mergeTaskDates } from '../lib/calendar-tasks.ts'
 import { ENTRY_DRAGGING, drag, markDragScroll, type DropTarget } from '../lib/calendar-drag.ts'
 import { onChange } from '../lib/events.ts'
 import { useEntryCompletion } from '../lib/use-completion.ts'
 import { queryContext } from '../lib/query.ts'
-import { cachedSummary, lastError, notice, primeSummaries, summaryOf, workspace } from '../lib/state.ts'
+import { cachedSummary, primeSummaries, summaryOf, typesById, workspace } from '../lib/state.ts'
 import CalendarEntryItem from './calendar/CalendarEntryItem.vue'
 import EventDetails from './calendar/EventDetails.vue'
 import OccurrenceDetails from './calendar/OccurrenceDetails.vue'
+import OverdueSection from './calendar/OverdueSection.vue'
 import PopoverMenu from './PopoverMenu.vue'
 
 const props = defineProps<{
@@ -44,6 +48,8 @@ const days = computed(() => agendaDays(today.value, props.agenda))
 
 // Data -----------------------------------------------------------------------
 const entries = ref<CalendarEntry[]>([])
+/** The tasks late today (the feed's own: they are before the range). */
+const overdue = ref<CalendarEntry[]>([])
 const sources = ref<CalendarSource[]>([])
 const loaded = ref(false)
 const failed = ref(false)
@@ -55,10 +61,11 @@ async function load() {
   const id = ++requestId
   const range = days.value
   try {
-    const data = await api.calendar(workspace.space.id, range[0]!, range.at(-1)!, viewerTimeZone())
+    const data = await api.calendar(workspace.space.id, range[0]!, range.at(-1)!, viewerTimeZone(), today.value)
     if (id !== requestId) return
     primeSummaries(data.objects)
     entries.value = data.entries
+    overdue.value = data.overdue
     settle()
     failed.value = false
   } catch {
@@ -105,25 +112,31 @@ onBeforeUnmount(() => {
 
 // What is shown ---------------------------------------------------------------
 const selected = computed(() =>
-  selectEntries(entries.value, {
-    settings: props.agenda,
-    typeIds: props.typeIds,
-    filter: props.filter,
-    object: cachedSummary,
-    context: queryContext(props.parentId ? summaryOf(props.parentId) : undefined),
-  })
+  mergeTaskDates(
+    selectEntries([...entries.value, ...overdue.value], {
+      settings: props.agenda,
+      typeIds: props.typeIds,
+      filter: props.filter,
+      object: cachedSummary,
+      context: queryContext(props.parentId ? summaryOf(props.parentId) : undefined),
+    }),
+    cachedSummary,
+    typesById.value
+  )
 )
 
 // Completion feedback (lib/use-completion.ts, as on the Calendar page): a task marked Done here
 // stays where it was, checked and struck, through the background reloads this page makes; only a
 // fresh look at the agenda (a reload, another filter or range) drops it. The source of a fresh
 // look is one string: an array would be new on every re-run and clear what it should not.
-const { completion, merge, moving, settle } = useEntryCompletion({
+const { merge, moveEntry, settle } = useEntryCompletion({
   selected: () => selected.value,
   resetOn: () => [JSON.stringify(props.filter), JSON.stringify(props.agenda), props.typeIds.join(), props.parentId, days.value[0], days.value.at(-1)].join('\u0000'),
 })
 
-const placed = computed(() => placeEntries(merge(selected.value), days.value))
+const shown = computed(() => merge(selected.value))
+const late = computed(() => lateEntries(shown.value))
+const placed = computed(() => placeEntries(shown.value, days.value))
 
 /** "Today · Thu Nov 12", "Tomorrow · Fri Nov 13", then "Sat Nov 14". */
 function heading(day: string): { lead?: string; date: string } {
@@ -140,44 +153,12 @@ function rowsOf(day: string, timed: CalendarEntry[]) {
 }
 
 // Dragging --------------------------------------------------------------------
-// A day's section is a drop target (data-day); objects move to the day they land on, keeping their
-// time of day. Events of subscribed calendars never move, and neither does anything in a readonly
-// embed.
-const movable = (entry: CalendarEntry) => !props.readonly && (entry.kind === 'property' || entry.kind === 'object')
+// A day's section is a drop target (data-day); objects move to the day they land on (lib/calendar-drop.ts).
+// Events of subscribed calendars never move, nor do the late tasks (they have Move to today), nor
+// anything in a readonly embed.
+const movable = (entry: CalendarEntry) => !props.readonly && !entry.overdue && (entry.kind === 'property' || entry.kind === 'object')
 async function drop(entry: CalendarEntry, mode: 'move' | 'resize', target: DropTarget) {
-  if (mode !== 'move') return
-  const times = movedTimes(entry, target)
-  if (times.start === entry.start && (times.end ?? '') === (entry.end ?? '')) return
-  try {
-    const move = () => changeEntryTimes(entry, times)
-    const changed = await (entry.objectId && completion.entries.has(entry.objectId) ? moving(entry.objectId, move) : move())
-    if (!changed) return
-    announceMove(entry, target.day)
-  } catch (error) {
-    lastError.value = (error as Error).message
-  }
-  await load()
-}
-/**
- * "Moved to Thu, Nov 19", with Undo putting the previous times back. A repeating date's change was
- * asked for a scope (this, the following, all) that Undo cannot know, so that one only says it.
- */
-function announceMove(entry: CalendarEntry, day: string) {
-  const message = `Moved to ${formatWeekday(day)}, ${formatDayShort(day)}`
-  if (entry.recurring) {
-    notice.value = { message }
-    return
-  }
-  const previous = { start: entry.start, ...(entry.end ? { end: entry.end } : {}) }
-  const undo = async () => {
-    try {
-      await changeEntryTimes(entry, previous)
-    } catch (error) {
-      lastError.value = (error as Error).message
-    }
-    await load()
-  }
-  notice.value = { message, action: { label: 'Undo', run: undo } }
+  if (mode === 'move' && (await dropEntry(entry, mode, target, moveEntry))) await load()
 }
 /** The day a dragged entry would land on, tinted as on the Calendar page. */
 const dropDay = computed(() => (drag.active && drag.mode === 'move' && drag.target ? drag.target.day : ''))
@@ -205,6 +186,7 @@ async function detailsDone() {
     <p v-if="!loaded" class="py-3 text-sm text-ink-faint">Loading…</p>
     <p v-else-if="failed && !entries.length" class="py-3 text-sm text-red-600">Could not load the agenda.</p>
     <template v-else>
+      <OverdueSection :entries="late" variant="row" @details="showDetails" @moved="load" />
       <section v-for="{ day, allDay, timed } in placed" :key="day" class="mt-4 rounded-lg first:mt-0" :class="dropDay === day ? 'bg-accent/10' : ''" :data-agenda-day="day" :data-day="day">
         <h3 class="mb-1 px-1.5 text-sm">
           <template v-if="heading(day).lead">

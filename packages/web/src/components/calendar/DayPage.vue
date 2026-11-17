@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The calendar's Day view, which is also Today: what is scheduled that day, its daily note
-// (edited in place, with what refers to the day), and what was created that day.
+// (edited in place, with what refers to the day), and what was created that day. Today starts
+// with the tasks that are late (OverdueSection).
 import { computed, inject, provide, ref, watch } from 'vue'
 import { defaultTemplate, type CalendarEntry, type CalendarSource, type Id, type ObjectSummary } from '@vasta/core'
 import { ENTRY_DRAGGING } from '../../lib/calendar-drag.ts'
@@ -17,6 +18,7 @@ import AppIcon from '../AppIcon.vue'
 import TipsCard from '../TipsCard.vue'
 import TypeIcon from '../TypeIcon.vue'
 import CalendarEntryItem from './CalendarEntryItem.vue'
+import OverdueSection from './OverdueSection.vue'
 import HabitChecklist from '../HabitChecklist.vue'
 import FoodDay from '../nutrition/FoodDay.vue'
 import ObjectLink from '../ObjectLink.vue'
@@ -25,6 +27,8 @@ const props = defineProps<{
   day: string
   noteId?: Id | undefined
   entries: CalendarEntry[]
+  /** The tasks late today, shown first on today (none for another day). */
+  overdue?: CalendarEntry[]
   sources: Map<Id, CalendarSource>
   created: ObjectSummary[]
   /** The daily note is being made. */
@@ -32,7 +36,7 @@ const props = defineProps<{
   /** Show the day's habits here (when the calendar's side column, which has them, is hidden). */
   habits?: boolean
 }>()
-const emit = defineEmits<{ details: [entry: CalendarEntry, element: HTMLElement]; create: [element: HTMLElement]; 'start-note': [text?: string] }>()
+const emit = defineEmits<{ details: [entry: CalendarEntry, element: HTMLElement]; create: [element: HTMLElement]; 'start-note': [text?: string]; moved: [] }>()
 
 const draft = ref('')
 /** The daily note is built with columns, which need room. */
@@ -78,6 +82,7 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
       <span class="text-sm font-normal tracking-normal text-ink-faint">Week {{ isoWeek(day) }}</span>
     </h1>
 
+    <OverdueSection v-if="isToday(day) && overdue?.length" :entries="overdue" variant="day-task" class="!mt-6" @details="(e, el) => emit('details', e, el)" @moved="emit('moved')" />
     <TipsCard v-if="isToday(day)" class="mt-6" />
     <HabitChecklist v-if="habits" :day="day" variant="inline" class="mt-8" />
     <FoodDay :key="day" :day="day" class="mt-8" />
@@ -103,7 +108,7 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
     <section v-for="section in taskSections" :key="section.id" class="mt-8" :data-task-section="section.id">
       <h2 :class="heading" class="mb-3"><AppIcon :fallback="section.icon" /> {{ section.title }} <span class="font-normal text-ink-faint">{{ section.rows.length }}</span></h2>
       <div class="space-y-1.5">
-        <CalendarEntryItem v-for="row in section.rows" :key="row.entry.key" :entry="row.entry" :task-role="row.role" variant="day-task" @details="(e, el) => emit('details', e, el)" />
+        <CalendarEntryItem v-for="row in section.rows" :key="row.key" :entry="row" variant="day-task" @details="(e, el) => emit('details', e, el)" />
       </div>
     </section>
 

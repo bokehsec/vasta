@@ -48,10 +48,17 @@ export function selectEntries(entries: CalendarEntry[], { settings, typeIds, fil
   return entries.filter((entry) => {
     if (entry.kind === 'daily-note') return false
     if (entry.kind === 'external') return calendars === true || (Array.isArray(calendars) && !!entry.sourceId && calendars.includes(entry.sourceId))
-    if (settings?.field && entry.field !== settings.field) return false
+    // A late task is listed when one of its late dates is the field chosen.
+    if (settings?.field && !(entry.overdue ? entry.overdue.some((late) => late.field === settings.field) : entry.field === settings.field)) return false
     const summary = entry.objectId ? object(entry.objectId) : undefined
     return !!summary && (!typeIds.length || typeIds.includes(summary.typeId)) && matchesFilter(summary, filter, context)
   })
+}
+
+/** The late tasks among entries (core overdueEntries, a kept one included), the longest overdue first. */
+export function lateEntries(entries: CalendarEntry[]): CalendarEntry[] {
+  const since = (entry: CalendarEntry) => entry.overdue!.map((late) => late.day).sort()[0]!
+  return entries.filter((entry) => entry.overdue).sort((a, b) => since(a).localeCompare(since(b)) || a.key.localeCompare(b.key))
 }
 
 export interface AgendaDay {
@@ -62,10 +69,11 @@ export interface AgendaDay {
   timed: CalendarEntry[]
 }
 
-/** The entries on each day: one that spans days is on each of them within the range. */
+/** The entries on each day: one that spans days is on each of them within the range; late tasks are no day's. */
 export function placeEntries(entries: CalendarEntry[], days: string[]): AgendaDay[] {
   const placed = days.map<AgendaDay>((day) => ({ day, allDay: [], timed: [] }))
   for (const entry of entries) {
+    if (entry.overdue) continue
     for (const one of placed) {
       if (entry.startDay > one.day || entry.endDay < one.day) continue
       ;(entry.allDay ? one.allDay : one.timed).push(entry)
