@@ -3,6 +3,7 @@
 // stored under its new name and removed. Delete this file once every device has started a build
 // that has it; nothing else reads the old names.
 import type { PreferenceScope } from './preferences.ts'
+import { sessionKey, validSession } from './review-session.ts'
 
 export interface Converted {
   scope: PreferenceScope
@@ -76,8 +77,20 @@ function pattern(name: string, user: string): [PreferenceScope, string, Parse] |
   return undefined
 }
 
+/** The one paused review the device kept, now one per type: kept if it is this person's and of the current shape. */
+function legacyReview(raw: string, user: string): Converted | undefined {
+  try {
+    const data = JSON.parse(raw) as { userId?: unknown }
+    const session = validSession(data)
+    return session && data.userId === user ? { scope: 'device', key: sessionKey(session.typeId), value: session } : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** What the old key `name` holding `raw` means now; undefined when it is not one of the old keys, is another account's, or holds nothing usable. */
 export function convertLegacy(name: string, raw: string, user: string): Converted | undefined {
+  if (name === 'vasta.review') return legacyReview(raw, user)
   const found = FIXED[name] ?? pattern(name, user)
   if (!found) return undefined
   const [scope, key, parse] = found

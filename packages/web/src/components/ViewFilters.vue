@@ -6,7 +6,7 @@
 import { computed, ref } from 'vue'
 import type { FilterGroup, ObjectType, ViewDef } from '@vasta/core'
 import { closedOptionsOf, closedStatusIds, savedConditions } from '@vasta/core'
-import { tintedButton } from '../lib/buttons.ts'
+import { quietButton, tintedButton } from '../lib/buttons.ts'
 import { describeFilter } from '../lib/query.ts'
 import AppIcon from './AppIcon.vue'
 import FilterGroupEditor from './FilterGroupEditor.vue'
@@ -50,7 +50,7 @@ const editing = ref(false)
     <div v-if="savedItems" class="mx-1.5 mt-1.5 rounded-lg border border-line px-3 py-2" data-view-filter>
       <p class="text-xs font-medium uppercase tracking-wide text-ink-faint">This view</p>
       <p class="mt-0.5 break-words" data-view-filter-text>{{ savedText }}</p>
-      <button class="mt-1 flex min-h-11 items-center gap-1 rounded-md text-accent md:min-h-0" data-edit-view-filter :aria-expanded="editing" @click="editing = !editing">
+      <button :class="[quietButton, 'mt-1 -ml-3']" data-edit-view-filter :aria-expanded="editing" @click="editing = !editing">
         {{ editing ? 'Close' : 'Edit view filter' }}
       </button>
       <p v-if="editing" class="text-xs text-ink-faint">Changes the view for everyone who uses it.</p>
@@ -62,7 +62,7 @@ const editing = ref(false)
     <div class="mx-1.5 mt-2 flex items-center gap-2 px-1">
       <p class="text-xs font-medium uppercase tracking-wide text-ink-faint">Just for now</p>
       <span class="text-xs text-ink-faint">gone when you leave this page</span>
-      <button v-if="clear && narrowing.items.length" class="ml-auto min-h-11 rounded-lg px-2 text-accent md:min-h-0" data-narrowing-clear @click="emit('clear')">Clear</button>
+      <button v-if="clear && narrowing.items.length" :class="[quietButton, 'ml-auto']" data-narrowing-clear @click="emit('clear')">Clear</button>
     </div>
     <div class="p-1.5" data-narrowing>
       <FilterGroupEditor :group="narrowing" :type-ids="[type.id]" @update="emit('update:narrowing', $event)" />

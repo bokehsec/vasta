@@ -99,15 +99,16 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   opensOn: optional(isOpensOn),
   properties: (v) => Array.isArray(v) && v.every(isProperty),
   views: Array.isArray,
-  openIn: optional((v) => v === 'page' || v === 'pane'),
+  openIn: optional((v) => v === 'page' || v === 'pane' || v === 'popup'),
   subtasks: optional((v) => isObject(v) && isNonEmpty((v as { parentField?: unknown }).parentField)),
   habits: optional(isHabitProgressSettings),
   quickActions: optional((v) => isObject(v) && Object.entries(v as object).every(([key, x]) => {
     if (key === 'actions') return Array.isArray(x) && x.every(isQuickAction)
-    if (key === 'triageStatuses') return Array.isArray(x) && x.every(isNonEmpty)
-    if (key === 'reviewEvery') return typeof x === 'number' && Number.isInteger(x) && x >= 0
-    // The date and status settings of Defer and Drop became roles and actions (operations.ts): a stale copy is refused.
-    return (key === 'nextStepField' || key === 'holdStatus') && isNonEmpty(x)
+    return key === 'nextStepField' && isNonEmpty(x)
+  })),
+  review: optional((v) => isObject(v) && Object.entries(v as object).every(([key, x]) => {
+    if (key === 'incoming') return Array.isArray(x) && x.every(isNonEmpty)
+    return key === 'every' && typeof x === 'number' && Number.isInteger(x) && x >= 0
   })),
   aliases: isStringArray,
   tagIds: isStringArray,
@@ -116,6 +117,17 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   query: optional(isObject),
   template: optional((v) => isObject(v) && ['template', 'snippet'].includes((v as { kind?: unknown }).kind as string) && isString((v as { name?: unknown }).name)),
   enabled: (v) => typeof v === 'boolean',
+}
+
+/**
+ * Quick-action settings that moved (operations.ts): Defer's date and statuses became date roles and
+ * the type's own actions, Review's settings its `review` block. A device that has not caught up yet
+ * still sends them; they are dropped rather than its whole change refused.
+ */
+const RETIRED_QUICK_ACTION_KEYS = ['deferField', 'deferStatus', 'dropStatus', 'reviewEvery', 'triageStatuses', 'holdStatus']
+function withoutRetired(name: string, value: unknown): unknown {
+  if (name !== 'quickActions' || !isObject(value)) return value
+  return Object.fromEntries(Object.entries(value as object).filter(([key]) => !RETIRED_QUICK_ACTION_KEYS.includes(key)))
 }
 
 function validValue(name: string, value: unknown): boolean {
@@ -172,6 +184,7 @@ function merge(store: NodeStore, spaceIds: Set<Id>, change: SyncChange, now: () 
   for (const [name, field] of Object.entries(fields)) {
     if (!isPushable(table, name)) throw new Refused(`${name} cannot be changed by a client`)
     if (!isObject(field) || !isHlc(field.hlc)) throw new Refused(`${name} needs a value and an hlc`)
+    field.value = withoutRetired(name, field.value)
     if (!validValue(name, field.value ?? null)) throw new Refused(`invalid value for ${name}`)
   }
   // Every HLC first, so a clock too far ahead refuses the change before anything is written.

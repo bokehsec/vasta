@@ -1,4 +1,5 @@
-// Task review follows the current view/search/Mine, with an explicit whole-space sweep.
+// Task review always starts with every new task in the space, then the check-ins of the current
+// view/search/Mine; an explicit whole-space sweep; one paused session per type.
 // node review-scope.mjs [chromium|webkit] [base]   MODE=json: HTTP; default: replica
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync } from 'node:fs'
@@ -34,7 +35,9 @@ const until = async (check, name) => {
 const clean = (text) => text.replace(/\s+/g, ' ').trim()
 const click = (s) => page.locator(s).click()
 const title = () => page.locator('[data-process-title]').innerText()
-const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem('vasta.review')))
+// The paused review is a device preference of the person, one per type.
+const reviewKey = () => page.evaluate((id) => Object.keys(localStorage).find((k) => k.endsWith(`.type/${id}/review`)), taskTypeId)
+const saved = async () => { const key = await reviewKey(); return key ? JSON.parse(await page.evaluate((k) => localStorage.getItem(k), key)) : null }
 const more = () => page.locator('main header button[title="More"]').click()
 async function pickView(name) {
   if (await page.locator('[data-view-picker]').count()) {
@@ -43,6 +46,7 @@ async function pickView(name) {
   } else await page.locator('main [role=button]', { hasText: new RegExp(`^\\s*${name}\\s*$`) }).click()
 }
 let space
+let taskTypeId
 try {
   await request('post', '/api/auth/login', { username: 'tester', password: 'test-password' })
   const me = await request('get', '/api/auth/me')
@@ -57,7 +61,7 @@ try {
       { id: 'inbox', label: 'Inbox', status: 'todo' }, { id: 'next', label: 'Next', status: 'todo' },
       { id: 'done', label: 'Done', status: 'done' }, { id: 'drop', label: 'Dropped', status: 'done' },
     ] } : p).concat([{ id: 'area', name: 'Area', kind: 'select', options: [{ id: 'work', label: 'Work' }, { id: 'personal', label: 'Personal' }] }]),
-    quickActions: { reviewEvery: 7, triageStatuses: ['inbox'] },
+    review: { every: 7, incoming: ['inbox'] },
     views: [
       { id: 'work', name: 'Work', layout: 'list', filter: filter('work'), sort: [{ field: 'title', direction: 'desc' }] },
       { id: 'personal', name: 'Personal', layout: 'list', filter: filter('personal') },
@@ -66,6 +70,7 @@ try {
       { id: 'agenda', name: 'Agenda', layout: 'agenda', filter: filter('work') },
     ],
   })
+  taskTypeId = type.id
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto' }).format(new Date())
   const make = (title, area, status, mine = true, reviewed) => request('post', '/api/objects', {
     typeId: type.id, title,
@@ -80,13 +85,14 @@ try {
   const recent = await make('Send the weekly update', 'work', 'next', true, today)
   const closed = await make('Finished work', 'work', 'done')
   const other = await make('Check design handoff', 'work', 'inbox', false)
+  const theirs = await make('Their onboarding task', 'work', 'next', false)
   const outside = await make('Book a dentist appointment', 'personal', undefined, true, today)
   await page.goto(base, { waitUntil: 'networkidle' })
   // The last view and Mine are the account's, the last space this device's.
   await page.request.put(`${base}/api/auth/me`, { headers: { 'x-requested-with': 'vasta' }, data: { preferences: { [`type/${type.id}/last-view`]: 'work', [`type/${type.id}/mine`]: true } } })
   await page.evaluate((spaceId) => {
     localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(spaceId))
-    localStorage.removeItem('vasta.review')
+    for (const key of Object.keys(localStorage)) if (/\.type\/.+\/review$/.test(key) || key === 'vasta.review') localStorage.removeItem(key)
   }, space.id)
   await page.reload({ waitUntil: 'networkidle' })
   await until(async () => {
@@ -96,16 +102,17 @@ try {
   const reviewButton = page.locator('[data-review-tasks]')
   const scopeTitle = () => reviewButton.getAttribute('title')
   const count = async (n) => until(async () => clean(await reviewButton.innerText()) === `Review ${n}`, `Review ${n}`)
-  await count(2)
+  // New tasks in the whole space (incoming, other, outside), then this view's check-ins (commitment).
+  await count(4)
   assert.equal(await scopeTitle(), 'Work · Mine', 'the button names its view scope')
 
-  console.log('Review snapshots this view: incoming first, even if reviewed today; recently reviewed and closed stay out')
+  console.log('Review starts with every new task in the space, even from other views or reviewed today, then this view\'s check-ins; recently reviewed and closed stay out')
   await reviewButton.click()
-  assert.equal(await title(), incoming.title, 'incoming precedes a check-in sorted ahead of it in the view')
+  assert.equal(await title(), incoming.title, 'new tasks precede the view\'s check-ins')
   assert.equal((await saved()).kind, 'tasks')
   assert.equal((await saved()).scope, 'view')
-  assert.equal((await saved()).newCount, 1)
-  assert.deepEqual((await saved()).ids, [incoming.id, commitment.id])
+  assert.equal((await saved()).newCount, 3)
+  assert.deepEqual((await saved()).ids, [incoming.id, other.id, outside.id, commitment.id], 'the space\'s new tasks oldest first (also another view\'s and not mine), then the view\'s check-ins')
   assert.equal(await page.locator('[data-process-reviewed]').count(), 0, 'incoming has no Keep')
   // A member/space refresh may replace the current space object without changing its id.
   // It must not pause a review in progress (including when another tab changes another space).
@@ -120,60 +127,60 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 1200))
   assert.equal(await page.locator('[data-process-mode]').count(), 1, 'deleting an unrelated space keeps the review open')
   await click('[data-process-choice="next"]')
-  await until(async () => await title() === commitment.title, 'placing incoming advances within the frozen queue')
-  assert.deepEqual((await saved()).ids, [incoming.id, commitment.id])
+  await until(async () => await title() === other.title, 'placing incoming advances within the frozen queue')
+  assert.deepEqual((await saved()).ids, [incoming.id, other.id, outside.id, commitment.id])
   await page.locator('[role=status]').getByRole('button', { name: 'Undo', exact: true }).click()
   await until(async () => (await request('get', `/api/objects/${incoming.id}`)).props.status.value[0] === 'inbox', 'Undo restores incoming')
-  assert.equal(await title(), commitment.title)
+  assert.equal(await title(), other.title)
   await click('[data-process-close]')
   await pickView('Personal')
   assert.equal(await scopeTitle(), 'Resume Work · Mine', 'the paused session keeps its original scope name')
+  assert.match(clean(await reviewButton.innerText()), /^Resume 2 of 4$/, 'the button says where the review stands')
+  assert.equal(clean(await page.locator('[data-review-paused-scope]').innerText()), 'in Work · Mine', 'and which view it covers, when that is not this one')
   await page.reload()
   await until(async () => /Resume/.test(await reviewButton.innerText()), 'paused session after reload')
   await reviewButton.click()
-  assert.equal(await title(), commitment.title, 'switching views and reload preserve the old queue and position')
+  assert.equal(await title(), other.title, 'switching views and reload preserve the old queue and position')
   assert.equal((await saved()).scopeLabel, 'Work · Mine')
   await click('[data-process-close]')
-  await more()
-  await click('[data-review-view]')
-  await click('[data-start-review]')
+  // Review this view instead: asks before it replaces the paused session, then starts from Personal.
+  await click('[data-review-this-instead]')
   await page.getByRole('button', { name: 'Start new session', exact: true }).click()
-  await until(async () => await title() === outside.title, 'a new review uses Personal')
-  assert.deepEqual((await saved()).ids, [outside.id])
-  await click('[data-process-skip]')
+  await until(async () => await title() === incoming.title, 'a new review of Personal starts with the space\'s new tasks')
+  assert.deepEqual((await saved()).ids, [incoming.id, other.id, outside.id])
+  assert.equal((await saved()).scopeLabel, 'Personal · Mine')
+  for (let i = 0; i < 3; i++) await click('[data-process-skip]')
   await click('[data-process-finish]')
+  assert.equal(await page.locator('[data-review-this-instead]').count(), 0)
   await pickView('Work')
-  await count(2)
+  await count(4)
 
-  console.log('Search changes the scope and count; a zero-result view still offers the full sweep')
+  console.log('Search narrows the check-ins, not the new tasks; the full sweep adds every check-in of the space')
   const search = page.locator('input[placeholder="Filter…"]')
   await search.fill('onboarding')
-  await count(1)
+  // Search narrows the check-ins, not the new tasks: still the space's three and Review onboarding copy.
+  await count(4)
   assert.match(await scopeTitle(), /Search: “onboarding”/)
   await reviewButton.click()
-  assert.deepEqual((await saved()).ids, [commitment.id])
-  await click('[data-process-skip]')
+  assert.deepEqual((await saved()).ids, [incoming.id, other.id, outside.id, commitment.id])
+  for (let i = 0; i < 4; i++) await click('[data-process-skip]')
   await click('[data-process-finish]')
   await search.fill('no matching task')
-  await until(async () => clean(await reviewButton.innerText()) === 'Review', 'empty current view')
+  // No check-in matches: the space's new tasks are still there to review.
+  await count(3)
   assert.match(await scopeTitle(), /Work · Mine/)
-  await reviewButton.click()
-  assert(await page.locator('[data-start-review]').isDisabled())
-  assert.match(await page.locator('[data-review-none]').innerText(), /Work · Mine/)
-  assert.match(await page.locator('[data-start-space]').innerText(), /4$/)
-  await page.keyboard.press('Escape')
   await more()
-  assert.match(await page.locator('[data-review-all]').innerText(), /4$/)
+  assert.match(await page.locator('[data-review-all]').innerText(), /5$/)
   await click('[data-review-all]')
   const full = await saved()
   assert.equal(full.scope, 'space')
   assert.equal(full.scopeLabel, `All tasks in ${space.name}`)
-  assert.deepEqual(new Set(full.ids), new Set([incoming.id, commitment.id, other.id, outside.id]))
+  assert.deepEqual(new Set(full.ids), new Set([incoming.id, commitment.id, other.id, outside.id, theirs.id]))
   assert(!full.ids.includes(recent.id) && !full.ids.includes(closed.id))
-  for (let i = 0; i < 4; i++) await click('[data-process-skip]')
+  for (let i = 0; i < 5; i++) await click('[data-process-skip]')
   await click('[data-process-finish]')
   await search.fill('')
-  await count(2)
+  await count(4)
 
   console.log('Phone scope, visible Mine chip, review options and touch targets fit 320–430px')
   if (process.env.SHOTS) { mkdirSync(process.env.SHOTS, { recursive: true }); await page.screenshot({ path: path.join(process.env.SHOTS, `review-scope-${engine}-desktop.png`) }) }
@@ -190,16 +197,15 @@ try {
   }
   await page.setViewportSize({ width: 390, height: 844 })
   await click('[data-review-mine]')
-  await count(3)
+  await count(5)
   assert.equal(await page.locator('[data-review-mine]').count(), 0)
   await click('[data-filters-button]')
   await click('[data-filters-mine]')
   await click('[data-filters-done]')
-  await count(2)
+  await count(4)
   await reviewButton.click()
   assert.equal(await page.locator('[data-process-scope]').innerText(), 'Work · Mine')
-  await click('[data-process-skip]')
-  await click('[data-process-skip]')
+  for (let i = 0; i < 4; i++) await click('[data-process-skip]')
   await click('[data-process-finish]')
   if (process.env.SHOTS) {
     await page.screenshot({ path: path.join(process.env.SHOTS, `review-scope-${engine}-phone.png`) })
@@ -211,16 +217,15 @@ try {
   console.log('Lists, tables and boards share scope; explicitly labelled full sweeps on Metrics and Agenda')
   for (const name of ['Table', 'Board']) {
     await pickView(name)
-    await count(2)
+    await count(4)
     await reviewButton.click()
-    assert.deepEqual(new Set((await saved()).ids), new Set([incoming.id, commitment.id]))
-    await click('[data-process-skip]')
-    await click('[data-process-skip]')
+    assert.deepEqual(new Set((await saved()).ids), new Set([incoming.id, other.id, outside.id, commitment.id]))
+    for (let i = 0; i < 4; i++) await click('[data-process-skip]')
     await click('[data-process-finish]')
   }
   for (const name of ['Metrics', 'Agenda']) {
     await pickView(name)
-    await until(async () => clean(await reviewButton.innerText()) === 'Review all 4', `explicit full sweep on ${name}`)
+    await until(async () => clean(await reviewButton.innerText()) === 'Review all 5', `explicit full sweep on ${name}`)
     assert.match(await scopeTitle(), /All tasks in/)
   }
   assert.deepEqual(errors, [])

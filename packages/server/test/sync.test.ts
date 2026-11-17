@@ -290,10 +290,11 @@ describe('sync', () => {
     a.edit('types', 'type-book', { quickActions: { nextStepField: 'due' } }, 's')
     a.edit('types', 'type-book', { quickActions: { nextStepField: 3 } }, 's')
     a.edit('types', 'type-book', { quickActions: { actions: [{ id: 'x', name: 'X', changes: [{ field: 'f' }] }] } }, 's')
-    // The date and status settings of Defer and Drop are gone (they became roles and actions): a stale copy is refused.
-    a.edit('types', 'type-book', { quickActions: { deferField: 'due' } }, 's')
-    a.edit('types', 'type-book', { quickActions: { dropStatus: 'dropped' } }, 's')
-    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for quickActions', 'invalid value for quickActions', 'invalid value for quickActions', 'invalid value for quickActions'])
+    // The date and status settings of Defer and Drop are gone (they became roles and actions): a device
+    // that has not caught up still sends them; they are dropped and the rest of its change kept.
+    a.edit('types', 'type-book', { quickActions: { nextStepField: 'due', deferField: 'due' } }, 's')
+    a.edit('types', 'type-book', { quickActions: { nextStepField: 'due', dropStatus: 'dropped' } }, 's')
+    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for quickActions', 'invalid value for quickActions', undefined, undefined])
     expect(store.getType('type-book')?.quickActions).toEqual({ nextStepField: 'due' })
     // A date's role is the plan or the deadline, and only a date has one.
     a.edit('types', 'type-book', { properties: [{ id: 'due', kind: 'date', name: 'Due', role: 'deadline' }, { id: 'work', kind: 'date', name: 'Do date', role: 'plan' }] }, 's')
@@ -302,15 +303,20 @@ describe('sync', () => {
     expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for properties', 'invalid value for properties'])
     expect(store.getType('type-book')?.properties.map((p) => p.id)).toEqual(['due', 'work'])
     // Workflow settings sync through the replica, including empty incoming statuses and zero days.
-    a.edit('types', 'type-book', { quickActions: { triageStatuses: ['inbox'], reviewEvery: 7 } }, 's')
-    a.edit('types', 'type-book', { quickActions: { triageStatuses: [], reviewEvery: 0 } }, 's')
-    a.edit('types', 'type-book', { quickActions: { triageStatuses: [3] } }, 's')
-    a.edit('types', 'type-book', { quickActions: { reviewEvery: -1 } }, 's')
-    a.edit('types', 'type-book', { quickActions: { reviewEvery: '7' } }, 's')
-    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, undefined, 'invalid value for quickActions', 'invalid value for quickActions', 'invalid value for quickActions'])
-    expect(store.getType('type-book')?.quickActions).toEqual({ triageStatuses: [], reviewEvery: 0 })
-    a.edit('types', 'type-book', { quickActions: null }, 's')
+    a.edit('types', 'type-book', { review: { incoming: ['inbox'], every: 7 } }, 's')
+    a.edit('types', 'type-book', { review: { incoming: [], every: 0 } }, 's')
+    a.edit('types', 'type-book', { review: { incoming: [3] } }, 's')
+    a.edit('types', 'type-book', { review: { every: -1 } }, 's')
+    a.edit('types', 'type-book', { review: { every: '7' } }, 's')
+    // Review's settings once lived in the quick actions, and the Hold status with them: stale copies are dropped.
+    a.edit('types', 'type-book', { quickActions: { nextStepField: 'due', reviewEvery: 7 } }, 's')
+    a.edit('types', 'type-book', { quickActions: { nextStepField: 'due', holdStatus: 'hold' } }, 's')
+    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, undefined, 'invalid value for review', 'invalid value for review', 'invalid value for review', undefined, undefined])
+    expect(store.getType('type-book')?.review).toEqual({ incoming: [], every: 0 })
+    expect(store.getType('type-book')?.quickActions).toEqual({ nextStepField: 'due' })
+    a.edit('types', 'type-book', { review: null, quickActions: null }, 's')
     await a.push()
+    expect(store.getType('type-book')).not.toHaveProperty('review')
     expect(store.getType('type-book')).not.toHaveProperty('quickActions')
     // The relation that makes a book a step of another: a property id, or (null) none.
     a.edit('types', 'type-book', { subtasks: { parentField: 'part-of' } }, 's')

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes } from '../src/builtin-types.ts'
 import type { ObjectType, PropertyValue, QuickActionDef } from '../src/model.ts'
-import { reviewButtons, reviewChoices, settlesTriage, taskWorkflowQueues, triageDispositionActions } from '../src/task-workflows.ts'
+import { reviewButtons, reviewChoices, reviewQueues, settlesTriage, taskWorkflowQueues } from '../src/task-workflows.ts'
 import { needsTriage, triageOptionsOf } from '../src/task-status.ts'
 
 const base = createBuiltinTypes('s', '2026-11-14T12:00:00Z').find((t) => t.system === 'task')!
@@ -32,12 +32,12 @@ describe('sister task workflows', () => {
   })
 
   it('uses configured status ids across renames, ignores closed/deleted choices, and supports no incoming statuses', () => {
-    const configured = { ...task, quickActions: { triageStatuses: ['wait', 'gone', 'done'] } }
+    const configured = { ...task, review: { incoming: ['wait', 'gone', 'done'] } }
     expect(triageOptionsOf(configured).map((o) => o.id)).toEqual(['wait'])
     expect(needsTriage(configured, object('a', 'wait'))).toBe(true)
     expect(needsTriage(configured, object('a', 'in'))).toBe(false)
-    expect(needsTriage({ ...task, quickActions: { triageStatuses: [] } }, object('a', 'in'))).toBe(false)
-    expect(needsTriage({ ...task, quickActions: { triageStatuses: [] } }, object('a'))).toBe(true)
+    expect(needsTriage({ ...task, review: { incoming: [] } }, object('a', 'in'))).toBe(false)
+    expect(needsTriage({ ...task, review: { incoming: [] } }, object('a'))).toBe(true)
     expect(needsTriage(task, object('a', 'deleted-option'))).toBe(true)
     // Without an Inbox option nothing is incoming by status: To do is a commitment, only a task with no status is new.
     expect(triageOptionsOf(base)).toEqual([])
@@ -45,37 +45,55 @@ describe('sister task workflows', () => {
     expect(needsTriage(base, object('a'))).toBe(true)
   })
 
+  it('a review starts with every new task in the space, then the check-ins of the place it started from', () => {
+    const inSpace = [
+      { ...object('c-new', 'in'), createdAt: '2026-11-03T00:00:00Z' },
+      { ...object('a-new'), createdAt: '2026-11-01T00:00:00Z' },
+      { ...object('view-1', 'next'), createdAt: '2026-11-02T00:00:00Z' },
+      { ...object('elsewhere', 'next'), createdAt: '2026-11-02T00:00:00Z' },
+      { ...object('recent', 'next', '2026-11-13'), createdAt: '2026-11-02T00:00:00Z' },
+    ]
+    // The view shows a check-in and a new task, and not what is elsewhere or reviewed lately.
+    const inView = [inSpace[2]!, inSpace[0]!, inSpace[4]!]
+    const queues = reviewQueues(task, inSpace, inView, '2026-11-14')
+    expect(queues.incoming.map((o) => o.id)).toEqual(['a-new', 'c-new'])
+    expect(queues.checkIns.map((o) => o.id)).toEqual(['view-1'])
+    // A sweep of all uses the space as the place.
+    expect(reviewQueues(task, inSpace, inSpace, '2026-11-14').checkIns.map((o) => o.id)).toEqual(['view-1', 'elsewhere'])
+    expect(reviewQueues(undefined, inSpace, inView, '2026-11-14')).toEqual({ incoming: [], checkIns: [] })
+  })
+
   it('never treats note/date-only changes as a triage decision', () => {
     const edit: QuickActionDef = { id: 'next-step', name: 'Next step', changes: [{ field: 'next', value: { kind: 'ask' } }] }
     const defer: QuickActionDef = { id: 'defer', name: 'Defer', changes: [{ field: 'due', value: { kind: 'ask' } }] }
     expect(settlesTriage(task, edit)).toBe(false)
     expect(settlesTriage(task, defer)).toBe(false)
-    for (const disposition of triageDispositionActions(task)) expect(settlesTriage(task, disposition)).toBe(true)
-    const next = triageDispositionActions(task).find((a) => a.name === 'Next')!
+    for (const { action } of reviewChoices(task)) expect(settlesTriage(task, action)).toBe(true)
+    const next = reviewChoices(task).find((c) => c.option.label === 'Next')!.action
     expect(settlesTriage(task, { ...defer, changes: [...defer.changes, ...next.changes] })).toBe(true)
     expect(settlesTriage(task, { ...next, changes: [{ field: 'status', value: { kind: 'clear' } }] })).toBe(false)
     expect(settlesTriage(task, { ...next, changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['in'] } } }] })).toBe(false)
   })
 
   it('uses existing statuses only, and respects configured review intervals', () => {
-    expect(triageDispositionActions(task).map((a) => a.name)).toEqual(['Next', 'Waiting', 'On Hold', 'Done', 'Dropped'])
+    expect(reviewChoices(task).map((c) => c.action.name)).toEqual(['Next', 'Waiting', 'On Hold', 'Done', 'Dropped'])
     const held = object('held', 'hold', '2026-11-07')
-    expect(taskWorkflowQueues({ ...task, quickActions: { reviewEvery: 14 } }, [held], '2026-11-14').review).toEqual([])
-    expect(taskWorkflowQueues({ ...task, quickActions: { reviewEvery: 0 } }, [held], '2026-11-14').review).toEqual([held])
+    expect(taskWorkflowQueues({ ...task, review: { every: 14 } }, [held], '2026-11-14').review).toEqual([])
+    expect(taskWorkflowQueues({ ...task, review: { every: 0 } }, [held], '2026-11-14').review).toEqual([held])
     expect(taskWorkflowQueues(undefined, [held], '2026-11-14')).toEqual({ triage: [], review: [] })
   })
 
   it('uses the configured scheduling question instead of offering a status-only shortcut', () => {
     const configured = { ...task, quickActions: { actions: [{ id: 'defer', name: 'Defer', changes: [{ field: 'dodate', value: { kind: 'ask' as const } }, { field: 'status', value: { kind: 'value' as const, value: { kind: 'select' as const, value: ['next'] } } }] }] } }
-    const choices = triageDispositionActions(configured)
+    const choices = reviewChoices(configured).map((c) => c.action)
     const schedule = choices.find((a) => a.id === 'defer')!
     expect(schedule.changes).toContainEqual({ field: 'dodate', value: { kind: 'ask' } })
-    expect(choices.some((a) => a.id === 'triage-status:next')).toBe(false)
+    expect(choices.some((a) => a.id === 'status:next')).toBe(false)
     expect(settlesTriage(configured, schedule)).toBe(true)
   })
 
   it('offers every status that is not incoming as a review choice, open first, reusing actions that only place the task', () => {
-    const configured: ObjectType = { ...task, quickActions: { holdStatus: 'hold', actions: [
+    const configured: ObjectType = { ...task, quickActions: { actions: [
       { id: 'done', name: 'Mark done', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['done'] } } }] },
       { id: 'defer', name: 'Defer', changes: [{ field: 'dodate', value: { kind: 'ask' } }, { field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['wait'] } } }] },
       { id: 'start', name: 'Start now', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['next'] } } }, { field: 'priority', value: { kind: 'value', value: { kind: 'select', value: ['high'] } } }] },
@@ -87,7 +105,7 @@ describe('sister task workflows', () => {
     expect(choices[1]!.action.id).toBe('defer')
     expect(choices[1]!.action.changes[0]!.value.kind).toBe('ask')
     expect(choices[0]!.action.id).toBe('status:next')
-    expect(choices[2]!.action.id).toBe('hold')
+    expect(choices[2]!.action.id).toBe('status:hold')
     expect(choices[3]!.action.id).toBe('done')
     expect(choices[4]!.action.icon).toEqual({ kind: 'icon', value: 'ph:x-circle' })
     expect(reviewChoices({ ...task, system: undefined })).toEqual([])
@@ -98,7 +116,7 @@ describe('sister task workflows', () => {
     const typed: ObjectType = { ...task, properties: task.properties.map((p) => p.id === 'status' && p.kind === 'select' ? { ...p, options: [
       { id: 'in', label: 'Inbox', status: 'todo' }, { id: 'next', label: 'Next', status: 'todo' }, { id: 'sched', label: 'Scheduled', status: 'todo' },
       { id: 'wait', label: 'Waiting', status: 'todo' }, { id: 'done', label: 'Done', status: 'done' }, { id: 'drop', label: 'Dropped', status: 'done' }, { id: 'hold', label: 'On Hold' },
-    ] } : p), quickActions: { holdStatus: 'hold', actions: [
+    ] } : p), quickActions: { actions: [
       { id: 'done', name: 'Mark done', changes: [set('done')] },
       { id: 'defer', name: 'Defer', changes: [{ field: 'dodate', value: { kind: 'ask' } }, set('sched')] },
       { id: 'drop', name: 'Drop', changes: [set('drop')] },
@@ -125,7 +143,7 @@ describe('sister task workflows', () => {
     })
 
     it('has no Defer for a type without one, and its Scheduled status is a link', () => {
-      const plain = { ...typed, quickActions: { holdStatus: 'hold' }, properties: typed.properties.filter((p) => p.id !== 'dodate') }
+      const plain = { ...typed, quickActions: {}, properties: typed.properties.filter((p) => p.id !== 'dodate') }
       expect(shape(reviewButtons(plain, 'next', false)).main).toEqual(['done:Done', 'drop:Drop'])
       expect(shape(reviewButtons(plain, 'next', false)).more).toContain('Scheduled')
     })

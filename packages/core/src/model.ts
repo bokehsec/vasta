@@ -53,12 +53,14 @@ export interface QuickActions {
   actions?: QuickActionDef[]
   /** A text property for the task's next step, shown under its title in lists; default none. */
   nextStepField?: Id
+}
+
+/** How Review treats a task type's tasks (Type settings › Review; task-review.ts, task-status.ts). */
+export interface ReviewSettings {
   /** How many days after its Last reviewed date a task comes up in Review again; default 7, 0 every time. */
-  reviewEvery?: number
-  /** The status option Hold sets in a review (a task kept for later without a date); default one called "On hold"; "none": no Hold. */
-  holdStatus?: Id
-  /** Incoming statuses for Triage; unset: those called Inbox, else none. No status always needs triage. */
-  triageStatuses?: Id[]
+  every?: number
+  /** The statuses of new tasks, which Review settles first; unset: those called Inbox, else none. No status always counts as new. */
+  incoming?: Id[]
 }
 
 /** One quick action: a button that makes its changes, asking first for the value of one marked `ask`. */
@@ -222,6 +224,8 @@ export interface ObjectType {
   openIn?: ViewOpenIn
   /** What a task's Done, Defer and Drop buttons set (task-actions.ts); unset: the defaults. */
   quickActions?: QuickActions
+  /** How Review treats its tasks (task types); unset: the defaults. */
+  review?: ReviewSettings
   /** Splitting its objects into steps (subtasks.ts); unset: none. */
   subtasks?: SubtaskSettings
   /** The Tracker's progress: where it shows, its charts and range; unset: the defaults. Habit types only. */

@@ -8,7 +8,7 @@ import { defaultQuickActions, plainStatusAction } from './task-actions.ts'
 import { closedStatusIds, closedOptionsOf, doneOptionOf, statusOptionsOf } from './task-status.ts'
 import { docReferences } from './doc.ts'
 import { habitPauseKey } from './habits.ts'
-import type { CaptureInfo, DatePropertyDef, DocNode, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, OpensOn, Person, PropertyDef, QueryDef, QuickActionDef, QuickActions, Space } from './model.ts'
+import type { CaptureInfo, DatePropertyDef, DocNode, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, OpensOn, Person, PropertyDef, QueryDef, QuickActionDef, QuickActions, ReviewSettings, Space } from './model.ts'
 import { addHabitFoodProperty } from './nutrition.ts'
 import { queryRelations, relatedIds, runQuery, timeBounds } from './query.ts'
 import type { Store } from './store.ts'
@@ -161,8 +161,31 @@ export function ensureBuiltinTypes(store: Store, at: IsoDateTime): ObjectType[] 
       for (const space of store.listSpaces()) addTaskDateRoles(store, space.id, at)
       store.setMeta('task-date-roles-2026-11-16', at)
     }
+    // Review's own settings leave the quick actions, and the Hold status setting goes (2026-11-17).
+    if (!store.getMeta('review-settings-2026-11-17')) {
+      for (const space of store.listSpaces()) moveReviewSettings(store, space.id, at)
+      store.setMeta('review-settings-2026-11-17', at)
+    }
     return added
   })
+}
+
+/** What a type's quick actions held before Review had settings of its own. */
+type OldReviewQuickActions = QuickActions & { reviewEvery?: number; holdStatus?: Id; triageStatuses?: Id[] }
+
+/**
+ * How often a task comes up in Review (`reviewEvery`) and which statuses are new (`triageStatuses`)
+ * move from the quick actions to the type's `review` settings; the Hold status (`holdStatus`)
+ * did nothing any more and goes.
+ */
+function moveReviewSettings(store: Store, spaceId: Id, at: IsoDateTime) {
+  for (const type of store.listTypes(spaceId)) {
+    const { reviewEvery, holdStatus: _hold, triageStatuses, ...settings } = (type.quickActions ?? {}) as OldReviewQuickActions
+    if (reviewEvery === undefined && triageStatuses === undefined && _hold === undefined) continue
+    const review: ReviewSettings = { ...type.review, ...(reviewEvery !== undefined ? { every: reviewEvery } : {}), ...(triageStatuses !== undefined ? { incoming: triageStatuses } : {}) }
+    const { quickActions: _old, ...rest } = type
+    store.putType({ ...rest, ...(Object.keys(settings).length ? { quickActions: settings } : {}), ...(Object.keys(review).length ? { review } : {}), updatedAt: at })
+  }
 }
 
 /** What a task type's settings said before dates had roles: the date Defer set, the status it set, the status Drop set. */

@@ -80,7 +80,7 @@ function endDrag() {
       <AppIcon :fallback="field.icon" :size="14" class="shrink-0 text-ink-soft" />
       <span class="min-w-0 flex-1 truncate" :class="field.on ? '' : 'text-ink-faint'">{{ field.label }}</span>
       <button
-        class="rounded p-1"
+        class="rounded p-1 max-md:grid max-md:min-h-11 max-md:min-w-11 max-md:place-items-center"
         :class="field.on ? 'text-accent' : 'text-ink-faint hover:text-ink'"
         :title="field.on ? 'Hide field' : 'Show field'"
         :aria-pressed="field.on"
@@ -90,13 +90,13 @@ function endDrag() {
       </button>
     </div>
     <div class="my-1 border-t border-line" />
-    <button class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-hover" :aria-pressed="!!list?.wrap" @click="toggleWrap">
+    <button class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-hover max-md:min-h-11" :aria-pressed="!!list?.wrap" @click="toggleWrap">
       <AppIcon :fallback="list?.wrap ? 'ph:check-square-fill' : 'ph:square'" :size="14" :class="list?.wrap ? 'text-accent' : 'text-ink-faint'" />
       Wrap titles
     </button>
     <button
       v-if="list"
-      class="mt-1 rounded-lg px-2 py-1.5 text-left text-xs text-ink-faint hover:bg-hover hover:text-ink"
+      class="mt-1 rounded-lg px-2 py-1.5 text-left text-xs text-ink-faint hover:bg-hover hover:text-ink max-md:min-h-11"
       @click="emit('update', undefined)"
     >
       Reset to default

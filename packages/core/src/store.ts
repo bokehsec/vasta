@@ -72,6 +72,7 @@ function rowToType(row: Row): ObjectType {
     ...(row.quick_actions ? { quickActions: parse(row.quick_actions) } : {}),
     ...(row.subtasks ? { subtasks: parse(row.subtasks) } : {}),
     ...(row.habits ? { habits: parse(row.habits) } : {}),
+    ...(row.review ? { review: parse(row.review) } : {}),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     ...(row.deleted_at ? { deletedAt: row.deleted_at as string } : {}),
@@ -529,16 +530,16 @@ export class Store {
       // An upsert, like putSpace: a column this build does not name (one a later build added) keeps its value.
       this.db
         .prepare(
-          `INSERT INTO types (id, space_id, system, name, plural_name, description, icon, color, properties, views, open_in, quick_actions, subtasks, habits, created_at, updated_at, deleted_at, rev, clock)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO types (id, space_id, system, name, plural_name, description, icon, color, properties, views, open_in, quick_actions, subtasks, habits, review, created_at, updated_at, deleted_at, rev, clock)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (id) DO UPDATE SET space_id = excluded.space_id, system = excluded.system, name = excluded.name, plural_name = excluded.plural_name, description = excluded.description,
              icon = excluded.icon, color = excluded.color, properties = excluded.properties, views = excluded.views, open_in = excluded.open_in, quick_actions = excluded.quick_actions,
-             subtasks = excluded.subtasks, habits = excluded.habits, created_at = excluded.created_at, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at,
+             subtasks = excluded.subtasks, habits = excluded.habits, review = excluded.review, created_at = excluded.created_at, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at,
              rev = excluded.rev, clock = excluded.clock`
         )
         .run(
           type.id, type.spaceId, type.system ?? null, type.name, type.pluralName, type.description ?? null,
-          json(type.icon), type.color ?? null, json(type.properties), json(type.views), type.openIn ?? null, json(type.quickActions), json(type.subtasks), json(type.habits), type.createdAt, type.updatedAt,
+          json(type.icon), type.color ?? null, json(type.properties), json(type.views), type.openIn ?? null, json(type.quickActions), json(type.subtasks), json(type.habits), json(type.review), type.createdAt, type.updatedAt,
           type.deletedAt ?? null, stamp.rev, stamp.clock
         )
       this.db.prepare("DELETE FROM sync_tombstones WHERE kind = 'types' AND id = ?").run(type.id)

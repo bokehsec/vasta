@@ -48,6 +48,8 @@ export const ADDED_COLUMNS: { table: string; column: string; definition: string 
   { table: 'types', column: 'subtasks', definition: 'TEXT' },
   // JSON HabitTypeSettings: the Tracker's progress (ObjectType.habits; habit types only).
   { table: 'types', column: 'habits', definition: 'TEXT' },
+  // JSON ReviewSettings: how often a task comes up in Review and which statuses are new (ObjectType.review).
+  { table: 'types', column: 'review', definition: 'TEXT' },
 ]
 
 /** Indexes on added columns; run after ADDED_COLUMNS, since an older table may lack them before. */

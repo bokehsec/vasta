@@ -14,6 +14,7 @@ import { boardDrag, closeCard, closingColumn, moveCard, pressCard, type BoardAxi
 import { chip } from '../lib/colors.ts'
 import { foldKey, useGroupFolds } from '../lib/group-folds.ts'
 import { openMenuAt, promptDialog } from '../lib/overlays.ts'
+import { quietButton } from '../lib/buttons.ts'
 import { newValues, useNewPlace } from '../lib/new-item.ts'
 import { groupObjects, movableField, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, typesById } from '../lib/state.ts'
@@ -236,7 +237,7 @@ async function addCard(column: Group, lane: Group) {
       <button
         v-for="column in columns"
         :key="column.key"
-        class="flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13px]"
+        class="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px]"
         :class="shownKey === column.key ? 'border-ink bg-ink text-surface' : 'border-line text-ink-soft'"
         :aria-current="shownKey === column.key || undefined"
         :data-board-chip="column.key"
@@ -331,7 +332,7 @@ async function addCard(column: Group, lane: Group) {
                     @keydown.esc="addingIn = ''"
                     @blur="addingIn = ''"
                   />
-                  <button v-else class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-sm text-ink-faint hover:bg-hover hover:text-ink" @click="startAdding(column, lane)">
+                  <button v-else :class="quietButton" @click="startAdding(column, lane)">
                     <AppIcon fallback="ph:plus" :size="14" /> New
                   </button>
                 </template>

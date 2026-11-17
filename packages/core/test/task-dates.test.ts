@@ -57,11 +57,8 @@ describe('the migration giving task dates their roles (2026-11-16)', () => {
     const { plan, deadline } = taskDatesOf(type)
     expect([plan?.id, deadline?.id]).toEqual(['work', 'due'])
     expect(type.properties.find((p) => p.id === 'checkback')).not.toHaveProperty('role')
-    expect(type.quickActions).toEqual({
-      nextStepField: 'next',
-      reviewEvery: 14,
-      actions: expect.any(Array),
-    })
+    expect(type.quickActions).toEqual({ nextStepField: 'next', actions: expect.any(Array) })
+    expect(type.review).toEqual({ every: 14 })
     const defer = quickActionsOf(type).find((a) => a.id === 'defer')!
     expect(defer.changes).toEqual([{ field: 'work', value: { kind: 'ask' } }, { field: 'status', value: status('scheduled') }])
     const drop = quickActionsOf(type).find((a) => a.id === 'drop')!
@@ -94,5 +91,18 @@ describe('the migration giving task dates their roles (2026-11-16)', () => {
     store.putType({ ...type, properties: type.properties.map((p) => { const { role: _role, ...rest } = p as PropertyDef & { role?: string }; return rest as PropertyDef }) })
     expect(taskDatesOf(again()).plan).toBeUndefined()
     expect(store.getType(builtinTypeId('s', 'page'))).toEqual(page)
+  })
+
+  it('moves Review\'s settings out of the quick actions and drops the Hold status', () => {
+    const { type, again } = run({ ...legacy({ reviewEvery: 0, triageStatuses: ['inbox'], holdStatus: 'hold', nextStepField: 'next' }) })
+    expect(type.review).toEqual({ every: 0, incoming: ['inbox'] })
+    expect(type.quickActions).toEqual({ nextStepField: 'next' })
+    expect(JSON.stringify(type.quickActions)).not.toMatch(/reviewEvery|triageStatuses|holdStatus/)
+    // Once: a second start changes nothing.
+    expect(again()).toEqual(type)
+    // Only the Hold setting: it goes, and no empty review block appears.
+    const { type: held } = run(legacy({ holdStatus: 'hold' }))
+    expect(held).not.toHaveProperty('review')
+    expect(held).not.toHaveProperty('quickActions')
   })
 })

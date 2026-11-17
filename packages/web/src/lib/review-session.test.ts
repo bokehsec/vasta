@@ -1,29 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { REVIEW_KEY, currentId, isFinished, moveBy, readSession, recordOutcome, skipCurrent, skippedSession, startSession, summarize, undoOutcome, writeSession, type ReviewSession } from './review-session.ts'
+import { currentId, isFinished, moveBy, recordOutcome, sessionKey, skipCurrent, skippedSession, startSession, summarize, undoOutcome, validSession, workflowTitle, type ReviewSession } from './review-session.ts'
 
-const scope = { userId: 'u1', spaceId: 's1', typeId: 't', viewId: 'v', viewName: 'Open tasks' }
+const scope = { spaceId: 's1', typeId: 't', viewId: 'v', viewName: 'Open tasks', kind: 'review' as const, scope: 'view' as const, scopeLabel: 'Open tasks' }
 const begin = (ids: string[] = ['a', 'b', 'c']) => startSession(scope, ids)
 
-function fakeStorage(initial?: string) {
-  const items = new Map<string, string>(initial === undefined ? [] : [[REVIEW_KEY, initial]])
-  return {
-    items,
-    getItem: (key: string) => items.get(key) ?? null,
-    setItem: (key: string, value: string) => void items.set(key, value),
-    removeItem: (key: string) => void items.delete(key),
-  }
-}
-
 describe('review session', () => {
-  it('preserves the workflow and frozen scope when revisiting skipped work and resuming', () => {
-    const workflow = { ...scope, kind: 'triage' as const, scope: 'space' as const, scopeLabel: 'All tasks in Main', fieldIds: ['status', 'due'] }
+  it('keeps the frozen scope when revisiting skipped work', () => {
+    const workflow = { ...scope, kind: 'tasks' as const, scope: 'space' as const, scopeLabel: 'All tasks in Main', newCount: 1 }
     const session = skipCurrent(startSession(workflow, ['a', 'b']))
-    const storage = fakeStorage()
-    writeSession({ ...session, cards: { b: { scrollTop: 250, notesOpen: true } } }, storage)
-    expect(readSession('u1', 's1', storage)).toMatchObject({ ...workflow, index: 1, cards: { b: { scrollTop: 250, notesOpen: true } } })
-    expect(skippedSession(session)).toMatchObject({ ...workflow, ids: ['a'], index: 0 })
-    expect(readSession('u1', 's1', fakeStorage(JSON.stringify({ ...session, kind: 'unknown' })))).toBeNull()
-    expect(readSession('u1', 's1', fakeStorage(JSON.stringify({ ...session, cards: { b: { scrollTop: -1 } } })))).toBeNull()
+    expect(skippedSession(session)).toMatchObject({ ...workflow, ids: ['a'], index: 0, newCount: 1 })
+    expect(workflowTitle(session)).toBe('Review tasks')
+    expect(workflowTitle(begin())).toBe('Review this view')
   })
 
   it('starts on the first object with a copy of the ids and nothing decided', () => {
@@ -222,77 +209,44 @@ describe('review session', () => {
     })
   })
 
-  describe('keeping it on the device', () => {
-    const stored = (over: Partial<ReviewSession> = {}) => JSON.stringify({ ...begin(), ...over })
+  describe('reading a stored session', () => {
+    const stored = (over: Partial<ReviewSession> = {}) => ({ ...begin(), ...over })
 
-    it('reads back what was written', () => {
-      const storage = fakeStorage()
-      const session = recordOutcome(begin(), 'a', 'Done')
-      writeSession(session, storage)
-      expect(readSession('u1', 's1', storage)).toEqual(session)
+    it('is where the type keeps it', () => {
+      expect(sessionKey('t1')).toBe('type/t1/review')
     })
 
-    it('reads nothing without a user or a space or storage', () => {
-      const storage = fakeStorage(stored())
-      expect(readSession(undefined, 's1', storage)).toBeNull()
-      expect(readSession('u1', undefined, storage)).toBeNull()
-      expect(readSession('u1', 's1', undefined)).toBeNull()
-      expect(storage.items.has(REVIEW_KEY)).toBe(true)
-    })
-
-    it('reads nothing when there is nothing stored', () => {
-      expect(readSession('u1', 's1', fakeStorage())).toBeNull()
-    })
-
-    it('forgets another user\'s review', () => {
-      const storage = fakeStorage(stored())
-      expect(readSession('u2', 's1', storage)).toBeNull()
-      expect(storage.items.has(REVIEW_KEY)).toBe(false)
-    })
-
-    it('keeps the user\'s review for another space, and offers it there only', () => {
-      const storage = fakeStorage(stored())
-      expect(readSession('u1', 's2', storage)).toBeNull()
-      expect(storage.items.has(REVIEW_KEY)).toBe(true)
-      expect(readSession('u1', 's1', storage)?.ids).toEqual(['a', 'b', 'c'])
+    it('reads back what was written, with a decision and a scroll position', () => {
+      const session = { ...recordOutcome(begin(), 'a', 'Done'), cards: { b: { scrollTop: 250 } } }
+      expect(validSession(JSON.parse(JSON.stringify(session)))).toEqual(session)
     })
 
     it('reads nothing from corrupt or foreign data', () => {
-      expect(readSession('u1', 's1', fakeStorage('{not json'))).toBeNull()
-      expect(readSession('u1', 's1', fakeStorage(stored({ v: 2 as 1 })))).toBeNull()
-      expect(readSession('u1', 's1', fakeStorage(stored({ ids: 'abc' as unknown as string[] })))).toBeNull()
-      expect(readSession('u1', 's1', fakeStorage('"text"'))).toBeNull()
+      expect(validSession(null)).toBeNull()
+      expect(validSession('text')).toBeNull()
+      expect(validSession(stored({ v: 2 as 1 }))).toBeNull()
+      expect(validSession(stored({ ids: 'abc' as unknown as string[] }))).toBeNull()
+      expect(validSession(stored({ cards: { b: { scrollTop: -1 } } }))).toBeNull()
     })
 
     it('reads nothing from a session with parts missing or out of range', () => {
-      const partial = JSON.stringify({ v: 1, userId: 'u1', spaceId: 's1', typeId: 't', ids: ['a'] })
-      expect(readSession('u1', 's1', fakeStorage(partial))).toBeNull()
-      expect(readSession('u1', 's1', fakeStorage(stored({ index: 99 })))).toBeNull()
-      expect(readSession('u1', 's1', fakeStorage(stored({ outcomes: { a: 3 as unknown as string } })))).toBeNull()
+      expect(validSession({ v: 1, spaceId: 's1', typeId: 't', ids: ['a'] })).toBeNull()
+      expect(validSession(stored({ index: 99 }))).toBeNull()
+      expect(validSession(stored({ outcomes: { a: 3 as unknown as string } }))).toBeNull()
+      expect(validSession(stored({ newCount: 9 }))).toBeNull()
     })
 
-    it('forgets the review when written as null', () => {
-      const storage = fakeStorage(stored())
-      writeSession(null, storage)
-      expect(storage.items.has(REVIEW_KEY)).toBe(false)
+    it('reads nothing from a session of an older shape: no kind or scope, or the retired Triage', () => {
+      const { kind: _kind, ...noKind } = stored()
+      expect(validSession(noKind)).toBeNull()
+      const { scope: _scope, scopeLabel: _label, ...noScope } = stored()
+      expect(validSession(noScope)).toBeNull()
+      expect(validSession(stored({ kind: 'triage' as 'tasks' }))).toBeNull()
     })
 
-    it('does not throw when the storage does', () => {
-      const broken = {
-        getItem: () => {
-          throw new Error('denied')
-        },
-        setItem: () => {
-          throw new Error('full')
-        },
-        removeItem: () => {
-          throw new Error('denied')
-        },
-      }
-      expect(readSession('u1', 's1', broken)).toBeNull()
-      expect(() => writeSession(begin(), broken)).not.toThrow()
-      expect(() => writeSession(null, broken)).not.toThrow()
-      expect(readSession('u2', 's1', { getItem: () => stored(), removeItem: broken.removeItem })).toBeNull()
+    it('lets go of what older builds also saved', () => {
+      const old = { ...stored(), userId: 'u1', fieldIds: ['status'], cards: { a: { scrollTop: 3, notesOpen: true } } }
+      expect(validSession(old)).toEqual({ ...stored(), cards: { a: { scrollTop: 3 } } })
     })
   })
 })

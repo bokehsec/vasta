@@ -39,7 +39,7 @@ function toggleDone() {
         v-if="editor.isEditable"
         class="-my-1 ml-auto flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink"
         :class="capture.done ? 'text-green-600' : 'opacity-0 focus-visible:opacity-100 group-hover/capture:opacity-100 [@media(hover:none)]:opacity-100'"
-        :title="capture.done ? `Mark not ${reviewed.lower}` : `Mark ${reviewed.lower}`"
+        :title="capture.done ? reviewed.unmark : reviewed.mark"
         @click="toggleDone"
       >
         <AppIcon :fallback="capture.done ? 'ph:check-circle-fill' : 'ph:check-circle'" :size="15" />

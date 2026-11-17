@@ -87,6 +87,7 @@ const original = {
   views: found.views.filter((v) => v.id !== viewId && v.id !== `${taskType.id}:bulk`),
   properties: found.properties.filter((p) => !['bulknext', 'reviewnext'].includes(p.id)).map((p) => (p.id === 'status' ? { ...p, options: p.options.filter((o) => o.id !== 'scheduled') } : p)),
   quickActions: undefined,
+  review: undefined,
 }
 const baseStatus = original.properties.find((p) => p.id === 'status')
 await put(`/api/types/${taskType.id}`, {
@@ -94,8 +95,8 @@ await put(`/api/types/${taskType.id}`, {
   properties: [...original.properties.map((p) => (p.id === 'status' ? { ...baseStatus, options: [...baseStatus.options, { id: 'scheduled', label: 'Scheduled', status: 'todo' }] } : p)), { id: 'reviewnext', kind: 'text', name: 'Next step' }],
   // These are established commitments; incoming-task decisions are covered by task-workflows.mjs.
   // The type's own Defer sets the Do date and the Scheduled status.
+  review: { incoming: [] },
   quickActions: {
-    triageStatuses: [],
     nextStepField: 'reviewnext',
     actions: [
       { id: 'done', name: 'Mark done', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: [status.options.find((o) => o.status === 'done').id] } } }] },
@@ -111,6 +112,12 @@ const tasks = []
 // Notes longer than the list's preview: the review shows them to the end.
 const longNotes = { body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: `${'Long notes. '.repeat(40)}The end of the notes ${tag}.` }] }] } }
 for (const name of ['A', 'B', 'C', 'D', 'E']) tasks.push(await post('/api/objects', { typeId: taskType.id, title: `Review ${tag} ${name}`, props: { status: { kind: 'select', value: [todo] } }, content: longNotes }))
+// A review starts with every new task in the space; this check is about the check-ins, so the seed's tasks with no status get one first.
+for (const summary of await get(`/api/types/${taskType.id}/objects`)) {
+  if (summary.props.status?.value?.length) continue
+  const open = await get(`/api/objects/${summary.id}`)
+  await put(`/api/objects/${summary.id}`, { ...open, props: { ...open.props, status: { kind: 'select', value: [todo] } } })
+}
 await sleep(1500)
 const days = await page.evaluate(() => {
   const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`

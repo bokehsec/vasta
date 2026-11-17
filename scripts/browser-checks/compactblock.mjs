@@ -114,14 +114,19 @@ try {
   await menuItem('Open block').click()
   await until(() => new URL(page.url()).pathname === `/o/${source.id}`, 'the source page')
 
-  step('the block emptied: the compact embed shows nothing')
+  step('the block emptied: the compact embed shows a faint note while editing and nothing when read')
   const full = await get(`/api/objects/${source.id}`)
   full.content.body.content[0].content = [para()]
   await put(full)
   await page.goto(`${base}/o/${host.id}`)
   await until(async () => (await frame.count()) === 1 && (await frame.getAttribute('data-empty')) === '', 'the empty block hidden', 20000)
+  // While the page is edited it stays, with a faint note, so the block can still be found; read, it takes no room.
+  if (!/Nothing here yet/.test(await frame.evaluate((el) => getComputedStyle(el, '::before').content))) throw new Error('the empty compact block has no note while editing')
+  const editor = page.locator('.vasta-doc').first()
+  await editor.evaluate((el) => el.setAttribute('contenteditable', 'false'))
   const box = await frame.boundingBox()
-  if (box && box.height > 2) throw new Error(`the empty compact block takes ${box.height}px`)
+  if (box && box.height > 2) throw new Error(`the empty compact block takes ${box.height}px when read`)
+  await editor.evaluate((el) => el.setAttribute('contenteditable', 'true'))
 
   step('filled again: the line comes back by itself')
   full.content.body.content[0].content = [para(`Heads up line ${tag}`)]

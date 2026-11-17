@@ -54,7 +54,8 @@ try {
       { id: 'done', label: 'Done', status: 'done' }, { id: 'drop', label: 'Dropped', status: 'done' },
     ] } : p).concat([{ id: 'nextstep', name: 'Next step', kind: 'text' }]),
     // The type's own Defer sets the Do date (the built-in plan date) and the Scheduled status.
-    quickActions: { nextStepField: 'nextstep', reviewEvery: 7, triageStatuses: ['inbox'], actions: [
+    review: { every: 7, incoming: ['inbox'] },
+    quickActions: { nextStepField: 'nextstep', actions: [
       { id: 'done', name: 'Mark done', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['done'] } } }] },
       { id: 'defer', name: 'Defer', changes: [{ field: 'dodate', value: { kind: 'ask' } }, { field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['scheduled'] } } }] },
       { id: 'drop', name: 'Drop', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['drop'] } } }] },
@@ -311,7 +312,7 @@ try {
   await page.keyboard.press('ArrowRight')
   await page.keyboard.press('Escape')
   await page.locator('[data-process-mode]').waitFor({ state: 'detached' })
-  await until(async () => /Resume review\s+2 of 2/.test(await reviewButton.innerText()), 'the paused session is on the button')
+  await until(async () => /Resume\s+2 of 2/.test(await reviewButton.innerText()), 'the paused session is on the button')
   await reviewButton.click()
   await page.locator('[data-process-mode]').waitFor()
   await page.keyboard.press('k')

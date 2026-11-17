@@ -3,16 +3,13 @@
 // objects change anywhere (debounced), so embedded queries stay current.
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { BoardSettings, Id, ObjectRecord, ObjectSummary, QueryDef, TableSettings } from '@vasta/core'
-import { pinMenu, setProperties } from '../lib/actions.ts'
+import { quietButton } from '../lib/buttons.ts'
 import { onChange } from '../lib/events.ts'
-import { displayTitle } from '../lib/format.ts'
-import { openContextMenu, type MenuItem } from '../lib/overlays.ts'
+import { objectRowMenu } from '../lib/object-menu.ts'
+import { openContextMenu } from '../lib/overlays.ts'
 import { runServerQuery } from '../lib/query.ts'
 import { cachedSummary, primeSummaries, typesById } from '../lib/state.ts'
 import ObjectCollection from './ObjectCollection.vue'
-import { copyObjectLink, openObject } from '../lib/open.ts'
-import { quickActionMenuItems } from '../lib/quick-actions.ts'
-import { subtaskMenuItems } from '../lib/subtasks.ts'
 import { useCompletion } from '../lib/use-completion.ts'
 
 /** `readonly`: property cells of a table do not edit (a whiteboard card, a page that cannot be edited). */
@@ -92,26 +89,15 @@ const completion = useCompletion({
 /** The query's rows plus the tasks it kept after a completion, back where they were. */
 const display = computed(() => completion.pin(completion.keep(results.value)))
 
-/** An open task's quick actions, in its menu (a long press on a phone); none where nothing changes. */
-function quickItems(object: ObjectSummary): MenuItem[] {
-  if (props.readonly) return []
-  const type = typesById.value.get(object.typeId)
-  const items = [
-    ...(completion.entries.has(object.id) ? [] : quickActionMenuItems(type, object, { save: async (id, values) => moved({ ...(await setProperties(id, values)), preview: '' }) })),
-    ...subtaskMenuItems(type, object, (saved) => moved({ ...saved, preview: '' })),
-  ]
-  return items.length ? [{ kind: 'separator' }, ...items] : []
-}
-
-function objectMenu(event: MouseEvent, object: ObjectSummary) {
-  openContextMenu(event, [
-    { kind: 'heading', label: displayTitle(object, typesById.value.get(object.typeId)) },
-    { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(object.id, { where: 'type' }) },
-    { label: 'Copy link to page', icon: 'ph:link', run: () => copyObjectLink(object.id) },
-    pinMenu(object.id),
-    ...quickItems(object),
-  ])
-}
+/** The row menu (lib/object-menu.ts); a readonly query offers no change, and a trashed object leaves the results at once. */
+const objectMenu = (event: MouseEvent, object: ObjectSummary) =>
+  openContextMenu(event, objectRowMenu(object, {
+    type: typesById.value.get(object.typeId),
+    readonly: props.readonly,
+    completing: completion.entries.has(object.id),
+    moved: (saved) => moved({ ...saved, preview: '' }),
+    trashed: (id) => (results.value = results.value.filter((o) => o.id !== id)),
+  }))
 
 /** The query ran and nothing matched (an agenda is never empty: it says "Nothing planned"); a kept completion still counts. */
 const empty = computed(() => !loading.value && !failed.value && !isAgenda.value && !display.value.length)
@@ -149,7 +135,7 @@ defineExpose({ count: computed(() => display.value.length), empty })
         @moved="moved({ ...$event, preview: '' })"
         @menu="objectMenu"
       />
-      <button v-if="limit && display.length > limit && !showAll && !isAgenda" class="mt-2 text-xs text-ink-faint hover:text-ink" @click="showAll = true">
+      <button v-if="limit && display.length > limit && !showAll && !isAgenda" :class="[quietButton, 'mt-2']" @click="showAll = true">
         Show all {{ display.length }}
       </button>
     </template>

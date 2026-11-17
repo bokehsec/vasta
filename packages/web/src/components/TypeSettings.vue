@@ -4,7 +4,7 @@ import { newId } from '@vasta/core'
 // Changes are made on a draft and saved together, as a patch of only the fields the dialog changed
 // (lib/type-patch.ts): the views and anything else changed meanwhile are not sent.
 import { computed, reactive, ref } from 'vue'
-import type { ColorName, DatePropertyDef, DateRole, FormulaPropertyDef, Icon, ObjectType, PropertyDef, QuickActions, SelectOption, TypePatch } from '@vasta/core'
+import type { ColorName, DatePropertyDef, DateRole, FormulaPropertyDef, Icon, ObjectType, PropertyDef, QuickActions, ReviewSettings as ReviewSettingsValue, SelectOption, TypePatch } from '@vasta/core'
 import { FORMULA_BUILTIN_FIELDS, FORMULA_FUNCTIONS, checkFormula, eligibleParentFields, formulaFromNames, formulaKind, formulaToNames, formulaUses } from '@vasta/core'
 import { greyButton, mainButton } from '../lib/buttons.ts'
 import { clone } from '../lib/clone.ts'
@@ -19,6 +19,7 @@ import IconPicker from './IconPicker.vue'
 import ModalDialog from './ModalDialog.vue'
 import PopoverMenu from './PopoverMenu.vue'
 import QuickActionsSettings from './QuickActionsSettings.vue'
+import ReviewSettings from './ReviewSettings.vue'
 import TypeTemplates from './TypeTemplates.vue'
 import { useRouter } from 'vue-router'
 
@@ -57,6 +58,12 @@ function setOpenIn(value: 'popup' | 'pane' | 'page') {
 function setQuickActions(value: QuickActions | undefined) {
   if (value) draft.value.quickActions = value
   else delete draft.value.quickActions
+}
+
+// Review (tasks): how often a task comes back and which statuses are new (ReviewSettings).
+function setReview(value: ReviewSettingsValue | undefined) {
+  if (value) draft.value.review = value
+  else delete draft.value.review
 }
 
 // Subtasks: the single relation to the type itself that makes an object a step of another, or a
@@ -195,7 +202,7 @@ function insertField(def: FormulaPropertyDef, name: string) {
 const otherTypes = computed(() => [...workspace.types].sort((a, b) => a.name.localeCompare(b.name)))
 
 /** The fields this dialog edits: the others (the views) are changed where they are shown. */
-const EDITED = ['name', 'pluralName', 'description', 'icon', 'color', 'properties', 'openIn', 'quickActions', 'subtasks'] as const
+const EDITED = ['name', 'pluralName', 'description', 'icon', 'color', 'properties', 'openIn', 'quickActions', 'review', 'subtasks'] as const
 
 async function save() {
   if (!draft.value.name.trim()) {
@@ -289,6 +296,7 @@ async function leave(path: string) {
       <p class="mt-0.5 text-xs text-ink-faint">A click on a {{ (draft.name || 'object').toLowerCase() }} in a list, table, board or query opens it there. A view can choose otherwise.</p>
     </section>
     <QuickActionsSettings :type="draft" @update="setQuickActions" />
+    <ReviewSettings :type="draft" @update="setReview" />
     <section class="mt-4" data-subtask-settings>
       <label class="text-xs text-ink-faint" for="type-subtask-field">Subtasks</label>
       <select

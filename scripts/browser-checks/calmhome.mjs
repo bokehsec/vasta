@@ -225,12 +225,18 @@ try {
   if (await tagsButton.count()) fail('a Tags button although the page has tags')
   await put(`/api/objects/${home.id}`, { ...(await get(`/api/objects/${home.id}`)), tagIds: [] })
 
-  step('compact queries: with results it shows; with none it and its heading are gone; a full one stays')
+  step('compact queries: with results it shows; with none it and its heading stay, noted, while editing and are gone when read; a full one stays')
   await page.goto(`${base}/o/${home.id}`)
   const doc = page.locator('.vasta-doc').first()
   const text = (t) => doc.getByText(t, { exact: false })
   await until(async () => (await visible(text(`Pay fee ${tag}`))) && (await doc.locator('[data-empty]').count()) === 1, 'the results and the empty one')
   if (!(await visible(page.locator('.vasta-doc h2', { hasText: `Next ${tag}` })))) fail('the heading above a compact query with results is hidden')
+  // While the page is edited the empty one and its heading stay, with a faint note, so it can still be found.
+  if (!(await visible(page.locator('.vasta-doc h2', { hasText: `Heads up ${tag}` })))) fail('editing: the heading above the empty compact query is hidden')
+  if (!(await visible(doc.locator('[data-node-view-wrapper]:has([data-empty])')))) fail('editing: the empty compact query is hidden')
+  if (!/Nothing here yet/.test(await doc.locator('[data-node-view-wrapper] > [data-empty]').evaluate((el) => getComputedStyle(el, '::before').content))) fail('editing: no note in the empty compact query')
+  // Read: the page cannot be edited, so it goes (the editor's own attribute, as a read-only page has it).
+  await doc.evaluate((el) => el.setAttribute('contenteditable', 'false'))
   if (await visible(page.locator('.vasta-doc h2', { hasText: `Heads up ${tag}` }))) fail('the heading above the empty compact query shows')
   if (await visible(doc.locator('[data-empty]'))) fail('the empty compact query shows')
   // The full embed's own "No objects match" is the one allowed to show: exactly one is visible.
@@ -246,6 +252,7 @@ try {
   if (!(await visible(page.locator('.vasta-doc h2', { hasText: `Heads up ${tag}` })))) fail('the heading stayed hidden while the settings are open')
   await done.click()
   await until(async () => !(await visible(page.locator('.vasta-doc h2', { hasText: `Heads up ${tag}` }))), 'hidden again')
+  await doc.evaluate((el) => el.setAttribute('contenteditable', 'true'))
 
   step('an agenda in a compact embed: all-day events are chips, timed ones rows')
   const today_ = page.locator(`section[data-agenda-day="${today}"]`)

@@ -34,7 +34,7 @@ async function save() {
       <label :class="label" class="max-w-xs">
         Word for items you dealt with
         <input v-model="word" :class="field" :placeholder="DEFAULT_REVIEWED_LABEL" maxlength="40" @change="save" @keydown.enter="($event.target as HTMLInputElement).blur()" />
-        <span class="mt-1 block">The inbox offers “Mark {{ reviewed.lower }}” and hides those items until you show them.</span>
+        <span class="mt-1 block">The inbox offers “{{ reviewed.mark }}” and hides those items until you show them.</span>
       </label>
       <label class="flex items-start gap-2.5 text-sm">
         <input v-model="fade" type="checkbox" class="mt-0.5 h-4 w-4 accent-[var(--color-accent)]" @change="save" />

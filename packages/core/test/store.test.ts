@@ -175,11 +175,13 @@ describe.each(backends)('shared store on %s', (_name, open) => {
     const store = setUp()
     const task = store.getType(builtinTypeId('s', 'task'))!
     expect(task.quickActions).toBeUndefined()
-    store.putType({ ...task, quickActions: { nextStepField: 'due', holdStatus: 'done' } })
-    expect(store.getType(task.id)?.quickActions).toEqual({ nextStepField: 'due', holdStatus: 'done' })
-    const { quickActions: _quickActions, ...cleared } = store.getType(task.id)!
+    store.putType({ ...task, quickActions: { nextStepField: 'due' }, review: { every: 14, incoming: ['inbox'] } })
+    expect(store.getType(task.id)?.quickActions).toEqual({ nextStepField: 'due' })
+    expect(store.getType(task.id)?.review).toEqual({ every: 14, incoming: ['inbox'] })
+    const { quickActions: _quickActions, review: _review, ...cleared } = store.getType(task.id)!
     store.putType(cleared)
     expect(store.getType(task.id)).not.toHaveProperty('quickActions')
+    expect(store.getType(task.id)).not.toHaveProperty('review')
     store.close()
   })
 

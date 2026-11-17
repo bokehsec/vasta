@@ -52,13 +52,13 @@ export function closingOf(type: ObjectType | undefined, object: Item): 'done' | 
 export const isClosedTask = (type: ObjectType | undefined, object: Item): boolean => closingOf(type, object) !== undefined
 
 /**
- * The options a review treats as incoming: the type's own list (`quickActions.triageStatuses`),
+ * The options a review treats as incoming: the type's own list (`review.incoming`),
  * else those labelled Inbox, else none. Tasks of a task type only; never an option meaning done.
  */
 export function triageOptionsOf(type: ObjectType | undefined): SelectOption[] {
   if (type?.system !== 'task') return []
   const options = statusOptionsOf(type).filter((o) => o.status !== 'done')
-  const own = type.quickActions?.triageStatuses
+  const own = type.review?.incoming
   if (Array.isArray(own)) return options.filter((o) => own.includes(o.id))
   return options.filter((o) => /^inbox$/i.test(o.label.trim()))
 }

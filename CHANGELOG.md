@@ -8,6 +8,14 @@ GitHub release page.
 
 ### Added
 
+- **A paused review keeps its place for each type, and says where it is.** Pausing a review of
+  Tasks no longer gets lost or replaced when you review another type; each type keeps its own, on
+  this device, and starting another review of the same type asks first. While one is paused the
+  Review button reads "Resume 4 of 12" (on a phone too); if it covers another view or search than
+  the one you are on, it says which and offers **Review this view instead** beside it. Review
+  settings (how often a task comes back, which statuses are new) have their own **Review** section
+  in Type settings, and the Hold setting, which no longer had any effect, is gone.
+
 - **Filters are a temporary narrowing.** On a phone's Filters sheet and a computer's Filter menu, what
   you add narrows the view for this visit only and is gone when you leave the page. The view's own
   filter is shown apart ("This view: Area is Work") and is not counted; the count and **Clear** cover
@@ -119,9 +127,9 @@ GitHub release page.
 
 - **Review tasks: one routine, few clear choices.** A task type's page has one **Review**
   button (with how many are waiting) instead of separate Triage and Review buttons on every view. It
-  goes through the current view, including search and Mine: **new** tasks first (no status,
-  or an incoming one such as Inbox), then **check-ins** (open tasks not reviewed for 7 days, including
-  ones on hold). The review shows the task in full (all its notes, Claude's take, its steps with
+  always starts with every **new** task in the space (no status, or an incoming one such as Inbox,
+  whichever view you are on), then the **check-ins** of the view you are looking at, including
+  its search and Mine (open tasks not reviewed for 7 days, including ones on hold). The review shows the task in full (all its notes, Claude's take, its steps with
   their dates) and **the plan now**: status, due date, do date, priority, project and next step,
   each changeable in place. Under the task are at most four buttons, and never the status it
   already has: a task already placed has **Keep in Next** (or its status, highlighted), which marks
@@ -131,7 +139,7 @@ GitHub release page.
   ("Move to Waiting · On hold"), and **Decide later** records nothing and keeps it in the queue. Keys
   on a computer: K keep, N next, F defer, D done, X drop, 1–9 the links. On a big screen the
   buttons are centred under the task with the plan beside it; on a phone they are a tray at the
-  bottom. Type settings › Quick actions sets how often a task comes back for a check-in and which
+  bottom. Type settings › Review sets how often a task comes back for a check-in and which
   statuses count as new. The page's ⋯ menu offers **Review all tasks in this space** for a full sweep.
 - **Search and filters in one place on a phone.** A type's page (Tasks and the rest) shows the view
   and a Filters button on one row, with a count of what is on, instead of a toolbar that scrolled
@@ -162,18 +170,18 @@ GitHub release page.
   reviewed, or not in the last 7 days. "Review all" takes the others too. **Reviewed** says a task is
   fine as it is: it records today in the task's new Last reviewed field and moves on, so a task kept
   for later without a date no longer has to be deferred or skipped. Three buttons decide: Done,
-  Defer… and Next step…; More holds the rest (Drop, On hold when the status has it, your own actions,
+  Defer… and Next step…; More holds the rest (Drop, your own actions,
   Break into steps). Any decision counts as reviewed too: a status change marks a task reviewed wherever
   it is made (see "A changed status counts as a review" below), and the ones that leave the status as it is (Keep, a next
   step) record it themselves. A next step is saved with Save and keeps
   the task on screen (Next goes on); Done, Defer and the others move on. The task's whole notes show
   (and its other text fields), scrolling under the buttons. Skip and Back move without changing
   anything. Close the review, open a task's details, or reload, and it waits for you: Back from the
-  task returns to the same one, and Tasks offers "Resume review · 4 of 12" (End forgets it; it stays
+  task returns to the same one, and Tasks offers "Resume 4 of 12" (End forgets it; it stays
   on this device, for you only). Undo takes a decision off again, and the end counts each task once
   ("Reviewed 6 · Done 3 · 4 skipped, unchanged") with "Review 4 skipped" to go over those. How often
-  a task comes up again (7 days unless changed; 0 for every time) and the status Hold sets are in
-  Type settings › Quick actions. A view's filters can use **Due for review**, which is the review's
+  a task comes up again (7 days unless changed; 0 for every time) is in
+  Type settings › Review. A view's filters can use **Due for review**, which is the review's
   check-in list (open tasks that are not new and have not been reviewed for that many days; also in
   Claude's queries), to show tasks only when they need a look (say, tasks on hold). On a computer, R marks
   reviewed, keys 1–9 run the actions and the arrows skip or go back; on a phone, swipe right to
@@ -297,8 +305,8 @@ GitHub release page.
   lists and tables throughout Vasta. Task rows keep their completion circle; individual actions,
   Review and triage remain available.
 
-- **Review the tasks you are looking at.** Review uses the current task view's filters, search and
-  Mine; new tasks still come before check-ins, and the review's header names its scope. On a phone,
+- **Review the tasks you are looking at.** Review's check-ins come from the current task view's
+  filters, search and Mine, after every new task in the space, and the review's header names its scope. On a phone,
   Mine also has a visible chip to remove it. **Review all tasks in Main** (using your space’s name) in ⋯ ignores those filters,
   even when nothing waits in this view. Paused sessions keep and name their original scope. Metrics
   and Agenda explicitly offer **Review all** for the whole space. Background space updates no longer
@@ -388,11 +396,26 @@ GitHub release page.
   with a time), without the year. Other years, tables and boards are unchanged.
 - **A compact query that finds nothing disappears**, with the heading right above it, instead of
   saying "No objects match this query." The same goes for a compact embedded block that is empty.
-  It stays while it loads, while its settings are open and when the query fails.
+  It stays while it loads, while its settings are open and when the query fails. While you edit the
+  page it stays, with a faint "Nothing here yet", so you can still find and change it.
 - **A type remembers only a view you picked**: until you pick one, it still opens on its first
   view, also after the views are reordered.
 
 ### Fixed
+- **One row menu everywhere.** The menu of a task, note or other row is the same on a type's page
+  and in a query: Open, Copy link, Pin, its quick actions and steps, and **Move to trash** (queries
+  did not have it). On a phone every row has the ⋯ button, not only those of types with quick actions.
+- **Inbox: "Clear".** An inbox item's button is **Clear** (and **Bring back**), and the list says
+  "Show cleared". A word you chose in Settings › Inbox stays: the button reads "Mark" and your word.
+- **Phone and page fixes.** A type's page names itself once on a phone (the top bar), not twice.
+  A link to a type in another space no longer flashes "Type not found" while it loads. The count at
+  the top of a type's page counts what the view shows, not the Done and Dropped it hides. Collapse
+  all and Expand all appear on a page's own groups, not above every grouped embed and whiteboard card.
+  Board column chips, the fields and columns ticks and the like are 44px to tap on a phone.
+- **Review keys.** A first status such as "Delegated" or "Soon" no longer takes D, F or X from Done,
+  Defer and Drop, a review of another type no longer says it "does not settle incoming tasks", and the
+  message for a deleted task names the button ("Decide later"). A review saved by an older version
+  that no longer fits is not offered to resume.
 
 - **Deferring a repeating or timed date keeps what it holds.** Defer, and any quick action that sets
   a day, keeps a date's time of day and its end; on a repeating date it moves only this occurrence,

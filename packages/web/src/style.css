@@ -151,9 +151,10 @@ body {
 .vasta-doc h2:not(.vasta-ui *) { font-size: 1.3rem; font-weight: 700; margin-top: 1.2rem; }
 .vasta-doc h3:not(.vasta-ui *) { font-size: 1.12rem; font-weight: 650; margin-top: 1rem; }
 .vasta-doc h4:not(.vasta-ui *) { font-size: 1rem; font-weight: 650; margin-top: 0.8rem; }
-/* A compact embed with nothing to show (an empty query, an emptied block) is hidden, and so is a heading right above it. */
-.vasta-doc :is(h1, h2, h3, h4, h5, h6):has(+ [data-node-view-wrapper] > [data-empty]),
-.vasta-doc [data-node-view-wrapper]:has(> [data-empty]) { display: none; }
+/* A compact embed with nothing to show (an empty query, an emptied block) is hidden when the page is read, and so is a heading right above it. While editing they stay, with a faint note, so the block can still be found and changed. */
+.vasta-doc:not([contenteditable='true']) :is(h1, h2, h3, h4, h5, h6):has(+ [data-node-view-wrapper] > [data-empty]),
+.vasta-doc:not([contenteditable='true']) [data-node-view-wrapper]:has(> [data-empty]) { display: none; }
+.vasta-doc[contenteditable='true'] [data-node-view-wrapper] > [data-empty]::before { content: 'Nothing here yet'; color: var(--color-ink-faint); font-size: 0.875rem; font-style: italic; }
 /* An embedded block starts at the top of its frame, a heading too. */
 .vasta-block-embed .vasta-doc > :first-child:not(.vasta-ui *) { margin-top: 0; }
 .vasta-doc ul:not(.vasta-ui *) { list-style: disc; padding-left: 1.4rem; }

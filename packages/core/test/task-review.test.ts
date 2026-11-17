@@ -5,7 +5,7 @@ import type { ObjectSummary } from '../src/model.ts'
 import { fieldKind, matchesFilter } from '../src/query.ts'
 import { quickActionEdit, quickActionMessage } from '../src/task-actions.ts'
 import { taskWorkflowQueues } from '../src/task-workflows.ts'
-import { dueForReview, holdAction, holdOptionOf, reviewEveryOf, reviewFieldOf, reviewedAction, reviewedByStatusChange, withReviewed } from '../src/task-review.ts'
+import { dueForReview, reviewEveryOf, reviewFieldOf, reviewedAction, reviewedByStatusChange, withReviewed } from '../src/task-review.ts'
 
 const AT = '2026-11-14T12:00:00.000Z'
 const types = createBuiltinTypes('s', AT)
@@ -14,12 +14,6 @@ const page = types.find((t) => t.system === 'page')!
 const context = { today: '2026-11-14', nextWeek: '2026-11-16', timeZone: 'UTC' }
 const day = (value: string): PropertyValue => ({ kind: 'date', value: { start: `${value}T00:00:00.000Z`, resolution: 'day' } })
 const reviewedOn = (value?: string): { props: Record<string, PropertyValue> } => ({ props: value ? { reviewed: day(value) } : {} })
-const withHold = (label: string, quickActions?: ObjectType['quickActions']): ObjectType => ({
-  ...task,
-  properties: task.properties.map((p) => (p.id === 'status' && p.kind === 'select' ? { ...p, options: [...p.options, { id: 'hold', label }] } : p)),
-  ...(quickActions ? { quickActions } : {}),
-})
-
 describe('review dates', () => {
   it('a task has Last reviewed; other types and a task without it have none', () => {
     expect(reviewFieldOf(task)?.name).toBe('Last reviewed')
@@ -29,12 +23,12 @@ describe('review dates', () => {
 
   it('come up again after a week unless the type says otherwise', () => {
     expect(reviewEveryOf(task)).toBe(7)
-    expect(reviewEveryOf({ ...task, quickActions: { reviewEvery: 14 } })).toBe(14)
-    expect(reviewEveryOf({ ...task, quickActions: { reviewEvery: -1 } })).toBe(7)
+    expect(reviewEveryOf({ ...task, review: { every: 14 } })).toBe(14)
+    expect(reviewEveryOf({ ...task, review: { every: -1 } })).toBe(7)
     expect(dueForReview(task, reviewedOn(), '2026-11-14')).toBe(true)
     expect(dueForReview(task, reviewedOn('2026-11-08'), '2026-11-14')).toBe(false)
     expect(dueForReview(task, reviewedOn('2026-11-07'), '2026-11-14')).toBe(true)
-    expect(dueForReview({ ...task, quickActions: { reviewEvery: 0 } }, reviewedOn('2026-11-14'), '2026-11-14')).toBe(true)
+    expect(dueForReview({ ...task, review: { every: 0 } }, reviewedOn('2026-11-14'), '2026-11-14')).toBe(true)
     // Without the date every open task is reviewed every time, as before.
     expect(dueForReview(page, reviewedOn('2026-11-14'), '2026-11-14')).toBe(true)
   })
@@ -80,20 +74,6 @@ describe('review dates', () => {
   })
 })
 
-describe('Hold', () => {
-  it('sets an "On hold" status, or the one the type names; none when there is neither or it says none', () => {
-    expect(holdAction(task)).toBeUndefined()
-    const hold = holdAction(withHold('On Hold'))!
-    expect(hold.name).toBe('On Hold')
-    expect(hold.changes).toEqual([{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['hold'] } } }])
-    expect(holdOptionOf(withHold('Someday'))).toBeUndefined()
-    expect(holdOptionOf(withHold('Someday', { holdStatus: 'hold' }))?.label).toBe('Someday')
-    expect(holdOptionOf(withHold('On hold', { holdStatus: 'none' }))).toBeUndefined()
-    // Never an option meaning done.
-    expect(holdOptionOf(withHold('On hold', { holdStatus: 'done' }))).toBeUndefined()
-  })
-})
-
 describe('the Due for review filter', () => {
   const summary = (type: ObjectType, reviewed?: string, status: string | null = 'todo') => ({ id: 'a', typeId: type.id, title: 'A', tagIds: [], collectionIds: [], props: { ...(reviewed ? { reviewed: day(reviewed) } : {}), ...(status ? { status: { kind: 'select', value: [status] } } : {}) } }) as unknown as ObjectSummary
   const due = { kind: 'filter' as const, field: 'reviewDue', operator: 'is-checked' as const }
@@ -104,9 +84,9 @@ describe('the Due for review filter', () => {
     expect(matches(task)).toBe(true)
     expect(matches(task, '2026-11-10')).toBe(false)
     expect(matches(task, '2026-11-07')).toBe(true)
-    const fortnight = { ...task, quickActions: { reviewEvery: 14 } }
+    const fortnight = { ...task, review: { every: 14 } }
     expect(matches(fortnight, '2026-11-07')).toBe(false)
-    expect(matches({ ...task, quickActions: { reviewEvery: 3 } }, '2026-11-10')).toBe(true)
+    expect(matches({ ...task, review: { every: 3 } }, '2026-11-10')).toBe(true)
     expect(matches(page)).toBe(false)
   })
 

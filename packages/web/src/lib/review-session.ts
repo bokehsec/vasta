@@ -1,23 +1,23 @@
 // A review (ProcessMode): a view's open objects one at a time, in an order fixed when it starts.
 // The session is ids and places only, never the objects' text: the review shows each object as it
 // is now, so a change made elsewhere (its page, an Undo) is what it shows. It lives on this device
-// (localStorage, one at a time), so closing the review, opening an object and coming back, or a
-// reload, all return to the same object; it belongs to one user and space and is never offered to
-// another. Each object counts once in the end's totals: its last outcome, taken off again by Undo.
+// (a device preference of this person, kept by use-review-session.ts), one paused session per type (a type is in
+// one space), so closing the review, opening an object and coming back, or a reload, all return to
+// the same object, and a review of one type never replaces another's. Each object counts once in
+// the end's totals: its last outcome, taken off again by Undo.
 import type { Id } from '@vasta/core'
 
-/** `tasks`: Review tasks, new ones first and then those due for a check-in; `triage` and `review` are older sessions of one queue each. */
-export type WorkflowKind = 'tasks' | 'triage' | 'review'
+/** `tasks`: Review tasks, the new ones first and then those due for a check-in; `review`: a view's open objects of any other type. */
+export type ReviewKind = 'tasks' | 'review'
 
 export interface ReviewSession {
   v: 1
-  userId: Id
   spaceId: Id
   typeId: Id
   viewId: string
   /** The view's name when it started, to say what is being reviewed. */
   viewName: string
-  /** The objects, in the view's order when it started. */
+  /** The objects, in the order it started with. */
   ids: Id[]
   /** The place: ids.length once past the last one (the end). */
   index: number
@@ -27,26 +27,24 @@ export interface ReviewSession {
   skipped: Id[]
   /** An object opened from the review: coming back to the list from it reopens the review there. */
   openedId?: Id
-  /** Optional for old saved sessions, which remain view-scoped reviews. */
-  kind?: WorkflowKind
-  scope?: 'space' | 'view'
-  scopeLabel?: string
-  fieldIds?: string[]
+  kind: ReviewKind
+  /** Where its check-ins came from: the view it started in, or the whole space ("Review all"). */
+  scope: 'space' | 'view'
+  /** What it covers, in words: the view's name and what narrowed it, or all tasks in the space. */
+  scopeLabel: string
   /** A `tasks` review: how many of the ids, at the start, were new when it began. */
   newCount?: number
-  /** Reading position and notes disclosure survive Pause and Open details. */
-  cards?: Record<Id, { scrollTop: number; notesOpen: boolean }>
+  /** Where each card was scrolled to: survives Pause and Open details. */
+  cards?: Record<Id, { scrollTop: number }>
 }
 
-export const REVIEW_KEY = 'vasta.review'
-
-export type ReviewScope = Pick<ReviewSession, 'userId' | 'spaceId' | 'typeId' | 'viewId' | 'viewName' | 'kind' | 'scope' | 'scopeLabel' | 'fieldIds' | 'newCount'>
+export type ReviewScope = Pick<ReviewSession, 'spaceId' | 'typeId' | 'viewId' | 'viewName' | 'kind' | 'scope' | 'scopeLabel' | 'newCount'>
 
 export function startSession(scope: ReviewScope, ids: readonly Id[]): ReviewSession {
   return { v: 1, ...scope, ids: [...ids], index: 0, outcomes: {}, skipped: [] }
 }
 
-export const workflowTitle = (session: ReviewSession) => session.kind === 'tasks' ? 'Review tasks' : session.kind === 'triage' ? 'Triage incoming' : session.scope === 'space' ? 'Review commitments' : 'Review this view'
+export const workflowTitle = (session: ReviewSession) => (session.kind === 'tasks' ? 'Review tasks' : 'Review this view')
 
 export const isFinished = (session: ReviewSession) => session.index >= session.ids.length
 export const currentId = (session: ReviewSession): Id | undefined => session.ids[session.index]
@@ -103,53 +101,26 @@ export function skippedSession(session: ReviewSession): ReviewSession {
   return startSession(newCount === undefined ? scope : { ...scope, newCount: ids.slice(0, newCount).filter((id) => skipped.has(id)).length }, left)
 }
 
-/** The stored review, if it is this user's in this space; another user's is forgotten. */
-export function readSession(userId: Id | undefined, spaceId: Id | undefined, storage: Pick<Storage, 'getItem' | 'removeItem'> | undefined = safeStorage()): ReviewSession | null {
-  if (!storage || !userId || !spaceId) return null
-  let session: ReviewSession | null = null
-  try {
-    session = JSON.parse(storage.getItem(REVIEW_KEY) ?? 'null') as ReviewSession | null
-  } catch {}
-  session = valid(session)
-  if (!session) return null
-  if (session.userId !== userId) {
-    try {
-      storage.removeItem(REVIEW_KEY)
-    } catch {}
-    return null
-  }
-  return session.spaceId === spaceId ? session : null
-}
-
-/** Keeps the review on this device, or forgets it (null). */
-export function writeSession(session: ReviewSession | null, storage: Pick<Storage, 'setItem' | 'removeItem'> | undefined = safeStorage()) {
-  try {
-    if (session) storage?.setItem(REVIEW_KEY, JSON.stringify(session))
-    else storage?.removeItem(REVIEW_KEY)
-  } catch {}
-}
+/** Where a type's paused review is kept (what belongs to the type first, so deleting it drops it). */
+export const sessionKey = (typeId: Id) => `type/${typeId}/review`
 
 /** A stored session as written, or null: anything missing or of another shape (an older version, damage) is not offered. */
-function valid(data: unknown): ReviewSession | null {
+export function validSession(data: unknown): ReviewSession | null {
   const s = data as Partial<ReviewSession> | null
   if (!s || typeof s !== 'object' || s.v !== 1) return null
   const strings = (list: unknown): list is string[] => Array.isArray(list) && list.every((x) => typeof x === 'string')
-  if (![s.userId, s.spaceId, s.typeId, s.viewId, s.viewName].every((x) => typeof x === 'string') || !strings(s.ids) || !strings(s.skipped)) return null
+  if (![s.spaceId, s.typeId, s.viewId, s.viewName, s.scopeLabel].every((x) => typeof x === 'string') || !strings(s.ids) || !strings(s.skipped)) return null
   if (typeof s.index !== 'number' || !Number.isInteger(s.index) || s.index < 0 || s.index > s.ids.length) return null
   if (!s.outcomes || typeof s.outcomes !== 'object' || Object.values(s.outcomes).some((x) => typeof x !== 'string')) return null
-  if (s.kind !== undefined && s.kind !== 'tasks' && s.kind !== 'triage' && s.kind !== 'review') return null
+  if (s.kind !== 'tasks' && s.kind !== 'review') return null
+  if (s.scope !== 'space' && s.scope !== 'view') return null
   if (s.newCount !== undefined && (!Number.isInteger(s.newCount) || s.newCount < 0 || s.newCount > s.ids.length)) return null
-  if (s.scope !== undefined && s.scope !== 'space' && s.scope !== 'view') return null
-  if (s.scopeLabel !== undefined && typeof s.scopeLabel !== 'string') return null
-  if (s.fieldIds !== undefined && !strings(s.fieldIds)) return null
-  if (s.cards !== undefined && (!s.cards || typeof s.cards !== 'object' || Object.values(s.cards).some((c) => !c || !Number.isFinite(c.scrollTop) || c.scrollTop < 0 || typeof c.notesOpen !== 'boolean'))) return null
-  return s as ReviewSession
-}
-
-function safeStorage(): Storage | undefined {
-  try {
-    return typeof localStorage === 'undefined' ? undefined : localStorage
-  } catch {
-    return undefined
+  if (s.cards !== undefined && (!s.cards || typeof s.cards !== 'object' || Object.values(s.cards).some((c) => !c || !Number.isFinite(c.scrollTop) || c.scrollTop < 0))) return null
+  // Only what the session is made of: what older builds also saved (fields, notes open) is let go.
+  return {
+    v: 1, spaceId: s.spaceId!, typeId: s.typeId!, viewId: s.viewId!, viewName: s.viewName!, ids: s.ids, index: s.index, outcomes: s.outcomes, skipped: s.skipped,
+    ...(typeof s.openedId === 'string' ? { openedId: s.openedId } : {}), kind: s.kind, scope: s.scope, scopeLabel: s.scopeLabel!,
+    ...(s.newCount !== undefined ? { newCount: s.newCount } : {}),
+    ...(s.cards ? { cards: Object.fromEntries(Object.entries(s.cards).map(([id, c]) => [id, { scrollTop: c.scrollTop }])) } : {}),
   }
 }

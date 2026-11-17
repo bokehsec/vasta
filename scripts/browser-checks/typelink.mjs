@@ -1,5 +1,5 @@
 // A link to a type of another space (/t/<id>) opens that space and shows the type's page, as a link
-// to an object of another space does.
+// to an object of another space does, without flashing "Type not found." while it loads.
 //   node typelink.mjs [chromium|webkit] [base]
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -33,11 +33,18 @@ const { types } = await get(`/api/spaces/${other.id}`)
 const target = types.find((t) => t.key === 'habit') ?? types.find((t) => t.key === 'task') ?? types[0]
 console.log(`• in ${current}, opening /t/${target.id} (${target.pluralName} of ${other.name})`)
 
+// While the other space's type loads the page says nothing, never "Type not found."
+await page.addInitScript(() => {
+  new MutationObserver(() => {
+    if (document.body?.innerText.includes('Type not found.')) window.__notFound = true
+  }).observe(document, { subtree: true, childList: true, characterData: true })
+})
 await page.goto(`${base}/t/${target.id}`)
 await page.getByRole('heading', { name: target.pluralName }).first().waitFor({ timeout: 15000 })
 const now = await page.evaluate(() => JSON.parse(localStorage.getItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)))))
 if (now !== other.id) throw new Error(`space not switched: ${now}`)
 console.log(`• ${target.pluralName} shown, space switched to ${other.name}`)
+if (await page.evaluate(() => window.__notFound)) throw new Error('"Type not found." flashed while the type loaded')
 if (problems.length) throw new Error(problems.join('\n'))
 await browser.close()
 console.log('ok')

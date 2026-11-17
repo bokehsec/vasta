@@ -46,8 +46,8 @@ describe('what a status means', () => {
 
   it('incoming is the type’s own list, else Inbox, else nothing', () => {
     expect(triageOptionsOf(task).map((o) => o.id)).toEqual(['in'])
-    expect(triageOptionsOf({ ...task, quickActions: { triageStatuses: ['next', 'done'] } }).map((o) => o.id)).toEqual(['next'])
-    expect(triageOptionsOf({ ...task, quickActions: { triageStatuses: [] } })).toEqual([])
+    expect(triageOptionsOf({ ...task, review: { incoming: ['next', 'done'] } }).map((o) => o.id)).toEqual(['next'])
+    expect(triageOptionsOf({ ...task, review: { incoming: [] } })).toEqual([])
     expect(triageOptionsOf(base)).toEqual([])
     expect(triageOptionsOf(page)).toEqual([])
   })

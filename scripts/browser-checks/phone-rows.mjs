@@ -278,7 +278,7 @@ try {
   await until(async () => (await page.locator('[data-quick-ask-sheet]').count()) === 0, 'the sheet closed')
   await swipe(W - 40, p.y, -50, 0, 3)
   await open.waitFor()
-  await tap(page.locator('main h1').first())
+  await tap(page.locator('main header'))
   await until(async () => (await open.count()) === 0, 'the open row closed')
 
   step('swipe left uncovers Done first and More; Done closes the task without opening it')
@@ -296,7 +296,7 @@ try {
   p = await centre(row(c))
   await swipe(W - 40, p.y, -200, 0)
   await open.waitFor()
-  await tap(page.locator('main h1').first())
+  await tap(page.locator('main header'))
   await until(async () => (await open.count()) === 0, 'the open row closed')
 
   step('a vertical move does not swipe')

@@ -45,16 +45,18 @@ rows and icon buttons, where controls are expected; never a way into a feature. 
 text (grey in a page, quiet in a menu), solid red only to confirm in the "Are you sure?" dialog.
 32px tall on a desktop, 44px and 15px text on a phone; size never tells kinds apart. Each has hover,
 pressed, disabled and keyboard-focus states. Settings' `primary`/`secondary` are Main and Grey.
-Review on the Tasks page is tinted while work waits and grey when it doesn't; a press starts the
-review of the current view, search and Mine (new tasks, then check-ins), the paused one says
-"Resume review 4 of 12". Inside a review, its header names the scope; a paused review keeps its
-original scope. On a phone it sits beside the view picker, with a removable Mine chip below. More offers
+Review on the Tasks page (`ReviewButton`) is tinted while work waits and grey when it doesn't; a press
+starts the review of every new task in the space, then the check-ins of the current view, search
+and Mine; the paused one (one per type, `lib/use-review-session.ts`) says "Resume 4 of 12" and, when
+it covers another scope than this view, which, with Review this view instead beside it. Inside a
+review, its header names the scope; a paused review keeps its original scope. On a phone it sits beside the view picker, with a removable Mine chip below. More offers
 "Review all tasks in Main" (using the space’s name) for a whole-space sweep. Metrics and Agenda explicitly say Review all.
 Inside a review, at most four buttons and never the status the task already
 has: Keep in that status is Main (the one highlighted; a new task has none), Defer…, Done and
-Drop are bordered, other statuses are underlined links, Decide later quiet. On a big screen they are
+Drop are Grey (`ReviewDecisionBar`), other statuses are underlined links, Decide later quiet. On a big screen they are
 centred under the task, the plan in a column beside it; on a phone a 2×2 tray at the bottom. Navigation (sidebar, tab bar, calendar grids), segmented controls,
-chips, menu rows and the whiteboard keep their own looks; they are not buttons of these kinds.
+chips, menu rows (`MenuRow`: icon, label, then a value, tick or caret; one look for every menu and
+sheet) and the whiteboard keep their own looks; they are not buttons of these kinds.
 
 **Bottom sheets** (`components/BottomSheet.vue`): every menu, picker, question and card that comes up
 from the bottom of a phone is this one component: a dimmed page that closes on a tap, a rounded
@@ -153,6 +155,17 @@ line "All subtasks done" with the type's first quick action as a button.
 **Row actions**: tasks have one leading completion circle. Rows open their object; their menu
 and quick actions operate on that object only. Lists and tables have no row multiselect or bulk
 action mode, on desktop or phone.
+The row's menu is one function (`lib/object-menu.ts`, `objectRowMenu`) for every list, table, board
+and query: Open, Copy link, Pin, the quick actions and steps while open, Move to trash; a place that
+cannot change anything (a whiteboard card) leaves the last two out. On a phone every row has a ⋯ for it.
+A collection (`ObjectCollection`) draws its layouts with `ObjectTable` and `ObjectRows` (the rows of a
+list, and of a table on a phone), cards, board or agenda; `FieldValue` shows a field in a cell or a row,
+`StepProgress` the "2/5" pill and `ShowMore` the end of a group drawn in part.
+
+**A type's page** is `TypePage` with its parts: `ViewSwitcher` (tabs, or a phone's view button),
+`ViewToolbar` (a desktop's search, Mine, Filter and arrange buttons) or `FiltersSheet` (a phone's),
+both driven by one model (`lib/view-toolbar.ts`) whose menus are `ArrangeMenus`; `ReviewButton` and
+the review (`lib/use-review-session.ts`); the views themselves are `lib/use-type-views.ts`.
 
 **Grouped collections**: `GroupHeading` uses the standard Quiet button and 13px Phosphor
 caret-down/right, beside the existing colour chip and full matching count. Plain group labels

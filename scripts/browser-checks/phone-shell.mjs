@@ -243,18 +243,19 @@ try {
   await summary.click()
   await page.locator('[data-fields]').waitFor()
 
-  step('320px wide: header and controls inside the screen, no sideways scroll, a long title wraps')
+  step('320px wide: header and controls inside the screen, no sideways scroll; the page is named once, by the top bar')
   await page.setViewportSize({ width: 320, height: 640 })
   await page.goto(`${base}/t/${taskType.id}`)
   await page.locator('[data-filters-button]').waitFor()
-  await page.evaluate(() => (document.querySelector('main h1').textContent = 'Extraordinarily Long Plural Names Wrapping'))
   await sleep(200)
   const edges = await page.evaluate(() =>
     ['main header button', '[data-view-picker]', '[data-filters-button]'].flatMap((q) => [...document.querySelectorAll(q)].map((el) => ({ q, ...el.getBoundingClientRect().toJSON() })))
   )
   for (const e of edges) if (e.x < 0 || e.x + e.width > 320 || e.height < 40) throw new Error(`clipped or small at 320px: ${JSON.stringify(e)}`)
+  // One page title on a phone: the top bar names it, so the page's own heading is there for screen readers only.
   const h1 = await page.locator('main h1').boundingBox()
-  if (h1.height < 40 || h1.x + h1.width > 320) throw new Error(`the title did not wrap: ${JSON.stringify(h1)}`)
+  if (h1.width > 2 || h1.height > 2) throw new Error(`the page heading shows on a phone: ${JSON.stringify(h1)}`)
+  if (!(await page.locator('nav[aria-label="Location"]').innerText()).includes(await page.locator('main h1').textContent())) throw new Error('the top bar does not name the page')
   if (await page.locator('main header span.text-ink-faint').isVisible()) throw new Error('the object count shows on a phone')
   const wide320 = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.querySelector('main').scrollWidth))
   if (wide320 > 320) throw new Error(`the page scrolls sideways at 320px: ${wide320}px`)

@@ -1,23 +1,24 @@
 <script setup lang="ts">
 // One focused session: Review tasks (new tasks first, then those due for a check-in), or a review
 // of one view. Everything about the task is on screen (its text in full, steps, the plan's fields,
-// editable in place) and so are its choices, few and never the status it already has
-// (reviewButtons): a task already placed has Keep in that status, highlighted (reviewed today, back
-// in `reviewEvery` days); a new task has Next, Defer…, Done and Drop, none highlighted. Other
-// statuses are links under them; Later records nothing and keeps it in the queue. On a big screen
-// the choices sit under the task, the plan beside it; on a phone they are a tray at the bottom.
+// editable in place) and so are its choices (ReviewDecisionBar: what is offered is
+// lib/review-choices.ts): few and never the status it already has; a task already placed has Keep
+// in that status (reviewed today, back in `review.every` days); a new task has Next, Defer…, Done
+// and Drop. Decide later records nothing and keeps it in the queue. On a big screen the choices sit
+// under the task, the plan beside it; on a phone they are a tray at the bottom.
 // The queue is stable, with Undo, explicit save, and the reading position kept across interruptions.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Doc, ObjectSummary, ObjectType, PropertyDef, PropertyValue, QuickActionDef, SelectOption } from '@vasta/core'
-import { STATUS_PROPERTY_ID, askOf, daysBetween, deferActionOf, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, quickActionsOf, reviewButtons, reviewEveryOf, reviewedAction, settlesTriage, statusProperty, taskDatesOf, withReviewed, type ReviewButton } from '@vasta/core'
+import { STATUS_PROPERTY_ID, askOf, daysBetween, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, reviewEveryOf, settlesTriage, taskDatesOf, withReviewed } from '@vasta/core'
 import { addSelectOption, dayKey } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
-import { greyButton, mainButton } from '../lib/buttons.ts'
+import { greyButton, mainButton, quietButton } from '../lib/buttons.ts'
 import type { ListField } from '../lib/columns.ts'
 import { onChange } from '../lib/events.ts'
 import { displayTitle, formatDateShort } from '../lib/format.ts'
 import { contextMenu } from '../lib/overlays.ts'
 import { quickAsk, runQuickAction, type QuickSave } from '../lib/quick-actions.ts'
+import { reviewDecisions } from '../lib/review-choices.ts'
 import { currentId, isFinished, moveBy, recordOutcome, skipCurrent, skippedSession, summarize, undoOutcome, workflowTitle, type ReviewSession } from '../lib/review-session.ts'
 import { lastError, ui } from '../lib/state.ts'
 import { addSubtask, subtasksOf } from '../lib/subtasks.ts'
@@ -28,6 +29,7 @@ import AppIcon from './AppIcon.vue'
 import DocPreview from './DocPreview.ts'
 import PropertyDisplay from './PropertyDisplay.vue'
 import PropertyValueEditor from './PropertyValueEditor.vue'
+import ReviewDecisionBar from './ReviewDecisionBar.vue'
 
 /** `undone`: Undo of a decision, which may come from the notice after the review has closed. */
 const props = defineProps<{ type: ObjectType; objects: ObjectSummary[]; fields: ListField[]; session: ReviewSession; save: QuickSave; undone: (id: string, name: string) => void }>()
@@ -66,7 +68,7 @@ const title = computed(() => workflowTitle(props.session))
 const noun = computed(() => props.type.name.toLowerCase())
 
 /** This one is new (no status, or an incoming one): it needs a place, so there is no Keep. */
-const isNew = computed(() => props.session.kind === 'triage' || (props.session.kind === 'tasks' && !!current.value && needsTriage(props.type, current.value)))
+const isNew = computed(() => props.session.kind === 'tasks' && !!current.value && needsTriage(props.type, current.value))
 
 // Where it is: a Review tasks session counts its new tasks and its check-ins apart.
 const newCount = computed(() => props.session.kind === 'tasks' ? Math.min(props.session.newCount ?? 0, total.value) : 0)
@@ -83,46 +85,11 @@ const position = computed(() => {
   return index.value < newCount.value ? `New ${index.value + 1} of ${newCount.value}` : `Check-in ${index.value - newCount.value + 1} of ${total.value - newCount.value}`
 })
 
-// The choices. A task type: its review buttons and links (reviewButtons), then any other quick
-// actions of its own as links. Another type (a view's review): its quick actions as the buttons.
-const actions = computed(() => quickActionsOf(props.type))
-const status = computed(() => statusProperty(props.type))
-const currentStatus = computed<SelectOption | undefined>(() => {
-  const value = status.value && current.value ? current.value.props[status.value.id] : undefined
-  const id = value?.kind === 'select' ? value.value[0] : undefined
-  return id ? status.value?.options.find((o) => o.id === id) : undefined
-})
-const buttons = computed(() => reviewButtons(props.type, currentStatus.value?.id, isNew.value))
+// The choices (lib/review-choices.ts), which the plan beside the task shapes: it edits the next step itself.
 const nextStepField = computed(() => nextStepFieldOf(props.type))
-const extras = computed(() => {
-  const covered = new Set(buttons.value.covered)
-  return actions.value.filter((a) => !covered.has(a.id) && !(askOf(props.type, a)?.def.id === nextStepField.value?.id && plan.value.some((d) => d.id === nextStepField.value?.id)))
-})
-const asButton = (action: QuickActionDef): ReviewButton => ({ role: 'move', label: action.name, action })
-/** The main row (after Keep) and the links under it. */
-const mainButtons = computed(() => buttons.value.main.length ? buttons.value.main : extras.value.map(asButton))
-const links = computed(() => buttons.value.main.length ? [...buttons.value.more, ...extras.value.map(asButton)] : [])
-const reviewed = computed(() => (isNew.value ? undefined : reviewedAction(props.type)))
-const label = (button: ReviewButton) => (askOf(props.type, button.action) ? `${button.label}…` : button.label)
-const icon = (button: ReviewButton) => button.role === 'defer' ? 'ph:calendar-blank' : button.role === 'done' ? 'ph:check-circle' : button.role === 'drop' ? 'ph:x-circle' : button.action.icon?.value ?? 'ph:arrow-right'
-const tone = (button: ReviewButton) => button.role === 'done' ? 'text-[var(--color-flow-done)]' : button.role === 'drop' ? 'text-red-600 dark:text-red-400' : ''
-// Keys: K (or R) keeps; the main buttons by letter (F defer, D done, X drop, a new task's first
-// status by its initial); the links 1–9.
-const keys = computed(() => {
-  const map = new Map<string, ReviewButton>()
-  for (const button of mainButtons.value) {
-    const key = button.role === 'defer' ? 'f' : button.role === 'done' ? 'd' : button.role === 'drop' ? 'x' : button.label.trim()[0]?.toLowerCase()
-    if (key && !'kr'.includes(key) && !map.has(key)) map.set(key, button)
-  }
-  links.value.slice(0, 9).forEach((button, i) => map.set(String(i + 1), button))
-  return map
-})
-const keyOf = (button: ReviewButton) => [...keys.value].find(([, b]) => b === button)?.[0]?.toUpperCase() ?? ''
-const rightAction = computed(() => deferActionOf(props.type))
+const choices = computed(() => reviewDecisions(props.type, current.value, { isNew: isNew.value, planFieldIds: plan.value.map((d) => d.id) }))
 const every = computed(() => reviewEveryOf(props.type))
-const keepLabel = computed(() => outcome.value ? `Next ${noun.value}` : currentStatus.value ? `Keep in ${currentStatus.value.label}` : 'Keep as it is')
-const keepHint = computed(() => outcome.value ? 'Decided. Go on to the next one.' : every.value ? `Marks it reviewed today. It comes back in ${every.value} ${every.value === 1 ? 'day' : 'days'}.` : 'Marks it reviewed today.')
-const laterHint = 'Not reviewed; it stays in the queue.'
+const currentStatus = computed(() => choices.value.currentStatus)
 
 // What it is: new or a check-in, when it was last reviewed, when it was added.
 const meta = computed(() => {
@@ -134,7 +101,7 @@ const meta = computed(() => {
   const last = lastReviewedDay(props.type, object)
   const ago = last ? daysBetween(last, dayKey()) : undefined
   const reviewedText = ago === undefined ? 'never reviewed' : ago <= 0 ? 'reviewed today' : ago === 1 ? 'reviewed yesterday' : `reviewed ${ago} days ago`
-  return { kind: props.session.kind === 'tasks' || props.session.kind === 'review' ? 'Check-in' : '', detail: [reviewedText, added].join(' · ') }
+  return { kind: 'Check-in', detail: [reviewedText, added].join(' · ') }
 })
 
 // The plan now: a task's status, dates, priority, project, next step and assignee (each editable but
@@ -147,7 +114,7 @@ const plan = computed<PropertyDef[]>(() => {
   return ids.flatMap((id) => props.type.properties.find((p) => p.id === id && p.kind !== 'rich-text') ?? [])
     .filter((d) => d.id !== 'assignee' || current.value?.props[d.id])
 })
-const editable = (def: PropertyDef) => def.kind !== 'formula' && !(def.id === STATUS_PROPERTY_ID && buttons.value.main.length)
+const editable = (def: PropertyDef) => def.kind !== 'formula' && !(def.id === STATUS_PROPERTY_ID && choices.value.hasButtons)
 async function setField(def: PropertyDef, value: PropertyValue | undefined) {
   const object = current.value
   if (!object) return
@@ -274,7 +241,7 @@ let wasInert = false
 const blocked = computed(() => busy.value || addingStep.value)
 function rememberCard() {
   const id = currentObjectId.value
-  if (id && card.value) update((s) => ({ ...s, cards: { ...s.cards, [id]: { scrollTop: card.value!.scrollTop, notesOpen: true } } }))
+  if (id && card.value) update((s) => ({ ...s, cards: { ...s.cards, [id]: { scrollTop: card.value!.scrollTop } } }))
 }
 function pause() {
   if (blocked.value) return
@@ -300,11 +267,11 @@ watch(shownTexts, async () => {
   const id = currentObjectId.value
   if (card.value && id && props.session.cards?.[id]) card.value.scrollTop = props.session.cards[id]!.scrollTop
 })
-const keepButton = ref<HTMLButtonElement | null>(null)
+const keepButton = () => panel.value?.querySelector<HTMLElement>('[data-process-reviewed]') ?? null
 watch(() => !!quickAsk.value || contextMenu.open, async (overlay) => {
   if (overlay) return
   await nextTick()
-  if (document.activeElement === document.body) (keepButton.value ?? panel.value)?.focus({ preventScroll: true })
+  if (document.activeElement === document.body) (keepButton() ?? panel.value)?.focus({ preventScroll: true })
 })
 onMounted(() => {
   opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -337,15 +304,15 @@ function onKey(event: KeyboardEvent) {
   if (typing) return
   // Enter/Space on a button belongs to that button, not to the session shortcuts.
   if ((event.target as Element | null)?.closest('button, a') && (event.key === 'Enter' || event.key === ' ')) return
-  if (/^[kKrR]$/.test(event.key) && reviewed.value && !done.value) {
+  if (/^[kKrR]$/.test(event.key) && choices.value.reviewed && !done.value) {
     event.preventDefault()
-    void act(reviewed.value, keepButton.value)
+    void act(choices.value.reviewed, keepButton())
     return
   }
-  const button = keys.value.get(event.key.toLowerCase())
+  const button = choices.value.keys.get(event.key.toLowerCase())
   if (button && !done.value) {
     event.preventDefault()
-    void act(button.action, panel.value?.querySelector<HTMLElement>(`[data-key="${keyOf(button)}"]`) ?? null)
+    void act(button.action, panel.value?.querySelector<HTMLElement>(`[data-key="${choices.value.keyOf(button)}"]`) ?? null)
   } else if (event.key === 'ArrowRight' || event.key === ' ') {
     event.preventDefault()
     skip()
@@ -404,12 +371,13 @@ function onTouchEnd() {
   springing.value = end === 0 && dx !== 0 && !reducedMotion
   shift.value = 0
   touch = undefined
-  if (end > 0 && rightAction.value) void act(rightAction.value, null)
+  if (end > 0 && choices.value.defer) void act(choices.value.defer, null)
   else if (end < 0) skip()
 }
 
 // The buttons are at the bottom, where notices show: the notice (Undo) sits just above them instead.
-const buttonBlock = ref<HTMLElement | null>(null)
+const bar = ref<InstanceType<typeof ReviewDecisionBar> | null>(null)
+const buttonBlock = computed(() => (bar.value?.$el as HTMLElement | undefined) ?? null)
 let blockSize: ResizeObserver | undefined
 function liftNotices() {
   ui.noticeLift = buttonBlock.value ? Math.max(0, Math.round(window.innerHeight - buttonBlock.value.getBoundingClientRect().top)) : 0
@@ -427,10 +395,6 @@ onBeforeUnmount(() => {
 const summary = computed(() => summarize(props.session))
 const wide = computed(() => !isPhone.value)
 const sectionName = 'text-xs font-semibold text-ink-faint'
-const choiceButton = 'flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 text-[15px] hover:bg-hover active:bg-line disabled:opacity-50'
-const quiet = 'flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm text-ink-soft hover:bg-hover hover:text-ink disabled:opacity-40'
-const link = 'min-h-11 rounded-md px-1.5 text-sm text-ink underline decoration-line-strong underline-offset-[3px] hover:bg-hover hover:decoration-ink-soft disabled:opacity-40'
-const kbd = 'rounded border border-line-strong px-1.5 py-0.5 text-[11px] leading-none text-ink-faint'
 </script>
 
 <template>
@@ -450,11 +414,11 @@ const kbd = 'rounded border border-line-strong px-1.5 py-0.5 text-[11px] leading
         <header class="shrink-0 border-b border-line px-4 pb-3 pt-3 md:px-6">
           <div class="flex items-center gap-2">
             <button v-if="isPhone && !done" class="-ml-2 grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg text-ink-soft hover:bg-hover disabled:opacity-40" :disabled="index === 0 || blocked" aria-label="Back to the previous task" data-process-back @click="move(-1)"><AppIcon fallback="ph:caret-left" :size="18" /></button>
-            <h2 class="min-w-0 flex-1 truncate font-semibold" data-process-heading>{{ title }}<span class="font-normal text-ink-soft max-md:hidden"> · {{ session.scopeLabel ?? session.viewName }}</span></h2>
+            <h2 class="min-w-0 flex-1 truncate font-semibold" data-process-heading>{{ title }}<span class="font-normal text-ink-soft max-md:hidden"> · {{ session.scopeLabel }}</span></h2>
             <span class="text-sm tabular-nums text-ink-soft" aria-live="polite" data-process-position>{{ saving ? 'Saving…' : position }}</span>
             <button class="-mr-2 min-h-11 shrink-0 rounded-lg px-3 text-sm text-ink-soft hover:bg-hover disabled:opacity-50" :disabled="blocked" :aria-label="`Pause ${title.toLowerCase()} (resume later)`" data-process-close @click="pause">{{ done ? 'Close' : 'Pause' }}</button>
           </div>
-          <p class="mt-1 break-words text-xs text-ink-soft md:hidden" data-process-scope>{{ session.scopeLabel ?? session.viewName }}</p>
+          <p class="mt-1 break-words text-xs text-ink-soft md:hidden" data-process-scope>{{ session.scopeLabel }}</p>
           <div class="mt-2 flex items-center gap-1.5" aria-hidden="true">
             <template v-for="part in parts" :key="part.label">
               <span v-if="part.label && wide" class="whitespace-nowrap pr-1 text-xs tabular-nums text-ink-soft">{{ part.label }} {{ part.at }}/{{ part.size }}</span>
@@ -494,7 +458,7 @@ const kbd = 'rounded border border-line-strong px-1.5 py-0.5 text-[11px] leading
               @touchend="onTouchEnd"
               @touchcancel="onTouchCancel"
             >
-              <p v-if="missing" class="text-sm text-ink-soft" data-process-missing>This {{ noun }} is no longer here (deleted or moved since the review started). Choose Later to go on.</p>
+              <p v-if="missing" class="text-sm text-ink-soft" data-process-missing>This {{ noun }} is no longer here (deleted or moved since the review started). Choose Decide later to go on.</p>
               <template v-else-if="current">
                 <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-soft md:text-sm" data-process-meta>
                   <span v-if="meta.kind" class="rounded-md px-1.5 py-0.5 font-semibold" :class="isNew ? 'bg-accent/12 text-accent' : 'bg-hover text-ink'">{{ meta.kind }}</span>
@@ -546,39 +510,13 @@ const kbd = 'rounded border border-line-strong px-1.5 py-0.5 text-[11px] leading
                 </form>
 
                 <div class="mt-4 flex flex-wrap gap-x-2" :class="isPhone ? '-ml-2' : 'md:hidden'">
-                  <button :class="quiet" :disabled="blocked" data-process-open @click="open()"><AppIcon fallback="ph:arrow-square-out" :size="16" />Open page</button>
-                  <button v-if="canBreakDown && !breakingDown" :class="quiet" :disabled="blocked" data-process-break @click="startBreakDown"><AppIcon fallback="ph:tree-structure" :size="16" />Break into steps</button>
+                  <button :class="quietButton" :disabled="blocked" data-process-open @click="open()"><AppIcon fallback="ph:arrow-square-out" :size="16" />Open page</button>
+                  <button v-if="canBreakDown && !breakingDown" :class="quietButton" :disabled="blocked" data-process-break @click="startBreakDown"><AppIcon fallback="ph:tree-structure" :size="16" />Break into steps</button>
                 </div>
               </template>
             </div>
 
-            <!-- The decision, under the task: Keep (highlighted: the status it has), the main
-                 buttons, then the other statuses as links; Back and Decide later at the ends. A
-                 phone has them as a tray at the bottom, Back in the header. -->
-            <div ref="buttonBlock" class="shrink-0 border-t border-line bg-surface px-3.5 pt-2.5 md:px-6 md:pt-3.5" :class="isPhone ? 'pb-1' : 'pb-2'" data-process-choices>
-              <template v-if="current">
-                <div :class="isPhone ? 'grid grid-cols-2 gap-2' : 'flex flex-wrap justify-center gap-2'">
-                  <button v-if="reviewed" ref="keepButton" :class="[mainButton, 'min-h-11 min-w-0 px-4 text-[15px]', isPhone ? 'min-h-12' : '']" :disabled="blocked" :title="keepHint" data-process-reviewed @click="act(reviewed, $event.currentTarget as HTMLElement)">
-                    <AppIcon fallback="ph:check" :size="18" class="shrink-0" /><span class="truncate">{{ keepLabel }}</span><kbd v-if="wide && !outcome" class="ml-1 rounded border border-surface/35 px-1.5 py-0.5 text-[11px] leading-none text-surface/75">K</kbd>
-                  </button>
-                  <button v-for="button in mainButtons" :key="button.action.id" :class="[choiceButton, isPhone ? 'min-h-12' : '']" :disabled="blocked" :data-key="keyOf(button)" :data-process-choice="button.option?.id ?? button.role" :data-process-role="button.role" :data-process-action="button.option ? undefined : button.action.id" @click="act(button.action, $event.currentTarget as HTMLElement)">
-                    <AppIcon :icon="button.option ? undefined : button.action.icon" :fallback="icon(button)" :size="18" class="shrink-0" :class="tone(button)" /><span class="truncate">{{ label(button) }}</span><kbd v-if="wide && keyOf(button)" :class="[kbd, 'ml-1']">{{ keyOf(button) }}</kbd>
-                  </button>
-                </div>
-              </template>
-              <div class="mt-1 flex items-center gap-2" :class="wide ? 'grid grid-cols-[1fr_auto_1fr]' : 'justify-between'">
-                <button v-if="wide" :class="[quiet, 'justify-self-start']" :disabled="index === 0 || blocked" data-process-back @click="move(-1)"><AppIcon fallback="ph:caret-left" :size="14" />Back</button>
-                <p v-if="current && links.length" class="flex min-w-0 flex-wrap items-center text-sm text-ink-soft" :class="wide ? 'justify-center' : ''" data-process-links>
-                  <span class="pr-0.5">{{ buttons.main.length ? 'Move to' : 'Or' }}</span>
-                  <template v-for="(button, i) in links" :key="button.action.id">
-                    <span v-if="i" aria-hidden="true">·</span>
-                    <button :class="link" :disabled="blocked" :data-key="keyOf(button)" :title="wide && keyOf(button) ? `Key ${keyOf(button)}` : undefined" :data-process-choice="button.option?.id" :data-process-action="button.option ? undefined : button.action.id" @click="act(button.action, $event.currentTarget as HTMLElement)">{{ label(button) }}</button>
-                  </template>
-                </p>
-                <span v-else />
-                <button :class="[quiet, 'justify-self-end font-medium text-ink']" :disabled="blocked" :title="outcome ? undefined : laterHint" data-process-skip @click="skip">{{ outcome ? 'Next' : wide ? 'Decide later' : 'Later' }}<AppIcon fallback="ph:caret-right" :size="14" /></button>
-              </div>
-            </div>
+            <ReviewDecisionBar ref="bar" :type="type" :choices="choices" :active="!!current" :blocked="blocked" :outcome="outcome" :noun="noun" :every="every" :at-first="index === 0" :wide="wide" @act="act" @skip="skip" @back="move(-1)" />
           </div>
 
           <!-- A wide screen: the plan beside the task. -->
@@ -593,8 +531,8 @@ const kbd = 'rounded border border-line-strong px-1.5 py-0.5 text-[11px] leading
                 </div>
               </div>
               <div class="mt-3 flex flex-col items-start">
-                <button :class="quiet" :disabled="blocked" data-process-open @click="open()"><AppIcon fallback="ph:arrow-square-out" :size="16" />Open the full page</button>
-                <button v-if="canBreakDown && !breakingDown" :class="quiet" :disabled="blocked" data-process-break @click="startBreakDown"><AppIcon fallback="ph:tree-structure" :size="16" />Break into steps</button>
+                <button :class="quietButton" :disabled="blocked" data-process-open @click="open()"><AppIcon fallback="ph:arrow-square-out" :size="16" />Open the full page</button>
+                <button v-if="canBreakDown && !breakingDown" :class="quietButton" :disabled="blocked" data-process-break @click="startBreakDown"><AppIcon fallback="ph:tree-structure" :size="16" />Break into steps</button>
               </div>
             </template>
           </aside>

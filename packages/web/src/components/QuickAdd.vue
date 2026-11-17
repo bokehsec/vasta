@@ -187,8 +187,8 @@ onMounted(() => titleInput.value?.focus())
       <span class="flex-1" />
       <span class="text-xs text-ink-faint max-lg:hidden">↵ add · ⌘↵ add and open</span>
       <button v-if="!isPhone" type="button" :class="greyButton" @click="emit('close')">Cancel</button>
-      <button type="button" :class="greyButton" :disabled="!canAdd" title="Add and open (⌘↩)" data-quick-add-open @click="add(true)">
-        <AppIcon fallback="ph:arrows-out-simple" :size="14" />Open
+      <button type="button" :class="greyButton" :disabled="!canAdd" title="Add and open (⌘↩)" aria-label="Open" data-quick-add-open @click="add(true)">
+        <AppIcon fallback="ph:arrows-out-simple" :size="14" /><span class="max-md:hidden">Open</span>
       </button>
       <button type="button" :class="mainButton" class="max-md:min-w-28" :disabled="!canAdd" data-quick-add-save @click="add(false)">Add {{ typeName }}</button>
     </div>

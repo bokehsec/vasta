@@ -1,10 +1,12 @@
 // Task workflows use status to distinguish incoming work from commitments. Review recency and
 // a next-step edit never hide an unresolved incoming task. Saved views are independent of this.
+// A Review of tasks always starts with every new task in the space, then the check-ins of the
+// place it was started from (a view, or the whole space).
 import { STATUS_PROPERTY_ID } from './builtin-types.ts'
 import type { ObjectRecord, ObjectType, QuickActionDef, SelectOption } from './model.ts'
-import { askOf, deferActionOf, quickActionsOf } from './task-actions.ts'
+import { deferActionOf, quickActionsOf } from './task-actions.ts'
 import { needsTriage, triageOptionsOf } from './task-status.ts'
-import { holdAction, isCheckInDue } from './task-review.ts'
+import { isCheckInDue } from './task-review.ts'
 import { statusProperty } from './metrics.ts'
 
 /** Sister queues within the supplied tasks: incoming work, then commitments due for review. */
@@ -19,6 +21,16 @@ export function taskWorkflowQueues<T extends Pick<ObjectRecord, 'props'>>(type: 
   return { triage, review }
 }
 
+/**
+ * What a Review of tasks goes through: the new tasks of the whole space (`space`, oldest first),
+ * then the check-ins due among `place`'s tasks, in its order (the view it started from; the space
+ * itself for a sweep of all). Counts are these lists' lengths.
+ */
+export function reviewQueues<T extends Pick<ObjectRecord, 'props' | 'createdAt' | 'id'>>(type: ObjectType | undefined, space: readonly T[], place: readonly T[], today: string): { incoming: T[]; checkIns: T[] } {
+  const oldestFirst = [...space].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+  return { incoming: taskWorkflowQueues(type, oldestFirst, today).triage, checkIns: taskWorkflowQueues(type, place, today).review }
+}
+
 /** A decision explicitly places/closes the task. Dates or notes alone leave triage unfinished. */
 export function settlesTriage(type: ObjectType, action: QuickActionDef): boolean {
   const status = statusProperty(type)
@@ -27,25 +39,6 @@ export function settlesTriage(type: ObjectType, action: QuickActionDef): boolean
   if (change?.value.kind !== 'value' || change.value.value.kind !== 'select') return false
   const object = { props: { [status.id]: change.value.value } }
   return !needsTriage(type, object)
-}
-
-/** Existing status choices, never invented states. Incoming statuses are not dispositions. */
-export function triageDispositionActions(type: ObjectType): QuickActionDef[] {
-  const incoming = new Set(triageOptionsOf(type).map((o) => o.id))
-  const status = statusProperty(type)
-  if (!status || status.id !== STATUS_PROPERTY_ID) return []
-  const actions = quickActionsOf(type)
-  return status.options.filter((o) => !incoming.has(o.id)).map((o) => {
-    // A scheduled disposition uses the configured date question as well as its status. Choosing
-    // Scheduled must not bypass the date/other changes already defined by Defer or a custom action.
-    const schedule = actions.find((a) => askOf(type, a)?.def.kind === 'date' && a.changes.some((c) => c.field === status.id && c.value.kind === 'value' && c.value.value.kind === 'select' && c.value.value.value.length === 1 && c.value.value.value[0] === o.id))
-    return schedule ?? {
-    id: `triage-status:${o.id}`,
-    name: o.label,
-    icon: { kind: 'icon', value: o.status === 'done' ? 'ph:check-circle' : 'ph:arrow-right' },
-    changes: [{ field: status.id, value: { kind: 'value', value: { kind: 'select', value: [o.id] } } }],
-    }
-  })
 }
 
 /** One of a review's choices: a status a task can be placed in, and the action that places it. */
@@ -57,7 +50,7 @@ export interface ReviewChoice {
 /**
  * The statuses a review offers as buttons: each one that is not incoming, the open ones first and
  * those that close the task last, in the status's own order. A status reuses an action already set
- * up to place a task there and nothing else (Defer's date question, Mark done, Hold), so choosing
+ * up to place a task there and nothing else (Defer's date question, Mark done), so choosing
  * Scheduled still asks for its date; any other status gets a plain one. The action is named after
  * the status, which is what the review's totals count. None for a type without the built-in status.
  */
@@ -66,8 +59,7 @@ export function reviewChoices(type: ObjectType | undefined): ReviewChoice[] {
   const status = statusProperty(type)
   if (!status || status.id !== STATUS_PROPERTY_ID) return []
   const incoming = new Set(triageOptionsOf(type).map((o) => o.id))
-  const hold = holdAction(type)
-  const actions = [...quickActionsOf(type), ...(hold ? [hold] : [])]
+  const actions = quickActionsOf(type)
   const places = (action: QuickActionDef, option: SelectOption) => {
     const change = action.changes.findLast((c) => c.field === status.id)
     const sets = change?.value.kind === 'value' && change.value.value.kind === 'select' && change.value.value.value.length === 1 && change.value.value.value[0] === option.id

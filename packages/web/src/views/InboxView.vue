@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Inbox: everything captured into the daily notes of the last days (Telegram, Shortcuts, the
-// browser extension…), newest first and grouped by day. Marking an item reviewed (or the user's word
-// for it, lib/inbox.ts) hides it here and checks it in its daily note; "Show reviewed" brings it back.
+// browser extension…), newest first and grouped by day. Clearing an item (or the user's word
+// for it, lib/inbox.ts) hides it here and checks it in its daily note; "Show cleared" brings it back.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { addDays } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
@@ -70,7 +70,7 @@ async function setDone(item: InboxItem, done: boolean, undoable = true) {
   item.done = done
   try {
     await api.setCaptureDone(item.noteId, item.id, done)
-    if (done && undoable) notice.value = { message: `Marked ${reviewed.value.lower}`, action: { label: 'Undo', run: () => setDone(item, false, false) } }
+    if (done && undoable) notice.value = { message: reviewed.value.marked, action: { label: 'Undo', run: () => setDone(item, false, false) } }
   } catch (error) {
     item.done = !done
     lastError.value = (error as Error).message
@@ -83,8 +83,8 @@ function itemMenu(event: MouseEvent, item: InboxItem) {
   openContextMenu(event, [
     { label: 'Open capture source', icon: 'ph:arrow-square-out', run: () => openInNote(item) },
     item.done
-      ? { label: `Mark not ${reviewed.value.lower}`, icon: 'ph:circle', run: () => setDone(item, false) }
-      : { label: `Mark ${reviewed.value.lower}`, icon: 'ph:check-circle', run: () => setDone(item, true) },
+      ? { label: reviewed.value.unmark, icon: 'ph:circle', run: () => setDone(item, false) }
+      : { label: reviewed.value.mark, icon: 'ph:check-circle', run: () => setDone(item, true) },
   ])
 }
 
@@ -129,7 +129,7 @@ async function showOlder() {
         >
           <button
             class="-ml-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-faint hover:bg-hover hover:text-ink max-md:h-10 max-md:w-10"
-            :title="item.done ? `Mark not ${reviewed.lower}` : `Mark ${reviewed.lower}`"
+            :title="item.done ? reviewed.unmark : reviewed.mark"
             @click="setDone(item, !item.done)"
           >
             <AppIcon :fallback="item.done ? 'ph:check-circle-fill' : 'ph:circle'" :size="20" :class="item.done ? 'text-green-600' : ''" />

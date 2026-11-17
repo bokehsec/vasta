@@ -76,7 +76,7 @@ function endDrag() {
       <AppIcon :fallback="column.icon" :size="14" class="shrink-0 text-ink-soft" />
       <span class="min-w-0 flex-1 truncate" :class="column.hidden ? 'text-ink-faint' : ''">{{ column.label }}</span>
       <button
-        class="rounded p-1"
+        class="rounded p-1 max-md:grid max-md:min-h-11 max-md:min-w-11 max-md:place-items-center"
         :class="column.wrap ? 'text-accent' : 'text-ink-faint hover:text-ink'"
         :title="column.wrap ? 'Long values wrap' : 'Long values on one line'"
         @click="change(column.field, { wrap: !column.wrap })"
@@ -85,18 +85,18 @@ function endDrag() {
       </button>
       <button
         v-if="index"
-        class="rounded p-1"
+        class="rounded p-1 max-md:grid max-md:min-h-11 max-md:min-w-11 max-md:place-items-center"
         :class="column.hidden ? 'text-ink-faint hover:text-ink' : 'text-ink-soft hover:text-ink'"
         :title="column.hidden ? 'Show column' : 'Hide column'"
         @click="change(column.field, { hidden: !column.hidden })"
       >
         <AppIcon :fallback="column.hidden ? 'ph:eye-slash' : 'ph:eye'" :size="14" />
       </button>
-      <span v-else class="w-[22px]" />
+      <span v-else class="w-[22px] max-md:w-11" />
     </div>
     <button
       v-if="table"
-      class="mt-1 rounded-lg px-2 py-1.5 text-left text-xs text-ink-faint hover:bg-hover hover:text-ink"
+      class="mt-1 rounded-lg px-2 py-1.5 text-left text-xs text-ink-faint hover:bg-hover hover:text-ink max-md:min-h-11"
       @click="emit('update', undefined)"
     >
       Reset columns
