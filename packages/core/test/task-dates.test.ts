@@ -75,6 +75,23 @@ describe('the migration giving task dates their roles (2026-11-16)', () => {
     expect(deferActionOf(plain)?.changes).toEqual([{ field: 'work', value: { kind: 'ask' } }])
   })
 
+  it("turns a type's own Defer that asked for the deadline into one that asks for the plan", () => {
+    const own = [
+      { id: 'done', name: 'Mark done', changes: [{ field: 'status', value: status('done') }] },
+      { id: 'defer', name: 'Defer', changes: [{ field: 'due', value: { kind: 'ask' as const } }] },
+      { id: 'deadline', name: 'Move deadline', changes: [{ field: 'due', value: { kind: 'ask' as const } }] },
+    ]
+    const { type } = run(legacy({ actions: own, nextStepField: 'next' }))
+    const actions = quickActionsOf(type)
+    expect(actions.find((a) => a.id === 'defer')?.changes).toEqual([{ field: 'work', value: { kind: 'ask' } }])
+    // Only Defer: an action of the type's own that asks for the deadline keeps doing so.
+    expect(actions.find((a) => a.id === 'deadline')?.changes).toEqual([{ field: 'due', value: { kind: 'ask' } }])
+    expect(actions.find((a) => a.id === 'done')?.changes).toEqual(own[0].changes)
+    // A type without a plan date gets one, and its Defer asks for it.
+    const none = run(legacy({ actions: own }, (p) => p.filter((x) => x.id !== 'work'))).type
+    expect(quickActionsOf(none).find((a) => a.id === 'defer')?.changes).toEqual([{ field: 'dodate', value: { kind: 'ask' } }])
+  })
+
   it('adds a Do date plan after Due to a type that has none, or takes the one called that', () => {
     const none = run(legacy({}, (p) => p.filter((x) => x.id !== 'work')))
     expect(none.type.properties.map((p) => p.id).slice(0, 4)).toContain('dodate')

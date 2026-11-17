@@ -224,6 +224,13 @@ function addTaskDateRoles(store: Store, spaceId: Id, at: IsoDateTime) {
         return action
       })
     }
+    // Defer plans the work and keeps the deadline: a type's own Defer that asked for its deadline asks
+    // for the plan date instead (the plan is found above, or was just added).
+    const planId = properties.find((p) => isDate(p) && p.role === 'plan')?.id
+    if (actions && planId)
+      actions = actions.map((action) =>
+        action.id === 'defer' ? { ...action, changes: action.changes.map((c) => (c.field === DUE_PROPERTY_ID && c.value.kind === 'ask' ? { ...c, field: planId } : c)) } : action
+      )
     const quickActions = { ...settings, ...(actions ? { actions } : {}) }
     const { quickActions: _old, ...rest } = next
     store.putType({ ...rest, ...(Object.keys(quickActions).length ? { quickActions } : {}), updatedAt: at })
