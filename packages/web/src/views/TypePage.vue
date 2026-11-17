@@ -3,7 +3,7 @@ import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, PropertyValue, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, closedOptionsOf, closedStatusIds, defaultViewFilter, dueForReview, fillFromFilter, hidesClosed, isClosedTask, matchesFilter, needsTriage, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
+import { RANK_PROPERTY_ID, taskDatesOf, closedOptionsOf, closedStatusIds, defaultViewFilter, dueForReview, fillFromFilter, hidesClosed, isClosedTask, matchesFilter, needsTriage, parentFieldOf, quickActionsOf, reviewFieldOf, taskWorkflowQueues, sortKey as fieldSortKey, statusProperty, withClosedHidden, withClosedShown } from '@vasta/core'
 import AgendaMenu from '../components/AgendaMenu.vue'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -318,9 +318,10 @@ const hasQuickActions = computed(() => quickActionsOf(type.value).length > 0)
 const taskWorkflows = computed(() => type.value?.system === 'task')
 const reviewable = computed(() => !fixedActive.value && !agendaActive.value && (hasQuickActions.value || !!reviewFieldOf(type.value)))
 const openList = computed(() => visible.value.filter((o) => !completion.entries.has(o.id) && !isClosedTask(type.value, o)))
-const processList = computed(() => openList.value.filter((o) => dueForReview(type.value, o, dayKey())))
 const queues = computed(() => taskWorkflowQueues(type.value, [...objects.value].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)), dayKey()))
 const viewQueues = computed(() => taskWorkflowQueues(type.value, openList.value, dayKey()))
+// What a review of this view's tasks checks in: a task type's check-ins (the "Due for review" filter's rule), any other type's open objects due for one.
+const processList = computed(() => (taskWorkflows.value ? viewQueues.value.review : openList.value.filter((o) => dueForReview(type.value, o, dayKey()))))
 // Metrics and the calendar-fed agenda do not use `visible`: offer an explicitly named full sweep.
 const primaryScope = computed(() => reviewable.value ? 'view' as const : 'space' as const)
 const primaryQueues = computed(() => primaryScope.value === 'view' ? viewQueues.value : queues.value)
@@ -353,8 +354,9 @@ async function startProcess(kind: WorkflowKind, scope: 'space' | 'view', all = f
     ? [...selectedQueues.triage, ...(all && scope === 'view' ? openList.value.filter((o) => !needsTriage(type.value, o)) : selectedQueues.review)]
     : scope === 'view' ? (all ? openList.value : processList.value) : selectedQueues[kind]
   if (!list.length || !session.user || !workspace.space) return
+  const dates = taskDatesOf(type.value)
   const fields = scope === 'space'
-    ? ['status', 'due', ...(type.value?.quickActions?.deferField ? [type.value.quickActions.deferField] : []), 'assignee']
+    ? ['status', ...(dates.deadline ? [dates.deadline.id] : []), ...(dates.plan ? [dates.plan.id] : []), 'assignee']
     : currentFields.value.filter((f) => f.on).map((f) => f.field)
   setReview(startSession({
     userId: session.user.id, spaceId: workspace.space.id, typeId: props.id,

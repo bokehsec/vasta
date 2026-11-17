@@ -146,7 +146,7 @@ const original = {
   ...found,
   views: found.views.filter((v) => v.id !== tableId && v.id !== boardId),
   properties: found.properties
-    .filter((p) => p.id !== 'dodate' && p.id !== 'nextstep')
+    .filter((p) => p.id !== 'nextstep')
     .map((p) => (p.id === 'status' ? { ...p, options: p.options.filter((o) => o.id !== 'dropped' && o.id !== 'scheduled') } : p)),
   quickActions: undefined,
 }
@@ -156,10 +156,18 @@ const phoneType = {
     ...original.properties.map((p) =>
       p.id === 'status' ? { ...status, options: [...original.properties.find((q) => q.id === 'status').options, { id: 'scheduled', label: 'Scheduled', status: 'todo' }, { id: 'dropped', label: 'Dropped', status: 'done' }] } : p
     ),
-    { id: 'dodate', kind: 'date', name: 'Do date' },
     { id: 'nextstep', kind: 'text', name: 'Next step' },
   ],
-  quickActions: { deferField: 'dodate', deferStatus: 'scheduled', nextStepField: 'nextstep' },
+  // The type's own Defer sets the Do date and the Scheduled status; Done, Drop and Next step are as by default.
+  quickActions: {
+    nextStepField: 'nextstep',
+    actions: [
+      { id: 'done', name: 'Mark done', icon: { kind: 'icon', value: 'ph:check-circle' }, changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['done'] } } }] },
+      { id: 'defer', name: 'Defer', icon: { kind: 'icon', value: 'ph:clock-clockwise' }, changes: [{ field: 'dodate', value: { kind: 'ask' } }, { field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['scheduled'] } } }] },
+      { id: 'drop', name: 'Drop', icon: { kind: 'icon', value: 'ph:x-circle' }, changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['dropped'] } } }] },
+      { id: 'next-step', name: 'Next step', icon: { kind: 'icon', value: 'ph:pencil-simple-line' }, changes: [{ field: 'nextstep', value: { kind: 'ask' } }] },
+    ],
+  },
   views: [
     { id: tableId, name: 'PhoneTable', layout: 'table', filter: { kind: 'group', operator: 'and', items: [{ kind: 'filter', field: 'title', operator: 'contains', value: { kind: 'literal', value: 'PhoneRows' } }] }, table: { columns: [{ field: 'title' }, { field: 'quickActions' }, { field: 'status' }, { field: 'due' }, { field: 'tags' }] } },
     { id: boardId, name: 'PhoneBoard', layout: 'kanban', groupBy: [{ field: 'status' }], filter: { kind: 'group', operator: 'and', items: [{ kind: 'filter', field: 'title', operator: 'contains', value: { kind: 'literal', value: 'PhoneRows' } }] } },
@@ -241,7 +249,10 @@ try {
   await swipe(60, p.y, W * 0.6, 0)
   await page.locator('[data-quick-ask-sheet]').waitFor()
   if (page.url().includes('/o/')) throw new Error('the swipe opened the task')
+  // Alpha is due today: Tomorrow is past its deadline, so the warning shows and Save waits.
   await tap(page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }))
+  await page.locator('[data-defer-menu] [data-due-line]').waitFor()
+  if (await dodateOf(a.id)) throw new Error('Tomorrow past the deadline saved without Save')
   await tap(page.locator('[data-defer-menu] [data-ask-save]'))
   await until(async () => (await dodateOf(a.id)) === days.tomorrow && (await statusOf(a.id)) === 'scheduled', 'the swipe deferred to tomorrow')
   await tap(toast.filter({ hasText: 'Defer' }).locator('button', { hasText: 'Undo' }))
@@ -301,7 +312,6 @@ try {
   await tap(deferItem)
   await page.locator('[data-quick-ask-sheet]').waitFor()
   await tap(page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }))
-  await tap(page.locator('[data-defer-menu] [data-ask-save]'))
   await until(async () => (await dodateOf(c.id)) === days.tomorrow, 'Defer from the menu')
 
   step("a ⋯ at the row's end: 44px, labelled, opens the row's menu, does not open the task or swipe")

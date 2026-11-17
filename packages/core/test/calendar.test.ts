@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes, newObject, type DateValue, type ObjectRecord, type ObjectSummary, type ObjectType, type PropertyValue } from '../src/index.ts'
-import { calendarObjects, changeOccurrence, changeOneOccurrence, changeSeries, completeRepeat, currentOccurrence, dayReferences, objectEntries, occurrences, pruneExceptions, settleTaskSave, spanOf, splitSeries } from '../src/calendar.ts'
+import { calendarObjects, changeOccurrence, changeOneOccurrence, changeSeries, completeRepeat, currentOccurrence, dayReferences, moveOccurrenceTo, objectEntries, occurrences, pruneExceptions, settleTaskSave, spanOf, splitSeries } from '../src/calendar.ts'
 import { Store } from '../src/store.ts'
 import { calendarEntries, parseCalendar } from '../src/ics.ts'
 import { addDays, instantOf, wallTimeIn } from '../src/time.ts'
@@ -206,6 +206,26 @@ describe('changing occurrences in the store', () => {
   })
 })
 
+describe('moving one occurrence to a day', () => {
+  it('moves the occurrence the date is at, keeping its time and the rest of the series', () => {
+    const weekly: DateValue = { start: '2026-11-02T14:00:00.000Z', end: '2026-11-02T15:00:00.000Z', resolution: 'time', rrule: 'FREQ=WEEKLY', timeZone: NY }
+    const moved = moveOccurrenceTo(weekly, '2026-11-05', NY)
+    expect(moved).toMatchObject({ start: weekly.start, rrule: 'FREQ=WEEKLY', exceptions: { '2026-11-02T14:00:00.000Z': { start: '2026-11-05T14:00:00.000Z', end: '2026-11-05T15:00:00.000Z' } } })
+    // Across the clock change: the same wall-clock time.
+    expect(moveOccurrenceTo(weekly, '2026-11-09', NY).exceptions!['2026-11-02T14:00:00.000Z']!).toMatchObject({ start: '2026-11-09T14:00:00.000Z' })
+    expect(moveOccurrenceTo({ ...weekly, start: '2026-10-26T13:00:00.000Z', end: '2026-10-26T14:00:00.000Z' }, '2026-11-03', NY).exceptions!['2026-10-26T13:00:00.000Z']!).toMatchObject({ start: '2026-11-03T14:00:00.000Z' })
+    // The next occurrence is still where the rule puts it.
+    expect(occurrences(moved, { from: '2026-11-08', to: '2026-11-10' }, NY).map((o) => o.start)).toEqual(['2026-11-09T14:00:00.000Z'])
+  })
+
+  it('moves the next one when the first is cancelled, and leaves a date that does not repeat alone', () => {
+    const value: DateValue = { start: '2026-11-02T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY', exceptions: { '2026-11-02T00:00:00.000Z': { cancelled: true } } }
+    expect(moveOccurrenceTo(value, '2026-11-12', 'UTC').exceptions).toMatchObject({ '2026-11-09T00:00:00.000Z': { start: '2026-11-12T00:00:00.000Z' } })
+    const single: DateValue = { start: '2026-11-02T00:00:00.000Z', resolution: 'day' }
+    expect(moveOccurrenceTo(single, '2026-11-12', 'UTC')).toBe(single)
+  })
+})
+
 describe('completing a repeating task', () => {
   const task = createBuiltinTypes('s', at).find((t) => t.system === 'task')!
   const make = (due: DateValue, status = 'todo'): ObjectRecord =>
@@ -224,6 +244,26 @@ describe('completing a repeating task', () => {
     rent = done(rent)
     expect(statusOf(rent)).toEqual(['done'])
     expect(dueOf(rent)).toMatchObject({ start: '2026-11-16T00:00:00.000Z' })
+  })
+
+  it('clears a plan on or before the occurrence done, and keeps a later one', () => {
+    const planned = (plan: string | undefined): ObjectRecord => {
+      const rent = make({ start: '2026-11-02T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY' })
+      return plan ? { ...rent, props: { ...rent.props, dodate: { kind: 'date', value: { start: `${plan}T00:00:00.000Z`, resolution: 'day' } } } } : rent
+    }
+    expect(done(planned('2026-11-01')).props).not.toHaveProperty('dodate')
+    expect(done(planned('2026-11-02')).props).not.toHaveProperty('dodate')
+    expect(dueOf(done(planned('2026-11-02')))).toMatchObject({ start: '2026-11-09T00:00:00.000Z' })
+    expect(done(planned('2026-11-05')).props.dodate).toBeDefined()
+    expect(done(planned(undefined)).props).not.toHaveProperty('dodate')
+    // A plan that itself repeats is its own series, not left behind by this one.
+    const series = planned(undefined)
+    const weekly: ObjectRecord = { ...series, props: { ...series.props, dodate: { kind: 'date', value: { start: '2026-11-01T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=DAILY' } } } }
+    expect(done(weekly).props.dodate).toBeDefined()
+    // A timed occurrence compares by its day in the zone.
+    const timed = make({ start: '2026-11-03T02:00:00.000Z', resolution: 'time', rrule: 'FREQ=WEEKLY', timeZone: NY })
+    const evening: ObjectRecord = { ...timed, props: { ...timed.props, dodate: { kind: 'date', value: { start: '2026-11-02T00:00:00.000Z', resolution: 'day' } } } }
+    expect(done(evening).props).not.toHaveProperty('dodate')
   })
 
   it('skips cancelled occurrences and keeps moved ones', () => {

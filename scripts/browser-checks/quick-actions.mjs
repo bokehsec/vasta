@@ -1,12 +1,12 @@
-// A task's quick actions in the test env: the default Mark done, Defer (Tomorrow, Next week, a day on the
-// calendar) and Drop under its tags (a button each, [data-action="<id>"]), with their Undo notices;
-// what the old settings still shape in the defaults (a "Dropped" status, a "Do date" field and a
-// "Scheduled" status), the "Due …" line, "Also move the due date" (off at first: the deadline
-// stays) and the late note; the section showing for Task only; the
+// A task's quick actions in the test env: the default Mark done, Defer (Tomorrow and Next week save in
+// one tap with Undo, a day on the calendar needs Save; it sets the Do date, never Due) and Drop under
+// its tags (a button each, [data-action="<id>"]), with their Undo notices; the type's own Defer and
+// Drop actions (Defer also setting a "Scheduled" status, Drop setting "Dropped"), the "Due …" line,
+// "Also move the due date" (off at first: the deadline stays) and the late note, with Tomorrow past
+// the deadline waiting for Save; the section showing for Task only; the
 // "Next week" pick in a date property's editor; a phone width (list rows, and a table's actions under
 // each title).
-// Type settings › Quick actions: the defaults listed, the first edit making them the type's own list
-// (keeping the other settings), "Use the defaults"; a custom "Waiting" action (Status and a date in 7
+// Type settings › Quick actions: the defaults listed, the type's own list, "Use the defaults"; a custom "Waiting" action (Status and a date in 7
 // days) on the page and on a row, setting both with Undo; renaming and moving an action up; an
 // action that asks for a text field; the "Next step under the title" select.
 // Then the same actions on task rows: a view's "Quick actions" toggle (list: on each row; table: a
@@ -82,7 +82,7 @@ const originalTask = {
   // Row quick actions: the "Plain" view and the toggle are this check's.
   views: found.views.filter((v) => !v.id.endsWith(':plain')).map(({ quickActions, table, ...v }) => ({ ...v, layout: v.layout === 'table' ? 'list' : v.layout })),
   properties: found.properties
-    .filter((p) => p.id !== 'dodate' && p.id !== 'nextstep')
+    .filter((p) => p.id !== 'nextstep')
     .map((p) => (p.id === 'status' ? { ...p, options: p.options.filter((o) => o.id !== 'dropped' && o.id !== 'scheduled') } : p)),
   quickActions: undefined,
 }
@@ -136,18 +136,20 @@ await act('done').waitFor()
 await act('defer').waitFor()
 if ((await act('drop').count()) !== 0) throw new Error('the built-in task has no second done status, yet Drop is shown')
 
-step('Defer › Tomorrow sets Due; Undo empties it again')
+step('Defer › Tomorrow saves in one tap and sets the Do date, not Due; Undo empties it again')
+const doRow = () => page.locator('.vasta-prop-row', { has: page.locator('.vasta-prop-name', { hasText: /^\s*Do date\s*$/ }) })
 await act('defer').click()
 await page.waitForSelector('[data-defer-menu]')
-if ((await dueLine().count()) !== 0) throw new Error('"Due …" shown while Defer sets Due itself')
+if ((await dueLine().count()) !== 0) throw new Error('"Due …" shown for a task without a due date')
 await page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }).click()
-await page.locator('[data-defer-menu] [data-ask-save]').click()
-await until(async () => dayOf((await propsOf(task.id)).due) === days.tomorrow, `Due is ${days.tomorrow}`)
-await toast.filter({ hasText: 'Defer · Due' }).locator('button', { hasText: 'Undo' }).waitFor()
-await until(async () => !(await dueRow().innerText()).includes('Empty'), 'the Due field shows the date')
+await until(async () => dayOf((await propsOf(task.id)).dodate) === days.tomorrow, `Do date is ${days.tomorrow}`)
+if ((await propsOf(task.id)).due !== undefined) throw new Error('Defer set Due')
+if ((await page.locator('[data-defer-menu]').count()) !== 0) throw new Error('the question stayed open after a preset')
+await toast.filter({ hasText: 'Defer · Do date' }).locator('button', { hasText: 'Undo' }).waitFor()
+await until(async () => !(await doRow().innerText()).includes('Empty'), 'the Do date field shows the date')
 await toast.locator('button', { hasText: 'Undo' }).click()
-await until(async () => (await propsOf(task.id)).due === undefined, 'Due empty after Undo')
-await until(async () => (await dueRow().innerText()).includes('Empty'), 'the Due field shows Empty again')
+await until(async () => (await propsOf(task.id)).dodate === undefined, 'Do date empty after Undo')
+await until(async () => (await doRow().innerText()).includes('Empty'), 'the Do date field shows Empty again')
 
 step('Done closes the task and the buttons go; Undo brings them back')
 await act('done').click()
@@ -184,38 +186,41 @@ if ((await page.locator('[data-quick-defaults]').count()) !== 0) throw new Error
 if ((await page.locator('[data-next-step-field]').count()) !== 0) throw new Error('the next-step select shows for a type that is not a task')
 
 // ---------------------------------------------------------------------------
-// A "Dropped" and a "Scheduled" status, a "Do date" field, and Task's quick actions pointing at them.
+// A "Dropped" and a "Scheduled" status, and Task's own Defer (setting Scheduled) and Drop (setting Dropped) actions.
 const status = originalTask.properties.find((p) => p.id === 'status')
-await put(`/api/types/${taskType.id}`, {
+const setStatus = (id) => ({ field: 'status', value: { kind: 'value', value: { kind: 'select', value: [id] } } })
+const ownActions = [
+  { id: 'done', name: 'Mark done', icon: { kind: 'icon', value: 'ph:check-circle' }, changes: [setStatus('done')] },
+  { id: 'defer', name: 'Defer', icon: { kind: 'icon', value: 'ph:clock-clockwise' }, changes: [{ field: 'dodate', value: { kind: 'ask' } }, setStatus('scheduled')] },
+  { id: 'drop', name: 'Drop', icon: { kind: 'icon', value: 'ph:x-circle' }, changes: [setStatus('dropped')] },
+]
+const withStatuses = {
   ...originalTask,
-  properties: [
-    ...originalTask.properties.map((p) => (p.id === 'status' ? { ...status, options: [...status.options, { id: 'dropped', label: 'Dropped', status: 'done', color: 'red' }, { id: 'scheduled', label: 'Scheduled', status: 'todo', color: 'purple' }] } : p)),
-    { id: 'dodate', kind: 'date', name: 'Do date' },
-  ],
-  quickActions: { deferField: 'dodate', deferStatus: 'scheduled' },
-})
+  properties: originalTask.properties.map((p) => (p.id === 'status' ? { ...status, options: [...status.options, { id: 'dropped', label: 'Dropped', status: 'done', color: 'red' }, { id: 'scheduled', label: 'Scheduled', status: 'todo', color: 'purple' }] } : p)),
+}
+await put(`/api/types/${taskType.id}`, { ...withStatuses, quickActions: { actions: ownActions } })
 await sleep(1500) // the replica pulls the type
 
-step('Type settings: defaults shaped by the old fields; the first edit keeps them; Use the defaults goes back')
+step('Type settings: the type\'s own Defer and Drop actions; an edit keeps them; Use the defaults goes back to a plain Defer')
 await page.goto(`${base}/t/${taskType.id}?settings=1`)
 await page.waitForSelector('[data-quick-action-settings]')
 const quickRows = page.locator('[data-quick-action]')
 const saveButton = page.locator('button', { hasText: /^\s*Save\s*$/ })
 await until(async () => (await quickRows.count()) === 3, 'Mark done, Defer and Drop are listed')
-if (JSON.stringify(await page.locator('[data-quick-name]').evaluateAll((els) => els.map((e) => e.value))) !== '["Mark done","Defer","Drop"]') throw new Error('the defaults are not Mark done, Defer, Drop')
+if (JSON.stringify(await page.locator('[data-quick-name]').evaluateAll((els) => els.map((e) => e.value))) !== '["Mark done","Defer","Drop"]') throw new Error('the actions are not Mark done, Defer, Drop')
 const deferSummary = await quickRows.nth(1).innerText()
 if (!deferSummary.includes('Do date') || !deferSummary.includes('Scheduled')) throw new Error(`Defer does not say it sets Do date and Scheduled: ${deferSummary}`)
 if (!(await quickRows.nth(2).innerText()).includes('Dropped')) throw new Error('Drop does not say it sets Dropped')
-if ((await page.locator('[data-quick-defaults]').count()) !== 0) throw new Error('"Use the defaults" shown on the defaults')
+await page.locator('[data-quick-defaults]').waitFor()
 await quickRows.nth(2).locator('[data-quick-name]').fill('Drop it')
 await quickRows.nth(2).locator('[data-quick-name]').blur()
-await page.locator('[data-quick-defaults]').waitFor()
 await saveButton.click()
-await until(async () => (await get(`/api/types/${taskType.id}`)).quickActions?.actions?.length === 3, 'the first edit saved the three defaults as the type\'s own list')
+await until(async () => (await get(`/api/types/${taskType.id}`)).quickActions?.actions?.[2]?.name === 'Drop it', 'the edit saved the renamed Drop')
 {
   const saved = (await get(`/api/types/${taskType.id}`)).quickActions
-  if (saved.actions.map((a) => a.id).join() !== 'done,defer,drop' || saved.actions[2].name !== 'Drop it') throw new Error(`own list: ${JSON.stringify(saved.actions)}`)
-  if (saved.deferField !== 'dodate' || saved.deferStatus !== 'scheduled') throw new Error(`the edit lost the other settings: ${JSON.stringify(saved)}`)
+  if (saved.actions.map((a) => a.id).join() !== 'done,defer,drop') throw new Error(`own list: ${JSON.stringify(saved.actions)}`)
+  if (JSON.stringify(saved.actions[1].changes) !== JSON.stringify(ownActions[1].changes)) throw new Error(`the edit lost Defer's changes: ${JSON.stringify(saved.actions[1])}`)
+  if ('deferField' in saved || 'deferStatus' in saved || 'dropStatus' in saved) throw new Error(`the retired settings came back: ${JSON.stringify(saved)}`)
 }
 await sleep(1500)
 task = await makeTask('Renamed')
@@ -228,10 +233,10 @@ await page.goto(`${base}/t/${taskType.id}?settings=1`)
 await page.locator('[data-quick-defaults]').click()
 await until(async () => (await page.locator('[data-quick-name]').evaluateAll((els) => els.map((e) => e.value))).join() === 'Mark done,Defer,Drop', 'the defaults are back, Drop named Drop')
 if ((await page.locator('[data-quick-defaults]').count()) !== 0) throw new Error('"Use the defaults" still shown on the defaults')
+if ((await quickRows.nth(1).innerText()).includes('Scheduled')) throw new Error('the default Defer sets a status')
 await saveButton.click()
 await until(async () => (await get(`/api/types/${taskType.id}`)).quickActions?.actions === undefined, 'Use the defaults saved: no list of its own')
-if ((await get(`/api/types/${taskType.id}`)).quickActions?.deferField !== 'dodate') throw new Error('Use the defaults dropped the Defer setting')
-await put(`/api/types/${taskType.id}`, { ...(await get(`/api/types/${taskType.id}`)), quickActions: { deferField: 'dodate', deferStatus: 'scheduled' } })
+await put(`/api/types/${taskType.id}`, { ...(await get(`/api/types/${taskType.id}`)), quickActions: { actions: ownActions } })
 await sleep(1500)
 
 step('Drop sets Dropped and Undo reopens the task')
@@ -299,6 +304,27 @@ await until(async () => dayOf((await propsOf(task.id)).dodate) === `${days.month
 if ((await toast.innerText()).includes('after its due date')) throw new Error('late note shown for a day before Due')
 if (dayOf((await propsOf(task.id)).due) !== due) throw new Error('Due moved by a day before it')
 
+step('Defer › Tomorrow past the deadline waits for Save; before it, one tap saves')
+task = await makeTask('Past deadline', { due: { kind: 'date', value: { start: `${days.today}T00:00:00.000Z`, resolution: 'day' } } })
+await open(task)
+await act('defer').click()
+await page.waitForSelector('[data-defer-menu]')
+await page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }).click()
+await sleep(600)
+if ((await page.locator('[data-defer-menu]').count()) !== 1) throw new Error('Tomorrow saved at once although it is after the deadline')
+if (!(await dueLine().innerText()).includes('planned after the deadline')) throw new Error(`no warning for Tomorrow past the deadline: ${await dueLine().innerText()}`)
+if ((await propsOf(task.id)).dodate !== undefined) throw new Error('Tomorrow saved the Do date before Save')
+await page.locator('[data-defer-menu] [data-ask-save]').click()
+await until(async () => dayOf((await propsOf(task.id)).dodate) === days.tomorrow, 'Save wrote the Do date past the deadline')
+if (dayOf((await propsOf(task.id)).due) !== days.today) throw new Error('Due moved')
+task = await makeTask('Before deadline', { due: { kind: 'date', value: { start: `${days.nextWeek}T00:00:00.000Z`, resolution: 'day' } } })
+await open(task)
+await act('defer').click()
+await page.waitForSelector('[data-defer-menu]')
+await page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }).click()
+await until(async () => dayOf((await propsOf(task.id)).dodate) === days.tomorrow, 'Tomorrow before the deadline saves at once')
+if (dayOf((await propsOf(task.id)).due) !== days.nextWeek) throw new Error('Due moved')
+
 step('a date property with no value offers "Next week": the first day of next week')
 task = await makeTask('Next')
 await open(task)
@@ -334,8 +360,7 @@ if (!sheet || Math.abs(sheet.y + sheet.height - 844) > 2 || sheet.width < 380) t
 const tomorrowBox = await page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }).boundingBox()
 if (tomorrowBox.height < 44) throw new Error(`Tomorrow is ${tomorrowBox.height}px high on a phone`)
 await page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }).click()
-await page.locator('[data-defer-menu] [data-ask-save]').click()
-await until(async () => dayOf((await propsOf(task.id)).dodate) === days.tomorrow, 'Tomorrow tapped on the phone')
+await until(async () => dayOf((await propsOf(task.id)).dodate) === days.tomorrow, 'Tomorrow tapped on the phone saves at once')
 await act('drop').click()
 await until(async () => (await propsOf(task.id)).status?.value?.[0] === 'dropped', 'Drop tapped on the phone')
 
@@ -566,9 +591,9 @@ if (page.url() !== listUrl) throw new Error(`Drop navigated to ${page.url()}`)
 await rowButton(rowTask4.id, 'defer').click()
 await page.waitForSelector('[data-defer-menu]')
 await page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }).click()
-await page.locator('[data-defer-menu] [data-ask-save]').click()
-await until(async () => dayOf((await propsOf(rowTask4.id)).due) === days.tomorrow, `row Defer set Due to ${days.tomorrow}`)
-await toast.filter({ hasText: 'Defer · Due' }).waitFor()
+await until(async () => dayOf((await propsOf(rowTask4.id)).dodate) === days.tomorrow, `row Defer set the Do date to ${days.tomorrow}`)
+if ((await propsOf(rowTask4.id)).due !== undefined) throw new Error('row Defer set Due')
+await toast.filter({ hasText: 'Defer · Do date' }).waitFor()
 if (page.url() !== listUrl) throw new Error(`Defer navigated to ${page.url()}`)
 if ((await rowActions(rowTask4.id).count()) !== 1) throw new Error('a deferred task lost its actions')
 
@@ -770,7 +795,6 @@ step('Type settings: add a "Waiting" action that sets Status and a date 7 days o
     ...current,
     properties: [
       ...current.properties.map((p) => (p.id === 'status' ? { ...currentStatus, options: [...currentStatus.options, { id: 'scheduled', label: 'Scheduled', status: 'todo', color: 'purple' }] } : p)),
-      { id: 'dodate', kind: 'date', name: 'Do date' },
     ],
   })
   await sleep(1500)

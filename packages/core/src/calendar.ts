@@ -8,7 +8,8 @@ import { copyObject } from './operations.ts'
 import { reviewFieldOf, reviewedByStatusChange } from './task-review.ts'
 import { doneOptionOf, reopenOptionOf } from './task-status.ts'
 import type { Store } from './store.ts'
-import { addDays, dayIn, daysBetween, instantOf, isValidTimeZone, wallTimeIn } from './time.ts'
+import { taskDatesOf } from './task-dates.ts'
+import { addDays, dayIn, dayOfDate, daysBetween, instantOf, isValidTimeZone, moveDateToDay, wallTimeIn } from './time.ts'
 
 /** Inclusive range of days ("YYYY-MM-DD") in the viewer's zone. */
 export interface DayRange {
@@ -133,6 +134,18 @@ function ruleTimes(value: DateValue, occurrence: IsoDateTime): Times {
     return { start: occurrence, end: `${addDays(occurrence.slice(0, 10), daysBetween(value.start.slice(0, 10), value.end.slice(0, 10)))}T00:00:00.000Z` }
   }
   return { start: occurrence, end: new Date(Date.parse(occurrence) + Date.parse(value.end) - Date.parse(value.start)).toISOString() }
+}
+
+/**
+ * "This event" moved to a day, the rest of the series staying: the occurrence the date is at (the
+ * first one not cancelled) starts on `day` at the same time of day, as long as it was. A date that
+ * does not repeat, or has no occurrence left, is returned as it is.
+ */
+export function moveOccurrenceTo(value: DateValue, day: string, timeZone: string): DateValue {
+  const occurrence = currentOccurrence(value, timeZone)
+  if (!occurrence) return value
+  const moved = moveDateToDay({ ...currentTimes(value, occurrence), resolution: value.resolution, ...(value.timeZone ? { timeZone: value.timeZone } : {}) }, { day }, timeZone)
+  return changeOneOccurrence(value, occurrence, { start: moved.start, ...(moved.end ? { end: moved.end } : {}) })
 }
 
 /** Where an occurrence is: moved by its exception, or where the rule puts it. */
@@ -325,9 +338,10 @@ function* nextOccurrences(value: DateValue, timeZone: string): Generator<IsoDate
 /**
  * A task done whose due date repeats is due next time instead, as reminders in other apps do: the
  * occurrence it is at (currentOccurrence, the one with a checkbox on the calendar) is done, its due
- * date becomes the series from the next one (splitSeries' rest of it, so a COUNT ends where it did)
- * and its status goes back to the to-do one it had (or the one that reopens a task, task-status.ts). Done is the first
- * option meaning done, the one checkboxes set; others (a "Dropped") end it, as does the last
+ * date becomes the series from the next one (splitSeries' rest of it, so a COUNT ends where it did),
+ * a plan date on or before the occurrence done is cleared, and its status goes back to the to-do
+ * one it had (or the one that reopens a task, task-status.ts). Done is the first option meaning
+ * done, the one checkboxes set; others (a "Dropped") end it, as does the last
  * occurrence done. `object` is the task being saved, `stored` the one it replaces and `base` the
  * copy the change was made to (when it was edited for a while); only a status changed by this save
  * counts, so a merge of changes made elsewhere never repeats it, and done on an occurrence done
@@ -340,7 +354,9 @@ export function completeRepeat(object: ObjectRecord, stored: ObjectRecord | unde
     const value = o?.props.status
     return value?.kind === 'select' ? status.options.find((option) => option.id === value.value[0]) : undefined
   }
-  const dueOf = (o: ObjectRecord | undefined) => (o?.props.due?.kind === 'date' ? o.props.due.value : undefined)
+  const { plan, deadline } = taskDatesOf(type)
+  if (!deadline) return object
+  const dueOf = (o: ObjectRecord | undefined) => (o?.props[deadline.id]?.kind === 'date' ? (o.props[deadline.id] as { value: DateValue }).value : undefined)
   const done = doneOptionOf(type)
   const before = optionOf(stored)
   // The next occurrence has not been started: back to the to-do status it had, else the one that reopens a task.
@@ -360,7 +376,11 @@ export function completeRepeat(object: ObjectRecord, stored: ObjectRecord | unde
   }
   const rest = next ? splitSeries(due, next, currentTimes(due, next), timeZone)?.after : undefined
   if (!rest) return object
-  return { ...object, props: { ...object.props, status: { kind: 'select', value: [todo.id] }, due: { kind: 'date', value: rest } } }
+  const props: ObjectRecord['props'] = { ...object.props, status: { kind: 'select', value: [todo.id] }, [deadline.id]: { kind: 'date', value: rest } }
+  // A plan on or before the occurrence just done is behind it: the next one starts unplanned.
+  const planned = plan ? props[plan.id] : undefined
+  if (plan && planned?.kind === 'date' && !planned.value.rrule && dayOfDate(planned.value, timeZone) <= dayOfDate({ start: current, resolution: due.resolution }, timeZone)) delete props[plan.id]
+  return { ...object, props }
 }
 
 /**

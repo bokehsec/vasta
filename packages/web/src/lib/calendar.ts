@@ -1,7 +1,7 @@
 // Calendar page helpers: visible ranges per view, the week's first day, repeat rules, and the
 // edits the calendar makes to objects (move a date, tick a task, create something on a day).
 import type { CalendarEntry, DateValue, ObjectType, PropertyDef } from '@vasta/core'
-import { addDays, daysBetween } from '@vasta/core'
+import { addDays, daysBetween, dayOfDate, moveDateToDay } from '@vasta/core'
 import type { OccurrenceScope } from '@vasta/core/calendar'
 import { api } from './api.ts'
 import { dayKey } from './actions.ts'
@@ -18,6 +18,9 @@ export const CALENDAR_VIEWS: { id: CalendarView; label: string; short: string; p
 ]
 
 export const viewerTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
+
+/** The day a date value falls on, in this device's zone (a day value's own day). */
+export const dayOfValue = (value: Pick<DateValue, 'start' | 'resolution'>) => dayOfDate(value, viewerTimeZone())
 
 const locale = typeof navigator !== 'undefined' ? navigator.language : 'en'
 
@@ -259,17 +262,7 @@ export const dateProperties = (type: ObjectType | undefined) => (type?.propertie
 export const HOUR_HEIGHT = 48
 
 /** Shift a date so it starts at `start` (same length; day dates stay day dates). */
-export function moveDate(value: DateValue, start: { day: string; minutes?: number }): DateValue {
-  if (value.resolution === 'day') {
-    const shift = daysBetween(value.start.slice(0, 10), start.day)
-    return { ...value, start: `${start.day}T00:00:00.000Z`, ...(value.end ? { end: `${addDays(value.end.slice(0, 10), shift)}T00:00:00.000Z` } : {}) }
-  }
-  const old = new Date(value.start)
-  const minutes = start.minutes ?? old.getHours() * 60 + old.getMinutes()
-  const next = instantAt(start.day, minutes)
-  const length = value.end ? Date.parse(value.end) - Date.parse(value.start) : 0
-  return { ...value, start: next, ...(value.end ? { end: new Date(Date.parse(next) + length).toISOString() } : {}) }
-}
+export const moveDate = (value: DateValue, start: { day: string; minutes?: number }): DateValue => moveDateToDay(value, start, viewerTimeZone())
 
 /** An entry's times after moving it to a day (and a time, over the hour grid), keeping its length. */
 export function movedTimes(entry: CalendarEntry, target: { day: string; minutes?: number }): { start: string; end?: string } {

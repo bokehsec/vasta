@@ -1,14 +1,14 @@
 // Tasks on the calendar: a planned work day and a deadline are separate entries, never evidence
 // of completion. The Day page combines the same slot, keeping distinct times/occurrences intact.
 import type { CalendarEntry, DateValue, Id, ObjectSummary, ObjectType } from '@vasta/core'
-import { closingOf, plannedDateFieldOf } from '@vasta/core'
+import { closingOf, taskDatesOf } from '@vasta/core'
 
 export type TaskDateRole = 'planned' | 'due'
 
 export function taskDateRole(type: ObjectType | undefined, field: string | undefined): TaskDateRole | undefined {
-  if (type?.system !== 'task') return undefined
-  if (field === 'due') return 'due'
-  return field && field === plannedDateFieldOf(type)?.id ? 'planned' : undefined
+  const { plan, deadline } = taskDatesOf(type)
+  if (!field) return undefined
+  return field === deadline?.id ? 'due' : field === plan?.id ? 'planned' : undefined
 }
 
 export function taskDate(object: Pick<ObjectSummary, 'props'> | undefined, field: string | undefined): DateValue | undefined {
@@ -20,7 +20,7 @@ export function taskDate(object: Pick<ObjectSummary, 'props'> | undefined, field
 export function taskEntryCheckable(entry: CalendarEntry, type: ObjectType | undefined, object: Pick<ObjectSummary, 'props'> | undefined): boolean {
   const role = taskDateRole(type, entry.field)
   if (!role || (entry.recurring && !entry.current)) return false
-  return role === 'due' || (!entry.recurring && !taskDate(object, 'due')?.rrule)
+  return role === 'due' || (!entry.recurring && !taskDate(object, taskDatesOf(type).deadline?.id)?.rrule)
 }
 
 export interface DayTaskEntry { entry: CalendarEntry; role: TaskDateRole }

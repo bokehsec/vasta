@@ -1,6 +1,6 @@
 import { reactive, type InjectionKey } from 'vue'
 import type { CalendarEntry, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyValue } from '@vasta/core'
-import { isClosedTask } from '@vasta/core'
+import { isClosedTask, taskDatesOf } from '@vasta/core'
 import { clone } from './clone.ts'
 import type { ObjectSaveObserver } from './object-saves.ts'
 
@@ -70,11 +70,12 @@ export function createCompletionFeedback(options: {
     observe(object: ObjectRecord, base?: ObjectRecord): ObjectSaveObserver | undefined {
       const type = options.type(object)
       if (type?.system !== 'task' || object.typeId !== type.id || suppressed.has(object.id)) return
+      const deadline = taskDatesOf(type).deadline?.id ?? ''
       const existing = entries.get(object.id)
       const rows = options.rows()
       const before = rows.find((row) => row.id === object.id)
       if (!before) return
-      const undoing = existing && !done(object) && (!existing.repeat || same(object.props.due, existing.before.props.due))
+      const undoing = existing && !done(object) && (!existing.repeat || same(object.props[deadline], existing.before.props[deadline]))
       if (undoing) {
         const started = generation
         entries.delete(object.id)
@@ -100,7 +101,7 @@ export function createCompletionFeedback(options: {
         saved: (saved) => {
           if (entries.get(object.id) !== current) return
           current.pending = false
-          current.repeat = !done(saved) && !same(saved.props.due, current.before.props.due)
+          current.repeat = !done(saved) && !same(saved.props[deadline], current.before.props[deadline])
           // What the save changed beyond the edit (a repeating task's due date moved on, the Last reviewed day a new status sets): Undo puts it back too.
           for (const key of Object.keys(changes(object, saved))) if (!(key in current.restore)) current.restore[key] = current.before.props[key] && clone(current.before.props[key])
           show(saved)

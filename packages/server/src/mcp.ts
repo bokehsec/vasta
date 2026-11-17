@@ -20,7 +20,9 @@ was eaten with log_food (a line like "2 slices of bread, coffee 200 ml at breakf
 with nutrition_day, and fill in a food (from its label: nutrients per its base amount, portions)
 with save_food. Person properties (kind "person", e.g. a task's Assignee) hold members of the
 space: set them by username or name, "me" for the user; get_object shows who made an object
-and who changed it last (createdBy, updatedBy). A space with sprints has a Sprint type (dates,
+and who changed it last (createdBy, updatedBy). A task's date properties have a role in list_types:
+"plan" is the day it will be worked on (the Do date), "deadline" the day it is due by; set the
+plan to put a task off and leave the deadline. A space with sprints has a Sprint type (dates,
 goal) and tasks a Sprint field: set it by the sprint's title, or "current" for the one under way.
 Types may have templates (list_templates): create_object starts from a type's default template,
 or the one named by "template", with its questions answered by "answers". Whiteboards (type
@@ -226,7 +228,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     {
       title: 'Query objects',
       description:
-        'Objects of some types, filtered and sorted, like a query in the app. Fields are property names, "Relation.Field" through a relation, or title, tags, createdAt, updatedAt, createdBy, updatedBy, date, type, and "Due for review" (is-checked: a task not reviewed in its type\'s number of days). People by username or name, "me" for the user ("Assignee contains me"). Operators: is, is-not, contains, not-contains, starts-with, is-empty, is-not-empty, is-checked, is-not-checked, gt, gte, lt, lte, before, after. Dates as YYYY-MM-DD.',
+        'Objects of some types, filtered and sorted, like a query in the app. Fields are property names, "Relation.Field" through a relation, or title, tags, createdAt, updatedAt, createdBy, updatedBy, date, type, host, and "Due for review" (is-checked: a task in Review\'s check-ins, open and not new, not reviewed in its type\'s number of days). People by username or name, "me" for the user ("Assignee contains me"). Operators: is, is-not, contains, not-contains, starts-with, is-empty, is-not-empty, is-checked, is-not-checked, gt, gte, lt, lte, before, after. Dates as YYYY-MM-DD.',
       inputSchema: {
         space,
         types: z.array(z.string()).optional().describe('Type names or ids; all types when omitted'),

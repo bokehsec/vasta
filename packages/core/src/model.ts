@@ -44,19 +44,13 @@ export interface NutritionSettings {
 
 /**
  * A task type's quick actions (Type settings › Quick actions; task-actions.ts): buttons on a task's
- * page and rows that change its fields in one click. Without `actions`, the defaults: Done, Defer,
- * Drop and, with a next step field, Next step, set up by the other fields (a property or option the
- * type no longer has falls back to the default).
+ * page and rows that change its fields in one click. Without `actions`, the defaults: Done, Defer
+ * (asks the type's plan date, task-dates.ts), Drop and, with a next step field, Next step, set up by
+ * the other fields (a property or option the type no longer has falls back to the default).
  */
 export interface QuickActions {
-  /** The buttons, in order; unset: the defaults. */
+  /** The buttons, in order; unset: the defaults. Defer and Drop are the ones with these ids. */
   actions?: QuickActionDef[]
-  /** The date property the default Defer sets; default `due`. */
-  deferField?: Id
-  /** A status option the default Defer also sets ("Scheduled"); default none. */
-  deferStatus?: Id
-  /** The status option the default Drop sets; default the first option meaning done after Done ("Dropped"). */
-  dropStatus?: Id
   /** A text property for the task's next step, shown under its title in lists; default none. */
   nextStepField?: Id
   /** How many days after its Last reviewed date a task comes up in Review again; default 7, 0 every time. */
@@ -258,7 +252,12 @@ export interface RichTextPropertyDef extends PropertyDefBase { kind: 'rich-text'
 export interface NumberPropertyDef extends PropertyDefBase { kind: 'number'; format?: string }
 export interface CheckboxPropertyDef extends PropertyDefBase { kind: 'checkbox' }
 export interface UrlPropertyDef extends PropertyDefBase { kind: 'url' }
-export interface DatePropertyDef extends PropertyDefBase { kind: 'date'; withTime?: boolean; allowRange?: boolean }
+/**
+ * What a date means to a task (task-dates.ts): `plan` is the day you will work on it, `deadline` the
+ * day it must be done by. Dates without a role are plain dates.
+ */
+export type DateRole = 'plan' | 'deadline'
+export interface DatePropertyDef extends PropertyDefBase { kind: 'date'; withTime?: boolean; allowRange?: boolean; role?: DateRole }
 export interface RelationPropertyDef extends PropertyDefBase {
   kind: 'relation'
   /** Allowed target type ids. Empty means any type. */

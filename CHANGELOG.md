@@ -102,11 +102,11 @@ GitHub release page.
   their dates) and **the plan now**: status, due date, do date, priority, project and next step,
   each changeable in place. Under the task are at most four buttons, and never the status it
   already has: a task already placed has **Keep in Next** (or its status, highlighted), which marks
-  it reviewed so it comes back after the review interval, then **Schedule…** (a date, and the
-  Scheduled status: Defer and Scheduled are one choice), **Done** and **Drop**; a new task has
-  **Next**, Schedule…, Done and Drop, none highlighted. The other statuses are links under them
+  it reviewed so it comes back after the review interval, then **Defer…** (your type's own Defer, the
+  same as on a row or a task's page: a day, and the status it sets, such as Scheduled), **Done** and
+  **Drop**; a new task has **Next**, Defer…, Done and Drop, none highlighted. The other statuses are links under them
   ("Move to Waiting · On hold"), and **Decide later** records nothing and keeps it in the queue. Keys
-  on a computer: K keep, N next, S schedule, D done, X drop, 1–9 the links. On a big screen the
+  on a computer: K keep, N next, F defer, D done, X drop, 1–9 the links. On a big screen the
   buttons are centred under the task with the plan beside it; on a phone they are a tray at the
   bottom. Type settings › Quick actions sets how often a task comes back for a check-in and which
   statuses count as new. The page's ⋯ menu offers **Review all tasks in this space** for a full sweep.
@@ -148,8 +148,9 @@ GitHub release page.
   on this device, for you only). Undo takes a decision off again, and the end counts each task once
   ("Reviewed 6 · Done 3 · 4 skipped, unchanged") with "Review 4 skipped" to go over those. How often
   a task comes up again (7 days unless changed; 0 for every time) and the status Hold sets are in
-  Type settings › Quick actions. A view's filters can use **Due for review**, which follows that
-  setting, to show tasks only when they need a look (say, tasks on hold). On a computer, R marks
+  Type settings › Quick actions. A view's filters can use **Due for review**, which is the review's
+  check-in list (open tasks that are not new and have not been reviewed for that many days; also in
+  Claude's queries), to show tasks only when they need a look (say, tasks on hold). On a computer, R marks
   reviewed, keys 1–9 run the actions and the arrows skip or go back; on a phone, swipe right to
   defer, left to skip.
 - **Subtasks: split a task into steps.** Turn it on in Type settings › Subtasks (it can add a
@@ -200,7 +201,8 @@ GitHub release page.
   "Copy link to page" action. It copies `<server>/o/<id>` in the browser and `vasta://o/<id>`
   in the desktop app, matching existing block-link behaviour.
 - **Quick actions on a task's page**: buttons that change a task in one click, with Undo. By
-  default Done, Defer (tomorrow, next week or a day picked on a small calendar) and Drop (a second
+  default Done, Defer (tomorrow, next week or a day picked on a small calendar: it sets the task's
+  Do date and leaves the deadline alone) and Drop (a second
   "done" status such as "Dropped"; without one there is no Drop). Type settings › Quick actions
   edits them or adds your own: each sets fields to a value, a day (today, tomorrow, next week, in
   N days), you (people), nothing, or asks for the value when pressed (a day, a line of text).
@@ -246,9 +248,13 @@ GitHub release page.
   completed tasks and dropped tasks. Empty circles mean unfinished work; a checkmark means done.
   Matching plan and deadline entries share one row, and each task shows its other date. Change
   dates by opening the task; there are no extra Reschedule buttons on the calendar.
-- **Rescheduling keeps deadlines.** Schedule changes the planned work date without moving a
-  deadline unless you ask. Planning after the deadline shows a warning. A task's date picker
-  shows the other date and offers to move it too; repeating dates stay separate.
+- **A task's dates mean something.** Each task type has a **Do date** (the day you will work on it)
+  and a **Due** date (the deadline); Type settings › a date's Meaning says which is which (a new
+  Task starts with both, and your existing task types were given them: the date your Defer set, or
+  a new "Do date", is the plan). The calendar, Review, Defer and Claude all read them the same way.
+  Defer changes the Do date without moving the deadline unless you ask. Planning after the deadline
+  shows a warning. A task's date picker shows the other date and, when the deadline now falls before
+  the plan, offers to plan for it too; repeating dates stay separate.
 
 - **Simpler task rows.** Removed row multiselect, selection menus and the bulk-action bar from
   lists and tables throughout Vasta. Task rows keep their completion circle; individual actions,
@@ -322,15 +328,16 @@ GitHub release page.
   was last edited or keep a blank indent for subtask arrows, so the title has the row's width, and
   “Resume triage · 1 of 27” fits beside Triage & review.
 - **A quick action's question has Cancel and Save.** Every question (a next step, a day to defer
-  to, a number or link) shows both buttons, on a computer as on a phone. Tomorrow, Next week or a
-  day on the calendar now only picks the day: the question shows it, and where the due date ends up,
-  before Save writes it. If saving fails, the question stays open with what you typed and offers
-  Retry; a second tap while saving does nothing.
-- **Defer moves the due date too when you put a task off past it.** When Defer sets another date
-  (a "Do date"), the day picker has a box "Move the due date too", ticked: pick a day after the due
-  date and the due date goes with it, so the task is not left overdue; Undo puts both back. Untick
-  it to keep a real deadline where it is. A due date that repeats is never moved. The same goes for
-  several tasks at once and in process mode.
+  to, a number or link) shows both buttons, on a computer as on a phone. A day on the calendar only
+  picks the day: the question shows it, and where the due date ends up, before Save writes it.
+  **Tomorrow** and **Next week** save at once, with Undo in the notice, unless that day is after
+  the deadline: then the warning shows and Save waits. If saving fails, the question stays open
+  with what you typed and offers Retry; a second tap while saving does nothing.
+- **Defer can move the due date too when you put a task off past it.** The day picker has a box "Move
+  the due date too", unticked: tick it and a day after the due date takes the due date along, so the
+  task is not left overdue; Undo puts both back. Left unticked, a real deadline stays where it is. A
+  due date that repeats is never moved, and a timed one keeps its time of day, also across a clock
+  change. The same goes for process mode.
 - **On a phone, a quick action that asks (a day to defer to, a next step) asks in a sheet along the bottom of the screen**, within reach of the thumb, with larger buttons, instead of under the small button.
 - **The page a space opens on is calmer**: its icon is a small tile beside the title, and the tags
   row and the "Add property" line show only once there is something in them. Tags and Property
@@ -349,6 +356,13 @@ GitHub release page.
 
 ### Fixed
 
+- **Deferring a repeating or timed date keeps what it holds.** Defer, and any quick action that sets
+  a day, keeps a date's time of day and its end; on a repeating date it moves only this occurrence,
+  not the whole series. A due date at 9:00 moved across the November clock change is still 9:00.
+- **A repeating task done leaves no stale Do date.** Its due date moves to the next occurrence, and
+  a Do date on or before the day just done is cleared instead of left behind in the past.
+- **"Due for review" matches the review.** The filter shows the review's check-ins: open tasks that
+  are not new. New tasks (which have their own review queue) and closed ones no longer match.
 - **Habit progress keeps your latest display choices.** Rapid changes save in order, and saving
   an already-open Type settings window preserves newer progress choices.
 

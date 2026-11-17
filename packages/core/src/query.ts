@@ -14,7 +14,7 @@ import type {
 } from './model.ts'
 import { evaluateFormula, formulaKind, formulaReferences, type FormulaValue } from './formula.ts'
 import type { Bounds } from './store.ts'
-import { REVIEW_DUE_FIELD, dueForReview, reviewFieldOf } from './task-review.ts'
+import { REVIEW_DUE_FIELD, isCheckInDue, reviewFieldOf } from './task-review.ts'
 import { addDays, dayIn } from './time.ts'
 
 /** Fields every object has, usable in filters, sorting and grouping next to property ids. */
@@ -211,9 +211,9 @@ function readField(object: ObjectSummary, field: string, context: QueryContext):
       // The site a weblink points to, without "www.".
       return object.media?.host ? { kind: 'text', value: object.media.host.replace(/^www\./, '') } : EMPTY
     case REVIEW_DUE_FIELD: {
-      // A task not reviewed in its type's number of days (task-review.ts); a type without review dates has none.
+      // A task in Review's check-ins (task-review.ts): open, not new, not reviewed in its type's number of days; a type without review dates has none.
       const type = context.types.get(object.typeId)
-      return reviewFieldOf(type) ? { kind: 'checkbox', value: dueForReview(type, object, context.today) } : EMPTY
+      return reviewFieldOf(type) ? { kind: 'checkbox', value: isCheckInDue(type, object, context.today) } : EMPTY
     }
   }
   const own = context.types.get(object.typeId)?.properties.find((p) => p.id === field)

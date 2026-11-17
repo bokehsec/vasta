@@ -8,11 +8,12 @@
 // without the date reviews every open task every time, as before.
 import { REVIEWED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
 import type { DatePropertyDef, ObjectRecord, ObjectType, QuickActionDef, SelectOption } from './model.ts'
+import { isClosedTask, needsTriage } from './task-status.ts'
 import { daysBetween } from './time.ts'
 
 export const DEFAULT_REVIEW_EVERY = 7
 
-/** The built-in filter field "Due for review" (query.ts): checked on a task dueForReview says is due. */
+/** The built-in filter field "Due for review" (query.ts): checked on a task in Review's check-ins (isCheckInDue). */
 export const REVIEW_DUE_FIELD = 'reviewDue'
 
 /** The type's Last reviewed date (tasks), unless it was deleted or changed kind. */
@@ -41,6 +42,15 @@ export function dueForReview(type: ObjectType | undefined, object: Pick<ObjectRe
   const every = reviewEveryOf(type)
   const last = lastReviewedDay(type, object)
   return !every || !last || daysBetween(last, today) >= every
+}
+
+/**
+ * Whether a task is in Review's check-ins on `today`: open, not new (a new task is Review's first
+ * queue, whatever its Last reviewed day) and due for review. What the "Due for review" filter and
+ * the queues of a Review both ask.
+ */
+export function isCheckInDue(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>, today: string): boolean {
+  return type?.system === 'task' && !isClosedTask(type, object) && !needsTriage(type, object) && dueForReview(type, object, today)
 }
 
 /** Reviewed: today as the Last reviewed day, nothing else changed. None without the date. */

@@ -136,7 +136,7 @@ describe('people', () => {
     for (const type of types) store.putType(type)
     ensureBuiltinTypes(store, start)
     const task = () => store.getType(builtinTypeId('old', 'task'))!
-    expect(task().properties.map((p) => p.id)).toEqual(['body', 'status', 'due', 'assignee', 'priority', 'blocked', 'reviewed'])
+    expect(task().properties.map((p) => p.id)).toEqual(['body', 'status', 'due', 'assignee', 'dodate', 'priority', 'blocked', 'reviewed'])
     // Deleted by the user: it stays deleted.
     store.putType({ ...task(), properties: task().properties.filter((p) => p.id !== 'assignee') })
     ensureBuiltinTypes(store, start)

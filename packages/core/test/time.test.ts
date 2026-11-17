@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dayBucket } from '../src/index.ts'
+import { dayBucket, dayOfDate, moveDateToDay } from '../src/index.ts'
 
 describe('day buckets', () => {
   // Wednesday 2026-11-11, in a week that starts on Sunday the 8th.
@@ -20,5 +20,32 @@ describe('day buckets', () => {
   it('calls the first day of next week tomorrow on the last day of this one', () => {
     expect(dayBucket('2026-11-15', '2026-11-14', '2026-11-08')).toBe('tomorrow')
     expect(dayBucket('2026-11-16', '2026-11-14', '2026-11-08')).toBe('next-week')
+  })
+})
+
+describe('which day a date is on, and moving it to another', () => {
+  const TORONTO = 'America/Toronto'
+  it('a day value is on its own day; a timed one on the day in the zone', () => {
+    expect(dayOfDate({ start: '2026-11-03T00:00:00.000Z', resolution: 'day' }, TORONTO)).toBe('2026-11-03')
+    expect(dayOfDate({ start: '2026-11-03T03:30:00.000Z', resolution: 'time' }, TORONTO)).toBe('2026-11-02')
+    expect(dayOfDate({ start: '2026-11-03T03:30:00.000Z', resolution: 'time' }, 'UTC')).toBe('2026-11-03')
+  })
+
+  it('moves a day value, its end along, and keeps what else it holds', () => {
+    expect(moveDateToDay({ start: '2026-11-03T00:00:00.000Z', end: '2026-11-05T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY' }, { day: '2026-11-10' }, TORONTO)).toEqual({ start: '2026-11-10T00:00:00.000Z', end: '2026-11-12T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY' })
+  })
+
+  it('keeps the wall-clock time across the clock change on 1 Nov (9:00 stays 9:00)', () => {
+    const nine = { start: '2026-10-30T13:00:00.000Z', resolution: 'time' as const }
+    expect(moveDateToDay(nine, { day: '2026-11-03' }, TORONTO).start).toBe('2026-11-03T14:00:00.000Z')
+    // And back again, and over the spring change.
+    expect(moveDateToDay({ start: '2026-11-03T14:00:00.000Z', resolution: 'time' }, { day: '2026-10-30' }, TORONTO).start).toBe('2026-10-30T13:00:00.000Z')
+    expect(moveDateToDay({ start: '2026-03-06T14:00:00.000Z', resolution: 'time' }, { day: '2026-03-10' }, TORONTO).start).toBe('2026-03-10T13:00:00.000Z')
+  })
+
+  it('keeps a timed span\'s length, and can start at a time of day instead', () => {
+    const span = { start: '2026-10-30T13:00:00.000Z', end: '2026-10-30T14:30:00.000Z', resolution: 'time' as const }
+    expect(moveDateToDay(span, { day: '2026-11-03' }, TORONTO)).toEqual({ start: '2026-11-03T14:00:00.000Z', end: '2026-11-03T15:30:00.000Z', resolution: 'time' })
+    expect(moveDateToDay(span, { day: '2026-11-03', minutes: 600 }, TORONTO).start).toBe('2026-11-03T15:00:00.000Z')
   })
 })

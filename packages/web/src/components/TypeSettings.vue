@@ -3,7 +3,7 @@ import { newId } from '@vasta/core'
 // Edit a type: identity (name, icon, color, description) and its property definitions.
 // Changes are made on a draft and saved together.
 import { computed, reactive, ref } from 'vue'
-import type { ColorName, FormulaPropertyDef, Icon, ObjectType, PropertyDef, QuickActions, SelectOption } from '@vasta/core'
+import type { ColorName, DatePropertyDef, DateRole, FormulaPropertyDef, Icon, ObjectType, PropertyDef, QuickActions, SelectOption } from '@vasta/core'
 import { FORMULA_BUILTIN_FIELDS, FORMULA_FUNCTIONS, checkFormula, eligibleParentFields, formulaFromNames, formulaKind, formulaToNames, formulaUses } from '@vasta/core'
 import { greyButton, mainButton } from '../lib/buttons.ts'
 import { api } from '../lib/api.ts'
@@ -69,6 +69,13 @@ function setSubtaskField(value: string) {
   }
   if (value) draft.value.subtasks = { parentField: value }
   else delete draft.value.subtasks
+}
+
+// A task's dates mean something (task-dates.ts): one is the plan (the Do date Defer sets), one the deadline.
+function setRole(def: DatePropertyDef, role: string) {
+  for (const other of draft.value.properties) if (other.kind === 'date' && other.role === role) delete other.role
+  if (role) def.role = role as DateRole
+  else delete def.role
 }
 
 const richTextCount = computed(() => draft.value.properties.filter((p) => p.kind === 'rich-text').length)
@@ -347,6 +354,14 @@ async function leave(path: string) {
             <label v-if="def.kind === 'date'" class="flex items-center gap-2">
               <input v-model="def.withTime" type="checkbox" class="accent-[var(--color-accent)]" />
               Include time
+            </label>
+            <label v-if="draft.system === 'task' && def.kind === 'date'" class="flex items-center gap-2">
+              Meaning
+              <select :value="def.role ?? ''" class="rounded-md border border-line bg-surface px-1.5 py-1 text-xs text-ink-soft" data-date-role @change="setRole(def, ($event.target as HTMLSelectElement).value)">
+                <option value="">A plain date</option>
+                <option value="plan">The day you will work on it</option>
+                <option value="deadline">The day it is due by</option>
+              </select>
             </label>
 
             <template v-if="def.kind === 'select'">

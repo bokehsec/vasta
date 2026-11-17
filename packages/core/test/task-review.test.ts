@@ -4,13 +4,14 @@ import type { ObjectRecord, ObjectType, PropertyValue, QuickActionDef } from '..
 import type { ObjectSummary } from '../src/model.ts'
 import { fieldKind, matchesFilter } from '../src/query.ts'
 import { quickActionEdit, quickActionMessage } from '../src/task-actions.ts'
+import { taskWorkflowQueues } from '../src/task-workflows.ts'
 import { dueForReview, holdAction, holdOptionOf, reviewEveryOf, reviewFieldOf, reviewedAction, reviewedByStatusChange, withReviewed } from '../src/task-review.ts'
 
 const AT = '2026-11-14T12:00:00.000Z'
 const types = createBuiltinTypes('s', AT)
 const task = types.find((t) => t.system === 'task')!
 const page = types.find((t) => t.system === 'page')!
-const context = { today: '2026-11-14', nextWeek: '2026-11-16' }
+const context = { today: '2026-11-14', nextWeek: '2026-11-16', timeZone: 'UTC' }
 const day = (value: string): PropertyValue => ({ kind: 'date', value: { start: `${value}T00:00:00.000Z`, resolution: 'day' } })
 const reviewedOn = (value?: string): { props: Record<string, PropertyValue> } => ({ props: value ? { reviewed: day(value) } : {} })
 const withHold = (label: string, quickActions?: ObjectType['quickActions']): ObjectType => ({
@@ -52,7 +53,7 @@ describe('review dates', () => {
     const done: QuickActionDef = { id: 'done', name: 'Done', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['done'] } } }] }
     expect(withReviewed(task, done, { props: { status: { kind: 'select', value: ['todo'] } } })).toBe(done)
     expect(withReviewed(task, done, { props: {} })).toBe(done)
-    expect(quickActionMessage(task, kept, quickActionEdit(task, { id: 'a', props: {} }, kept, context)!, { longDay: (d) => d, dayOfTime: (iso) => iso.slice(0, 10) })).toBe('Next step')
+    expect(quickActionMessage(task, kept, quickActionEdit(task, { id: 'a', props: {} }, kept, context)!, { longDay: (d) => d, timeZone: 'UTC' })).toBe('Next step')
     expect(reviewedAction(page)).toBeUndefined()
   })
 
@@ -94,9 +95,9 @@ describe('Hold', () => {
 })
 
 describe('the Due for review filter', () => {
-  const summary = (type: ObjectType, reviewed?: string) => ({ id: 'a', typeId: type.id, title: 'A', tagIds: [], collectionIds: [], props: reviewed ? { reviewed: day(reviewed) } : {} }) as unknown as ObjectSummary
+  const summary = (type: ObjectType, reviewed?: string, status: string | null = 'todo') => ({ id: 'a', typeId: type.id, title: 'A', tagIds: [], collectionIds: [], props: { ...(reviewed ? { reviewed: day(reviewed) } : {}), ...(status ? { status: { kind: 'select', value: [status] } } : {}) } }) as unknown as ObjectSummary
   const due = { kind: 'filter' as const, field: 'reviewDue', operator: 'is-checked' as const }
-  const matches = (type: ObjectType, reviewed?: string) => matchesFilter(summary(type, reviewed), due, { types: new Map([[type.id, type]]), today: '2026-11-14', timeZone: 'UTC' })
+  const matches = (type: ObjectType, reviewed?: string, status?: string | null) => matchesFilter(summary(type, reviewed, status), due, { types: new Map([[type.id, type]]), today: '2026-11-14', timeZone: 'UTC' })
 
   it('follows the type\'s number of days', () => {
     expect(fieldKind('reviewDue')).toBe('checkbox')
@@ -107,5 +108,17 @@ describe('the Due for review filter', () => {
     expect(matches(fortnight, '2026-11-07')).toBe(false)
     expect(matches({ ...task, quickActions: { reviewEvery: 3 } }, '2026-11-10')).toBe(true)
     expect(matches(page)).toBe(false)
+  })
+
+  it('is Review\'s check-ins: not closed tasks, not new ones', () => {
+    const inbox = { ...task, properties: task.properties.map((p) => (p.id === 'status' && p.kind === 'select' ? { ...p, options: [{ id: 'inbox', label: 'Inbox', status: 'todo' as const }, ...p.options] } : p)) }
+    expect(matches(inbox, undefined, 'todo')).toBe(true)
+    expect(matches(inbox, undefined, 'inbox')).toBe(false)
+    expect(matches(inbox, undefined, null)).toBe(false)
+    expect(matches(inbox, '2026-11-01', 'done')).toBe(false)
+    // The same rule Review's queues use.
+    const queues = taskWorkflowQueues(inbox, [summary(inbox, undefined, 'inbox'), summary(inbox, undefined, 'todo'), summary(inbox, '2026-11-14', 'todo'), summary(inbox, undefined, 'done')], '2026-11-14')
+    expect(queues.triage).toHaveLength(1)
+    expect(queues.review).toHaveLength(1)
   })
 })

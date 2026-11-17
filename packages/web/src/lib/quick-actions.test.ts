@@ -5,7 +5,7 @@ import { completeRepeat } from '@vasta/core/calendar'
 // The runner talks to the server and the app's state only through these: stand in for them.
 const setProperties = vi.fn()
 vi.mock('./actions.ts', () => ({ dayKey: () => '2026-11-13', setProperties: (...args: unknown[]) => setProperties(...args) }))
-vi.mock('./calendar.ts', () => ({ nextWeekStart: () => '2026-11-15' }))
+vi.mock('./calendar.ts', () => ({ nextWeekStart: () => '2026-11-15', viewerTimeZone: () => 'UTC', dayOfValue: (value: { start: string }) => value.start.slice(0, 10) }))
 vi.mock('./format.ts', () => ({ formatLongDay: (iso: string) => `<${iso.slice(0, 10)}>` }))
 vi.mock('./session.ts', () => ({ session: { user: { id: 'u1' } } }))
 vi.mock('./state.ts', () => ({ lastError: { value: '' }, notice: { value: null } }))
@@ -23,7 +23,7 @@ const done = quickActionsOf(task).find((a) => a.id === 'done')!
 const defer = quickActionsOf(task).find((a) => a.id === 'defer')!
 const status = (id: string): PropertyValue => ({ kind: 'select', value: [id] })
 const day = (value: string, rrule?: string): PropertyValue => ({ kind: 'date', value: { start: `${value}T00:00:00.000Z`, resolution: 'day', ...(rrule ? { rrule } : {}) } })
-const open = (id: string, due?: PropertyValue) => ({ id, props: { status: status('todo'), ...(due ? { due } : {}) } as Record<string, PropertyValue> })
+const open = (id: string, due?: PropertyValue, plan?: PropertyValue) => ({ id, props: { status: status('todo'), ...(due ? { due } : {}), ...(plan ? { dodate: plan } : {}) } as Record<string, PropertyValue> })
 const message = () => (notice.value as { message: string; action?: { run: () => Promise<unknown> } } | null)!
 
 beforeEach(() => {
@@ -36,19 +36,29 @@ beforeEach(() => {
 })
 
 describe('runQuickAction', () => {
-  it('asks once and saves the object with its own values, a date that repeats keeping its rule', async () => {
+  it('asks once and saves the object with its own values, a date that repeats moving only this occurrence', async () => {
     const save = vi.fn(async () => {})
-    const running = runQuickAction(task, open('b', day('2026-11-02', 'FREQ=WEEKLY')), defer, { save })
+    const running = runQuickAction(task, open('b', undefined, day('2026-11-02', 'FREQ=WEEKLY')), defer, { save })
+    // (A date that repeats loads its rule parser first.)
+    await vi.waitFor(() => expect(quickAsk.value).not.toBeNull())
     // The question first, nothing saved before it is answered.
-    expect(quickAsk.value?.def.id).toBe('due')
+    expect(quickAsk.value?.def.id).toBe('dodate')
     expect(save).not.toHaveBeenCalled()
-    quickAsk.value!.answer(day('2026-11-20', 'FREQ=WEEKLY'))
+    quickAsk.value!.answer(day('2026-11-20'))
     const saved = await running
     expect(quickAsk.value).toBeNull()
     expect(saved!.id).toBe('b')
     expect(save).toHaveBeenCalledTimes(1)
-    expect(saved!.values.due).toEqual(day('2026-11-20', 'FREQ=WEEKLY'))
-    expect(message().message).toBe('Defer · Due <2026-11-20>')
+    expect(saved!.values.dodate).toEqual({ kind: 'date', value: { start: '2026-11-02T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY', exceptions: { '2026-11-02T00:00:00.000Z': { start: '2026-11-20T00:00:00.000Z' } } } })
+    expect(message().message).toBe('Defer · Do date <2026-11-20>')
+  })
+
+  it('keeps the time of a timed plan when it is deferred', async () => {
+    const save = vi.fn(async () => {})
+    const timed: PropertyValue = { kind: 'date', value: { start: '2026-11-02T15:30:00.000Z', resolution: 'time' } }
+    const running = runQuickAction(task, open('t', undefined, timed), defer, { save })
+    quickAsk.value!.answer(day('2026-11-20'))
+    expect((await running)!.values.dodate).toEqual({ kind: 'date', value: { start: '2026-11-20T15:30:00.000Z', resolution: 'time' } })
   })
 
   it('does nothing when the question is dismissed', async () => {
@@ -110,9 +120,9 @@ describe('runQuickAction', () => {
   })
 
   it('offers to move the due date with a day asked for another date, and Undo puts both back', async () => {
-    // A task whose Defer sets a "Do date" (as a triage setup has it).
-    const triage = { ...task, properties: [...task.properties, { id: 'dodate', kind: 'date' as const, name: 'Do date' }], quickActions: { deferField: 'dodate' } }
-    const deferDo = quickActionsOf(triage).find((a) => a.id === 'defer')!
+    // The built-in task: its Defer sets the "Do date".
+    const triage = task
+    const deferDo = defer
     const saved = new Map<string, Record<string, PropertyValue | undefined>>()
     const save = vi.fn(async (id: string, values: Record<string, PropertyValue | undefined>) => void saved.set(id, values))
     const late = open('late', day('2026-11-18'))
@@ -134,12 +144,13 @@ describe('runQuickAction', () => {
     // A due date that repeats, or none, is not offered to move.
     for (const object of [open('weekly', day('2026-11-18', 'FREQ=WEEKLY')), open('none')]) {
       running = runQuickAction(triage, object, deferDo, { save })
+      await vi.waitFor(() => expect(quickAsk.value).not.toBeNull())
       expect(quickAsk.value!.dueMovable).toBe(false)
       quickAsk.value!.answer(null)
       await running
     }
-    // Defer that sets the due date itself has nothing to offer.
-    running = runQuickAction(task, late, defer, { save })
+    // An action that sets the deadline itself has nothing to offer.
+    running = runQuickAction(task, late, { id: 'due', name: 'Due', changes: [{ field: 'due', value: { kind: 'ask' } }] }, { save })
     expect(quickAsk.value!.dueMovable).toBe(false)
     quickAsk.value!.answer(null)
     await running
@@ -266,8 +277,8 @@ describe('runQuickAction', () => {
     await question.answer(day('2026-11-21'))
     const saved = await running
     expect(quickAsk.value).toBeNull()
-    expect(saved!.values.due).toEqual(day('2026-11-21'))
-    expect(message().message).toBe('Defer · Due <2026-11-21>')
+    expect(saved!.values.dodate).toEqual(day('2026-11-21'))
+    expect(message().message).toBe('Defer · Do date <2026-11-21>')
     // Cancel after a failure writes nothing more.
     save.mockClear()
     offline = true
@@ -292,13 +303,13 @@ describe('runQuickAction', () => {
     releases.forEach((release) => release())
     await first
     const saved = await running
-    expect(saved!.values.due).toEqual(day('2026-11-20'))
+    expect(saved!.values.dodate).toEqual(day('2026-11-20'))
     expect(save).toHaveBeenCalledTimes(1)
   })
 
   it('says what it applies to, what the button says, and where the due date would go', async () => {
-    const triage = { ...task, properties: [...task.properties, { id: 'dodate', kind: 'date' as const, name: 'Do date' }], quickActions: { deferField: 'dodate' } }
-    const deferDo = quickActionsOf(triage).find((a) => a.id === 'defer')!
+    const triage = task
+    const deferDo = defer
     const late = { ...open('late', day('2026-11-18')), title: 'Fix the roof' }
     let running = runQuickAction(triage, late, deferDo, { save: vi.fn(), submitLabel: 'Save & next task' })
     expect(quickAsk.value).toMatchObject({ scope: 'Fix the roof', submitLabel: 'Save & next task', closes: false, due: '2026-11-18' })

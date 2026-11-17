@@ -3,8 +3,8 @@
 // "is it incoming?" asks here, so a list, the calendar, a board, a review and the server agree.
 //   - closed: the status is an option meaning done. Done is the first of those; any other (a
 //     "Dropped", "Cancelled") ends the task without doing it: closed as "dropped".
-//   - Drop: the type's chosen drop option (`quickActions.dropStatus`), else the second option
-//     meaning done.
+//   - Drop: the status the type's own Drop action sets (a closed option other than Done), else the
+//     second option meaning done.
 //   - reopening: the status the task had before when it is known and open, else the first to-do
 //     option that is not incoming, so a reopened task does not fall back into triage.
 //   - incoming: the options a review treats as new work: the type's own list, else those called
@@ -28,11 +28,13 @@ export const closedStatusIds = (type: ObjectType | undefined): Id[] => closedOpt
 /** The option that means done: the first one that does, the one checkboxes set. */
 export const doneOptionOf = (type: ObjectType | undefined): SelectOption | undefined => closedOptionsOf(type)[0]
 
-/** The option Drop sets: the type's chosen one (an option meaning done other than Done), else the next one meaning done. */
+/** The option Drop sets: the one the type's own Drop action sets (an option meaning done other than Done), else the next one meaning done. */
 export function dropOptionOf(type: ObjectType | undefined): SelectOption | undefined {
   const closed = closedOptionsOf(type)
-  const chosen = type?.quickActions?.dropStatus
-  const option = chosen ? statusOptionsOf(type).find((o) => o.id === chosen) : undefined
+  const status = statusProperty(type)
+  const change = status ? type?.quickActions?.actions?.find((a) => a.id === 'drop')?.changes.find((c) => c.field === status.id) : undefined
+  const chosen = change?.value.kind === 'value' && change.value.value.kind === 'select' ? change.value.value.value[0] : undefined
+  const option = chosen ? closed.find((o) => o.id === chosen) : undefined
   return option && option.id !== closed[0]?.id ? option : closed[1]
 }
 
@@ -59,6 +61,15 @@ export function triageOptionsOf(type: ObjectType | undefined): SelectOption[] {
   const own = type.quickActions?.triageStatuses
   if (Array.isArray(own)) return options.filter((o) => own.includes(o.id))
   return options.filter((o) => /^inbox$/i.test(o.label.trim()))
+}
+
+/** A new task: of a task type, open, and with no status or an incoming one. */
+export function needsTriage(type: ObjectType | undefined, object: Item): boolean {
+  if (type?.system !== 'task' || isClosedTask(type, object)) return false
+  const status = statusProperty(type)
+  const value = status && object.props[status.id]
+  const ids = value?.kind === 'select' ? value.value.filter((id) => status!.options.some((o) => o.id === id)) : []
+  return !ids.length || triageOptionsOf(type).some((o) => ids.includes(o.id))
 }
 
 /**

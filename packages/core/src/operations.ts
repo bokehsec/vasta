@@ -2,12 +2,13 @@
 // device means the same as one made through the server: new objects and types, saving an edited
 // copy, daily notes, the inbox, running a query.
 import { newId } from './ids.ts'
-import { ADDED_BUILTIN_PROPERTIES, BODY_PROPERTY_ID, HABIT_PAUSED_PROPERTY_ID, SOURCE_PROPERTY_ID, builtinProperty, builtinTypeId, missingBuiltinTypes } from './builtin-types.ts'
+import { ADDED_BUILTIN_PROPERTIES, BODY_PROPERTY_ID, DUE_PROPERTY_ID, HABIT_PAUSED_PROPERTY_ID, PLAN_PROPERTY_ID, SOURCE_PROPERTY_ID, builtinProperty, builtinTypeId, missingBuiltinTypes } from './builtin-types.ts'
 import { defaultQueryFilter, defaultViewFilter } from './closed-filter.ts'
-import { closedStatusIds } from './task-status.ts'
+import { defaultQuickActions, plainStatusAction } from './task-actions.ts'
+import { closedStatusIds, closedOptionsOf, doneOptionOf, statusOptionsOf } from './task-status.ts'
 import { docReferences } from './doc.ts'
 import { habitPauseKey } from './habits.ts'
-import type { CaptureInfo, DocNode, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, OpensOn, Person, QueryDef, Space } from './model.ts'
+import type { CaptureInfo, DatePropertyDef, DocNode, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, OpensOn, Person, PropertyDef, QueryDef, QuickActionDef, QuickActions, Space } from './model.ts'
 import { addHabitFoodProperty } from './nutrition.ts'
 import { queryRelations, relatedIds, runQuery, timeBounds } from './query.ts'
 import type { Store } from './store.ts'
@@ -155,8 +156,55 @@ export function ensureBuiltinTypes(store: Store, at: IsoDateTime): ObjectType[] 
       for (const space of store.listSpaces()) addHabitPauses(store, space.id, at)
       store.setMeta('habit-pauses-2026-11-16', at)
     }
+    // Task dates get their roles, and Defer and Drop their own actions (2026-11-16).
+    if (!store.getMeta('task-date-roles-2026-11-16')) {
+      for (const space of store.listSpaces()) addTaskDateRoles(store, space.id, at)
+      store.setMeta('task-date-roles-2026-11-16', at)
+    }
     return added
   })
+}
+
+/** What a task type's settings said before dates had roles: the date Defer set, the status it set, the status Drop set. */
+type LegacyQuickActions = QuickActions & { deferField?: Id; deferStatus?: Id; dropStatus?: Id }
+
+/**
+ * Each task type's dates get their roles: Due is the deadline; the plan is one that has the role
+ * already, else the date its Defer set (`deferField`), else one called "Do date", else a new "Do
+ * date". What its Defer and Drop settings (`deferStatus`, `dropStatus`) said becomes the type's own
+ * Defer and Drop actions, and the settings go, so a type that used them keeps its buttons.
+ */
+function addTaskDateRoles(store: Store, spaceId: Id, at: IsoDateTime) {
+  for (const type of store.listTypes(spaceId)) {
+    if (type.system !== 'task') continue
+    const { deferField, deferStatus, dropStatus, ...settings } = (type.quickActions ?? {}) as LegacyQuickActions
+    const isDate = (p: PropertyDef): p is DatePropertyDef => p.kind === 'date'
+    const dates = type.properties.filter(isDate)
+    const plan = dates.find((p) => p.role === 'plan') ?? dates.find((p) => p.id === deferField && p.id !== DUE_PROPERTY_ID) ?? dates.find((p) => p.id === PLAN_PROPERTY_ID || /^do date$/i.test(p.name.trim()))
+    let properties: PropertyDef[] = type.properties.map((p) => (p.id === DUE_PROPERTY_ID && isDate(p) && !p.role ? { ...p, role: 'deadline' } : p.id === plan?.id && isDate(p) ? { ...p, role: 'plan' } : p))
+    if (!plan) {
+      let id: Id = PLAN_PROPERTY_ID
+      while (properties.some((p) => p.id === id)) id += '-2'
+      const at = properties.findIndex((p) => p.id === DUE_PROPERTY_ID)
+      properties.splice(at >= 0 ? at + 1 : properties.length, 0, { id, kind: 'date', name: 'Do date', role: 'plan' })
+    }
+    const next: ObjectType = { ...type, properties }
+    let actions = settings.actions
+    // Defer and Drop as the settings had them, written out as actions (a type with its own list has them already).
+    if (!actions && (deferStatus || dropStatus)) {
+      const status = statusOptionsOf(next)
+      const deferTo = status.find((o) => o.id === deferStatus)
+      const dropTo = closedOptionsOf(next).find((o) => o.id === dropStatus && o.id !== doneOptionOf(next)?.id)
+      actions = defaultQuickActions(next).map((action): QuickActionDef => {
+        if (action.id === 'defer' && deferTo) return { ...action, changes: [...action.changes, { field: 'status', value: { kind: 'value', value: { kind: 'select', value: [deferTo.id] } } }] }
+        if (action.id === 'drop' && dropTo) return { ...plainStatusAction(next, dropTo), id: 'drop', name: 'Drop' }
+        return action
+      })
+    }
+    const quickActions = { ...settings, ...(actions ? { actions } : {}) }
+    const { quickActions: _old, ...rest } = next
+    store.putType({ ...rest, ...(Object.keys(quickActions).length ? { quickActions } : {}), updatedAt: at })
+  }
 }
 
 /**

@@ -1,25 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes } from '../src/builtin-types.ts'
-import type { ObjectType, PropertyDef, PropertyValue, QuickActionDef } from '../src/model.ts'
-import { completeRepeat } from '../src/calendar.ts'
+import type { DateValue, ObjectType, PropertyDef, PropertyValue, QuickActionDef } from '../src/model.ts'
+import { completeRepeat, moveOccurrenceTo } from '../src/calendar.ts'
 import type { ObjectRecord } from '../src/model.ts'
-import { isClosedTask } from '../src/task-status.ts'
-import { askOf, defaultQuickActions, nextStepFieldOf, quickActionChanges, quickActionEdit, quickActionMessage, quickActionsOf, withAskCleared } from '../src/task-actions.ts'
+import { dropOptionOf, isClosedTask } from '../src/task-status.ts'
+import { askOf, defaultQuickActions, deferActionOf, nextStepFieldOf, quickActionChanges, quickActionEdit, quickActionMessage, quickActionsOf, withAskCleared } from '../src/task-actions.ts'
 
 const AT = '2026-11-13T12:00:00.000Z'
 const types = createBuiltinTypes('s', AT)
 const task = types.find((t) => t.system === 'task')!
 const page = types.find((t) => t.system === 'page')!
-const context = { today: '2026-11-13', nextWeek: '2026-11-15', me: 'u1' }
+const context = { today: '2026-11-13', nextWeek: '2026-11-15', me: 'u1', timeZone: 'UTC' }
 
-/** The built-in task with "Scheduled", "Dropped", a "Do date" and a "Next step", as a space set up for triage has. */
+/** The built-in task (it has a "Do date") with "Scheduled", "Dropped" and a "Next step", as a space set up for triage has. */
 function triageTask(quickActions?: ObjectType['quickActions']): ObjectType {
   const properties: PropertyDef[] = task.properties.map((p) =>
     p.id === 'status' && p.kind === 'select'
       ? { ...p, options: [...p.options, { id: 'scheduled', label: 'Scheduled', status: 'todo' }, { id: 'dropped', label: 'Dropped', status: 'done' }] }
       : p
   )
-  const added: PropertyDef[] = [{ id: 'dodate', kind: 'date', name: 'Do date' }, { id: 'next', kind: 'text', name: 'Next step' }]
+  const added: PropertyDef[] = [{ id: 'next', kind: 'text', name: 'Next step' }]
   return { ...task, properties: [...properties, ...added], ...(quickActions ? { quickActions } : {}) }
 }
 
@@ -28,22 +28,32 @@ const day = (value: string, rrule?: string): PropertyValue => ({ kind: 'date', v
 const names = (type: ObjectType) => quickActionsOf(type).map((a) => a.name)
 
 describe('default quick actions', () => {
-  it('are Mark done and Defer (the due date) on the built-in task', () => {
+  it('are Mark done and Defer (the Do date, never the deadline) on the built-in task', () => {
     expect(names(task)).toEqual(['Mark done', 'Defer'])
-    expect(askOf(task, quickActionsOf(task)[1]!)?.def.id).toBe('due')
+    expect(askOf(task, quickActionsOf(task)[1]!)?.def.id).toBe('dodate')
+    expect(deferActionOf(task)?.id).toBe('defer')
   })
 
   it('add Drop for a second option meaning done, and Next step for a next step field', () => {
     expect(names(triageTask({ nextStepField: 'next' }))).toEqual(['Mark done', 'Defer', 'Drop', 'Next step'])
   })
 
-  it('follow the older settings, falling back when they name something gone or of the wrong kind', () => {
-    const defer = defaultQuickActions(triageTask({ deferField: 'dodate', deferStatus: 'scheduled' })).find((a) => a.id === 'defer')!
-    expect(defer.changes).toEqual([{ field: 'dodate', value: { kind: 'ask' } }, { field: 'status', value: { kind: 'value', value: status('scheduled') } }])
-    const fallback = defaultQuickActions(triageTask({ deferField: 'priority', deferStatus: 'gone', dropStatus: 'done', nextStepField: 'dodate' }))
-    expect(fallback.map((a) => a.id)).toEqual(['done', 'defer', 'drop'])
-    expect(fallback[1]!.changes).toEqual([{ field: 'due', value: { kind: 'ask' } }])
+  it('defer the date with the plan role, and have no Defer without one', () => {
+    const moved = { ...task, properties: task.properties.map((p) => (p.id === 'dodate' ? { ...p, id: 'work' } : p)) }
+    expect(defaultQuickActions(moved).find((a) => a.id === 'defer')?.changes).toEqual([{ field: 'work', value: { kind: 'ask' } }])
+    const unplanned = { ...task, properties: task.properties.filter((p) => p.id !== 'dodate') }
+    expect(names(unplanned)).toEqual(['Mark done'])
+    expect(deferActionOf(unplanned)).toBeUndefined()
     expect(nextStepFieldOf(triageTask({ nextStepField: 'dodate' }))).toBeUndefined()
+  })
+
+  it('drop with the status the type\'s own Drop action sets, else the second option meaning done', () => {
+    const extra = { ...triageTask(), properties: triageTask().properties.map((p) => (p.id === 'status' && p.kind === 'select' ? { ...p, options: [...p.options, { id: 'cancelled', label: 'Cancelled', status: 'done' as const }] } : p)) }
+    expect(dropOptionOf(extra)?.id).toBe('dropped')
+    const own = { ...extra, quickActions: { actions: [{ id: 'drop', name: 'Drop', changes: [{ field: 'status', value: { kind: 'value' as const, value: status('cancelled') } }] }] } }
+    expect(dropOptionOf(own)?.id).toBe('cancelled')
+    // Done itself is never Drop.
+    expect(dropOptionOf({ ...own, quickActions: { actions: [{ id: 'drop', name: 'Drop', changes: [{ field: 'status', value: { kind: 'value' as const, value: status('done') } }] }] } })?.id).toBe('dropped')
   })
 
   it('are none on other types', () => {
@@ -98,7 +108,7 @@ describe('quick actions on a type that is not a task', () => {
   it('run as a task’s do, with Undo values and a message', () => {
     expect(quickActionChanges(project, { props: {} }, reviewed, context)).toEqual({ nextreview: day('2026-11-20') })
     const edit = quickActionEdit(project, { id: 'p1', props: {} }, reviewed, context)
-    expect(edit).toEqual({ id: 'p1', values: { nextreview: day('2026-11-20') }, before: { nextreview: undefined } })
+    expect(edit).toEqual({ id: 'p1', values: { nextreview: day('2026-11-20') }, before: { nextreview: undefined }, days: { nextreview: '2026-11-20' } })
   })
 
   it('hide behind a status option meaning done, as a task’s do', () => {
@@ -144,10 +154,26 @@ describe('quickActionChanges', () => {
     expect(run(changes)).toBeUndefined()
   })
 
-  it('keeps a repeating date repeating', () => {
-    const props = { due: day('2026-11-13', 'FREQ=WEEKLY') }
-    expect(run([{ field: 'due', value: { kind: 'ask' } }], props, day('2026-11-20'))).toEqual({ due: day('2026-11-20', 'FREQ=WEEKLY') })
-    expect(run([{ field: 'due', value: { kind: 'day', days: 0 } }], props)).toEqual({ due: day('2026-11-13', 'FREQ=WEEKLY') })
+  it('moves only this occurrence of a repeating date, never the series', () => {
+    const props = { dodate: day('2026-11-13', 'FREQ=WEEKLY') }
+    const withRule = { ...context, moveOccurrence: (value: DateValue, to: string) => moveOccurrenceTo(value, to, 'UTC') }
+    const moved = quickActionChanges(type, { props }, { id: 'x', name: 'X', changes: [{ field: 'dodate', value: { kind: 'ask' } }] }, withRule, day('2026-11-17'))!.dodate
+    expect(moved).toEqual({ kind: 'date', value: { start: '2026-11-13T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY', exceptions: { '2026-11-13T00:00:00.000Z': { start: '2026-11-17T00:00:00.000Z' } } } })
+    // Moved again to where the rule puts it, the exception goes and the series is as it was.
+    const again = quickActionChanges(type, { props: { dodate: moved! } }, { id: 'x', name: 'X', changes: [{ field: 'dodate', value: { kind: 'day', days: 0 } }] }, withRule)!.dodate
+    expect(again).toEqual(props.dodate)
+    // Without the rule parser a repeating date is left as it is.
+    expect('dodate' in run([{ field: 'dodate', value: { kind: 'ask' } }], props, day('2026-11-17'))!).toBe(false)
+  })
+
+  it('keeps the time of day, the end and what else a date holds when moving it to a day', () => {
+    const timed: PropertyValue = { kind: 'date', value: { start: '2026-11-18T15:30:00.000Z', end: '2026-11-18T16:30:00.000Z', resolution: 'time', timeZone: 'UTC' } }
+    expect(run([{ field: 'dodate', value: { kind: 'ask' } }], { dodate: timed }, day('2026-11-20'))!.dodate).toEqual({ kind: 'date', value: { start: '2026-11-20T15:30:00.000Z', end: '2026-11-20T16:30:00.000Z', resolution: 'time', timeZone: 'UTC' } })
+    const span: PropertyValue = { kind: 'date', value: { start: '2026-11-18T00:00:00.000Z', end: '2026-11-19T00:00:00.000Z', resolution: 'day' } }
+    expect(run([{ field: 'dodate', value: { kind: 'ask' } }], { dodate: span }, day('2026-11-20'))!.dodate).toEqual({ kind: 'date', value: { start: '2026-11-20T00:00:00.000Z', end: '2026-11-21T00:00:00.000Z', resolution: 'day' } })
+    // A time in a zone that changes its clock keeps the wall-clock time (9:00 Toronto before and after 1 Nov).
+    const toronto: PropertyValue = { kind: 'date', value: { start: '2026-10-30T13:00:00.000Z', resolution: 'time' } }
+    expect(quickActionChanges(type, { props: { dodate: toronto } }, { id: 'x', name: 'X', changes: [{ field: 'dodate', value: { kind: 'ask' } }] }, { ...context, timeZone: 'America/Toronto' }, day('2026-11-03'))!.dodate).toEqual({ kind: 'date', value: { start: '2026-11-03T14:00:00.000Z', resolution: 'time' } })
   })
 })
 
@@ -163,19 +189,20 @@ describe('isClosedTask', () => {
 })
 
 describe('an action on an object', () => {
-  const type = triageTask({ deferField: 'dodate', deferStatus: 'scheduled' })
-  const defer = quickActionsOf(type).find((a) => a.id === 'defer')!
+  const type = triageTask()
+  // The type's own Defer, which also sets the Scheduled status.
+  const defer: QuickActionDef = { id: 'defer', name: 'Defer', changes: [{ field: 'dodate', value: { kind: 'ask' } }, { field: 'status', value: { kind: 'value', value: status('scheduled') } }] }
   const objects: { id: string; props: Record<string, PropertyValue> }[] = [
     { id: 'a', props: { status: status('todo'), dodate: day('2026-11-01') } },
     { id: 'b', props: { dodate: day('2026-11-02', 'FREQ=WEEKLY') } },
     { id: 'c', props: {} },
   ]
-  const format = { longDay: (d: string) => `<${d}>`, dayOfTime: (iso: string) => iso.slice(0, 10) }
+  const format = { longDay: (d: string) => `<${d}>`, timeZone: 'UTC' }
 
-  it('writes its values, a date that repeats keeping its own rule, with the values before', () => {
-    const [a, b, c] = objects.map((o) => quickActionEdit(type, o, defer, context, day('2026-11-20'))!)
+  it('writes its values with the values before', () => {
+    const [a, b, c] = objects.map((o) => quickActionEdit(type, o, defer, { ...context, moveOccurrence: (v, to) => moveOccurrenceTo(v, to, 'UTC') }, day('2026-11-20'))!)
     expect(a!.values).toEqual({ dodate: day('2026-11-20'), status: status('scheduled') })
-    expect(b!.values.dodate).toEqual(day('2026-11-20', 'FREQ=WEEKLY'))
+    expect(b!.values.dodate).toMatchObject({ kind: 'date', value: { rrule: 'FREQ=WEEKLY', start: '2026-11-02T00:00:00.000Z', exceptions: { '2026-11-02T00:00:00.000Z': { start: '2026-11-20T00:00:00.000Z' } } } })
     expect(a!.before).toEqual({ dodate: day('2026-11-01'), status: status('todo') })
     expect(c!.before).toEqual({ dodate: undefined, status: undefined })
   })
@@ -187,7 +214,7 @@ describe('an action on an object', () => {
   it('clears the asked field for an empty answer', () => {
     const nextStep = quickActionsOf(triageTask({ nextStepField: 'next' })).find((a) => a.id === 'next-step')!
     const edit = quickActionEdit(type, { id: 'a', props: { next: { kind: 'text', value: 'Call' } } }, withAskCleared(type, nextStep), context)
-    expect(edit).toEqual({ id: 'a', values: { next: undefined }, before: { next: { kind: 'text', value: 'Call' } } })
+    expect(edit).toEqual({ id: 'a', values: { next: undefined }, before: { next: { kind: 'text', value: 'Call' } }, days: {} })
   })
 
   it('keeps the due date of a repeating task in Undo when Done closes it, as completeRepeat moves it', () => {
@@ -224,12 +251,15 @@ describe('an action on an object', () => {
     expect('due' in quickActionChanges(type, late, defer, context, day('2026-11-20'))!).toBe(false)
     // A due date that repeats is a series, not a deadline to push: left alone.
     expect('due' in quickActionChanges(type, { props: { due: day('2026-11-18', 'FREQ=WEEKLY') } }, defer, moving, day('2026-11-20'))!).toBe(false)
-    // A timed due date keeps its time of day, and a span its length.
+    // A timed deadline keeps its time of day, and a span its length.
     const timed: PropertyValue = { kind: 'date', value: { start: '2026-11-18T15:30:00.000Z', end: '2026-11-18T16:30:00.000Z', resolution: 'time' } }
     expect(quickActionChanges(type, { props: { due: timed } }, defer, moving, day('2026-11-20'))!.due).toEqual({ kind: 'date', value: { start: '2026-11-20T15:30:00.000Z', end: '2026-11-20T16:30:00.000Z', resolution: 'time' } })
-    // Defer that sets the due date itself has nothing to take along.
-    const dueDefer = quickActionsOf(task)[1]!
+    // An action that sets the deadline itself has nothing to take along.
+    const dueDefer: QuickActionDef = { id: 'due', name: 'Due', changes: [{ field: 'due', value: { kind: 'ask' } }] }
     expect(quickActionChanges(task, late, dueDefer, moving, day('2026-11-20'))).toEqual({ due: day('2026-11-20') })
+    // A deadline at 9:00 Toronto moved across the 1 Nov clock change is still 9:00.
+    const nine: PropertyValue = { kind: 'date', value: { start: '2026-10-30T13:00:00.000Z', resolution: 'time' } }
+    expect(quickActionChanges(type, { props: { due: nine } }, defer, { ...moving, timeZone: 'America/Toronto' }, day('2026-11-03'))!.due).toEqual({ kind: 'date', value: { start: '2026-11-03T14:00:00.000Z', resolution: 'time' } })
   })
 
   it('says the days set and a day past the due date', () => {

@@ -52,8 +52,14 @@ try {
       { id: 'inbox', label: 'Inbox', status: 'todo' }, { id: 'next', label: 'Next', status: 'todo' },
       { id: 'scheduled', label: 'Scheduled', status: 'todo' }, { id: 'hold', label: 'On hold' },
       { id: 'done', label: 'Done', status: 'done' }, { id: 'drop', label: 'Dropped', status: 'done' },
-    ] } : p).concat([{ id: 'nextstep', name: 'Next step', kind: 'text' }, { id: 'do', name: 'Do date', kind: 'date' }]),
-    quickActions: { nextStepField: 'nextstep', deferField: 'do', deferStatus: 'scheduled', reviewEvery: 7, triageStatuses: ['inbox'] },
+    ] } : p).concat([{ id: 'nextstep', name: 'Next step', kind: 'text' }]),
+    // The type's own Defer sets the Do date (the built-in plan date) and the Scheduled status.
+    quickActions: { nextStepField: 'nextstep', reviewEvery: 7, triageStatuses: ['inbox'], actions: [
+      { id: 'done', name: 'Mark done', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['done'] } } }] },
+      { id: 'defer', name: 'Defer', changes: [{ field: 'dodate', value: { kind: 'ask' } }, { field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['scheduled'] } } }] },
+      { id: 'drop', name: 'Drop', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['drop'] } } }] },
+      { id: 'next-step', name: 'Next step', changes: [{ field: 'nextstep', value: { kind: 'ask' } }] },
+    ] },
     views: [{ id: 'all', name: 'All tasks', layout: 'list', sort: [{ field: 'createdAt', direction: 'asc' }] }, { id: viewId, name: 'On hold — due for review', layout: 'list', filter: { kind: 'group', operator: 'and', items: [
       { kind: 'filter', field: 'status', operator: 'is', value: { kind: 'literal', value: ['hold'] } }, { kind: 'filter', field: 'reviewDue', operator: 'is-checked' },
     ] } }],
@@ -107,7 +113,7 @@ try {
   assert.equal(await page.locator('[data-process-reviewed]').count(), 0, 'a new task has no Keep')
   assert.equal(await page.locator('[data-process-more], [data-process-notes-toggle]').count(), 0)
   // Four buttons, none highlighted (a new task has no status of its own to keep); the rest are links.
-  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => `${el.dataset.processRole}:${el.dataset.processChoice}`)), ['next:next', 'schedule:scheduled', 'done:done', 'drop:drop'])
+  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => `${el.dataset.processRole}:${el.dataset.processChoice}`)), ['next:next', 'defer:scheduled', 'done:done', 'drop:drop'])
   assert.deepEqual(await page.locator('[data-process-links] [data-process-choice]').evaluateAll((els) => els.map((el) => el.dataset.processChoice)), ['hold'])
   assert.equal(new Set(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor))).size, 1, 'no button highlighted on a new task')
   assert.match(await page.locator('[data-process-skip]').innerText(), /Later/)
@@ -144,26 +150,25 @@ try {
   await until(async () => !(await propsOf(a.id)).status, 'undo restores the incoming status')
   assert.equal(await currentTitle(), b.title, 'Undo does not move the review')
 
-  step('a status that asks a date (Scheduled): the question, failure/Retry in HTTP mode, then on to the check-ins')
+  step('Defer… (the type\'s own Defer, setting Scheduled) asks a date; Tomorrow saves at once; failure/Retry in HTTP mode; then on to the check-ins')
   await click('[data-process-choice="scheduled"]')
-  await page.locator('[data-defer-menu] button').filter({ hasText: /^Tomorrow$/ }).click()
   if (process.env.MODE === 'json') {
     await page.route(`**/api/objects/${b.id}`, (route) => route.request().method() === 'PUT' ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Test save failure' }) }) : route.continue())
-    await click('[data-ask-save]')
+    await page.locator('[data-defer-menu] button').filter({ hasText: /^Tomorrow$/ }).click()
     await page.locator('[data-ask-error]').waitFor()
     assert.equal((await page.locator('[data-ask-save]').innerText()).trim(), 'Retry')
     await page.unroute(`**/api/objects/${b.id}`)
-  }
-  await click('[data-ask-save]')
-  await until(async () => (await propsOf(b.id)).status?.value[0] === 'scheduled', 'Scheduled placed the task')
-  assert.equal((await propsOf(b.id)).do.value.start.slice(0, 10), tomorrow)
+    await click('[data-ask-save]')
+  } else await page.locator('[data-defer-menu] button').filter({ hasText: /^Tomorrow$/ }).click()
+  await until(async () => (await propsOf(b.id)).status?.value[0] === 'scheduled', 'Defer placed the task in Scheduled')
+  assert.equal((await propsOf(b.id)).dodate.value.start.slice(0, 10), tomorrow)
   await until(async () => (await currentTitle()) === c.title, 'on to the first check-in')
   assert.equal((await position.innerText()).trim(), 'Check-in 1 of 2')
 
   step('a check-in: its status is pressed, Keep names it, Keep records Reviewed and leaves the plan')
   // The status it has is Keep (highlighted), never a button of its own; Next is not a link either.
   assert.equal(await page.locator('[data-process-choice="next"]').count(), 0)
-  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole)), ['schedule', 'done', 'drop'])
+  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole)), ['defer', 'done', 'drop'])
   assert.notEqual(await page.locator('[data-process-reviewed]').evaluate((el) => getComputedStyle(el).backgroundColor), await page.locator('[data-process-role="done"]').evaluate((el) => getComputedStyle(el).backgroundColor))
   assert.match(await page.locator('[data-process-links]').innerText(), /Move to\s+On hold/)
   assert.match(await page.locator('[data-process-reviewed]').innerText(), /Keep in Next/)
@@ -178,7 +183,7 @@ try {
   await click('[data-process-skip]')
   await page.locator('[data-process-end]').waitFor()
   const summary = await page.locator('[data-process-summary]').innerText()
-  assert.match(summary, /Moved to Scheduled 1/)
+  assert.match(summary, /Defer 1/)
   assert.match(summary, /Reviewed 1/)
   assert.match(summary, /2 left for later/, 'the undone task and the one left for later')
   assert.equal((await propsOf(d.id)).status.value[0], 'hold')

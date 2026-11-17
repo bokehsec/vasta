@@ -1,12 +1,13 @@
 <script setup lang="ts">
-// The inside of a quick action's question (QuickAskHost): a day (tomorrow, next week or one picked
-// on a calendar, which only select it: the day, and where the due date ends up, show before Save
+// The inside of a quick action's question (QuickAskHost): a day (tomorrow and next week save at
+// once, with Undo, unless that is after the deadline: then the warning shows and Save waits; one
+// picked on a calendar only selects it: the day, and where the deadline ends up, show before Save
 // writes it, keeping deadlines unless explicitly moved) or a line of text
 // (a number, a link); an empty line clears the field. Cancel and Save are always on screen. It stays
 // open with what was typed or picked while saving, and when nothing could be saved says why and
 // offers Retry.
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { DUE_PROPERTY_ID, addDays } from '@vasta/core'
+import { addDays } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
 import { greyButton, mainButton } from '../lib/buttons.ts'
 import { nextWeekStart } from '../lib/calendar.ts'
@@ -29,7 +30,7 @@ const nextWeek = computed(() => nextWeekStart())
 // The day picked, if any: the one the object has at first. Nothing is written until Save.
 const picked = ref<string | undefined>(props.ask.day)
 // "Also move the due date": off at first — rescheduling replaces the plan, and a deadline moves
-// only by that explicit choice; a task planned past its due date is left overdue on purpose.
+// only by that explicit choice; a task planned past its deadline is left overdue on purpose.
 const moveDue = ref(false)
 
 const saving = computed(() => props.ask.state.saving)
@@ -40,7 +41,6 @@ const submitText = computed(() => (saving.value ? 'Saving…' : failed.value ? '
 const dueLine = computed(() => {
   const { ask } = props
   const day = picked.value
-  if (ask.def.id === DUE_PROPERTY_ID) return undefined
   if (!ask.due) return undefined
   const due = `Due ${longDay(ask.due)}`
   if (!day || day <= ask.due) return due
@@ -53,7 +53,7 @@ const dueLine = computed(() => {
 // A plan after its unchanged deadline needs a visible warning, including repeating deadlines.
 const afterDue = computed(() => {
   const { ask } = props
-  return ask.def.kind === 'date' && ask.def.id !== DUE_PROPERTY_ID && !!ask.due && !!picked.value && picked.value > ask.due && (!moveDue.value || !ask.dueMoves(picked.value))
+  return ask.def.kind === 'date' && !!ask.due && !!picked.value && picked.value > ask.due && (!moveDue.value || !ask.dueMoves(picked.value))
 })
 
 const problem = computed(() => (props.ask.def.kind === 'date' ? undefined : textProblem(props.ask.def, text.value)))
@@ -61,6 +61,12 @@ const stays = computed(() => (props.ask.closes === undefined ? undefined : props
 
 function pick(day: string) {
   if (!saving.value) picked.value = day
+}
+// Tomorrow and next week are one tap: saved at once (Undo is in the notice), but past the deadline
+// the warning shows first and Save waits.
+function preset(day: string) {
+  pick(day)
+  if (!afterDue.value) save()
 }
 const canSave = computed(() => !saving.value && (props.ask.def.kind === 'date' ? !!picked.value : !problem.value))
 
@@ -83,8 +89,8 @@ const saveClass = [mainButton, 'flex-1']
   <div v-if="ask.def.kind === 'date'" class="space-y-3 p-2 text-sm" data-defer-menu :aria-busy="saving || undefined">
     <p v-if="ask.scope" class="line-clamp-2 text-xs text-ink-soft max-md:text-sm" data-ask-scope>{{ ask.scope }}</p>
     <div class="flex gap-2">
-      <button :class="presetClass(tomorrow)" :aria-pressed="picked === tomorrow" :disabled="saving" @click="pick(tomorrow)">Tomorrow</button>
-      <button :class="presetClass(nextWeek)" :aria-pressed="picked === nextWeek" :disabled="saving" @click="pick(nextWeek)">Next week</button>
+      <button :class="presetClass(tomorrow)" :aria-pressed="picked === tomorrow" :disabled="saving" @click="preset(tomorrow)">Tomorrow</button>
+      <button :class="presetClass(nextWeek)" :aria-pressed="picked === nextWeek" :disabled="saving" @click="preset(nextWeek)">Next week</button>
     </div>
     <MiniMonth :selected="picked" @pick="pick" />
     <p class="font-medium" :class="picked ? 'text-ink' : 'text-ink-faint'" data-picked-day>{{ ask.def.name }}: {{ picked ? longDay(picked) : 'choose a day' }}</p>

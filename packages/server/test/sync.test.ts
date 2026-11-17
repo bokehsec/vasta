@@ -287,11 +287,20 @@ describe('sync', () => {
     await a.push()
     expect(store.getType('type-book')).not.toHaveProperty('openIn')
     // What its quick actions set: ids of its properties and options, or (null) the defaults.
-    a.edit('types', 'type-book', { quickActions: { deferField: 'due' } }, 's')
-    a.edit('types', 'type-book', { quickActions: { deferField: 3 } }, 's')
+    a.edit('types', 'type-book', { quickActions: { nextStepField: 'due' } }, 's')
+    a.edit('types', 'type-book', { quickActions: { nextStepField: 3 } }, 's')
     a.edit('types', 'type-book', { quickActions: { actions: [{ id: 'x', name: 'X', changes: [{ field: 'f' }] }] } }, 's')
-    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for quickActions', 'invalid value for quickActions'])
-    expect(store.getType('type-book')?.quickActions).toEqual({ deferField: 'due' })
+    // The date and status settings of Defer and Drop are gone (they became roles and actions): a stale copy is refused.
+    a.edit('types', 'type-book', { quickActions: { deferField: 'due' } }, 's')
+    a.edit('types', 'type-book', { quickActions: { dropStatus: 'dropped' } }, 's')
+    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for quickActions', 'invalid value for quickActions', 'invalid value for quickActions', 'invalid value for quickActions'])
+    expect(store.getType('type-book')?.quickActions).toEqual({ nextStepField: 'due' })
+    // A date's role is the plan or the deadline, and only a date has one.
+    a.edit('types', 'type-book', { properties: [{ id: 'due', kind: 'date', name: 'Due', role: 'deadline' }, { id: 'work', kind: 'date', name: 'Do date', role: 'plan' }] }, 's')
+    a.edit('types', 'type-book', { properties: [{ id: 'due', kind: 'date', name: 'Due', role: 'soon' }] }, 's')
+    a.edit('types', 'type-book', { properties: [{ id: 'n', kind: 'number', name: 'N', role: 'plan' }] }, 's')
+    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for properties', 'invalid value for properties'])
+    expect(store.getType('type-book')?.properties.map((p) => p.id)).toEqual(['due', 'work'])
     // Workflow settings sync through the replica, including empty incoming statuses and zero days.
     a.edit('types', 'type-book', { quickActions: { triageStatuses: ['inbox'], reviewEvery: 7 } }, 's')
     a.edit('types', 'type-book', { quickActions: { triageStatuses: [], reviewEvery: 0 } }, 's')

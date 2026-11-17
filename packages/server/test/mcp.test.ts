@@ -66,8 +66,13 @@ describe('MCP endpoint', () => {
     store.putUser({ ...store.getUser(ana.user.id)!, name: 'Ana Lima' })
     const types = await call('list_types')
     expect(types.find((t: { name: string }) => t.name === 'Task').properties.find((p: { name: string }) => p.name === 'Assignee')).toEqual({ id: 'assignee', name: 'Assignee', kind: 'person', multiple: false })
-    const forAna = await call('create_object', { type: 'Task', title: 'Water the plants', properties: { Assignee: 'ana' } })
-    await call('create_object', { type: 'Task', title: 'Pay the bills', properties: { Assignee: 'me' } })
+    // Dates say what they mean: the plan is the day it will be worked on, the deadline the day it is due by.
+    const dates = types.find((t: { name: string }) => t.name === 'Task').properties.filter((p: { kind: string }) => p.kind === 'date')
+    expect(dates.map((d: { id: string; role?: string }) => [d.id, d.role])).toEqual([['due', 'deadline'], ['dodate', 'plan'], ['reviewed', undefined]])
+    const forAna = await call('create_object', { type: 'Task', title: 'Water the plants', properties: { Assignee: 'ana', Status: 'To do' } })
+    await call('create_object', { type: 'Task', title: 'Pay the bills', properties: { Assignee: 'me', Status: 'To do' } })
+    // A task with no status is new: Review's first queue, not a check-in.
+    await call('create_object', { type: 'Task', title: 'Brand new' })
     expect(await call('get_object', { id: forAna.id })).toMatchObject({ properties: { Assignee: 'Ana Lima (ana)' }, createdBy: 'arie (arie)', updatedBy: 'arie (arie)' })
     const mine = await call('query', { types: ['Task'], where: [{ field: 'Assignee', operator: 'contains', value: 'me' }] })
     expect(mine.objects.map((o: { title: string }) => o.title)).toEqual(['Pay the bills'])
@@ -77,7 +82,7 @@ describe('MCP endpoint', () => {
     await call('add_comment', { id: forAna.id, text: 'Before Friday, @ana' })
     expect((await call('get_object', { id: forAna.id })).comments).toEqual([{ by: 'arie (arie)', at: expect.any(String), text: 'Before Friday, @ana' }])
     await expect(call('add_comment', { id: forAna.id, text: '  ' })).rejects.toThrow('needs text')
-    // Due for review: never reviewed, so both; one marked reviewed today drops out.
+    // Due for review (Review's check-ins): never reviewed, so both; one marked reviewed today drops out; a new task is not one.
     const due = async () => (await call('query', { types: ['Task'], where: [{ field: 'Due for review', operator: 'is-checked' }], sort: [{ field: 'title' }] })).objects.map((o: { title: string }) => o.title)
     expect(await due()).toEqual(['Pay the bills', 'Water the plants'])
     await call('update_object', { id: forAna.id, properties: { 'Last reviewed': new Date().toISOString().slice(0, 10) } })

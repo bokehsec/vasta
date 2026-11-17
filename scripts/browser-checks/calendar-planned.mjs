@@ -41,7 +41,8 @@ try {
   const space = (await get('/api/spaces'))[0], bundle = await get(`/api/spaces/${space.id}`)
   original = await get('/api/types/' + bundle.types.find(t => t.system === 'task').id)
   const status = original.properties.find(p => p.id === 'status'), open = status.options.find(o => o.status === 'todo').id, done = status.options.find(o => o.status === 'done').id
-  const type = { ...original, properties: [...original.properties.filter(p => p.id !== 'work' && p.id !== 'checkback'), { id: 'work', name: 'Do date', kind: 'date' }, { id: 'checkback', name: 'Check back', kind: 'date' }].map(p => p.id === 'status' ? { ...p, options: [...p.options.filter(o => o.id !== 'drop'), { id: 'drop', label: 'Dropped', status: 'done' }] } : p), quickActions: { deferField: 'work' } }
+  // The plan is the date with the plan role (here "work", in place of the built-in Do date); Check back is a plain date.
+  const type = { ...original, properties: [...original.properties.filter(p => p.id !== 'work' && p.id !== 'checkback' && p.role !== 'plan'), { id: 'work', name: 'Do date', kind: 'date', role: 'plan' }, { id: 'checkback', name: 'Check back', kind: 'date' }].map(p => p.id === 'status' ? { ...p, options: [...p.options.filter(o => o.id !== 'drop'), { id: 'drop', label: 'Dropped', status: 'done' }] } : p), quickActions: undefined }
   await put('/api/types/' + type.id, type)
   async function make(name, props) { const o = await post('/api/objects', { typeId: type.id, title: tag + ' ' + name, props: { status: { kind: 'select', value: [open] }, ...props } }); objects.push(o); return o }
   const planned = await make('Planned', { work: dateValue(15), due: dateValue(22) })
@@ -90,7 +91,7 @@ try {
   await until(async () => await entry('Planned').count() === 0, 'plan hidden with Tasks')
   assert.equal(await entry('Deadline').count(), 0)
   await page.getByRole('button', { name: /^Show(?:\s+\d+\s+hidden)?$/ }).click(); await page.getByLabel('Tasks', { exact: true }).check(); await page.keyboard.press('Escape')
-  console.log('• changing deadline keeps plan, moving plan too requires explicit action')
+  console.log('• changing deadline keeps plan; a deadline before the plan offers "Also plan for", which is explicit')
   await page.goto(`${base}/o/${same.id}`); await page.waitForSelector('textarea[data-large-text]')
   const dueRow = page.locator('.vasta-prop-row', { has: page.locator('.vasta-prop-name', { hasText: /^\s*Due\s*$/ }) })
   await dueRow.getByRole('button').first().click()
@@ -98,13 +99,19 @@ try {
   await input.fill(day(22)); await input.dispatchEvent('change')
   await until(async () => (await stored(same)).due.value.start.startsWith(day(22)), 'deadline changed')
   assert.ok((await stored(same)).work.value.start.startsWith(day(15)))
+  // A deadline after the plan has nothing to pull in.
+  assert.equal(await page.locator('[data-move-related-date]').count(), 0)
+  await input.fill(day(10)); await input.dispatchEvent('change')
+  await until(async () => (await stored(same)).due.value.start.startsWith(day(10)), 'deadline moved before the plan')
+  assert.ok((await stored(same)).work.value.start.startsWith(day(15)))
+  assert.match(await page.locator('[data-move-related-date]').innerText(), /Also plan for.*10/)
   await page.locator('[data-move-related-date]').click()
-  await until(async () => (await stored(same)).work.value.start.startsWith(day(22)), 'explicit plan move')
+  await until(async () => (await stored(same)).work.value.start.startsWith(day(10)), 'explicit plan move')
   await page.keyboard.press('Escape'); await go()
   assert.equal(await entry('SameDay').count(), 0)
   assert.equal((await stored(same)).status.value[0], open)
   await go(22)
-  assert.equal(await entry('SameDay').count(), 1)
+  assert.equal(await entry('SameDay').count(), 0)
   assert.equal(await entry('Repeat').locator('button[title="Mark as done"]').count(), 0)
   console.log('• phone layout, no row action clutter, completion and Undo')
   await page.setViewportSize({ width: 390, height: 844 }); await go(); await page.emulateMedia({ colorScheme: 'dark' })

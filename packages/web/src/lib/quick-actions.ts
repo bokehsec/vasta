@@ -2,8 +2,8 @@
 // or row (TaskQuickActions), a row's menu, a swipe, a circle, a board drop. The runner takes one
 // object. An action that asks for a value asks once (QuickAskHost, mounted in App.vue: under the
 // element pressed, or centred without one or on a phone); then the object is saved and one notice
-// with one Undo puts its previous values back. A day asked for another date than the due date
-// (Defer's Do date) offers to move the due date too when the day is after it, so the task is not
+// with one Undo puts its previous values back. A day asked for another date than the deadline
+// (Defer's Do date) offers to move the deadline too when the day is after it, so the task is not
 // left overdue. The question stays open, with what was typed or picked, until the values are saved:
 // when nothing could be saved it shows why and offers Retry or Cancel; while saving it takes no
 // second answer. Without a question a failed save says so (lastError) and shows no notice.
@@ -11,10 +11,10 @@
 // Drop for a dropped parent); the notice's one Undo then puts the parent and its subtasks back.
 // swipeActionsFor is the one swipe set-up every touch row has (lists, subtasks).
 import { reactive, shallowRef } from 'vue'
-import type { Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionDef } from '@vasta/core'
-import { DUE_PROPERTY_ID, askOf, closingOf, doneOptionOf, dropOptionOf, dueMovedTo, endsRepeat, isClosedTask, plainStatusAction, plannedDateFieldOf, quickActionEdit, quickActionMessage, quickActionsOf, statusActionOf, withAskCleared, type QuickActionContext, type QuickActionEdit } from '@vasta/core'
+import type { DateValue, Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionDef } from '@vasta/core'
+import { askOf, closingOf, deadlineMovedTo, doneOptionOf, dropOptionOf, endsRepeat, isClosedTask, plainStatusAction, quickActionEdit, quickActionMessage, quickActionsOf, statusActionOf, taskDatesOf, withAskCleared, type QuickActionContext, type QuickActionEdit } from '@vasta/core'
 import { dayKey, setProperties } from './actions.ts'
-import { nextWeekStart } from './calendar.ts'
+import { dayOfValue, nextWeekStart, viewerTimeZone } from './calendar.ts'
 import { formatLongDay } from './format.ts'
 import { choiceDialog, type MenuItem } from './overlays.ts'
 import { session } from './session.ts'
@@ -29,13 +29,16 @@ type Values = Record<Id, PropertyValue | undefined>
 export type QuickSave = (id: Id, values: Values) => unknown
 
 export const longDay = (day: string) => formatLongDay(`${day}T00:00:00.000Z`)
-const dayOfTime = (iso: string) => dayKey(new Date(iso))
+/** The day a date property's value falls on, here. */
+export const dayOf = (value: PropertyValue | undefined): string | undefined => (value?.kind === 'date' ? dayOfValue(value.value) : undefined)
 
-/** The day a date value falls on, here. */
-export function dayOf(value: PropertyValue | undefined): string | undefined {
-  if (value?.kind !== 'date') return undefined
-  return value.value.resolution === 'day' ? value.value.start.slice(0, 10) : dayOfTime(value.value.start)
+/** Moves one occurrence of a repeating date (core calendar.ts); its rule parser loads only for an object that has a date that repeats. */
+async function loadOccurrenceMover(): Promise<NonNullable<QuickActionContext['moveOccurrence']>> {
+  const { moveOccurrenceTo } = await import('@vasta/core/calendar')
+  const timeZone = viewerTimeZone()
+  return (value: DateValue, day: string) => moveOccurrenceTo(value, day, timeZone)
 }
+const hasRepeatingDate = (object: Target) => Object.values(object.props).some((v) => v.kind === 'date' && v.value.rrule)
 
 const textOf = (value: PropertyValue | undefined) => (value?.kind === 'text' || value?.kind === 'url' ? value.value : value?.kind === 'number' ? String(value.value) : '')
 
@@ -52,18 +55,18 @@ export interface QuickAsk {
   submitLabel: string
   /** With a custom submit label: whether saving also closes the object (a status the action sets), so the box can say so. */
   closes?: boolean
-  /** The day picked on the calendar at first (the object's own, else none), and the due date shown beside it. */
+  /** The day picked on the calendar at first (the object's own, else none), and the deadline shown beside it. */
   day?: string
   due?: string
   /** The text in the box at first (the object's current value). */
   text: string
   /**
-   * Whether a later day could take the due date along (a day asked for another date, such as
-   * Defer's Do date, and a due date that does not repeat): the question offers "Move the due
+   * Whether a later day could take the deadline along (a day asked for another date, such as
+   * Defer's Do date, and a deadline that does not repeat): the question offers "Move the due
    * date too", off at first so deadlines stay put unless explicitly moved.
    */
   dueMovable: boolean
-  /** The day the due date would move to when the day picked is after it; undefined when it stays. */
+  /** The day the deadline would move to when the day picked is after it; undefined when it stays. */
   dueMoves: (day: string) => string | undefined
   /** Whether the answer is being saved (no second one is taken), and why nothing was saved after the last try. */
   state: { saving: boolean; error: string }
@@ -133,7 +136,10 @@ async function saveEach(edits: readonly QuickActionEdit[], save: QuickSave) {
  */
 export async function runQuickAction(type: ObjectType, target: Target, action: QuickActionDef, options: RunOptions = {}): Promise<QuickActionEdit | undefined> {
   const save = options.save ?? ((id: Id, values: Values) => setProperties(id, values))
-  const context = { today: dayKey(), nextWeek: nextWeekStart(), me: session.user?.id, dayOfTime }
+  const dates = taskDatesOf(type)
+  const deadlineId = dates.deadline?.id
+  const moveOccurrence = hasRepeatingDate(target) ? await loadOccurrenceMover() : undefined
+  const context: QuickActionContext = { today: dayKey(), nextWeek: nextWeekStart(), me: session.user?.id, timeZone: viewerTimeZone(), ...(moveOccurrence ? { moveOccurrence } : {}) }
   let completed: QuickActionEdit | undefined
   let stepsClosed: QuickActionEdit[] = []
   let undoing = false
@@ -142,7 +148,7 @@ export async function runQuickAction(type: ObjectType, target: Target, action: Q
     completed = saved
     const steps = await closeOpenSteps(type, closedBy(type, target, saved), target, context)
     stepsClosed.push(...steps.closed)
-    const message = quickActionMessage(type, action, saved, { longDay, dayOfTime, due: target.props[DUE_PROPERTY_ID] })
+    const message = quickActionMessage(type, action, saved, { longDay, timeZone: context.timeZone, due: deadlineId ? target.props[deadlineId] : undefined })
     const undo = async () => {
       if (undoing) return
       undoing = true
@@ -188,7 +194,7 @@ export async function runQuickAction(type: ObjectType, target: Target, action: Q
     return finish(edit)
   }
 
-  const dueMoves = (day: string) => dayOf(dueMovedTo(type, target, day, dayOfTime))
+  const dueMoves = (day: string) => dayOf(deadlineMovedTo(type, target, day, context.timeZone))
   const closes = options.submitLabel ? closedBy(type, target, quickActionEdit(type, target, action, context, sampleAnswer(asked.def))) !== undefined : undefined
   quickAsk.value?.answer(null)
   return new Promise((resolve) => {
@@ -196,16 +202,16 @@ export async function runQuickAction(type: ObjectType, target: Target, action: Q
     const self: QuickAsk = {
       id: ++asks,
       action,
-      def: plannedDateFieldOf(type)?.id === asked.def.id ? { ...asked.def, name: 'Planned for' } : asked.def,
+      def: dates.plan?.id === asked.def.id ? { ...asked.def, name: 'Planned for' } : asked.def,
       anchor: options.anchor ?? null,
       scope: options.scope ?? (target.title || undefined),
       submitLabel: options.submitLabel ?? 'Save',
       closes,
       day: asked.def.kind === 'date' ? dayOf(target.props[asked.def.id]) : undefined,
-      due: asked.def.id !== DUE_PROPERTY_ID ? dayOf(target.props[DUE_PROPERTY_ID]) : undefined,
+      due: deadlineId && asked.def.id !== deadlineId ? dayOf(target.props[deadlineId]) : undefined,
       text: textOf(target.props[asked.def.id]),
-      // Any later day would move it: a due date there is, that does not repeat.
-      dueMovable: asked.def.kind === 'date' && asked.def.id !== DUE_PROPERTY_ID && !!dueMoves('9999-12-31'),
+      // Any later day would move it: a deadline there is, that does not repeat.
+      dueMovable: asked.def.kind === 'date' && asked.def.id !== deadlineId && !!dueMoves('9999-12-31'),
       dueMoves,
       state,
       answer: async (answer, moveDue) => {

@@ -17,6 +17,8 @@ export const SOURCE_PROPERTY_ID = 'source'
 /** A task's status (a select whose options have status meanings) and its due date. */
 export const STATUS_PROPERTY_ID = 'status'
 export const DUE_PROPERTY_ID = 'due'
+/** The day a task will be worked on (the plan; Defer sets it) — the "Do date". */
+export const PLAN_PROPERTY_ID = 'dodate'
 /** Who a task is for (a person property). */
 export const ASSIGNEE_PROPERTY_ID = 'assignee'
 /** A task that cannot move on (boards show a flag). */
@@ -132,7 +134,8 @@ const specs: Record<SystemTypeKey, BuiltinSpec> = {
           { id: 'done', label: 'Done', status: 'done', color: 'green' },
         ],
       },
-      { id: 'due', kind: 'date', name: 'Due', withTime: true },
+      { id: 'due', kind: 'date', name: 'Due', withTime: true, role: 'deadline' },
+      { id: PLAN_PROPERTY_ID, kind: 'date', name: 'Do date', role: 'plan' },
       { id: ASSIGNEE_PROPERTY_ID, kind: 'person', name: 'Assignee', multiple: false },
       {
         id: 'priority',

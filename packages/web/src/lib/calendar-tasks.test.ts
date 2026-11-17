@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { createBuiltinTypes, newObject, plannedDateFieldOf, type CalendarEntry, type DateValue, type ObjectSummary } from '@vasta/core'
+import { createBuiltinTypes, newObject, taskDatesOf, type CalendarEntry, type DateValue, type ObjectSummary } from '@vasta/core'
 import { objectEntries } from '@vasta/core/calendar'
 import { dayTaskGroups, taskDateRole, taskEntryCheckable } from './calendar-tasks.ts'
 
 const at = '2026-11-16T12:00:00.000Z'
 const base = createBuiltinTypes('space', at).find((t) => t.system === 'task')!
-const task = { ...base, properties: [...base.properties, { id: 'work', kind: 'date' as const, name: 'Do date' }, { id: 'checkback', kind: 'date' as const, name: 'Check back' }], quickActions: { deferField: 'work' } }
+const task = { ...base, properties: [...base.properties.map((p) => (p.id === 'dodate' ? { ...p, id: 'work' } : p)), { id: 'checkback', kind: 'date' as const, name: 'Check back' }] }
 const types = new Map([[task.id, task]])
 const day = (n: number): DateValue => ({ start: `2026-11-${n}T00:00:00.000Z`, resolution: 'day' })
 const timed = (hour: string): DateValue => ({ start: `2026-11-15T${hour}:00.000Z`, resolution: 'time' })
@@ -19,9 +19,10 @@ describe('task calendar dates', () => {
     expect(taskDateRole(task, 'due')).toBe('due')
     expect(taskDateRole(task, 'reviewed')).toBeUndefined()
     expect(taskDateRole(task, 'checkback')).toBeUndefined()
-    expect(plannedDateFieldOf(base)).toBeUndefined()
-    expect(plannedDateFieldOf({ ...task, system: undefined })).toBeUndefined()
-    expect(plannedDateFieldOf({ ...task, quickActions: { actions: [{ id: 'schedule', name: 'Schedule', changes: [{ field: 'work', value: { kind: 'ask' } }] }] } })?.id).toBe('work')
+    expect(taskDatesOf(task).plan?.id).toBe('work')
+    const unplanned = { ...task, properties: task.properties.map((p) => (p.id === 'work' && p.kind === 'date' ? { ...p, role: undefined } : p)) }
+    expect(taskDateRole(unplanned, 'work')).toBeUndefined()
+    expect(taskDateRole({ ...task, system: undefined }, 'work')).toBeUndefined()
   })
   it('combines the same-day all-day plan and deadline into one planned row', () => {
     const g = groups(object(day(15), day(15)))

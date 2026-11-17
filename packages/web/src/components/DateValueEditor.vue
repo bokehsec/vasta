@@ -5,7 +5,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import type { DateValue } from '@vasta/core'
 import { addDays } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
-import { WEEKDAY_CODES, buildRepeat, describeRepeat, formatWeekday, nextWeekStart, parseRepeat, viewerTimeZone, weekdayOf, type RepeatFreq, type RepeatRule } from '../lib/calendar.ts'
+import { WEEKDAY_CODES, buildRepeat, describeRepeat, formatWeekday, dayOfValue, nextWeekStart, parseRepeat, viewerTimeZone, weekdayOf, type RepeatFreq, type RepeatRule } from '../lib/calendar.ts'
 import { formatDate } from '../lib/format.ts'
 import AppIcon from './AppIcon.vue'
 import PopoverMenu from './PopoverMenu.vue'
@@ -21,16 +21,15 @@ onMounted(() => props.autofocus && (open.value = true))
 watch(open, (value) => !value && emit('close'))
 
 const pad = (n: number) => String(n).padStart(2, '0')
-const localDay = (iso: string) => dayKey(new Date(iso))
 const localTime = (iso: string) => {
   const d = new Date(iso)
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 const allDay = computed(() => (props.value ? props.value.resolution === 'day' : !props.withTime))
-const startDay = computed(() => (props.value ? (allDay.value ? props.value.start.slice(0, 10) : localDay(props.value.start)) : ''))
+const startDay = computed(() => (props.value ? dayOfValue(props.value) : ''))
 const startTime = computed(() => (props.value && !allDay.value ? localTime(props.value.start) : '09:00'))
-const endDay = computed(() => (props.value?.end ? (allDay.value ? props.value.end.slice(0, 10) : localDay(props.value.end)) : ''))
+const endDay = computed(() => (props.value?.end ? dayOfValue({ start: props.value.end, resolution: props.value.resolution }) : ''))
 const endTime = computed(() => (props.value?.end && !allDay.value ? localTime(props.value.end) : ''))
 
 function toInstant(day: string, time: string) {

@@ -3,17 +3,17 @@
 // changes: a fixed value, a day from today or next week, the user pressing it, nothing, or a value
 // asked for when pressed (one per action: a day on a small calendar, a line of text). Only a task
 // gets defaults without a list of its own: Done (the first status option meaning done, the one
-// checkboxes set), Defer (asks for a day for the due date, or the date the type names, and may set a
-// status such as "Scheduled"), Drop (another option meaning done, a "Dropped", which ends a task
-// without doing it, as in completeRepeat) and Next step (asks for the text of the type's next step
-// field). Changes naming a property the type no longer has, or a value that does not fit it, are
-// left out.
-import { DUE_PROPERTY_ID, REVIEWED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
-import type { DatePropertyDef, Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActionValue, SelectOption, TextPropertyDef } from './model.ts'
+// checkboxes set), Defer (asks for a day for the type's plan date, the Do date, and leaves the
+// deadline alone), Drop (another option meaning done, a "Dropped", which ends a task without doing
+// it, as in completeRepeat) and Next step (asks for the text of the type's next step field). Changes
+// naming a property the type no longer has, or a value that does not fit it, are left out.
+import { REVIEWED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
+import type { DateValue, Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActionValue, SelectOption, TextPropertyDef } from './model.ts'
 import { statusProperty } from './metrics.ts'
 import { reviewFieldOf } from './task-review.ts'
 import { doneOptionOf, dropOptionOf, reopenOptionOf } from './task-status.ts'
-import { addDays } from './time.ts'
+import { taskDatesOf } from './task-dates.ts'
+import { addDays, dayOfDate, moveDateToDay } from './time.ts'
 
 /** Kinds of property whose value an action can ask for when pressed. */
 export const ASKABLE_KINDS: readonly PropertyDef['kind'][] = ['date', 'text', 'number', 'url']
@@ -48,24 +48,17 @@ export function nextStepFieldOf(type: ObjectType | undefined): TextPropertyDef |
 
 const setStatus = (option: SelectOption, field: Id = STATUS_PROPERTY_ID): QuickActionChange => ({ field, value: { kind: 'value', value: { kind: 'select', value: [option.id] } } })
 
-/** Mark done, Defer, Drop and Next step, as the type's settings and properties allow. */
+/** Mark done, Defer, Drop and Next step, as the type's properties allow: Defer needs a plan date. */
 export function defaultQuickActions(type: ObjectType): QuickActionDef[] {
-  const settings = type.quickActions ?? {}
   // Only the task's own status select: its options are what the buttons set.
   const options = statusProperty(type)?.id === STATUS_PROPERTY_ID ? statusProperty(type)!.options : []
-  const option = (id: Id | undefined) => (id ? options.find((o) => o.id === id) : undefined)
-  const dateField = (id: Id | undefined) => {
-    const def = id ? type.properties.find((p) => p.id === id) : undefined
-    return def?.kind === 'date' ? def : undefined
-  }
   const done = options.length ? doneOptionOf(type) : undefined
   const drop = options.length ? dropOptionOf(type) : undefined
-  const deferField = dateField(settings.deferField) ?? dateField(DUE_PROPERTY_ID)
-  const deferStatus = option(settings.deferStatus)
+  const plan = taskDatesOf(type).plan
   const nextStep = nextStepFieldOf(type)
   const actions: QuickActionDef[] = []
   if (done) actions.push(plainStatusAction(type, done))
-  if (deferField) actions.push({ id: 'defer', name: 'Defer', icon: { kind: 'icon', value: 'ph:clock-clockwise' }, changes: [{ field: deferField.id, value: { kind: 'ask' } }, ...(deferStatus ? [setStatus(deferStatus)] : [])] })
+  if (plan) actions.push({ id: 'defer', name: 'Defer', icon: { kind: 'icon', value: 'ph:clock-clockwise' }, changes: [{ field: plan.id, value: { kind: 'ask' } }] })
   if (drop) actions.push(plainStatusAction(type, drop))
   if (nextStep) actions.push({ id: 'next-step', name: nextStep.name, icon: { kind: 'icon', value: 'ph:pencil-simple-line' }, changes: [{ field: nextStep.id, value: { kind: 'ask' } }] })
   return actions
@@ -100,14 +93,11 @@ export function askOf(type: ObjectType, action: QuickActionDef): { change: Quick
   return change && def ? { change, def } : undefined
 }
 
-/** A task's work date, as configured for Defer/Schedule; Due remains its deadline. */
-export function plannedDateFieldOf(type: ObjectType | undefined): DatePropertyDef | undefined {
-  if (type?.system !== 'task') return undefined
-  const configured = type.properties.find((p) => p.id === type.quickActions?.deferField)
-  if (configured?.kind === 'date' && configured.id !== DUE_PROPERTY_ID) return configured
-  const action = quickActionsOf(type).find((a) => a.id === 'defer' || a.id === 'schedule')
-  const asked = action && askOf(type, action)?.def
-  return asked?.kind === 'date' && asked.id !== DUE_PROPERTY_ID ? asked : undefined
+/** The type's Defer: its quick action with that id, else the first that asks for its plan date; none for a type without. Rows, a task's page and a review all run it. */
+export function deferActionOf(type: ObjectType | undefined): QuickActionDef | undefined {
+  const actions = quickActionsOf(type)
+  const plan = taskDatesOf(type).plan
+  return actions.find((a) => a.id === 'defer') ?? (plan ? actions.find((a) => askOf(type!, a)?.def.id === plan.id) : undefined)
 }
 
 /** Whether an action sets the status to this option (a change with it among its values). */
@@ -162,17 +152,25 @@ export interface QuickActionContext {
   /** The user pressing it. */
   me?: Id
   /**
-   * A day asked for another date (Defer's "Do date") that lands after the due date takes the due
-   * date along (the question's "Move the due date too"), so a task put off is not left overdue.
+   * A day asked for another date (Defer's "Do date") that lands after the deadline takes the
+   * deadline along, when the question's "Move the due date too" is ticked (it is not at first), so
+   * a task put off is not left overdue.
    */
   moveDue?: boolean
-  /** The day a timed date falls on for the user (default: its UTC day). */
-  dayOfTime?: (iso: string) => string
+  /** The user's time zone: the day a timed date falls on, and the time of day it keeps when moved. */
+  timeZone: string
+  /**
+   * Moves one occurrence of a repeating date to a day, the others staying (calendar.ts
+   * `moveOccurrenceTo`, which needs the rule parser the app loads only for that). Without it a
+   * repeating date is left as it is.
+   */
+  moveOccurrence?: (value: DateValue, day: string) => DateValue
 }
 
 /**
  * The property values an action writes (key → value; undefined clears), or undefined when it asks
- * and got no answer. A day is all-day; a date that repeats keeps its rule, moved to start there.
+ * and got no answer. A day moves a date there, keeping its time of day, its end and the rest it
+ * holds (a new one is all-day); a date that repeats changes only its current occurrence.
  */
 export function quickActionChanges(
   type: ObjectType,
@@ -181,12 +179,32 @@ export function quickActionChanges(
   context: QuickActionContext,
   answer?: PropertyValue
 ): Record<Id, PropertyValue | undefined> | undefined {
+  return resolveChanges(type, object, action, context, answer)?.values
+}
+
+/** What an action writes, and the day each date it moved to a day is on (a repeating date's value starts where it did: only its occurrence moved). */
+function resolveChanges(
+  type: ObjectType,
+  object: Pick<ObjectRecord, 'props'>,
+  action: QuickActionDef,
+  context: QuickActionContext,
+  answer?: PropertyValue
+): { values: Record<Id, PropertyValue | undefined>; days: Record<Id, string> } | undefined {
   const values: Record<Id, PropertyValue | undefined> = {}
-  const onDay = (field: Id, day: string): PropertyValue => {
+  const days: Record<Id, string> = {}
+  const onDay = (field: Id, day: string): PropertyValue | undefined => {
     const current = object.props[field]
-    const rrule = current?.kind === 'date' ? current.value.rrule : undefined
-    return { kind: 'date', value: { start: `${day}T00:00:00.000Z`, resolution: 'day', ...(rrule ? { rrule } : {}) } }
+    if (current?.kind !== 'date') return { kind: 'date', value: { start: `${day}T00:00:00.000Z`, resolution: 'day' } }
+    if (current.value.rrule) return context.moveOccurrence ? { kind: 'date', value: context.moveOccurrence(current.value, day) } : undefined
+    return { kind: 'date', value: moveDateToDay(current.value, { day }, context.timeZone) }
   }
+  const setDay = (field: Id, day: string) => {
+    const value = onDay(field, day)
+    if (!value) return
+    values[field] = value
+    days[field] = day
+  }
+  const deadline = taskDatesOf(type).deadline?.id
   let asked: { field: Id; day: string } | undefined
   for (const { field, value } of action.changes) {
     switch (value.kind) {
@@ -194,17 +212,18 @@ export function quickActionChanges(
         values[field] = value.value
         break
       case 'day':
-        values[field] = onDay(field, addDays(context.today, value.days))
+        setDay(field, addDays(context.today, value.days))
         break
       case 'next-week':
-        values[field] = onDay(field, context.nextWeek)
+        setDay(field, context.nextWeek)
         break
       case 'me':
         if (context.me) values[field] = { kind: 'person', value: [context.me] }
         break
       case 'ask':
         if (!answer) return undefined
-        values[field] = answer.kind === 'date' ? onDay(field, answer.value.start.slice(0, 10)) : answer
+        if (answer.kind === 'date') setDay(field, answer.value.start.slice(0, 10))
+        else values[field] = answer
         if (answer.kind === 'date' && context.moveDue) asked = { field, day: answer.value.start.slice(0, 10) }
         break
       case 'clear':
@@ -212,29 +231,24 @@ export function quickActionChanges(
         break
     }
   }
-  if (asked && asked.field !== DUE_PROPERTY_ID && !(DUE_PROPERTY_ID in values)) {
-    const due = dueMovedTo(type, object, asked.day, context.dayOfTime)
-    if (due) values[DUE_PROPERTY_ID] = due
+  if (asked && deadline && asked.field !== deadline && !(deadline in values)) {
+    const due = deadlineMovedTo(type, object, asked.day, context.timeZone)
+    if (due) values[deadline] = due
   }
-  return values
+  return { values, days }
 }
 
-const DAY_MS = 86_400_000
-
 /**
- * The due date moved to `day` when it falls before it, keeping a time of day (and the length of a
- * span); undefined when there is nothing to move: no due date, one on or after the day, or one that
+ * The deadline moved to `day` when it falls before it, keeping its time of day (and the length of a
+ * span); undefined when there is nothing to move: no deadline, one on or after the day, or one that
  * repeats (moving it would move the whole series, which putting one task off does not mean).
  */
-export function dueMovedTo(type: ObjectType, object: Pick<ObjectRecord, 'props'>, day: string, dayOfTime: (iso: string) => string = (iso) => iso.slice(0, 10)): PropertyValue | undefined {
-  const def = type.properties.find((p) => p.id === DUE_PROPERTY_ID)
-  const due = object.props[DUE_PROPERTY_ID]
-  if (def?.kind !== 'date' || due?.kind !== 'date' || due.value.rrule) return undefined
-  const from = dayOfValue(due, dayOfTime)
-  if (!from || from >= day) return undefined
-  const shift = Date.parse(`${day}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`)
-  const moved = (iso: string) => new Date(Date.parse(iso) + Math.round(shift / DAY_MS) * DAY_MS).toISOString()
-  return { kind: 'date', value: { ...due.value, start: moved(due.value.start), ...(due.value.end ? { end: moved(due.value.end) } : {}) } }
+export function deadlineMovedTo(type: ObjectType, object: Pick<ObjectRecord, 'props'>, day: string, timeZone: string): PropertyValue | undefined {
+  const field = taskDatesOf(type).deadline?.id
+  const due = field ? object.props[field] : undefined
+  if (due?.kind !== 'date' || due.value.rrule) return undefined
+  if (dayOfDate(due.value, timeZone) >= day) return undefined
+  return { kind: 'date', value: moveDateToDay(due.value, { day }, timeZone) }
 }
 
 /** The action with the value it asks for cleared instead: an empty answer to a line of text. */
@@ -248,6 +262,8 @@ export interface QuickActionEdit {
   id: Id
   values: Record<Id, PropertyValue | undefined>
   before: Record<Id, PropertyValue | undefined>
+  /** The day each date set on a day by the action is now on, for the notice. */
+  days: Record<Id, string>
 }
 
 /**
@@ -261,31 +277,36 @@ export function quickActionEdit(
   context: QuickActionContext,
   answer?: PropertyValue
 ): QuickActionEdit | undefined {
-  const values = quickActionChanges(type, object, action, context, answer)
-  if (!values) return undefined
+  const resolved = resolveChanges(type, object, action, context, answer)
+  if (!resolved) return undefined
+  const { values, days } = resolved
   const before = Object.fromEntries(Object.keys(values).map((key) => [key, object.props[key]]))
-  // Done on a repeating task is saved as its next occurrence (completeRepeat moves the due date and
-  // puts the status back), so Undo has to put the due date back too, not only the status.
-  if (!(DUE_PROPERTY_ID in before) && endsRepeat(type, object, values)) before[DUE_PROPERTY_ID] = object.props[DUE_PROPERTY_ID]
+  // Done on a repeating task is saved as its next occurrence (completeRepeat moves the deadline,
+  // clears a plan that is past and puts the status back), so Undo has to put those back too, not only the status.
+  const { plan, deadline } = taskDatesOf(type)
+  if (deadline && !(deadline.id in before) && endsRepeat(type, object, values)) {
+    before[deadline.id] = object.props[deadline.id]
+    if (plan && plan.id in object.props && !(plan.id in before)) before[plan.id] = object.props[plan.id]
+  }
   // A new status marks the task reviewed when saved (reviewedByStatusChange): Undo puts that day back too.
   const reviewed = reviewFieldOf(type)
   if (reviewed && STATUS_PROPERTY_ID in values && !(reviewed.id in before)) before[reviewed.id] = object.props[reviewed.id]
-  return { id: object.id, values, before }
+  return { id: object.id, values, before, days }
 }
 
-/** Whether `values` do a task whose due date repeats (Done, not Drop): what completeRepeat rewrites when saved, the task going on to its next occurrence. */
+/** Whether `values` do a task whose deadline repeats (Done, not Drop): what completeRepeat rewrites when saved, the task going on to its next occurrence. */
 export function endsRepeat(type: ObjectType, object: Pick<ObjectRecord, 'props'>, values: Record<Id, PropertyValue | undefined>): boolean {
-  const due = object.props[DUE_PROPERTY_ID]
+  const field = taskDatesOf(type).deadline?.id
+  const due = field ? object.props[field] : undefined
   const next = values[STATUS_PROPERTY_ID]
   if (type.system !== 'task' || due?.kind !== 'date' || !due.value.rrule || next?.kind !== 'select') return false
   const done = doneOptionOf(type)
   return !!done && next.value.includes(done.id)
 }
 
-/** The day a date value falls on ("YYYY-MM-DD"); a timed one in the zone `dayOfTime` gives. */
-function dayOfValue(value: PropertyValue | undefined, dayOfTime: (iso: string) => string): string | undefined {
-  if (value?.kind !== 'date') return undefined
-  return value.value.resolution === 'day' ? value.value.start.slice(0, 10) : dayOfTime(value.value.start)
+/** The day a property value falls on, if it is a date. */
+function dayOfValue(value: PropertyValue | undefined, timeZone: string): string | undefined {
+  return value?.kind === 'date' ? dayOfDate(value.value, timeZone) : undefined
 }
 
 /** An action's name said once it is done, in notices and counts: "Mark done" is "Done". */
@@ -301,21 +322,22 @@ export function quickActionMessage(
   type: ObjectType,
   action: QuickActionDef,
   edit: QuickActionEdit,
-  options: { longDay: (day: string) => string; dayOfTime: (iso: string) => string; due?: PropertyValue }
+  options: { longDay: (day: string) => string; timeZone: string; due?: PropertyValue }
 ): string {
-  // A due date the action does not name was taken along by the day asked for (moveDue): said in words, not as a day of its own.
-  const takesDue = !action.changes.some((c) => c.field === DUE_PROPERTY_ID)
-  const movedDue = takesDue && !!edit.values[DUE_PROPERTY_ID]
+  const deadline = taskDatesOf(type).deadline?.id
+  // A deadline the action does not name was taken along by the day asked for (moveDue): said in words, not as a day of its own.
+  const takesDue = !!deadline && !action.changes.some((c) => c.field === deadline)
+  const movedDue = takesDue && !!edit.values[deadline]
   const days = Object.entries(edit.values).flatMap(([field, value]) => {
     // The Last reviewed day a review adds to every action goes without saying.
-    if ((takesDue && field === DUE_PROPERTY_ID) || field === REVIEWED_PROPERTY_ID) return []
-    const day = dayOfValue(value, options.dayOfTime)
+    if ((takesDue && field === deadline) || field === REVIEWED_PROPERTY_ID) return []
+    const day = edit.days[field] ?? dayOfValue(value, options.timeZone)
     const def = type.properties.find((p) => p.id === field)
     return day && def ? [{ field, day, name: def.name }] : []
   })
   let message = [quickActionDoneName(action.name), ...days.map((d) => `${d.name} ${options.longDay(d.day)}`)].join(' · ')
-  const due = movedDue ? undefined : dayOfValue(options.due, options.dayOfTime)
-  const late = due && days.find((d) => d.field !== DUE_PROPERTY_ID && d.day > due)
+  const due = movedDue ? undefined : dayOfValue(options.due, options.timeZone)
+  const late = due && days.find((d) => d.field !== deadline && d.day > due)
   if (late && due) message += ` (after its due date, ${options.longDay(due)})`
   if (movedDue) message += ' · due date moved too'
   return message

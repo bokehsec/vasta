@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes } from '../src/builtin-types.ts'
 import type { ObjectType, PropertyValue, QuickActionDef } from '../src/model.ts'
-import { needsTriage, reviewButtons, reviewChoices, settlesTriage, taskWorkflowQueues, triageDispositionActions } from '../src/task-workflows.ts'
-import { triageOptionsOf } from '../src/task-status.ts'
+import { reviewButtons, reviewChoices, settlesTriage, taskWorkflowQueues, triageDispositionActions } from '../src/task-workflows.ts'
+import { needsTriage, triageOptionsOf } from '../src/task-status.ts'
 
 const base = createBuiltinTypes('s', '2026-11-14T12:00:00Z').find((t) => t.system === 'task')!
 const task: ObjectType = {
@@ -66,18 +66,18 @@ describe('sister task workflows', () => {
   })
 
   it('uses the configured scheduling question instead of offering a status-only shortcut', () => {
-    const configured = { ...task, quickActions: { deferStatus: 'next', deferField: 'due' } }
+    const configured = { ...task, quickActions: { actions: [{ id: 'defer', name: 'Defer', changes: [{ field: 'dodate', value: { kind: 'ask' as const } }, { field: 'status', value: { kind: 'value' as const, value: { kind: 'select' as const, value: ['next'] } } }] }] } }
     const choices = triageDispositionActions(configured)
     const schedule = choices.find((a) => a.id === 'defer')!
-    expect(schedule.changes).toContainEqual({ field: 'due', value: { kind: 'ask' } })
+    expect(schedule.changes).toContainEqual({ field: 'dodate', value: { kind: 'ask' } })
     expect(choices.some((a) => a.id === 'triage-status:next')).toBe(false)
     expect(settlesTriage(configured, schedule)).toBe(true)
   })
 
   it('offers every status that is not incoming as a review choice, open first, reusing actions that only place the task', () => {
-    const configured: ObjectType = { ...task, quickActions: { deferField: 'due', deferStatus: 'wait', holdStatus: 'hold', actions: [
+    const configured: ObjectType = { ...task, quickActions: { holdStatus: 'hold', actions: [
       { id: 'done', name: 'Mark done', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['done'] } } }] },
-      { id: 'defer', name: 'Defer', changes: [{ field: 'due', value: { kind: 'ask' } }, { field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['wait'] } } }] },
+      { id: 'defer', name: 'Defer', changes: [{ field: 'dodate', value: { kind: 'ask' } }, { field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['wait'] } } }] },
       { id: 'start', name: 'Start now', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['next'] } } }, { field: 'priority', value: { kind: 'value', value: { kind: 'select', value: ['high'] } } }] },
     ] } }
     const choices = reviewChoices(configured)
@@ -94,29 +94,40 @@ describe('sister task workflows', () => {
   })
 
   describe('review buttons', () => {
-    const typed: ObjectType = { ...task, properties: task.properties.concat([{ id: 'do', name: 'Do date', kind: 'date' }]).map((p) => p.id === 'status' && p.kind === 'select' ? { ...p, options: [
+    const set = (id: string): QuickActionDef['changes'][number] => ({ field: 'status', value: { kind: 'value', value: { kind: 'select', value: [id] } } })
+    const typed: ObjectType = { ...task, properties: task.properties.map((p) => p.id === 'status' && p.kind === 'select' ? { ...p, options: [
       { id: 'in', label: 'Inbox', status: 'todo' }, { id: 'next', label: 'Next', status: 'todo' }, { id: 'sched', label: 'Scheduled', status: 'todo' },
       { id: 'wait', label: 'Waiting', status: 'todo' }, { id: 'done', label: 'Done', status: 'done' }, { id: 'drop', label: 'Dropped', status: 'done' }, { id: 'hold', label: 'On Hold' },
-    ] } : p), quickActions: { deferField: 'do', holdStatus: 'hold' } }
+    ] } : p), quickActions: { holdStatus: 'hold', actions: [
+      { id: 'done', name: 'Mark done', changes: [set('done')] },
+      { id: 'defer', name: 'Defer', changes: [{ field: 'dodate', value: { kind: 'ask' } }, set('sched')] },
+      { id: 'drop', name: 'Drop', changes: [set('drop')] },
+    ] } }
     const shape = (r: ReturnType<typeof reviewButtons>) => ({ main: r.main.map((b) => `${b.role}:${b.label}`), more: r.more.map((b) => b.label) })
 
-    it('a new task: Next, Schedule, Done, Drop; the other open statuses as links', () => {
-      expect(shape(reviewButtons(typed, 'in', true))).toEqual({ main: ['next:Next', 'schedule:Schedule', 'done:Done', 'drop:Drop'], more: ['Waiting', 'On Hold'] })
+    it('a new task: Next, Defer, Done, Drop; the other open statuses as links', () => {
+      expect(shape(reviewButtons(typed, 'in', true))).toEqual({ main: ['next:Next', 'defer:Defer', 'done:Done', 'drop:Drop'], more: ['Waiting', 'On Hold'] })
     })
 
     it('a check-in never offers the status it has; Next becomes a link', () => {
-      expect(shape(reviewButtons(typed, 'next', false))).toEqual({ main: ['schedule:Schedule', 'done:Done', 'drop:Drop'], more: ['Waiting', 'On Hold'] })
-      expect(shape(reviewButtons(typed, 'wait', false))).toEqual({ main: ['schedule:Schedule', 'done:Done', 'drop:Drop'], more: ['Next', 'On Hold'] })
-      expect(shape(reviewButtons(typed, 'sched', false)).main[0]).toBe('schedule:Schedule')
+      expect(shape(reviewButtons(typed, 'next', false))).toEqual({ main: ['defer:Defer', 'done:Done', 'drop:Drop'], more: ['Waiting', 'On Hold'] })
+      expect(shape(reviewButtons(typed, 'wait', false))).toEqual({ main: ['defer:Defer', 'done:Done', 'drop:Drop'], more: ['Next', 'On Hold'] })
+      expect(shape(reviewButtons(typed, 'sched', false)).main[0]).toBe('defer:Defer')
     })
 
-    it('Schedule asks Defer\'s date and moves the task to Scheduled; Defer is covered by it', () => {
+    it('Defer is the type\'s own Defer action, as rows and the task page run it', () => {
       const { main, covered } = reviewButtons(typed, 'next', false)
-      const schedule = main.find((b) => b.role === 'schedule')!
-      expect(schedule.action.changes).toEqual([{ field: 'do', value: { kind: 'ask' } }, { field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['sched'] } } }])
-      expect(schedule.action.name).toBe('Moved to Scheduled')
+      const defer = main.find((b) => b.role === 'defer')!
+      expect(defer.action).toEqual(typed.quickActions!.actions![1])
+      expect(defer.option?.id).toBe('sched')
       expect(covered).toContain('defer')
       expect(main.find((b) => b.role === 'done')!.action.name).toBe('Done')
+    })
+
+    it('has no Defer for a type without one, and its Scheduled status is a link', () => {
+      const plain = { ...typed, quickActions: { holdStatus: 'hold' }, properties: typed.properties.filter((p) => p.id !== 'dodate') }
+      expect(shape(reviewButtons(plain, 'next', false)).main).toEqual(['done:Done', 'drop:Drop'])
+      expect(shape(reviewButtons(plain, 'next', false)).more).toContain('Scheduled')
     })
 
     it('no buttons without the built-in status', () => {

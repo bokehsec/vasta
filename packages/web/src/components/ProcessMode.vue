@@ -3,13 +3,13 @@
 // of one view. Everything about the task is on screen (its text in full, steps, the plan's fields,
 // editable in place) and so are its choices, few and never the status it already has
 // (reviewButtons): a task already placed has Keep in that status, highlighted (reviewed today, back
-// in `reviewEvery` days); a new task has Next, Schedule…, Done and Drop, none highlighted. Other
+// in `reviewEvery` days); a new task has Next, Defer…, Done and Drop, none highlighted. Other
 // statuses are links under them; Later records nothing and keeps it in the queue. On a big screen
 // the choices sit under the task, the plan beside it; on a phone they are a tray at the bottom.
 // The queue is stable, with Undo, explicit save, and the reading position kept across interruptions.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Doc, ObjectSummary, ObjectType, PropertyDef, PropertyValue, QuickActionDef, SelectOption } from '@vasta/core'
-import { DUE_PROPERTY_ID, STATUS_PROPERTY_ID, askOf, daysBetween, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, quickActionsOf, reviewButtons, reviewEveryOf, reviewedAction, settlesTriage, statusProperty, withReviewed, type ReviewButton } from '@vasta/core'
+import { STATUS_PROPERTY_ID, askOf, daysBetween, deferActionOf, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, quickActionsOf, reviewButtons, reviewEveryOf, reviewedAction, settlesTriage, statusProperty, taskDatesOf, withReviewed, type ReviewButton } from '@vasta/core'
 import { addSelectOption, dayKey } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { greyButton, mainButton } from '../lib/buttons.ts'
@@ -104,21 +104,21 @@ const mainButtons = computed(() => buttons.value.main.length ? buttons.value.mai
 const links = computed(() => buttons.value.main.length ? [...buttons.value.more, ...extras.value.map(asButton)] : [])
 const reviewed = computed(() => (isNew.value ? undefined : reviewedAction(props.type)))
 const label = (button: ReviewButton) => (askOf(props.type, button.action) ? `${button.label}…` : button.label)
-const icon = (button: ReviewButton) => button.role === 'schedule' ? 'ph:calendar-blank' : button.role === 'done' ? 'ph:check-circle' : button.role === 'drop' ? 'ph:x-circle' : button.action.icon?.value ?? 'ph:arrow-right'
+const icon = (button: ReviewButton) => button.role === 'defer' ? 'ph:calendar-blank' : button.role === 'done' ? 'ph:check-circle' : button.role === 'drop' ? 'ph:x-circle' : button.action.icon?.value ?? 'ph:arrow-right'
 const tone = (button: ReviewButton) => button.role === 'done' ? 'text-[var(--color-flow-done)]' : button.role === 'drop' ? 'text-red-600 dark:text-red-400' : ''
-// Keys: K (or R) keeps; the main buttons by letter (S schedule, D done, X drop, a new task's first
+// Keys: K (or R) keeps; the main buttons by letter (F defer, D done, X drop, a new task's first
 // status by its initial); the links 1–9.
 const keys = computed(() => {
   const map = new Map<string, ReviewButton>()
   for (const button of mainButtons.value) {
-    const key = button.role === 'schedule' ? 's' : button.role === 'done' ? 'd' : button.role === 'drop' ? 'x' : button.label.trim()[0]?.toLowerCase()
+    const key = button.role === 'defer' ? 'f' : button.role === 'done' ? 'd' : button.role === 'drop' ? 'x' : button.label.trim()[0]?.toLowerCase()
     if (key && !'kr'.includes(key) && !map.has(key)) map.set(key, button)
   }
   links.value.slice(0, 9).forEach((button, i) => map.set(String(i + 1), button))
   return map
 })
 const keyOf = (button: ReviewButton) => [...keys.value].find(([, b]) => b === button)?.[0]?.toUpperCase() ?? ''
-const rightAction = computed(() => buttons.value.main.find((b) => b.role === 'schedule')?.action ?? actions.value.find((a) => a.id === 'defer'))
+const rightAction = computed(() => deferActionOf(props.type))
 const every = computed(() => reviewEveryOf(props.type))
 const keepLabel = computed(() => outcome.value ? `Next ${noun.value}` : currentStatus.value ? `Keep in ${currentStatus.value.label}` : 'Keep as it is')
 const keepHint = computed(() => outcome.value ? 'Decided. Go on to the next one.' : every.value ? `Marks it reviewed today. It comes back in ${every.value} ${every.value === 1 ? 'day' : 'days'}.` : 'Marks it reviewed today.')
@@ -139,11 +139,11 @@ const meta = computed(() => {
 
 // The plan now: a task's status, dates, priority, project, next step and assignee (each editable but
 // the status, which the choices set); another type's fields from the view.
-const PLAN = [STATUS_PROPERTY_ID, DUE_PROPERTY_ID, 'priority', 'project', 'assignee']
+const PLAN = ['priority', 'project', 'assignee']
 const plan = computed<PropertyDef[]>(() => {
   if (props.type.system !== 'task') return props.fields.map((f) => f.def).filter((d): d is PropertyDef => !!d && d.kind !== 'rich-text').slice(0, 6)
-  const deferField = props.type.quickActions?.deferField
-  const ids = [...new Set([STATUS_PROPERTY_ID, DUE_PROPERTY_ID, ...(deferField ? [deferField] : []), ...PLAN.slice(2), ...(nextStepField.value ? [nextStepField.value.id] : [])])]
+  const dates = taskDatesOf(props.type)
+  const ids = [...new Set([STATUS_PROPERTY_ID, ...(dates.deadline ? [dates.deadline.id] : []), ...(dates.plan ? [dates.plan.id] : []), ...PLAN, ...(nextStepField.value ? [nextStepField.value.id] : [])])]
   return ids.flatMap((id) => props.type.properties.find((p) => p.id === id && p.kind !== 'rich-text') ?? [])
     .filter((d) => d.id !== 'assignee' || current.value?.props[d.id])
 })
@@ -240,7 +240,8 @@ const stepInput = ref<HTMLInputElement | null>(null)
 const addingStep = ref(false)
 const steps = computed(() => (current.value && canBreakDown.value ? subtasksOf(props.type, current.value.id) : []))
 const stepDate = (step: ObjectSummary) => {
-  const value = step.props[props.type.quickActions?.deferField ?? ''] ?? step.props[DUE_PROPERTY_ID]
+  const dates = taskDatesOf(props.type)
+  const value = (dates.plan && step.props[dates.plan.id]) || (dates.deadline && step.props[dates.deadline.id])
   return value?.kind === 'date' ? formatDateShort(value.value) : ''
 }
 async function startBreakDown() {

@@ -2,18 +2,10 @@
 // a next-step edit never hide an unresolved incoming task. Saved views are independent of this.
 import { STATUS_PROPERTY_ID } from './builtin-types.ts'
 import type { ObjectRecord, ObjectType, QuickActionDef, SelectOption } from './model.ts'
-import { askOf, quickActionsOf } from './task-actions.ts'
-import { isClosedTask, triageOptionsOf } from './task-status.ts'
-import { dueForReview, holdAction } from './task-review.ts'
+import { askOf, deferActionOf, quickActionsOf } from './task-actions.ts'
+import { needsTriage, triageOptionsOf } from './task-status.ts'
+import { holdAction, isCheckInDue } from './task-review.ts'
 import { statusProperty } from './metrics.ts'
-
-export function needsTriage(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>): boolean {
-  if (type?.system !== 'task' || isClosedTask(type, object)) return false
-  const status = statusProperty(type)
-  const value = status && object.props[status.id]
-  const ids = value?.kind === 'select' ? value.value.filter((id) => status!.options.some((o) => o.id === id)) : []
-  return !ids.length || triageOptionsOf(type).some((o) => ids.includes(o.id))
-}
 
 /** Sister queues within the supplied tasks: incoming work, then commitments due for review. */
 export function taskWorkflowQueues<T extends Pick<ObjectRecord, 'props'>>(type: ObjectType | undefined, objects: readonly T[], today: string): { triage: T[]; review: T[] } {
@@ -21,9 +13,8 @@ export function taskWorkflowQueues<T extends Pick<ObjectRecord, 'props'>>(type: 
   const review: T[] = []
   if (type?.system !== 'task') return { triage, review }
   for (const object of objects) {
-    if (isClosedTask(type, object)) continue
     if (needsTriage(type, object)) triage.push(object)
-    else if (dueForReview(type, object, today)) review.push(object)
+    else if (isCheckInDue(type, object, today)) review.push(object)
   }
   return { triage, review }
 }
@@ -106,7 +97,7 @@ function statusIcon(option: SelectOption, options: readonly SelectOption[]): str
 
 /** A button of a review: where the task goes, as a main button or as a link under them. */
 export interface ReviewButton {
-  role: 'next' | 'schedule' | 'done' | 'drop' | 'move'
+  role: 'next' | 'defer' | 'done' | 'drop' | 'move'
   label: string
   action: QuickActionDef
   option?: SelectOption
@@ -115,10 +106,10 @@ export interface ReviewButton {
 /**
  * A review's buttons for a task with status `current`: few, and never the status it already has (a
  * task already placed has Keep for that). Main: for a new task the first open status ("Next"), then
- * Schedule… (the date question with the scheduled status: Defer and Scheduled are one choice), Done
- * and Drop. The other open statuses and any further closing ones are links (`more`). `covered`: the
- * quick actions these stand for (Defer, folded into Schedule…). Actions are named for the review's
- * notice and totals: "Moved to Waiting", "Done".
+ * Defer… (the type's own Defer, asking its day and setting what it sets, such as a "Scheduled"
+ * status: the same Defer as a row's or a task page's), Done and Drop. The other open statuses and
+ * any further closing ones are links (`more`). `covered`: the quick actions these stand for. Actions
+ * are named for the review's notice and totals: "Moved to Waiting", "Done", "Defer".
  */
 export function reviewButtons(type: ObjectType | undefined, current: string | undefined, isNew: boolean): { main: ReviewButton[]; more: ReviewButton[]; covered: string[] } {
   const choices = reviewChoices(type)
@@ -131,29 +122,23 @@ export function reviewButtons(type: ObjectType | undefined, current: string | un
   const actions = quickActionsOf(type)
   const covered = choices.map((c) => c.action.id)
 
-  // Schedule…: a status already set up with a date question, else Defer's question moving the task to
-  // the status that reads as scheduled (or Defer as it is, without one).
-  const asking = open.find((c) => askOf(type, c.action)?.def.kind === 'date')
-  const defer = asking ? undefined : actions.find((a) => a.id === 'defer') ?? actions.find((a) => askOf(type, a)?.def.kind === 'date')
-  const scheduled = asking ?? open.find((c) => /sched/i.test(c.option.label))
-  let schedule: ReviewButton | undefined
-  if (asking) schedule = { ...button('schedule', asking), label: 'Schedule' }
-  else if (defer) {
-    covered.push(defer.id)
-    const changes = [...defer.changes.filter((c) => c.field !== status.id), ...(scheduled ? [{ field: status.id, value: { kind: 'value' as const, value: { kind: 'select' as const, value: [scheduled.option.id] } } }] : [])]
-    schedule = { role: 'schedule', label: 'Schedule', option: scheduled?.option, action: named({ ...defer, changes }, scheduled?.option, 'schedule') }
-  }
+  // Defer…: the type's own Defer, and the open status it puts a task in (if it does), which is no link then.
+  const defer = deferActionOf(type)
+  const sets = defer?.changes.findLast((c) => c.field === status.id)
+  const placedId = sets?.value.kind === 'value' && sets.value.value.kind === 'select' ? sets.value.value.value[0] : undefined
+  const placed = placedId ? open.find((c) => c.option.id === placedId) : undefined
+  if (defer) covered.push(defer.id)
 
-  const next = isNew ? open.find((c) => c !== scheduled) : undefined
+  const next = isNew ? open.find((c) => c !== placed) : undefined
   const [done, drop, ...otherClosing] = closing
   const main = [
     ...(next ? [button('next', next)] : []),
-    ...(schedule ? [schedule] : []),
+    ...(defer ? [{ role: 'defer' as const, label: 'Defer', ...(placed ? { option: placed.option } : {}), action: defer }] : []),
     ...(done ? [button('done', done)] : []),
     ...(drop ? [button('drop', drop, actions.find((a) => a.id === 'drop' && a.id === drop.action.id)?.name ?? drop.option.label)] : []),
   ]
   const more = [
-    ...open.filter((c) => c !== next && !(schedule && c === scheduled) && c.option.id !== current).map((c) => button('move', c)),
+    ...open.filter((c) => c !== next && c !== placed && c.option.id !== current).map((c) => button('move', c)),
     ...otherClosing.map((c) => button('move', c)),
   ]
   return { main, more, covered }

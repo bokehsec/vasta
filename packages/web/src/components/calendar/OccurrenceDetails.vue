@@ -4,9 +4,8 @@
 // following, or all of them (lib/calendar.ts, changeEntryTimes).
 import { computed, ref } from 'vue'
 import type { CalendarEntry, DateValue } from '@vasta/core'
-import { dayKey } from '../../lib/actions.ts'
 import { deleteButton, greyButton, mainButton } from '../../lib/buttons.ts'
-import { changeEntryTimes, describeRepeat, entryTime, formatDayShort } from '../../lib/calendar.ts'
+import { changeEntryTimes, dayOfValue, describeRepeat, entryTime, formatDayShort } from '../../lib/calendar.ts'
 import { displayTitle } from '../../lib/format.ts'
 import { lastError, summaryOf, typesById } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
@@ -39,7 +38,7 @@ const clock = (iso: string) => {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 const editing = ref(false)
-const day = ref(props.entry.allDay ? props.entry.start.slice(0, 10) : dayKey(new Date(props.entry.start)))
+const day = ref(dayOfValue({ start: props.entry.start, resolution: props.entry.allDay ? 'day' : 'time' }))
 const startTime = ref(props.entry.allDay ? '' : clock(props.entry.start))
 const endTime = ref(!props.entry.allDay && props.entry.end ? clock(props.entry.end) : '')
 const busy = ref(false)

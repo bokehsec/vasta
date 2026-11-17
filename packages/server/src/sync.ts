@@ -75,6 +75,12 @@ const isQuickAction = (v: unknown) => {
   return isObject(v) && isNonEmpty(action.id) && isString(action.name) && Array.isArray(action.changes) && action.changes.every((c) => isObject(c) && isNonEmpty(c.field) && isObject(c.value))
 }
 
+/** A property of a type: an object, and a date's role only a known one. */
+const isProperty = (v: unknown) => {
+  const def = v as { kind?: unknown; role?: unknown }
+  return isObject(v) && (def.role === undefined || (def.kind === 'date' && (def.role === 'plan' || def.role === 'deadline')))
+}
+
 /** The shape each field's value must have; null clears an optional one. */
 const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   name: isNonEmpty,
@@ -91,7 +97,7 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   nutrition: optional((v) => isObject(v) && Array.isArray((v as { meals?: unknown }).meals)),
   sprints: optional((v) => isObject(v) && isNonEmpty((v as { name?: unknown }).name) && isNonEmpty((v as { pluralName?: unknown }).pluralName)),
   opensOn: optional(isOpensOn),
-  properties: Array.isArray,
+  properties: (v) => Array.isArray(v) && v.every(isProperty),
   views: Array.isArray,
   openIn: optional((v) => v === 'page' || v === 'pane'),
   subtasks: optional((v) => isObject(v) && isNonEmpty((v as { parentField?: unknown }).parentField)),
@@ -100,7 +106,8 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
     if (key === 'actions') return Array.isArray(x) && x.every(isQuickAction)
     if (key === 'triageStatuses') return Array.isArray(x) && x.every(isNonEmpty)
     if (key === 'reviewEvery') return typeof x === 'number' && Number.isInteger(x) && x >= 0
-    return isNonEmpty(x)
+    // The date and status settings of Defer and Drop became roles and actions (operations.ts): a stale copy is refused.
+    return (key === 'nextStepField' || key === 'holdStatus') && isNonEmpty(x)
   })),
   aliases: isStringArray,
   tagIds: isStringArray,

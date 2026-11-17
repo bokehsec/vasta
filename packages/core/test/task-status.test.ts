@@ -34,11 +34,13 @@ describe('what a status means', () => {
     expect(isClosedTask(undefined, at('done'))).toBe(false)
   })
 
-  it('Drop is the chosen option meaning done, else the one after Done', () => {
+  it('Drop is what the type\'s own Drop action sets (an option meaning done), else the one after Done', () => {
+    const dropAction = (id: string) => ({ actions: [{ id: 'drop', name: 'Drop', changes: [{ field: 'status', value: { kind: 'value' as const, value: { kind: 'select' as const, value: [id] } } }] }] })
     expect(doneOptionOf(task)?.id).toBe('done')
     expect(dropOptionOf(task)?.id).toBe('cancelled')
-    expect(dropOptionOf({ ...task, quickActions: { dropStatus: 'dropped' } })?.id).toBe('dropped')
-    expect(dropOptionOf({ ...task, quickActions: { dropStatus: 'done' } })?.id).toBe('cancelled')
+    expect(dropOptionOf({ ...task, quickActions: dropAction('dropped') })?.id).toBe('dropped')
+    expect(dropOptionOf({ ...task, quickActions: dropAction('done') })?.id).toBe('cancelled')
+    expect(dropOptionOf({ ...task, quickActions: dropAction('next') })?.id).toBe('cancelled')
     expect(dropOptionOf(base)).toBeUndefined()
   })
 

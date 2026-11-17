@@ -12,7 +12,7 @@
 // closed by itself.
 import { computed, nextTick, ref, watch } from 'vue'
 import type { ObjectRecord, ObjectSummary, ObjectType, QuickActionDef } from '@vasta/core'
-import { DUE_PROPERTY_ID, doneActionOf, isClosedTask, statusProperty, subtaskProgress } from '@vasta/core'
+import { doneActionOf, isClosedTask, statusProperty, subtaskProgress, taskDatesOf } from '@vasta/core'
 import { mainButton, tintedButton } from '../lib/buttons.ts'
 import { setProperties } from '../lib/actions.ts'
 import { displayTitle, formatDateShort } from '../lib/format.ts'
@@ -35,7 +35,8 @@ const progress = computed(() => subtaskProgress(props.type, props.object, steps.
 /** The select that says whether a step is open or closed; without one, steps have no checkbox. */
 const statusDef = computed(() => statusProperty(props.type))
 const dueOf = (step: ObjectSummary) => {
-  const value = step.props[DUE_PROPERTY_ID]
+  const deadline = taskDatesOf(props.type).deadline?.id
+  const value = deadline ? step.props[deadline] : undefined
   return value?.kind === 'date' ? formatDateShort(value.value) : ''
 }
 

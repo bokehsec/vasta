@@ -137,9 +137,10 @@ try {
   const saveBox = await box(sheet.locator('[data-ask-save]'))
   if (saveBox.y + saveBox.height > H + 1) await fail(`Save is off screen: ${saveBox.y}+${saveBox.height} > ${H}`)
   await shot('4-defer-page')
-  await sheet.locator('button', { hasText: /^Tomorrow$/ }).click()
-  if ((await sheet.locator('[aria-pressed="true"]').count()) !== 1) await fail('Tomorrow not picked')
-  await shot('5-defer-tomorrow')
+  // A day on the calendar only picks it (Tomorrow and Next week would save at once).
+  await sheet.locator('.grid-cols-7 button').nth(10).click()
+  if ((await sheet.locator('.grid-cols-7 button.bg-ink').count()) !== 1) await fail('a calendar day is not picked')
+  await shot('5-defer-picked-day')
   await sheet.locator('[data-ask-cancel]').click()
   await sheet.waitFor({ state: 'detached' })
 

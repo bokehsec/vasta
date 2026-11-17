@@ -73,6 +73,7 @@ import {
   type FoodEntry,
   type FoodPortion,
   type Nutrients,
+  BUILTIN_FIELDS,
   REVIEW_DUE_FIELD,
 } from '@vasta/core'
 import {
@@ -758,8 +759,9 @@ export class AgentTools {
   /**
    * Objects of some types (names or ids; all types when empty), filtered and sorted like a query
    * in the app. Fields are property names (or ids), a relation's field as "Author.Country", or
-   * built-in fields: title, tags, createdAt, updatedAt, createdBy, updatedBy, date, type, and "Due for
-   * review" (checked on a task not reviewed in its type's number of days). Select values
+   * built-in fields: title, tags, createdAt, updatedAt, createdBy, updatedBy, date, type, host, and
+   * "Due for review" (checked on a task in Review's check-ins: open, not new, not reviewed in its
+   * type's number of days). Select values
    * are option labels; people are usernames or names ("me": the user).
    */
   query(options: { space?: string; types?: string[]; where?: AgentFilter[]; match?: 'all' | 'any'; sort?: { field: string; direction?: 'asc' | 'desc' }[]; limit?: number } = {}) {
@@ -1246,13 +1248,11 @@ export interface AgentFilter {
   value?: string | number | boolean | string[]
 }
 
-const BUILT_IN_FIELDS = ['title', 'tags', 'collections', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'date', 'type']
-
 /** A query field path from names: a property of `types`, or "Relation.Field" through a relation. */
 function resolveField(name: string, types: ObjectType[], all: ObjectType[]): { path: string; def?: PropertyDef } {
   const find = (among: ObjectType[], wanted: string) =>
     among.flatMap((t) => t.properties).find((p) => p.id === wanted) ?? among.flatMap((t) => t.properties).find((p) => fold(p.name) === fold(wanted))
-  const builtIn = BUILT_IN_FIELDS.find((f) => fold(f) === fold(name))
+  const builtIn = BUILTIN_FIELDS.find((f) => fold(f) === fold(name))
   if (builtIn) return { path: builtIn }
   if (fold(name) === fold('Due for review') || fold(name) === fold(REVIEW_DUE_FIELD)) return { path: REVIEW_DUE_FIELD }
   const direct = find(types, name)
@@ -1263,7 +1263,7 @@ function resolveField(name: string, types: ObjectType[], all: ObjectType[]): { p
     if (relation?.kind === 'relation') {
       const targets = relation.targetTypeIds.length ? all.filter((t) => relation.targetTypeIds.includes(t.id)) : all
       const rest = name.slice(dot + 1)
-      const inner = BUILT_IN_FIELDS.find((f) => fold(f) === fold(rest))
+      const inner = BUILTIN_FIELDS.find((f) => fold(f) === fold(rest))
       if (inner) return { path: `${relation.id}.${inner}` }
       const def = find(targets, rest)
       if (def) return { path: `${relation.id}.${def.id}`, def }
@@ -1285,7 +1285,7 @@ function describeProperty(def: PropertyDef, typeNames: Map<Id, string>, type: Ob
   if (def.kind === 'select') return { ...base, multiple: def.multiple, options: def.options.map((o) => o.label) }
   if (def.kind === 'relation') return { ...base, multiple: def.multiple, ...(def.targetTypeIds.length ? { targets: def.targetTypeIds.map((id) => typeNames.get(id) ?? id) } : {}), ...(def.reverseName?.trim() ? { reverseName: def.reverseName.trim() } : {}) }
   if (def.kind === 'person') return { ...base, multiple: def.multiple }
-  if (def.kind === 'date') return { ...base, ...(def.withTime ? { withTime: true } : {}) }
+  if (def.kind === 'date') return { ...base, ...(def.withTime ? { withTime: true } : {}), ...(def.role ? { role: def.role } : {}) }
   return base
 }
 

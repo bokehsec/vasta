@@ -1,6 +1,6 @@
 // Calendar arithmetic shared by queries and the calendar. Days are "YYYY-MM-DD" strings; instants
 // are ISO timestamps in UTC. Zone conversions use Intl, so any IANA zone works without a tz database.
-import type { IsoDateTime } from './model.ts'
+import type { DateValue, IsoDateTime } from './model.ts'
 
 export const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
@@ -118,4 +118,29 @@ export function instantOf(wall: WallTime, timeZone: string): number {
 export function startOfDay(day: string, timeZone: string): number {
   const [year, month, date] = day.split('-').map(Number) as [number, number, number]
   return instantOf({ year, month, day: date, hour: 0, minute: 0, second: 0 }, timeZone)
+}
+
+/** The day a date value falls on: a day value's own day, a timed one's in `timeZone`. */
+export function dayOfDate(value: Pick<DateValue, 'start' | 'resolution'>, timeZone: string): string {
+  return value.resolution === 'day' ? value.start.slice(0, 10) : dayIn(value.start, timeZone)
+}
+
+/**
+ * A date moved to start on `day`, keeping its length (a span's end moves along) and everything else
+ * it holds. A day value stays a day value; a timed one keeps its wall-clock time in its own zone (or
+ * `timeZone`), so a 9:00 moved across a clock change is still 9:00 — or starts at `minutes` after
+ * midnight when given. The one day-shift every move of a date goes through.
+ */
+export function moveDateToDay(value: DateValue, target: { day: string; minutes?: number }, timeZone: string): DateValue {
+  if (value.resolution === 'day') {
+    const shift = daysBetween(value.start.slice(0, 10), target.day)
+    return { ...value, start: `${target.day}T00:00:00.000Z`, ...(value.end ? { end: `${addDays(value.end.slice(0, 10), shift)}T00:00:00.000Z` } : {}) }
+  }
+  const zone = value.timeZone && isValidTimeZone(value.timeZone) ? value.timeZone : timeZone
+  const old = wallTimeIn(value.start, zone)
+  const [year, month, day] = target.day.split('-').map(Number) as [number, number, number]
+  const wall = { year, month, day, hour: target.minutes === undefined ? old.hour : Math.floor(target.minutes / 60), minute: target.minutes === undefined ? old.minute : target.minutes % 60, second: target.minutes === undefined ? old.second : 0 }
+  const start = instantOf(wall, zone)
+  const length = value.end ? Date.parse(value.end) - Date.parse(value.start) : 0
+  return { ...value, start: new Date(start).toISOString(), ...(value.end ? { end: new Date(start + length).toISOString() } : {}) }
 }

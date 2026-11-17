@@ -1,5 +1,5 @@
 // The review of the current view in the test env ("Review this view…"). Desktop: the review by keys
-// (D Done, → skip, ← back, S Scheduled asking a date), the end's counts (each task once), Escape;
+// (D Done, → skip, ← back, F Defer asking a date), the end's counts (each task once), Escape;
 // then the review counts only tasks not reviewed this week, "Review all" takes them all, R marks
 // one reviewed, and a task's whole notes show (not the list's first 280 characters). Phone (390×844,
 // touch): its button in full, full screen, a swipe left skipping, Done and Undo, the next step saved
@@ -85,15 +85,24 @@ const status = found.properties.find((p) => p.id === 'status')
 const original = {
   ...found,
   views: found.views.filter((v) => v.id !== viewId && v.id !== `${taskType.id}:bulk`),
-  properties: found.properties.filter((p) => !['dodate', 'bulknext', 'reviewnext'].includes(p.id)).map((p) => (p.id === 'status' ? { ...p, options: p.options.filter((o) => o.id !== 'scheduled') } : p)),
+  properties: found.properties.filter((p) => !['bulknext', 'reviewnext'].includes(p.id)).map((p) => (p.id === 'status' ? { ...p, options: p.options.filter((o) => o.id !== 'scheduled') } : p)),
   quickActions: undefined,
 }
 const baseStatus = original.properties.find((p) => p.id === 'status')
 await put(`/api/types/${taskType.id}`, {
   ...original,
-  properties: [...original.properties.map((p) => (p.id === 'status' ? { ...baseStatus, options: [...baseStatus.options, { id: 'scheduled', label: 'Scheduled', status: 'todo' }] } : p)), { id: 'dodate', kind: 'date', name: 'Do date' }, { id: 'reviewnext', kind: 'text', name: 'Next step' }],
+  properties: [...original.properties.map((p) => (p.id === 'status' ? { ...baseStatus, options: [...baseStatus.options, { id: 'scheduled', label: 'Scheduled', status: 'todo' }] } : p)), { id: 'reviewnext', kind: 'text', name: 'Next step' }],
   // These are established commitments; incoming-task decisions are covered by task-workflows.mjs.
-  quickActions: { triageStatuses: [], deferField: 'dodate', deferStatus: 'scheduled', nextStepField: 'reviewnext' },
+  // The type's own Defer sets the Do date and the Scheduled status.
+  quickActions: {
+    triageStatuses: [],
+    nextStepField: 'reviewnext',
+    actions: [
+      { id: 'done', name: 'Mark done', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: [status.options.find((o) => o.status === 'done').id] } } }] },
+      { id: 'defer', name: 'Defer', changes: [{ field: 'dodate', value: { kind: 'ask' } }, { field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['scheduled'] } } }] },
+      { id: 'next-step', name: 'Next step', changes: [{ field: 'reviewnext', value: { kind: 'ask' } }] },
+    ],
+  },
   views: [{ id: viewId, name: 'Review cycle', layout: 'list', filter: { kind: 'group', operator: 'and', items: [{ kind: 'filter', field: 'title', operator: 'contains', value: { kind: 'literal', value: `Review ${tag}` } }] } }, ...original.views],
 })
 const todo = status.options.find((o) => o.status === 'todo').id
@@ -132,7 +141,7 @@ const toast = () => page.locator('[role=status]')
 
 try {
   // ---------------------------------------------------------------------------
-  step('review: keys D (Done), → skip, ← back, S (Scheduled asks a date), to the end, its counts (each task once), Escape')
+  step('review: keys D (Done), → skip, ← back, F (Defer asks a date), to the end, its counts (each task once), Escape')
   await openView()
   await openReviewChooser()
   if (!/Review 5 tasks/.test(await page.locator('[data-process]').innerText())) throw new Error(`review button: ${await page.locator('[data-process]').innerText()}`)
@@ -150,16 +159,17 @@ try {
   await page.keyboard.press('ArrowLeft')
   await until(async () => (await position.innerText()).startsWith('Check-in 2 of 5'), '← went back')
   const deferTitle = await titleNow()
-  await page.keyboard.press('s')
+  await page.keyboard.press('f')
   await page.locator('[data-defer-menu]').waitFor()
+  // Tomorrow saves in one tap (the task has no deadline).
   await page.locator('[data-defer-menu] button', { hasText: /^Tomorrow$/ }).click()
-  await page.locator('[data-defer-menu] [data-ask-save]').click()
-  await until(async () => (await position.innerText()).startsWith('Check-in 3 of 5'), 'Scheduled moved on')
-  await until(async () => (await dodateOf(tasks.find((t) => t.title === deferTitle).id)) === days.tomorrow, 'key S scheduled it for tomorrow')
+  await until(async () => (await position.innerText()).startsWith('Check-in 3 of 5'), 'Defer moved on')
+  await until(async () => (await dodateOf(tasks.find((t) => t.title === deferTitle).id)) === days.tomorrow, 'key F deferred it to tomorrow')
+  if ((await statusOf(tasks.find((t) => t.title === deferTitle).id)) !== 'scheduled') throw new Error('Defer did not set Scheduled')
   for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight')
   await page.locator('[data-process-end]').waitFor()
   const summary = await page.locator('[data-process-summary]').innerText()
-  if (!/Done 1/.test(summary) || !/Moved to Scheduled 1/.test(summary) || !/3 left for later/.test(summary)) throw new Error(`end summary: ${summary}`)
+  if (!/Done 1/.test(summary) || !/Defer 1/.test(summary) || !/3 left for later/.test(summary)) throw new Error(`end summary: ${summary}`)
   await page.keyboard.press('Escape')
   await until(async () => (await page.locator('[data-process-mode]').count()) === 0, 'Escape closed it')
   // Closed at the end, the review is over: no Resume, a new review offered.
@@ -251,10 +261,10 @@ try {
   const card = await page.locator('[data-process-card]').boundingBox()
   await touchAt(card.x + card.width - 40, card.y + 80, -260, 0, 8)
   await until(async () => (await pos.innerText()).startsWith('Check-in 2 of'), 'a swipe left skipped')
-  // Keep (the status it has, To do), Schedule… and Done as buttons in the tray, In progress a link; no menu.
+  // Keep (the status it has, To do), Defer… and Done as buttons in the tray, In progress a link; no menu.
   const choices = await page.locator('[data-process-choice]').all()
   const roles = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole).join())
-  if (roles !== 'schedule,done' || choices.length !== 3) throw new Error(`review choices: ${roles}, ${choices.length}`)
+  if (roles !== 'defer,done' || choices.length !== 3) throw new Error(`review choices: ${roles}, ${choices.length}`)
   if ((await page.locator('[data-process-links]').innerText()).replace(/\s+/g, ' ').trim() !== 'Move to In progress') throw new Error(`links: ${await page.locator('[data-process-links]').innerText()}`)
   for (const choice of choices) if ((await choice.boundingBox()).height < 44) throw new Error('a choice under 44px')
   if (await page.locator('[data-process-more]').count()) throw new Error('the review still has a menu')

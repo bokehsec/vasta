@@ -53,8 +53,15 @@ side, shown on the objects it links to: "Wrote" for a book's Author, on a person
 (options with colors; an option with a `status` category drives task and kanban behavior),
 `person` (members of the space by user id, single or multiple: see [People](#people)) and
 `formula` (a value computed from the object's other fields, see [Formulas](#formulas)).
-The built-in Task has `status`, `due`, `assignee` (a single person, added to older spaces once,
-after Due) and `priority`.
+The built-in Task has `status`, `due`, `dodate` ("Do date"), `assignee` (a single person, added to
+older spaces once, after Due) and `priority`.
+A task's dates have **roles** ([`task-dates.ts`](../packages/core/src/task-dates.ts), `taskDatesOf`):
+a date property of a task type with `role: 'plan'` is the day the task will be worked on (the Do
+date: Defer sets it, the calendar shows it, dragging moves it) and one with `role: 'deadline'` is
+the day it must be done by (Due). A type has at most one of each (Type settings › the date's
+Meaning); a date without a role is a plain date. A migration (2026-11-16) gave existing task types
+the roles: Due the deadline, the date their Defer set (else one called "Do date", else a new "Do
+date") the plan.
 A task's page has **quick actions** ([`task-actions.ts`](../packages/core/src/task-actions.ts)):
 buttons that change its fields in one click, and so does any other type with a list of its own. A
 type's `quickActions.actions` (Type settings › Quick actions, column `types.quick_actions`) lists them, each a name, an icon and changes: a
@@ -62,12 +69,19 @@ property set to a fixed value, a day from today (`{ kind: 'day', days }`) or nex
 pressing it (`me`), nothing (`clear`), or a value asked for when pressed (`ask`, one per action: a day
 on a small calendar for dates, a line for text, numbers and links). Changes naming a property the
 type no longer has, or a value that does not fit it, are left out. Without a list, a task gets the
-defaults: Done (the first status option meaning done), Defer (asks a day for `due`, or `quickActions.deferField`,
-and sets `deferStatus` if any), Drop (`dropStatus`, else the second option meaning done; none: no
-Drop) and Next step (asks the text of `nextStepField`). A repeating date keeps its rule when set.
-A day asked for a date other than `due` (Defer's "Do date") that falls after the object's due date
-takes the due date along when the question's "Move the due date too" is ticked (it is at first):
-`due` moves to that day, keeping a time of day; a due date that repeats is left alone.
+defaults: Done (the first status option meaning done), Defer (asks a day for the plan date; none
+without one), Drop (the second option meaning done; none: no Drop) and Next step (asks the text of
+`nextStepField`). A type that wants Defer to also set a status, or Drop to set another option, has
+its own list with a Defer (id `defer`) and Drop (id `drop`) action: the older `deferField`,
+`deferStatus` and `dropStatus` settings were written out as such actions by the 2026-11-16
+migration and no longer exist. A day moves a date there keeping its time of day (the wall-clock time
+in the user's zone, across clock changes), its end and the rest it holds; a date that repeats moves
+only its current occurrence (an exception, as moving one event in the calendar does), never the
+series. A day asked for a date other than the deadline (Defer's "Do date") that falls after the
+deadline takes the deadline along when the question's "Move the due date too" is ticked (it is not
+at first): the deadline moves to that day, keeping its time of day; a deadline that repeats is left
+alone. Done on a task whose deadline repeats moves the deadline to the next occurrence and clears
+a plan date on or before the occurrence just done.
 An object whose status (a task's, or another type's select with status categories) is an option
 meaning done shows no quick actions. For triage they also go on rows: a list view or query with
 `quickActions: true` ends each row of a type with actions with them, and a table of such a type has a "Quick actions" column (`quickActions` in `table.columns`, hidden until shown, moved and sized
