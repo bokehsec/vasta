@@ -8,6 +8,7 @@ import { builtinTypeId, createBuiltinTypes, type ObjectType, type ViewDef } from
 import { NodeMediaStore } from '@vasta/core/media-node'
 import { NodeStore } from '@vasta/core/node'
 import { createApp } from '../src/app.ts'
+import { ChangeFeed, type ChangeEvent } from '../src/events.ts'
 import { Device, asUser, now } from './helpers.ts'
 
 const at = '2026-11-16T12:00:00.000Z'
@@ -19,9 +20,12 @@ function setup() {
   store.putSpace({ id: 's', name: 's', sidebar: [], createdAt: at })
   for (const type of createBuiltinTypes('s', at)) store.putType(type)
   const media = new NodeMediaStore(mkdtempSync(path.join(tmpdir(), 'vasta-type-patch-')))
-  const app = createApp({ store, media })
+  const feed = new ChangeFeed()
+  const events: ChangeEvent[] = []
+  feed.subscribe((event) => events.push(event))
+  const app = createApp({ store, media, feed })
   const user = asUser(app, store, { spaces: ['s'] })
-  return { store, app, user, task: builtinTypeId('s', 'task') }
+  return { store, app, user, events, task: builtinTypeId('s', 'task') }
 }
 
 describe('PATCH /api/types/:id', () => {
@@ -71,6 +75,15 @@ describe('PATCH /api/types/:id', () => {
     expect((await user.request('/api/types/missing', json({ name: 'x' }))).status).toBe(404)
     expect((await user.request(`/api/types/${task}`, json([]))).status).toBe(400)
     expect(store.getType(task)).toMatchObject({ system: 'task', spaceId: 's', name: 'Task' })
+  })
+
+  it('tells open pages without a replica that the type changed, however it was saved', async () => {
+    const { store, user, events, task } = setup()
+    await user.request(`/api/types/${task}`, json({ name: 'Chores' }))
+    await user.request(`/api/types/${task}`, json({ ...store.getType(task) }, 'PUT'))
+    const made = (await (await user.request('/api/types', json({ spaceId: 's', name: 'Book' }, 'POST'))).json()) as ObjectType
+    const typeEvents = events.filter((event) => event.kind === 'type')
+    expect(typeEvents).toEqual([{ kind: 'type', id: task, spaceId: 's' }, { kind: 'type', id: task, spaceId: 's' }, { kind: 'type', id: made.id, spaceId: 's' }])
   })
 })
 

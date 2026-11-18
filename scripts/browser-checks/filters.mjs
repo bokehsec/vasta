@@ -11,7 +11,7 @@ import { chromium, webkit } from 'playwright'
 
 const engine = process.argv[2] ?? 'chromium'
 const base = process.argv[3] ?? 'http://127.0.0.1:5183'
-if (!/^http:\/\/127\.0\.0\.1:518[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
+if (!/^http:\/\/127\.0\.0\.1:(518[34]|5283)$/.test(base)) throw new Error(`not the test env: ${base}`)
 
 const phone = { viewport: { width: 390, height: 844 }, hasTouch: true, ...(engine === 'webkit' ? {} : { isMobile: true }), locale: 'en-US', timezoneId: 'America/Toronto' }
 const launched = engine === 'webkit' ? undefined : await chromium.launch()
@@ -137,22 +137,32 @@ async function run(desktop) {
   await narrow('gamma')
   await until(async () => (await rows()) === 'gamma', 'only gamma listed')
   await page.locator('[data-save-to-view]').click()
+  await page.locator('[data-edit-view-filter]').click()
+  const values = page.locator('[data-view-filter-editor] input[placeholder="Value"]')
+  await values.last().fill('beta')
   await until(async () => (await items()).some((item) => item.field === 'title' && item.value.value === 'gamma'), 'the view saved with gamma')
   if ((await items()).length !== 2) throw new Error(`the view's filter is ${JSON.stringify(await items())}`)
   await until(async () => !(await shownCount(desktop)), 'the narrowing is gone once saved')
   if (await page.locator('[data-save-to-view]').count()) throw new Error('Save to view still offered')
   await until(async () => /gamma/.test((await page.locator('[data-view-filter-text]').textContent()) ?? ''), 'the saved condition listed under This view')
 
-  step(`${where}: Edit view filter changes the view's own conditions`)
-  await page.locator('[data-edit-view-filter]').click()
-  const values = page.locator('[data-view-filter-editor] input[placeholder="Value"]')
-  // Let the save just made settle: a re-render from its sync resets a box typed in but not yet committed.
+  step(`${where}: typing immediately after Save to view survives sync and a live update`)
+  // A distinct incoming value proves the update reached the open editor while beta is uncommitted.
+  const synced = await get(`/api/types/${taskType.id}`)
+  const remoteValue = `gamma ${tag}`
+  await put(`/api/types/${taskType.id}`, { ...synced, views: synced.views.map((v) => v.id === viewId ? { ...v, filter: { ...v.filter, items: v.filter.items.map((item) => item.value?.value === 'gamma' ? { ...item, value: { kind: 'literal', value: remoteValue } } : item) } } : v) })
+  await until(async () => (await page.locator('[data-view-filter-text]').textContent())?.includes(remoteValue), 'the remote filter reached the editor')
   await sleep(1500)
-  await values.last().fill('beta')
+  if (await values.last().inputValue() !== 'beta') throw new Error('an incoming type update discarded the uncommitted beta draft')
   await values.last().press('Enter')
   await values.last().blur()
   await until(async () => (await items()).some((item) => item.value?.value === 'beta') && !(await items()).some((item) => item.value?.value === 'gamma'), 'the view edited')
   await until(async () => (await rows()) === 'beta', 'the view now lists beta only')
+  step(`${where}: an idle editor shows a filter changed elsewhere`)
+  const edited = await get(`/api/types/${taskType.id}`)
+  const idleValue = `beta ${tag}`
+  await put(`/api/types/${taskType.id}`, { ...edited, views: edited.views.map((v) => v.id === viewId ? { ...v, filter: { ...v.filter, items: v.filter.items.map((item) => item.value?.value === 'beta' ? { ...item, value: { kind: 'literal', value: idleValue } } : item) } } : v) })
+  await until(async () => await values.last().inputValue() === idleValue, 'the idle editor shows the remote value')
   // Back to the view as it was, for the next run.
   await put(`/api/types/${taskType.id}`, { ...(await get(`/api/types/${taskType.id}`)), views: (await get(`/api/types/${taskType.id}`)).views.map((v) => (v.id === viewId ? { ...v, filter: { kind: 'group', operator: 'and', items: [ownFilter] } } : v)) })
   await page.keyboard.press('Escape')

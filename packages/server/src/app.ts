@@ -1399,6 +1399,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     if (!body.spaceId || !store.getSpace(body.spaceId) || !allowed(c, body.spaceId) || !body.name?.trim()) return c.json({ error: 'spaceId and name are required' }, 400)
     const type = newType(body.spaceId, body, randomUUID(), now())
     store.putType(type)
+    typeChanged(type)
     return c.json(type, 201)
   })
 
@@ -1411,6 +1412,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     const type: ObjectType = { ...rest, ...(rules ? { rules } : {}), id: existing.id, spaceId: existing.spaceId, createdAt: existing.createdAt, updatedAt: now() }
     if (existing.system) type.system = existing.system
     store.putType(type)
+    typeChanged(type)
     return c.json(type)
   })
 
@@ -1429,6 +1431,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     }
     if (!type.name.trim() || !type.pluralName.trim()) return c.json({ error: 'a type needs a name' }, 400)
     store.putType(type)
+    typeChanged(type)
     return c.json(type)
   })
 

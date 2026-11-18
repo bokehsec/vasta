@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import type { Filter, FilterOperator, FilterValue, Id } from '@vasta/core'
 import { OPERATORS, UNARY_OPERATORS } from '@vasta/core'
 import { chip } from '../lib/colors.ts'
+import { useFilterDraft } from '../lib/filter-draft.ts'
 import { filterFieldOptions, IDS_OPERATOR_LABELS, OPERATOR_LABELS } from '../lib/query.ts'
 import { systemType, workspace } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
@@ -50,9 +51,11 @@ function setValue(value: FilterValue | undefined) {
 
 // Text and numbers -----------------------------------------------------------
 const literalText = computed(() => (props.filter.value?.kind === 'literal' && !Array.isArray(props.filter.value.value) ? String(props.filter.value.value) : ''))
+const literalDraft = useFilterDraft(() => literalText.value)
 function setLiteral(raw: string) {
   if (kind.value === 'number') setValue(raw === '' || Number.isNaN(Number(raw)) ? undefined : { kind: 'literal', value: Number(raw) })
   else setValue(raw ? { kind: 'literal', value: raw } : undefined)
+  literalDraft.commit()
 }
 
 // Dates ----------------------------------------------------------------------
@@ -63,6 +66,7 @@ const dateMode = computed<DateMode>(() => {
   return 'exact'
 })
 const offset = computed(() => (props.filter.value?.kind === 'variable' ? (props.filter.value.offsetDays ?? 0) : 0))
+const offsetDraft = useFilterDraft(() => String(offset.value))
 function setDateMode(mode: DateMode) {
   if (mode === 'today') setValue({ kind: 'variable', name: 'today' })
   else if (mode === 'parent') setValue({ kind: 'variable', name: 'parent', field: 'createdAt' })
@@ -71,6 +75,7 @@ function setDateMode(mode: DateMode) {
 function setOffset(raw: string) {
   const days = Math.trunc(Number(raw)) || 0
   setValue({ kind: 'variable', name: 'today', ...(days ? { offsetDays: days } : {}) })
+  offsetDraft.commit()
 }
 
 // Lists of ids (tags, selects, relations, types) ----------------------------
@@ -136,12 +141,15 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
       <!-- Text / number -->
       <input
         v-if="kind === 'text' || kind === 'number'"
-        :value="literalText"
+        :value="literalDraft.value"
         :type="kind === 'number' ? 'number' : 'text'"
         :class="control"
         class="w-40"
         placeholder="Value"
+        @focus="literalDraft.focus"
+        @input="literalDraft.input(($event.target as HTMLInputElement).value)"
         @change="setLiteral(($event.target as HTMLInputElement).value)"
+        @blur="literalDraft.blur"
       />
 
       <!-- Date -->
@@ -152,10 +160,10 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
           <option value="parent">This page's date</option>
         </select>
         <span v-if="dateMode === 'today'" class="flex items-center gap-1 text-sm text-ink-soft">
-          <input :value="offset" type="number" :class="control" class="w-16" title="Days from today (negative for the past)" @change="setOffset(($event.target as HTMLInputElement).value)" />
+          <input :value="offsetDraft.value" type="number" :class="control" class="w-16" title="Days from today (negative for the past)" @focus="offsetDraft.focus" @input="offsetDraft.input(($event.target as HTMLInputElement).value)" @change="setOffset(($event.target as HTMLInputElement).value)" @blur="offsetDraft.blur" />
           days
         </span>
-        <input v-else-if="dateMode === 'exact'" type="date" :value="literalText" :class="control" @change="setLiteral(($event.target as HTMLInputElement).value)" />
+        <input v-else-if="dateMode === 'exact'" type="date" :value="literalDraft.value" :class="control" @focus="literalDraft.focus" @input="literalDraft.input(($event.target as HTMLInputElement).value)" @change="setLiteral(($event.target as HTMLInputElement).value)" @blur="literalDraft.blur" />
       </template>
 
       <!-- Ids -->
