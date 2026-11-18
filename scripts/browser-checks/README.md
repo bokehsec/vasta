@@ -4,18 +4,27 @@ Playwright scripts that drive the web app in the isolated test env (`scripts/tes
 5183 without a service worker, the server on 5184 serving `packages/web/dist` with it). They refuse
 other addresses; never point them at the dev server on 5173/5174 or at production.
 
+`capture`, `desktop`, `diagram`, `habits`, `templates` and `views` share `test-env.mjs`: each accepts
+`[chromium|webkit] [base]` (the older `[base]` form still works) and `MODE=json` for HTTP mode.
+Their allowed loopback ports are exactly 5183/5184, 5283/5285 and 5383/5385. Restart the seeded
+server for every run: display choices belong to the account and otherwise carry between checks.
+The shared contexts block service workers by default, because Settings can install the push worker
+even on Vite; the built-app habit check explicitly allows it for offline reload. In `views`,
+`/api/auth/me` is held until after ⌘K, with no ready navigation or mounted palette, then released;
+the palette must open and receive focus. This tests the loading shortcut in both data modes.
+
     scripts/test-env.sh &            # restart it after server edits; `pnpm --filter @vasta/web build` for 5184
     cd scripts/browser-checks && npm install   # once (browsers: npx playwright install chromium webkit)
     VASTA_DATA=<the test env's dir> node ../../packages/server/src/cli.ts token add tester ui-test --scope capture
     CAPTURE_TOKEN=<token> node replica.mjs chromium http://127.0.0.1:5183
     CAPTURE_TOKEN=<token> node replica.mjs chromium http://127.0.0.1:5184   # + reload offline (service worker)
     CAPTURE_TOKEN=<token> node replica.mjs webkit http://127.0.0.1:5184     # iPhone 15 profile
-    node views.mjs [base]        # every screen, search, trash + Undo, second tab, logout
+    node views.mjs [chromium|webkit] [base]        # every screen, search, trash + Undo, second tab, logout
     node editor.mjs [base]       # slash menu, mention, undo, moving a block, image upload
     node weblink.mjs             # a weblink created on the replica, fetched by the server
     node device.mjs; node update.mjs
     node page-width.mjs [chromium|webkit]   # Vite on 5183 only: Appearance choice, persistence, object/daily-note widths, columns, phones and panes (MODE=json too; SETTINGS=0 skips the headless WebKit Settings hang)
-    node desktop.mjs [base]      # Settings › This device: download links, the desktop app's version and shortcut
+    node desktop.mjs [chromium|webkit] [base]      # Settings › This device: download links, the desktop app's version and shortcut
     node firstsync.mjs [chromium|webkit]   # LAST_OBJECT=<id>: also open it offline
     node refused.mjs             # a refused change: toast, Settings list, dismiss (PHONE=1, SHOTS=<dir>)
     node httpsave.mjs            # HTTP mode: a rename made elsewhere while typing is not undone
@@ -37,12 +46,12 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node templates.mjs [chromium|webkit] [base]   # templates and snippets: a task saved as a template, {{ placeholders, the type's New using the default template (its question asked, placeholders resolved), the template listed nowhere else, ⌘K completing "/Task:", a snippet from the "/" menu (MODE=json too)
     node calmhome.mjs [chromium|webkit] [base]   # a calm home page: a space's start page has its icon beside the title and no empty tags row or "Add property" line (Tags/Property on hover; another page unchanged), an Agenda's all-day events as chips beside timed rows, an empty compact query and its heading hidden, this year's dates on list rows without the year (replica off: the agenda's calendar is faked in the browser; SHOTS=<dir>)
     node handover.mjs [base]     # a second tab takes the replica over when the first closes
-    node capture.mjs [base]      # /Type in quick capture (alone by default; in today’s note with Settings › Desktop app), a relation's values, ⌘K, the panel's bridge, a draft kept across a reload, the phone's chips (top types, More…) (MODE=json too)
+    node capture.mjs [chromium|webkit] [base]      # /Type in quick capture (alone by default; in today’s note with Settings › Desktop app), a relation's values, ⌘K, the panel's bridge, a draft kept across a reload, the phone's chips (top types, More…) (MODE=json too)
     node toggles.mjs [base]      # Tab nests under the line above (a toggle), ⇧Tab takes it out, /Toggle on a written line (MODE=json too)
     node blockrefs.mjs [base]    # @Title#… mentions a block, @@ embeds one read-only; it follows edits; links open the block (MODE=json too)
     node channels.mjs [base]     # Settings › Capture channels and Telegram's chats (the bot's state faked)
     node inbox.mjs [base]        # Settings › Inbox: the default Clear / Bring back and "Show cleared", a word of your own ("Mark triaged"), fading, in the inbox and the daily note
-    node diagram.mjs [base]      # Mermaid: /Diagram drawn, code hidden and shown, a mistake's line, ```mermaid typed (SHOTS=<dir>: light and dark)
+    node diagram.mjs [chromium|webkit] [base]      # Mermaid: /Diagram drawn, code hidden and shown, a mistake's line, ```mermaid typed (SHOTS=<dir>: light and dark)
     node import.mjs <export.zip> [base]   # Settings › Import: a Capacities full export into a new space, the report, a type and an object (SHOTS=<dir>)
     node nutrition.mjs [chromium|webkit] [base] [phone]   # food tracking: Settings, a weekly goal, the picker, editing, a recipe, portions, /food in ⌘K, the Nutrition page, kcal in the month (MODE=json too)
     node board.mjs [chromium|webkit] [base] [phone]   # drag between columns and within one (manual order), "+", WIP limit, folding (the person's own, the view not edited), swimlanes, card fields, Blocked, a drop into Done runs Done with Undo, "+" also takes the view's filter; phone = long press (chromium) (MODE=json too)
@@ -85,11 +94,25 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
 
 Notes: WebKit has no OPFS in an ephemeral context, so the scripts use a persistent profile; and
 Playwright's WebKit keeps OPFS across profiles, so a WebKit run reuses the replica of the last one
-(firstsync.mjs empties OPFS first). Nor do its locks span profiles: two WebKit contexts open at once
+(firstsync.mjs and the shared WebKit contexts empty the test replica first). Nor do its locks span profiles: two WebKit contexts open at once
 must not both run the replica, or they corrupt its database (SQLITE_CORRUPT), so a setup or cleanup
-context that only needs the API opens with `vasta.replica` off. device.mjs's banner step times
-out (its `context.route` of `/` does not reach the app's fetch in WebKit, likely because the service worker answers it);
-update.mjs checks the banner.
+context that only needs the API opens with `vasta.replica` off. device.mjs's banner step has timed out in WebKit (its `context.route` of `/` did not reach
+the app's fetch despite blocked service workers); update.mjs checks the banner in Chromium.
+
+A document's load event is earlier than Vue's lazy route and its data. Wait for the page's
+heading and for Loading… to disappear before navigating again or opening a menu: leaving early
+can cancel WebKit's module/data requests (`Importing a module script failed`, Vue Router navigation
+warnings, or `due to access control checks` on an aborted API request). These are not evidence
+that a later successful assertion failed, but neither should they be hidden by a blanket console
+filter. The shared-context checks block push-worker interference, and the affected checks wait for
+the page to settle. Habits also checks This device to ensure a replica run really has a filled local
+copy, and no longer ignores SQLITE_CORRUPT or failed module imports.
+
+Judge a run by all assertions **and exit status 0**, not an earlier `ok`, printed `true`, or a
+partially completed log. Success markers in these six checks follow context shutdown; an exit 1
+is still a failed run. `Service Worker registration blocked by Playwright` is expected in blocked
+contexts. Run WebKit checks sequentially, including the desktop and phone halves of capture.
+
 For timing with more data, build a copy with extra objects and start the env on it:
 `VASTA_TEST_SOURCE=<dir with vasta.db> scripts/test-env.sh`. In
 headless Chromium wait a moment between a click and Enter (ProseMirror reads the click's selection

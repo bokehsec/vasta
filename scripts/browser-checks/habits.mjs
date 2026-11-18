@@ -8,30 +8,26 @@
 // a past day fixed from a phone row by long press, and (on 5184, the built app) the same numbers
 // after reloading offline. SHOTS=<dir> saves light and dark screenshots; PHONE=1 a 390px width (Today left out).
 // The Tracker's own progress is checked too: where it shows (above, beside, off), the chart and
-// the range are picked in its Display menu (kept on the type, so they survive a reload).
+// the range are picked in its Display menu (kept with the account, so they survive a reload).
 //   node habits.mjs [chromium|webkit] [base]
-import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { chromium, webkit } from 'playwright'
+import { testArgs, testContext } from './test-env.mjs'
 import { addDays, habitReport, mondayOf } from '../../packages/core/src/index.ts'
 
-const engine = process.argv[2] ?? 'chromium'
-const base = process.argv[3] ?? 'http://127.0.0.1:5183'
-// Any 518x loopback port is a test env (5183/5184 the standard one; another may hold them).
-if (!/^http:\/\/127\.0\.0\.1:518[3-9]$/.test(base)) throw new Error(`not the test env: ${base}`)
+const { engine, base } = testArgs()
 // The built app is served by the API server itself; a dev one by Vite (its page loads /@vite/client).
 const built = !(await (await fetch(base)).text()).includes('/@vite/client')
 const timezoneId = 'America/Toronto'
 
-const options = { viewport: process.env.PHONE ? { width: 390, height: 844 } : { width: 1300, height: 1000 }, locale: 'en-US', timezoneId }
-const launched = engine === 'webkit' ? undefined : await chromium.launch()
-const context = launched ? await launched.newContext(options) : await webkit.launchPersistentContext(mkdtempSync(path.join(tmpdir(), 'vasta-habits-')), options)
-const browser = launched ?? context
+const options = { viewport: process.env.PHONE ? { width: 390, height: 844 } : { width: 1300, height: 1000 }, locale: 'en-US', timezoneId, serviceWorkers: built ? 'allow' : 'block' }
+const context = await testContext(engine, options)
 const page = context.pages()[0] ?? (await context.newPage())
 const problems = []
-page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && !/401|404|TextSelection endpoint|due to access control checks|SQLITE_CORRUPT|Importing a module script failed|VUE_ROUTER_R0010|router.onError|Failed to fetch|ERR_INTERNET_DISCONNECTED|WebKit encountered an internal error|network/i.test(m.text()) && problems.push(`${m.type()}: ${m.text()}`))
-page.on('pageerror', (e) => !/Importing a module script failed/.test(e.message) && problems.push(`pageerror: ${e.message}`))
+const failedRequests = []
+page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && !/401|404|TextSelection endpoint|Service Worker registration blocked by Playwright|due to access control checks|VUE_ROUTER_R0010|router.onError|Failed to fetch|ERR_INTERNET_DISCONNECTED|WebKit encountered an internal error|network/i.test(m.text()) && problems.push(`${m.type()}: ${m.text()}`))
+page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`))
+page.on('requestfailed', (request) => failedRequests.push(`${request.url()}: ${request.failure()?.errorText}`))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const step = (name) => console.log(`• ${name}`)
 async function until(check, what, timeout = 10000) {
@@ -60,6 +56,13 @@ await page.fill('#login-username', 'tester')
 await page.fill('#login-password', 'test-password')
 await page.click('button[type=submit]')
 await page.waitForSelector('nav', { state: 'attached', timeout: 30000 })
+await page.waitForURL((url) => url.pathname !== '/')
+// Let the start page finish before a later reload can cancel its mounted-hook request.
+await page.locator('main h1:visible').first().waitFor()
+await page.getByText('Loading…', { exact: true }).waitFor({ state: 'hidden' })
+// A replica run must actually use its local copy, rather than silently pass on HTTP fallback.
+await page.goto(`${base}/settings`)
+await until(async () => (await page.locator('#device').textContent().catch(() => ''))?.includes(process.env.MODE === 'json' ? 'Turned off on this browser' : 'Keeps a copy of your spaces'), 'the requested data mode')
 
 // Today as the browser sees it; weeks of check-ins before it.
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: timezoneId, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
@@ -86,6 +89,8 @@ for (const spec of specs) habits.push(await post('/api/objects', { typeId: habit
 await page.evaluate((id) => localStorage.setItem(Object.keys(localStorage).find((k) => /^vasta\.device\..+\.last-space$/.test(k)), JSON.stringify(id)), space.id)
 await page.reload()
 await page.waitForSelector('nav', { state: 'attached' })
+await page.locator('main h1:visible').first().waitFor()
+await page.getByText('Loading…', { exact: true }).waitFor({ state: 'hidden' })
 await until(async () => {
   if (await page.locator('aside').getByText(`Habits ${tag}`).count()) return true
   if (process.env.PHONE) return true
@@ -128,8 +133,8 @@ const report4 = habitReport(listed4, 4, today)
 const pct4 = report4.total.expected ? `${Math.round((report4.total.done / report4.total.expected) * 100)}%` : '—'
 await until(async () => (await main.locator('[data-progress-summary][data-layout="above"][data-chart="calendar"]').count()) === 1, 'the calendar above')
 await until(async () => (await text(main.locator('[data-progress-summary] [data-progress-headline]'))).startsWith(`${pct4} over the last 4 weeks ${report4.total.done} of ${report4.total.expected} done`), `headline ${pct4}`)
-// Where it shows, the charts and the range are picked in the Tracker's Display menu (beside
-// Filter), saved on the type; Type settings no longer has them.
+// The charts and range are personal choices in the Tracker's Display menu (beside Filter),
+// never shared fields in Type settings.
 await page.goto(`${base}/t/${habitType.id}?settings=1`)
 await until(() => page.getByRole('button', { name: 'Save', exact: true }).count(), 'Type settings')
 if (await page.locator('[data-habit-progress-settings]').count()) throw new Error('progress still in Type settings')
@@ -338,8 +343,9 @@ if (built) {
 
 if (problems.length) {
   console.log(problems.join('\n'))
+  console.log(failedRequests.join('\n'))
   throw new Error('console problems')
 }
 if (process.env.PHONE) for (const h of habits) await page.request.delete(`${base}/api/objects/${h.id}`, { headers })
+await context.close()
 console.log('ok')
-await browser.close()

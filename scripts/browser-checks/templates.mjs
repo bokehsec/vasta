@@ -3,20 +3,13 @@
 // placeholders resolved, the cursor where it says), the template is listed nowhere else, ⌘K
 // completes "/Task:" with it, and a snippet goes into a page from the "/" menu by its trigger.
 //   node templates.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
-import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { chromium, webkit } from 'playwright'
+import { testArgs, testContext } from './test-env.mjs'
 
-const engine = process.argv[2] ?? 'chromium'
-const base = process.argv[3] ?? 'http://127.0.0.1:5183'
-if (!/^http:\/\/127\.0\.0\.1:5[12]8[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
-
+const { engine, base } = testArgs()
 const options = { viewport: { width: 1300, height: 900 }, locale: 'en-US' }
-const launched = engine === 'webkit' ? undefined : await chromium.launch()
-const context = launched ? await launched.newContext(options) : await webkit.launchPersistentContext(mkdtempSync(path.join(tmpdir(), 'vasta-templates-')), options)
-const browser = launched ?? context
-if (process.env.MODE === 'json') await context.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))
+const context = await testContext(engine, options)
 const page = context.pages()[0] ?? (await context.newPage())
 const problems = []
 // TipTap's Link registers Apple Mail's `message:` scheme in every editor it creates, and linkifyjs warns from the second one on.
@@ -141,5 +134,5 @@ if (problems.length) {
   console.log(problems.join('\n'))
   throw new Error('console problems')
 }
+await context.close()
 console.log('ok')
-await browser.close()

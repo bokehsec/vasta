@@ -1,11 +1,11 @@
 // Mermaid diagrams (test env only): /Diagram inserts one, it is drawn, the code hides when the cursor
 // leaves and shows again on a click, a mistake names its line, ```mermaid typed makes one, and the
 // text is kept as a code block in "mermaid". SHOTS=<dir> saves light and dark screenshots.
-import { chromium } from 'playwright'
-const base = process.argv[2] ?? 'http://127.0.0.1:5183'
-if (!/^http:\/\/127\.0\.0\.1:518[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
-const browser = await chromium.launch()
-const page = await browser.newPage({ viewport: { width: 1000, height: 900 } })
+import assert from 'node:assert/strict'
+import { testArgs, testContext } from './test-env.mjs'
+const { engine, base } = testArgs()
+const context = await testContext(engine, { viewport: { width: 1000, height: 900 } })
+const page = context.pages()[0] ?? (await context.newPage())
 const problems = []
 page.on('console', (m) => m.type() === 'error' && !/401/.test(m.text()) && problems.push(m.text()))
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`))
@@ -33,20 +33,24 @@ const diagram = page.locator('[data-diagram]').first()
 // The drawing, not the icon of the "Turn into whiteboard" button.
 const drawing = diagram.locator('svg[aria-roledescription]')
 await drawing.waitFor({ timeout: 15000 })
-console.log('drawn:', await drawing.count() === 1, '| code shown while editing:', await diagram.locator('pre').isVisible())
+assert.equal(await drawing.count(), 1)
+assert.equal(await diagram.locator('pre').isVisible(), true)
+console.log('drawn: true | code shown while editing: true')
 
 console.log('• leave the block: only the drawing')
 await page.keyboard.press('Meta+ArrowDown')
 await page.keyboard.press('ArrowDown')
 await page.keyboard.type('After the diagram')
 await sleep(300)
-console.log('code hidden:', !(await diagram.locator('pre').isVisible()))
+assert.equal(await diagram.locator('pre').isVisible(), false)
+console.log('code hidden: true')
 if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/diagram-light.png` })
 
 console.log('• click the drawing: the code again, edited live')
 await drawing.click()
 await sleep(200)
-console.log('code shown:', await diagram.locator('pre').isVisible())
+assert.equal(await diagram.locator('pre').isVisible(), true)
+console.log('code shown: true')
 await page.keyboard.type('\n  B --> C[Diagram]')
 await sleep(800)
 console.log('nodes:', (await drawing.textContent()).replace(/\s+/g, ' ').trim())
@@ -67,11 +71,14 @@ await page.keyboard.press('End')
 await page.keyboard.press('Enter')
 await page.keyboard.type('```mermaid ')
 await page.keyboard.type('sequenceDiagram\n  Ana->>Bia: Hi')
-await page.waitForFunction(() => document.querySelectorAll('[data-diagram] svg[aria-roledescription]').length === 2, null, { timeout: 15000 }).catch(() => {})
+await page.waitForFunction(() => document.querySelectorAll('[data-diagram] svg[aria-roledescription]').length === 2, null, { timeout: 15000 })
 console.log('second diagram drawn:', await page.locator('[data-diagram] svg[aria-roledescription]').count() === 2)
 await sleep(1500)
 const saved = await (await page.request.get(`${base}/api/objects/${created.id}`)).json()
 const blocks = saved.content.body.content.filter((n) => n.type === 'codeBlock').map((n) => [n.attrs.language, n.content?.[0]?.text])
+assert.equal(blocks.length, 2)
+assert.match(blocks[0][1], /B --> C\[Diagram\]/)
+assert.match(blocks[1][1], /Ana->>Bia: Hi/)
 console.log('saved:', JSON.stringify(blocks))
 
 if (process.env.SHOTS) {
@@ -81,5 +88,6 @@ if (process.env.SHOTS) {
   await sleep(400)
   await page.screenshot({ path: `${process.env.SHOTS}/diagram-dark.png` })
 }
-console.log(problems.length ? `problems:\n${problems.join('\n')}` : 'no console errors')
-await browser.close()
+await context.close()
+if (problems.length) throw new Error(`console problems:\n${problems.join('\n')}`)
+console.log('OK')

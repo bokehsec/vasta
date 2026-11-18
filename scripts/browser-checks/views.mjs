@@ -1,16 +1,13 @@
 // Walk the app's screens with the local replica (test env only): no errors, same data as the server,
 // trash and Undo, search, a second tab (no replica there), logout.
-import { chromium } from 'playwright'
+import { testArgs, testContext } from './test-env.mjs'
 
-const base = process.argv[2] ?? 'http://127.0.0.1:5183'
-if (!/^http:\/\/127\.0\.0\.1:518[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
-const browser = await chromium.launch()
-const context = await browser.newContext()
-if (process.env.MODE === 'json') await context.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))
+const { engine, base } = testArgs()
+const context = await testContext(engine)
 const page = await context.newPage()
 const problems = []
 const watch = (p, name) => {
-  p.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && !/401|TextSelection endpoint/.test(m.text()) && problems.push(`${name} ${m.type()}: ${m.text()}`))
+  p.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && !/401|TextSelection endpoint|Service Worker registration blocked by Playwright|linkifyjs: already initialized - will not register custom scheme "message"/.test(m.text()) && problems.push(`${name} ${m.type()}: ${m.text()}`))
   p.on('pageerror', (e) => problems.push(`${name} pageerror: ${e.message}`))
 }
 watch(page, 'tab1')
@@ -35,6 +32,9 @@ await page.fill('#login-username', 'tester')
 await page.fill('#login-password', 'test-password')
 await page.click('button[type=submit]')
 await page.waitForSelector('nav', { timeout: 30000 })
+await page.waitForURL((url) => url.pathname !== '/')
+await page.locator('main h1').first().waitFor()
+await page.getByText('Loading…', { exact: true }).waitFor({ state: 'hidden' })
 const spaces = await get('/api/spaces')
 const space = spaces[0]
 const bundle = await get(`/api/spaces/${space.id}`)
@@ -50,22 +50,36 @@ for (const type of bundle.types.filter((t) => bundle.counts[t.id]).slice(0, 6)) 
 step('home, inbox, calendar, trash, settings render')
 for (const path of ['/', '/inbox', '/calendar', '/trash', '/settings']) {
   await page.goto(`${base}${path}`)
-  await sleep(800)
-  if (!(await page.textContent('body')).trim()) throw new Error(`${path} is empty`)
+  if (path === '/') await page.waitForURL((url) => url.pathname !== '/')
+  // A document's load event precedes Vue's lazy route and its data, especially on WebKit.
+  await page.locator('main h1').first().waitFor()
+  await page.getByText('Loading…', { exact: true }).waitFor({ state: 'hidden' })
+  if (!(await page.textContent('main')).trim()) throw new Error(`${path} is empty`)
 }
 
 step('⌘K pressed while the app loads opens the palette once it is ready')
 const target = (await get(`/api/spaces/${space.id}/search?q=&limit=5`)).find((o) => o.title)
-// Hold the answer to "who am I" so the app is running but still loading when the key goes in.
+// checkSession awaits auth/me in both modes. Keep it held until after the key, even when
+// Vite's module loading or WebKit takes longer than a fixed delay.
+let release
+let held = false
+const gate = new Promise((resolve) => (release = resolve))
 await page.route('**/api/auth/me', async (route) => {
-  await sleep(2500)
+  held = true
+  await gate
   await route.continue()
 })
-await page.goto(base)
-await page.waitForFunction(() => document.body.textContent.includes('Loading…'), null, { timeout: 15000 })
 const paletteInput = page.locator('input[placeholder="Search or create…"]')
-await page.keyboard.press('Meta+k')
-if ((await page.locator('nav').count()) > 0) throw new Error('the app was ready before the key went in')
+try {
+  await page.goto(base)
+  await until(() => held, 'auth/me held')
+  await page.getByText('Loading…', { exact: true }).waitFor()
+  if (await page.locator('nav').count()) throw new Error('the app was ready before the key went in')
+  await page.keyboard.press('Meta+k')
+  if (await paletteInput.count()) throw new Error('the palette mounted before the workspace was ready')
+} finally {
+  release()
+}
 await until(async () => (await paletteInput.count()) > 0, 'the palette opens when the app is ready')
 await until(async () => (await paletteInput.evaluate((el) => document.activeElement === el)), 'the palette has the focus')
 await page.unroute('**/api/auth/me')
@@ -100,6 +114,9 @@ await second.close()
 
 step('log out and in again')
 await page.goto(base)
+await page.waitForURL((url) => url.pathname !== '/')
+await page.locator('main h1').first().waitFor()
+await page.getByText('Loading…', { exact: true }).waitFor({ state: 'hidden' })
 await page.click('button[title="Spaces and account"]')
 await page.locator('button', { hasText: 'Log out' }).click()
 await page.waitForSelector('#login-username')
@@ -107,9 +124,12 @@ await page.fill('#login-username', 'tester')
 await page.fill('#login-password', 'test-password')
 await page.click('button[type=submit]')
 await page.waitForSelector('nav', { timeout: 30000 })
+await page.waitForURL((url) => url.pathname !== '/')
+await page.locator('main h1').first().waitFor()
+await page.getByText('Loading…', { exact: true }).waitFor({ state: 'hidden' })
 await page.goto(`${base}/o/${victim.id}`)
 await until(async () => (await page.inputValue('textarea[data-large-text]').catch(() => '')) === 'Renamed in tab 1', 'replica again after login')
 
-if (problems.length) console.log(`console problems:\n  ${problems.join('\n  ')}`)
+await context.close()
+if (problems.length) throw new Error(`console problems:\n  ${problems.join('\n  ')}`)
 console.log('OK')
-await browser.close()

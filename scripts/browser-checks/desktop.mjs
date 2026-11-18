@@ -3,14 +3,12 @@
 // `downloads` key); as the desktop app (its globals and set_shortcut faked), the Desktop app
 // section: recording a shortcut, one refused, the default, and ⌘, opening Settings.
 // SHOTS=<dir> saves screenshots of the sections.
-import { chromium } from 'playwright'
-const base = process.argv[2] ?? 'http://127.0.0.1:5183'
-if (!/^http:\/\/127\.0\.0\.1:518[34]$/.test(base)) throw new Error('test env only (5183/5184)')
-const browser = await chromium.launch()
+import { testArgs, testContext } from './test-env.mjs'
+const { engine, base } = testArgs()
 const clean = (text) => text.replace(/\s+/g, ' ').trim()
 
 async function open(init) {
-  const context = await browser.newContext()
+  const context = await testContext(engine)
   if (init) await context.addInitScript(init)
   const page = await context.newPage()
   await page.goto(base)
@@ -18,6 +16,9 @@ async function open(init) {
   await page.fill('#login-password', 'test-password')
   await page.click('button[type=submit]')
   await page.waitForSelector('nav', { state: 'attached', timeout: 30000 })
+  await page.waitForURL((url) => url.pathname !== '/')
+  await page.locator('main h1').first().waitFor()
+  await page.getByText('Loading…', { exact: true }).waitFor({ state: 'hidden' })
   return { context, page }
 }
 const shot = (page, selector, name) => process.env.SHOTS && page.locator(selector).screenshot({ path: `${process.env.SHOTS}/${name}.png` })
@@ -86,4 +87,4 @@ const shot = (page, selector, name) => process.env.SHOTS && page.locator(selecto
   console.log('0.1.2:', clean(await page.textContent('#desktop')))
   await context.close()
 }
-await browser.close()
+console.log('OK')

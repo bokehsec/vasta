@@ -9,19 +9,16 @@
 // picker, and a draft kept after Cancel until Discard or a save. As the desktop app (its globals faked),
 // since only it opens quick capture.
 //   node capture.mjs [base]      MODE=json: with the replica turned off (HTTP mode)
-import { chromium } from 'playwright'
-const base = process.argv[2] ?? 'http://127.0.0.1:5183'
-if (!/^http:\/\/127\.0\.0\.1:518[34]$/.test(base)) throw new Error('test env only (5183/5184)')
-const browser = await chromium.launch()
+import { testArgs, testContext } from './test-env.mjs'
+const { engine, base } = testArgs()
+const context = await testContext(engine)
 setTimeout(() => (console.log('timed out'), process.exit(1)), 90000).unref()
-const context = await browser.newContext()
-await context.addInitScript((json) => {
-  if (json) localStorage.setItem('vasta.replica', 'off')
+await context.addInitScript(() => {
   window.__VASTA_DESKTOP__ = { version: '0.1.6', shortcut: 'CommandOrControl+Shift+Space', updates: '', setShortcut: true }
   window.panelAnswers = []
   window.panelCalls = []
   window.__TAURI_INTERNALS__ = { invoke: async (command, args) => (window.panelCalls.push([command, args]), command === 'capture_suggestions' && window.panelAnswers.push(args.answer), null) }
-}, process.env.MODE === 'json')
+})
 const page = await context.newPage()
 await page.goto(base)
 await page.fill('#login-username', 'tester')
@@ -30,7 +27,8 @@ await page.click('button[type=submit]')
 await page.waitForSelector('nav', { state: 'attached', timeout: 30000 })
 const clean = (text) => text.replace(/\s+/g, ' ').trim()
 const headers = { 'x-requested-with': 'vasta' }
-const get = async (path) => (await page.request.get(`${base}${path}`)).json()
+let request = page.request
+const get = async (path) => (await request.get(`${base}${path}`)).json()
 
 // A type of books in every space, so the capture space has one whichever it is.
 const name = `Livro${Date.now() % 100000}`
@@ -129,13 +127,16 @@ await page.keyboard.press('Control+k')
 const query = page.locator('input[placeholder="Search or create…"]')
 await query.waitFor()
 await query.pressSequentially(`/${name.slice(0, -1).toLowerCase()}`)
-await page.waitForTimeout(400)
+await page.locator('.max-w-xl button.bg-hover').first().waitFor()
 for (let i = 0; i < 6 && !clean(await page.locator('.max-w-xl .bg-hover').first().textContent()).startsWith(name); i++) await page.keyboard.press('ArrowDown')
 await page.keyboard.press('Enter')
+await page.waitForFunction((value) => document.querySelector('input[placeholder="Search or create…"]')?.value === value, `/${name} `)
 console.log('⌘K picked:', JSON.stringify(await query.inputValue()))
 await query.pressSequentially('Hyperion nota:4')
-await page.waitForTimeout(300)
-console.log('⌘K result:', clean(await page.locator('.max-w-xl .bg-hover').first().textContent()))
+// HTTP completions can arrive after the keystrokes; wait for this line's create result.
+const createResult = page.locator('.max-w-xl button.bg-hover').filter({ hasText: 'Create “Hyperion”' })
+await createResult.waitFor()
+console.log('⌘K result:', clean(await createResult.textContent()))
 await page.keyboard.press('Enter')
 // The made object opens in the window (?popup=<id>&new=1) over the page.
 await page.waitForURL((url) => new URLSearchParams(url.search).get('popup'))
@@ -232,9 +233,11 @@ if ((await field.inputValue()) !== 'Desktop draft before a reload') throw new Er
 await page.getByRole('button', { name: 'Discard' }).click()
 await page.keyboard.press('Escape')
 // On a phone: where it goes, the type picker, a Save capture button, drafts.
-const phone = await browser.newContext({ viewport: { width: 390, height: 700 }, hasTouch: true })
-await phone.addInitScript((json) => json && localStorage.setItem('vasta.replica', 'off'), process.env.MODE === 'json')
+// Only one WebKit context may own the replica: its OPFS locks do not span profiles.
+await context.close()
+const phone = await testContext(engine, { viewport: { width: 390, height: 700 }, hasTouch: true })
 const mobile = await phone.newPage()
+request = mobile.request
 await mobile.goto(base)
 await mobile.fill('#login-username', 'tester')
 await mobile.fill('#login-password', 'test-password')
@@ -315,4 +318,4 @@ await openPhoneCapture()
 if ((await mobileField.inputValue()) !== 'Typed before an app reload') throw new Error(`the draft did not survive a reload: "${await mobileField.inputValue()}"`)
 await mobile.getByRole('button', { name: 'Discard' }).click()
 await phone.close()
-await browser.close()
+console.log('OK')
