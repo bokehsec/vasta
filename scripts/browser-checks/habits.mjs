@@ -326,6 +326,8 @@ if (process.env.PHONE) {
 if (built) {
   step('offline reload: the same numbers from the device')
   const report = await expectFor(13)
+  await page.goto(`${base}/t/${habitType.id}?view=__progress`)
+  await checkNumbers(13, report)
   await sleep(1500)
   await context.setOffline(true)
   await page.reload()
