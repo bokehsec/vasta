@@ -143,7 +143,9 @@ watch(
     await nextTick()
     input.value?.focus()
     inFlight = search()
-  }
+  },
+  // Open already when it mounts: a ⌘K pressed while the app loaded (lib/shortcuts.ts).
+  { immediate: true }
 )
 
 async function choose(result: Result | undefined) {

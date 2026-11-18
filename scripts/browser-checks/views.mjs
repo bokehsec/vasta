@@ -54,14 +54,21 @@ for (const path of ['/', '/inbox', '/calendar', '/trash', '/settings']) {
   if (!(await page.textContent('body')).trim()) throw new Error(`${path} is empty`)
 }
 
-step('search from the palette')
-await page.goto(base)
-await page.waitForSelector('nav', { state: 'attached', timeout: 30000 })
-await sleep(500)
+step('⌘K pressed while the app loads opens the palette once it is ready')
 const target = (await get(`/api/spaces/${space.id}/search?q=&limit=5`)).find((o) => o.title)
-// ⌘K before the app has its shortcuts is lost: press again until the palette shows.
+// Hold the answer to "who am I" so the app is running but still loading when the key goes in.
+await page.route('**/api/auth/me', async (route) => {
+  await sleep(2500)
+  await route.continue()
+})
+await page.goto(base)
+await page.waitForFunction(() => document.body.textContent.includes('Loading…'), null, { timeout: 15000 })
 const paletteInput = page.locator('input[placeholder="Search or create…"]')
-await until(async () => (await paletteInput.count()) > 0 || (await page.keyboard.press('Meta+k'), await sleep(300), (await paletteInput.count()) > 0), 'the palette opens')
+await page.keyboard.press('Meta+k')
+if ((await page.locator('nav').count()) > 0) throw new Error('the app was ready before the key went in')
+await until(async () => (await paletteInput.count()) > 0, 'the palette opens when the app is ready')
+await until(async () => (await paletteInput.evaluate((el) => document.activeElement === el)), 'the palette has the focus')
+await page.unroute('**/api/auth/me')
 await paletteInput.fill(target.title.slice(0, 6))
 await until(async () => (await page.textContent('body')).includes(target.title), `palette finds ${target.title}`)
 await page.keyboard.press('Escape')

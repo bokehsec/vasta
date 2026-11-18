@@ -146,6 +146,8 @@ async function run(desktop) {
   step(`${where}: Edit view filter changes the view's own conditions`)
   await page.locator('[data-edit-view-filter]').click()
   const values = page.locator('[data-view-filter-editor] input[placeholder="Value"]')
+  // Let the save just made settle: a re-render from its sync resets a box typed in but not yet committed.
+  await sleep(1500)
   await values.last().fill('beta')
   await values.last().press('Enter')
   await values.last().blur()

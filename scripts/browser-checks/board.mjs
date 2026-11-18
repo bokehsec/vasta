@@ -198,12 +198,17 @@ await until(async () => ((await get('/api/auth/me')).preferences ?? {})[foldKey]
 if ((await get(`/api/types/${task.id}`)).views[0].board?.collapsed?.length) throw new Error('folding a column edited the view')
 
 step('card fields and swimlanes')
-await page.getByRole('button', { name: 'Cards' }).click()
+// A phone's Cards menu is a row of the Filters sheet's Arrange list; a desktop has the toolbar button.
+if (phone) {
+  await page.locator('[data-filters-button]').click()
+  await page.locator('[data-arrange="cards"]').click()
+} else await page.getByRole('button', { name: 'Cards' }).click()
 await page.locator('select[aria-label="Swimlanes"]').selectOption({ label: 'Priority' })
 await until(() => page.locator('[data-board-cell="todo|high"]').count(), 'a High lane')
 await page.locator('button', { hasText: /^\s*Blocked\s*$/ }).last().click()
 await until(async () => JSON.stringify((await get(`/api/types/${task.id}`)).views[0].board?.cardFields) === JSON.stringify(['blocked']), 'card fields saved')
 await page.keyboard.press('Escape')
+if (phone) await page.keyboard.press('Escape') // the Filters sheet under it
 // Dragging into another lane changes that field too.
 await until(() => page.locator('[data-board-cell="doing|low"]').count(), 'a Low lane in progress')
 await page.locator('[data-drag-scroll]').evaluate((board) => board.scrollTo({ left: 0 }))

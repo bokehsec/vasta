@@ -84,12 +84,12 @@ back/forward and where you are (an object's type, then the object); the page is 
 (`bg-surface`, border, faint shadow) sitting on the canvas. On phones the panel is flat and full
 width, the sidebar is a drawer, and the top bar shows the menu (and Back beside it on an object's
 page, when there is history), the page and the bell. A bottom bar (`PhoneTabBar`) holds places only, as iPhone apps
-do: Home, Tasks, Inbox, Calendar, Search; the one you are on is accent-coloured. Capture is a round
+do: Home, Tasks, Inbox, Calendar, Search; the one you are on is accent-coloured. The one "+" is a round
 ink button above it on the right (it rises while a notice shows). The bar hides while the keyboard is
 up (`keyboardInset`; a zoom is not a keyboard) or a whiteboard is full screen (`ui.surfaceFull`),
-and pages get bottom padding so their last row clears it. Layers on a phone: bar and Capture 20,
-the drawer and its backdrop 30, process mode 40, sheets and notices 50 and up. Notices sit above
-the bar, above the keyboard when it is up, and above process mode's buttons (`ui.noticeLift`). Every `PopoverMenu` is a sheet from the bottom on a phone (dimmed page,
+and pages get bottom padding so their last row clears it. Layers on a phone: bar and "+" 20,
+the drawer and its backdrop 30, a review 40, sheets and notices 50 and up. Notices sit above
+the bar, above the keyboard when it is up, and above a review's buttons (`ui.noticeLift`). Every `PopoverMenu` is a sheet from the bottom on a phone (dimmed page,
 rounded top, safe area, 80% high at most and never more than the keyboard leaves (`sheetMaxHeight`),
 full-width rows 44px, 16px text boxes; a modal dialog: a tap on the dimmed page closes it without
 reaching what is underneath, focus moves in and goes back);
@@ -100,15 +100,17 @@ folds its fields into one outlined line under the quick actions, opened with a t
 **Where objects open** (`lib/open.ts`, the one place that decides): a **window** over the page
 (`PopupHost`, `?popup=<id>`; the default), the **side pane** next to it (`SidePane`, `?pane=<id>`),
 or the object's own **page**. Views and queries say `openIn`, else their type does (Type settings ›
-Open in: Window / Side pane / Its own page; unset is the window). Links elsewhere (mentions, the
-sidebar, ⌘K's search results, quick capture) open the page; every New opens what it made in the
-window. The window: centred over a dimmed page (a raised surface, 16px radius, soft offset shadow),
+Open in: Window / Side pane / Its own page; unset is the window). A link in text, the sidebar and
+quick capture open the page; ⌘K's results, notifications, mentions, the calendar and a row menu's
+Open open it where its type says on a phone (the window unless the type's Open in is another) and
+on its page on a desktop. Every New opens what it made, once Added, in the window. The window: centred over a dimmed page (a raised surface, 16px radius, soft offset shadow),
 the object as in the pane (no comments or activity), **Open full page** and Close at the top; Esc,
 Back or a click outside close it. On a phone it is a sheet from the bottom (grabber, Close and Open
-full page at 44px). A New closed untouched is removed. The pane: same surface and border as the
+full page at 44px). The pane: same surface and border as the
 page; phones have none. The link of the object the pane shows is tinted (`bg-hover`).
 
-**Quick card** (`QuickAdd`): a type page's New, for a plain object. A large title (20px semibold),
+**Quick card** (`QuickAdd`): every New of a plain object (a type page's, the sidebar's and top bar's,
+a group's "+", a board column's "+", the phone's "+"). A large title (20px semibold),
 **Add a note** (the type's text), the fields a row can hold as chips (field icon and name, the value
 once set; not text blocks, formulas or fields shown only with a value), and a footer on the raised
 surface: the type, the keys (↵ add · ⌘↵ add and open), Cancel, Open, Add <type> (Main). Nothing is
@@ -150,7 +152,7 @@ Any object with steps shows a small outlined count ("2/5"), green with "Ready to
 are closed. A step listed without its parent says "in <parent>" on a faint line. On its page, a
 Subtasks section under the quick actions: a quiet header with a thin progress line and "1 of 3 done", ruled rows (checkbox,
 title, short due date), and an "Add subtask" line at the end; when every step is closed, a bordered
-line "All subtasks done" with the type's first quick action as a button.
+line "All subtasks done" with the type's Done action as a button.
 
 **Row actions**: tasks have one leading completion circle. Rows open their object; their menu
 and quick actions operate on that object only. Lists and tables have no row multiselect or bulk
@@ -164,7 +166,13 @@ list, and of a table on a phone), cards, board or agenda; `FieldValue` shows a f
 
 **A type's page** is `TypePage` with its parts: `ViewSwitcher` (tabs, or a phone's view button),
 `ViewToolbar` (a desktop's search, Mine, Filter and arrange buttons) or `FiltersSheet` (a phone's),
-both driven by one model (`lib/view-toolbar.ts`) whose menus are `ArrangeMenus`; `ReviewButton` and
+both driven by one model (`lib/view-toolbar.ts`) whose menus are `ArrangeMenus`. **Filters are a
+narrowing**: what a person adds in the Filter menu or sheet lives in the page and is gone when they
+leave it; the view's own filter is shown apart ("This view: …") and never counted; Clear (and the
+count) cover only the narrowing, search and Mine; **Save to view** copies the narrowing into the
+view's filter (everyone's) and **Edit view filter** changes it on purpose. Done and Dropped are
+hidden by a visible view filter ("Status is not Done, Dropped"), which "Show done and dropped" turns
+off for this person only (a preference); `ReviewButton` and
 the review (`lib/use-review-session.ts`); the views themselves are `lib/use-type-views.ts`.
 
 **Grouped collections**: `GroupHeading` uses the standard Quiet button and 13px Phosphor
@@ -184,18 +192,20 @@ hover) reads as a small heading; a table inside one, or inside a whiteboard card
 header fill of its own (`bare`) and its first column lines up with the text around it. Never nest
 one framed surface in another.
 
-**Process mode**: a view's open objects one at a time, in a centred panel (full screen on a phone)
-over the dimmed page: place and a thin progress line, the title large, the next step, the view's
-fields, the start of the notes, Open; then the quick actions as large buttons (the first filled,
-with its number key), Break into steps for types with subtasks, Back and Skip. It ends with what
-was done.
+**Review** (`ProcessMode`, with `ReviewDecisionBar`): the tasks of a review one at a time, in a
+centred panel (full screen on a phone) over the dimmed page: which review and where in it (the new
+tasks, then the check-ins) with Pause, the task in full (notes, steps) and the plan beside it
+(status, dates, priority, project, next step, each edited in place), then the decision under it:
+Keep, Defer…, Done, Drop, the other statuses as links, Back and Decide later (buttons and keys:
+Buttons above). Another type's view review has its quick actions as the buttons. It ends with what
+was done and "Review N left for later".
 
 **Swipes** (`SwipeRow`, touch screens): on a row of a type with quick actions, a swipe right past 35%,
 or a flick past 15%, runs the type's Defer (else its first quick action); a slower one past 40px
 uncovers it as a button. A swipe left past 40px (or a flick) uncovers the other actions, Done first,
 then More (the row's long-press menu). As on iOS a release is judged by distance and speed
 (`lib/swipe.ts`), so a deliberate short swipe never springs back; an open row closes when swiped
-back 40px, flicked back or tapped, and settles with an ease-out (no bounce). Process mode's card
+back 40px, flicked back or tapped, and settles with an ease-out (no bounce). A review's card
 goes past 25% of the screen, or flicked past 40px. One row is open at a time; a tap elsewhere closes it. On phones
 swipes replace the row's buttons; tablets keep both. Swipes start 24px in from the left edge (the
 drawer's). Done is a deep green, Defer the (light theme's) accent blue, the rest warm greys: fixed
@@ -230,14 +240,14 @@ refers to the day, and what was created that day. Today's note is started on ope
 for "Start the daily note", so browsing does not litter empty notes.
 
 **The month beside the calendar**: week, three-day and day views have a small month on the right
-(toggle in the header, remembered per device). Dots under a day say what it holds, one color each
+(toggle in the header, remembered per account). Dots under a day say what it holds, one color each
 (`DAY_MARKS` in `lib/calendar.ts`): a daily note with text, tasks due, dated objects, references
 (objects linking to the day's note or date objects), events. A legend sits under it and the day's
 tooltip gives the counts. The dots follow the calendar's Show filters.
 
 **Fixed views**: some built-in types open on a view of their own before their saved views (`FIXED_VIEWS`
 in `TypePage`): Tags a Tree (sub-tags fold under their parent like folders, folding remembered per
-device), Habits a Tracker (habits × the last 14 days, 7 on phones). They are not stored on the type.
+account), Habits a Tracker (habits × the last 14 days, 7 on phones). They are not stored on the type.
 
 **Habits**: checked off where the day is: the calendar's day view (in the side column under the
 month, or as pills in the page when that column is hidden), daily notes (pills), the habit's page

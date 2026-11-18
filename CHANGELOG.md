@@ -8,32 +8,50 @@ GitHub release page.
 
 ### Added
 
-- **A paused review keeps its place for each type, and says where it is.** Pausing a review of
-  Tasks no longer gets lost or replaced when you review another type; each type keeps its own, on
-  this device, and starting another review of the same type asks first. While one is paused the
-  Review button reads "Resume 4 of 12" (on a phone too); if it covers another view or search than
-  the one you are on, it says which and offers **Review this view instead** beside it. Review
-  settings (how often a task comes back, which statuses are new) have their own **Review** section
-  in Type settings, and the Hold setting, which no longer had any effect, is gone.
-
-- **Filters are a temporary narrowing.** On a phone's Filters sheet and a computer's Filter menu, what
-  you add narrows the view for this visit only and is gone when you leave the page. The view's own
-  filter is shown apart ("This view: Area is Work") and is not counted; the count and **Clear** cover
-  only what you narrowed with, plus search and Mine. **Save to view** (shown when you have narrowed)
-  adds it to the view's own filter for everyone who uses the view, and **Edit view filter** changes
-  that filter on purpose.
+- **Review tasks: one routine, few clear choices.** A task type's page has one **Review** button
+  (with how many are waiting), beside New Task; on a phone it sits beside the view picker. It
+  always starts with every **new** task in the space (no status, or an incoming one such as Inbox,
+  whichever view you are on), then the **check-ins** of the view you are looking at, with its
+  search and Mine: open tasks not reviewed for 7 days. The review header says what it covers, and
+  on a phone Mine has a chip to remove it. Tasks go one at a time, with all their notes, Claude's
+  take, their steps, and **the plan now**: status, due date, do date, priority, project and next
+  step, each changeable in place. Under the task are at most four buttons, never the status it
+  already has: a placed task has **Keep in Next** (it records today as the task's new **Last
+  reviewed** day, so it comes back after the review interval), **Defer…** (your type's own Defer),
+  **Done** and **Drop**; a new task has **Next**, Defer…, Done and Drop. The other statuses are
+  links under them ("Move to Waiting · On hold"), and **Decide later** records nothing and keeps it
+  in the queue. Keys on a computer: K (or R) keep, N next, F defer, D done, X drop, 1–9 the links,
+  → later, ← back, Enter opens the page, Esc pauses; on a phone the buttons are a tray at the
+  bottom, swipe right to defer and left to leave it for later. Undo takes a decision off again, and
+  the end counts each task once ("Reviewed 6 · Done 3 · 4 left for later") with "Review 4 left for
+  later" to go over those. A paused review keeps its place, one for each type, on this device: the
+  button reads "Resume 4 of 12", opening a task's page and going Back returns to the same one, and
+  starting another review of the same type asks first. If the paused review covers another view
+  or search than the one you are on, it says which and offers **Review this view instead**. The
+  page's ⋯ menu has **Review all tasks in Main** (your space's name), which ignores filters; Metrics
+  and Agenda offer it too. Type settings › **Review** sets how often a task comes back (0: every
+  time) and which statuses count as new (only no status or Inbox unless you tick others). A view's
+  filter **Due for review** is the same check-in list, to show tasks only when they need a look.
+  Any change of a task's status counts as a review (see "A changed status counts as a review").
+- **Filters are a temporary narrowing.** On a phone's Filters sheet and a computer's Filter menu,
+  what you add narrows the view for this visit only and is gone when you leave the page. The view's
+  own filter is shown apart ("This view: Area is Work") and is not counted; the count and **Clear**
+  cover only what you narrowed with, plus search and Mine. **Save to view** (shown when you have
+  narrowed) adds it to the view's own filter for everyone who uses the view, and **Edit view
+  filter** changes that filter on purpose. The phone's sheet has a Done button and says how many
+  tasks the filters leave.
 - **Your display choices follow you.** Which groups and board columns you folded, Show done, Mine,
-  the view a type opens on, the phone bottom menu, the Habits display, the calendar's view and
-  Show menu, tips you hid, and the like are kept with your account, so they are the same on every
-  device and nothing you fold or hide changes what anyone else sees. Page width, a pane's width and
-  an unsaved capture stay per device. Values you already had on a device move over on first use.
-
+  the view a type opens on (until you pick one it opens on its first view), the phone bottom menu,
+  the Habits display, the calendar's view and Show menu, tips you hid, and the like are kept with
+  your account, so they are the same on every device and nothing you fold or hide changes what
+  anyone else sees. Page width, a pane's width and an unsaved capture stay per device. Values you
+  already had on a device move over on first use.
 - **Fold grouped views.** Use the chevron beside a group to hide or show its items, or Collapse all
-  and Expand all above the groups. Its name and matching count stay visible; tables keep one
-  shared header. Works in lists, tables and cards, including embedded queries and phone rows.
-  Folds are yours: remembered for this view on every device you use, without changing the view for
-  anyone else, its filters or what Review covers. A board's folded columns work the same way. Embedded group counts include matches beyond the preview.
-
+  and Expand all above the groups. Its name and matching count stay visible (embedded groups count
+  the matches beyond the preview); tables keep one shared header. Works in lists, tables, cards and
+  boards (a board's columns), including embedded queries and phone rows. Folds are yours, kept for
+  this view on every device you use, and do not change the view for anyone else, its filters or
+  what Review covers.
 - **Habits from SparkyFitness.** Connect a space to your SparkyFitness server with a read-only
   API key, choose how much history to bring in, then preview seven days before linking a habit.
   Steps, water and sleep fill its daily amount (they need a daily goal, which the link asks for;
@@ -45,51 +63,22 @@ GitHub release page.
   last error, and the habit can be unlinked; the panel is hidden when the space has no connection.
   Disconnecting keeps filled days, or removes them with the links and the properties the connection
   added. The connection sits above Delete space in space settings.
-
-- **Objects in a window over the page.** A click on an object in a list, table, board or query —
-  and every New — opens it in a window over what you were looking at, a sheet from the bottom on a
-  phone, instead of taking you to its page. In it the object is read and edited as on its page;
-  Esc, Back, a click outside or **Open full page** leaves the window. Closing it goes back a step,
-  so the next Back leaves the page instead of opening the window again (reading three tasks costs
-  one Back), and **Open full page** takes the window's place, so one Back returns to the list. On a
-  phone the window sits above the keyboard and under the notch, and the calendar, Search,
-  notifications, mentions and a row menu's **Open** use it too. Type settings' **Open in**
-  chooses the window (the default), the side pane or its own page, and a view's layout menu can
-  choose for itself. A New is never made before you add it, so there is nothing to clean up.
-- **The quick card.** Every New (a type page's New button, the sidebar's and the top bar's New, a
-  "+" on a group's header in a list or table, a board column's "+") starts from the same place: a
-  small card over the list: a large title,
-  **Add a note**, and the type's fields as a row of chips (Status, Due, Priority…). Nothing is made
-  until it is added. Enter adds it and the card stays for the next one, saying what was added
-  (with Open and Undo); ⌘↩ or **Open** adds it and opens it in the window; Cancel, Esc or a click
-  outside leave nothing behind. On a phone it is a sheet from the bottom, and the type page's own
-  New button gives way to the one round "+" (it opens this card for the type and the view, with a
-  "Capture a note instead" link; elsewhere "+" opens quick capture). Types with a default template
-  keep their flow on a computer, and a template button stays on a phone; the menu's Blank choice
-  uses the card. The card starts with what the view you are on filters on (on a Work view, Area is
-  Work), with you as Assignee while Mine is on, and with the group, column or lane you added into,
-  so what you add shows there; templates start from the same values; on Today, a New is dated today.
 - **Habits by the week.** A habit has a new field, **Times a week**: set it to 3 and the habit counts
   by the week (Monday to Sunday), on any days. Today's list, the Tracker, the habit's page,
   reminders and the agent tools say "2 of 3 this week", count streaks in weeks, and stop asking
   once the week's goal is met. A space that already had a field with this id keeps its own.
 - **Habit progress.** The Habits page has a **Progress** tab beside Tracker: how much of what your
-  habits asked for got done over the last 4, 8 or 13 weeks, as a percent with "94 of 120", a bar
-  per week and a row per habit with its goal. Days a habit was paused count as days off, so they
-  are not asked and not missed; the range is the Tracker's too, so both cover the same weeks.
-  Beside the range you pick the chart (a trend line or a calendar of done days, the same two as on
-  the Tracker), your own choice on every device you use, and each habit shows its own weeks as
-  small columns. It works offline. The agent tools' `list_habits` can add the same numbers
-  (`weeks`) and reports the same last four weeks.
-- **Habit progress on the Tracker, your way.** The Habits Tracker shows how you are doing next to
-  the habits. Its **Display** button, beside Filter, chooses where (above the habits, beside them — below them
-  on a phone — or off), the chart (a trend line or a calendar of done days) and the range (4, 8 or
-  13 weeks), your own choice on every device you use (the habit type's saved setting is only what
-  shows until you pick). It starts with the calendar above; settings saved when there
-  were more charts read as the nearest of the two. On a phone each habit is one row, as in the Habit
-  Tracker app: its whole name, "2 of 3 this week" or its streak, its last two weeks as ticks (a day
-  a "3 a week" habit does not need is never shown as missed) and a round check for today; a long
-  press on a tick changes that past day.
+  habits asked for got done over the last 4, 8 or 13 weeks, as a percent with "94 of 120", a chart
+  and a row per habit with its goal and its own weeks as small columns. There are two charts, a
+  trend line or a calendar of done days, and one range. The Tracker's **Display** button, beside
+  Filter, chooses where progress shows (above the habits, beside them — below them on a phone — or
+  off), the chart and the range, the same ones as on the tab: your own choice on every device you
+  use (the habit type's saved setting is only what shows until you pick). It starts with the
+  calendar above; settings saved when there were more charts read as the nearest of the two. On a
+  phone each habit is one row, as in the Habit Tracker app: its whole name, "2 of 3 this week" or
+  its streak, its last two weeks as ticks (a day a "3 a week" habit does not need is never shown as
+  missed) and a round check for today; a long press on a tick changes that past day. It works
+  offline. The agent tools' `list_habits` can add the same numbers (`weeks`).
 - **Pauses with dates.** A habit's page has **Pause** and **Resume**, and lists its pauses with a
   first and a last day to change. Paused days are days off in the Tracker, Today, the calendar,
   streaks, progress, reminders and the agent tools: not asked, not missed. A habit that was paused
@@ -98,106 +87,75 @@ GitHub release page.
   habit's page says **Last 4 weeks** and **This week so far** (days still to come no longer count),
   all counted the same way as the Progress tab and the agent tools (it was the last 30 days,
   counted differently for weekly habits).
-- **Menu in the phone bottom menu.** Settings › Appearance › Bottom menu can now include **Menu**,
-  which opens the side menu from within reach of your thumb. The ☰ button at the top left still
-  opens it too.
-
+- **Objects in a window over the page.** A click on an object in a list, table, board, query,
+  the calendar, Search, notifications, a mention or a row menu's **Open** — and every New — opens
+  it in a window over what you were looking at, a sheet from the bottom on a phone, instead of
+  taking you to its page. In it the object is read and edited as on its page; Esc, Back, a click
+  outside or **Open full page** leaves the window. Closing it goes back a step, so the next Back
+  leaves the page instead of opening the window again (reading three tasks costs one Back), and
+  **Open full page** takes the window's place, so one Back returns to the list. On a phone the
+  window sits above the keyboard and under the notch. Type settings' **Open in** chooses the window
+  (the default), the side pane or its own page, and a view's layout menu can choose for itself.
+- **One way to start something new: the quick card.** Every New (a type page's New button, the
+  sidebar's and the top bar's New, a "+" on a group's header in a list or table, a board column's
+  "+") opens a small card over the list: a large title, **Add a note**, and the type's fields as a
+  row of chips (Status, Due, Priority…). Nothing is made until it is added. Enter adds it and the
+  card stays for the next one, saying what was added (with Open and Undo); ⌘↩ or **Open** adds it
+  and opens it in the window; Cancel, Esc or a click outside leave nothing behind. The card starts
+  with what the view you are on filters on (on a Work view, Area is Work), with you as Assignee
+  while Mine is on, and with the group, column or lane you added into, so what you add shows there;
+  on Today, a New is dated today. Types with a default template keep their flow on a computer, and
+  a template button stays on a phone. On a phone the card is a sheet from the bottom, and there is
+  one "+", the round one above the bottom bar: on a type's page it starts a new item of that type
+  from the view, with a "Capture a note instead" link; elsewhere it opens quick capture.
+- **Quick capture made for a phone.** It says where the text will go, lets you pick Note or a type
+  (no need to type "/Book"), and has a Save capture button above the keyboard (Return adds a line).
+  The types you create most (in the last 90 days, four) are offered first, the rest under More….
+  Text you have not saved is kept on this device and comes back next time, with Discard, also after
+  the app is reloaded, and on a computer too.
+- **A phone layout that fits the hand.** A bar at the bottom goes to Home, Tasks, Inbox, Calendar
+  and Search, with the round "+" above it. Pickers and menus (a status, a date, a long-press menu)
+  rise from the bottom with larger rows and stay above the keyboard. A type's page shows the view
+  picker and a Filters button on one row, with a count of what is on; Filters opens a sheet with
+  Search this view, Mine, the filters and Arrange (sort, group, layout, fields). A task's fields
+  fold into one line under its buttons, and its page has Back at the top. Every row has a ⋯ button
+  with its actions, so nothing needs a long press to be found.
 - **Choose your phone bottom menu.** Settings › Appearance › Phone bottom menu lets you pick one
-  to five places (including Today, Settings and your object types), reorder them with arrows, or
-  reset to the original menu. Changes appear immediately, belong to you on every device (you can
-  set it from a computer too), and are the same in every space; a type shows in each space that has
-  a type of that name.
-
-- **A task you mark Done stays where it was until you leave.** On a type's page (Tasks views, in
-  every layout: list, table, phone rows, cards and board, plus the Done button, swipe and menu), a
-  completed task keeps its place, shows a checked circle and a muted, struck-through
-  title, and counts as done. It only leaves when you reload, leave the page, switch views or change
-  the filters, sort or layout; searching keeps matching rows. Uncheck it, or press Undo in the
-  notice, to put back everything the completion changed, not only the status (a Next task returns to
-  Next). A repeating task says "Done this time · Next: <date>". A failed save puts the task back
-  with a Retry. Its Done, Defer and Drop buttons are hidden meanwhile, leaving the circle and Undo.
-  On a board, the card stays in its column; dragging it to a Done or Dropped column still moves it
-  and runs that status's action, with the same notice and Undo as the Done button. On a phone,
-  opening a task, marking it Done and going Back shows the list fresh, without it.
-
+  to five places (including Today, Settings, **Menu**, which opens the side menu within reach of
+  your thumb, and your object types), reorder them with arrows, or reset to the original menu.
+  Changes appear immediately, belong to you on every device (you can set it from a computer too),
+  and are the same in every space; a type shows in each space that has a type of that name.
 - **Choose your page width.** Settings › Appearance has Standard, Wide and Full width, remembered
   on this device for all object pages and daily notes. Standard keeps the reading width and gives
   pages with columns more room; daily notes with columns now get that same room. Full width uses
   the available content area while keeping the page margins.
-
-- **Review tasks: one routine, few clear choices.** A task type's page has one **Review**
-  button (with how many are waiting) instead of separate Triage and Review buttons on every view. It
-  always starts with every **new** task in the space (no status, or an incoming one such as Inbox,
-  whichever view you are on), then the **check-ins** of the view you are looking at, including
-  its search and Mine (open tasks not reviewed for 7 days, including ones on hold). The review shows the task in full (all its notes, Claude's take, its steps with
-  their dates) and **the plan now**: status, due date, do date, priority, project and next step,
-  each changeable in place. Under the task are at most four buttons, and never the status it
-  already has: a task already placed has **Keep in Next** (or its status, highlighted), which marks
-  it reviewed so it comes back after the review interval, then **Defer…** (your type's own Defer, the
-  same as on a row or a task's page: a day, and the status it sets, such as Scheduled), **Done** and
-  **Drop**; a new task has **Next**, Defer…, Done and Drop, none highlighted. The other statuses are links under them
-  ("Move to Waiting · On hold"), and **Decide later** records nothing and keeps it in the queue. Keys
-  on a computer: K keep, N next, F defer, D done, X drop, 1–9 the links. On a big screen the
-  buttons are centred under the task with the plan beside it; on a phone they are a tray at the
-  bottom. Type settings › Review sets how often a task comes back for a check-in and which
-  statuses count as new. The page's ⋯ menu offers **Review all tasks in this space** for a full sweep.
-- **Search and filters in one place on a phone.** A type's page (Tasks and the rest) shows the view
-  and a Filters button on one row, with a count of what is on, instead of a toolbar that scrolled
-  sideways. Filters opens a sheet with Search this view, Mine, the filters and Arrange (sort,
-  group, layout, fields), and Clear (see Filters are a temporary narrowing). Each task row has a ⋯ button with its actions, so nothing needs
-  a long press to be found.
-- **Quick capture made for a phone.** It says where the text will go, lets you pick Note or a type
-  (no need to type "/Book"), and has a Save capture button above the keyboard (Return adds a line).
-  The types you make most (in the last 90 days, four) are offered first, the rest under More….
-  Text you have not saved is kept on this device and comes back next time, with Discard, also after
-  the app is reloaded, and on a computer too.
-- **Quick actions on any type.** Type settings › Quick actions, until now only on a task, works on
-  every type: set up buttons that change its fields in one click, and they show on its objects'
-  pages, as a view's row buttons, in the Quick actions column and in process mode. (A task still
-  gets Done, Defer, Drop and Next step until you edit them; another type starts empty.)
-- **Drag in the agenda.** In an Agenda view or query, drag a task or an event of your own to another
-  day (after a long press on a phone) to move it there; a timed one keeps its time of day. A task's
-  plan moves, never its deadline by accident (see "Dragging a task moves its plan" below). A notice
-  says where it went, with Undo, and dragging near the top or bottom scrolls to days off screen.
-- **A phone layout that fits the hand.** On a phone a bar at the bottom goes to Home, Tasks, Inbox,
-  Calendar and Search, with a round Capture button above it. Pickers and menus (a status, a date, a
-  long-press menu) rise from the bottom with larger rows, and stay above the keyboard. A type's views
-  are one button with the list in a sheet, a task's fields fold into one line under its buttons, and
-  a task's page has Back at the top.
-- **Review your tasks one at a time, as in OmniFocus.** "Review 12 tasks" on Tasks (on a phone, a
-  full-width button under the view; the count is exactly the tasks it will show, after search, Mine
-  and filters) walks through the view's open tasks that are due for review, in its order: ones never
-  reviewed, or not in the last 7 days. "Review all" takes the others too. **Reviewed** says a task is
-  fine as it is: it records today in the task's new Last reviewed field and moves on, so a task kept
-  for later without a date no longer has to be deferred or skipped. Three buttons decide: Done,
-  Defer… and Next step…; More holds the rest (Drop, your own actions,
-  Break into steps). Any decision counts as reviewed too: a status change marks a task reviewed wherever
-  it is made (see "A changed status counts as a review" below), and the ones that leave the status as it is (Keep, a next
-  step) record it themselves. A next step is saved with Save and keeps
-  the task on screen (Next goes on); Done, Defer and the others move on. The task's whole notes show
-  (and its other text fields), scrolling under the buttons. Skip and Back move without changing
-  anything. Close the review, open a task's details, or reload, and it waits for you: Back from the
-  task returns to the same one, and Tasks offers "Resume 4 of 12" (End forgets it; it stays
-  on this device, for you only). Undo takes a decision off again, and the end counts each task once
-  ("Reviewed 6 · Done 3 · 4 skipped, unchanged") with "Review 4 skipped" to go over those. How often
-  a task comes up again (7 days unless changed; 0 for every time) is in
-  Type settings › Review. A view's filters can use **Due for review**, which is the review's
-  check-in list (open tasks that are not new and have not been reviewed for that many days; also in
-  Claude's queries), to show tasks only when they need a look (say, tasks on hold). On a computer, R marks
-  reviewed, keys 1–9 run the actions and the arrows skip or go back; on a phone, swipe right to
-  defer, left to skip.
+- **Quick actions: buttons that change an object in one click, on any type.** Type settings ›
+  Quick actions sets them up. They show on its objects' pages, as a view's row buttons, in a
+  **Quick actions** column and in Review. Each sets fields to a value, a day (today, tomorrow, next week, in N days), you (people),
+  nothing, or asks for the value when pressed (a day, a line of text). A task type starts with
+  **Mark done**, **Defer…** (sets the Do date, see "A task's dates mean something"), **Drop** (a
+  second "done" status such as "Dropped"; without one there is no Drop) and Next step; another type
+  starts empty. Turn on "Quick actions" in a task view's menu or a query's settings and every open
+  task's row has its actions, with a text property chosen in Type settings › Quick actions shown
+  under the title as the next step. On a phone they go under each title, so nothing scrolls
+  sideways. Done, Defer and the others save at once, so a failed save says so instead of showing a
+  "Done" notice, and every one has Undo.
 - **Subtasks: split a task into steps.** Turn it on in Type settings › Subtasks (it can add a
   "Part of" field, or use one you have). A task's page lists its steps with how many are done; type
   a step and press Return for the next, or paste several lines at once. New steps take the task's
   Area, Project, people and tags. Lists show the steps under their task, folded with its caret, with
   a "2/5" count, and "Ready to close" once all are done, with a button for the type's Done (the task
-  is never closed for you; closing it early asks whether to close its open steps too). "Nest subtasks" in a view's layout menu or a query's
-  settings lists them flat instead. A row's menu has Add subtask…, Make subtask of… and Remove from
-  parent.
+  is never closed for you). Closing a task with open steps, however it is closed (Done, Drop, a
+  board drag, a review), asks once "Close its 3 open subtasks too?" with **Close them too** or
+  **Leave open**; they close with Done, or Drop when the task was dropped, and one Undo puts the
+  task and its steps back. "Nest subtasks" in a view's layout menu or a query's settings lists them
+  flat instead. A row's menu has Add subtask…, Make subtask of… and Remove from parent. Marking a
+  step done shows a notice with Undo.
 - **Tasks on a phone: swipe a row.** Swipe right to defer a task (pick the day in the sheet that
-  rises from the bottom); swipe left for Done, Drop, Next step and More. Long-press a row for the
-  same actions in its menu. On a tablet the buttons stay and the swipes work too. A subtask in a
-  task's page swipes the same way and has the same ⋯ button and long-press menu as any other row.
+  rises from the bottom); swipe left for Done, Drop, Next step and More. A quick flick counts as
+  much as a long drag; a short, slow swipe uncovers the button, and swiping back closes it.
+  Long-press a row for the same actions in its menu. On a tablet the buttons stay and the swipes
+  work too. A subtask in a task's page swipes the same way.
 - **Tables fit a phone.** A table view is drawn as rows on a phone, with its columns as a short
   line under each title, so nothing scrolls sideways. "Show as table on this phone" in the layout
   menu keeps the table for that view on that phone.
@@ -207,44 +165,37 @@ GitHub release page.
 - **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu, a right-click on the
   view's tab, or the tab dragged into a sidebar section puts that one view, such as a "Today" view
   of Tasks, in the sidebar; its row opens the type on that view.
-- **Choose the fields on a list's rows**: in a list view or query, the new Fields menu picks which
+- **Choose the fields on a list's rows**: in a list view or query, the Fields menu picks which
   fields follow each title (a due date, status, tags, any property), puts them in order by
-  dragging, and can wrap long titles. Once fields are chosen, tasks get a checkbox to mark them
-  done from the list. Reset to default brings back tags and the last change.
+  dragging, and can wrap long titles. Reset to default brings back tags and the last change. A
+  task's checkbox, to mark it done from the list, is always there.
 - **Group by a date**: lists, tables and the other layouts can group by a date field, under
   Earlier (Overdue for a task's due date), Today, Tomorrow, This week, Next week, Later and No
   date. A board grouped this way shows the columns; its cards do not move between them.
 - **An embedded query can be shown compact**: just its results, without the header bar and the
   border, for a page that has its own heading above each list. Pick Show as → Compact in the
-  block's menu; Edit query and Open query move there.
+  block's menu; Edit query and Open query move there. A compact query that finds nothing
+  disappears, with the heading right above it; it stays while it loads, while its settings are open
+  and when the query fails, and while you edit the page it shows a faint "Nothing here yet".
 - **An embedded block can be shown compact** too: just its content, without the frame and the
   object's name (a colored group without its panel), and nothing at all while the block is empty,
   for a block another page or a script keeps up to date. Show as → Compact in the block's menu;
   Open block moves there.
 - **An Agenda layout** for queries and type views: the next few days from today, one section
-  each, for a home page. What the query or view selects that has a date shows under its day: all-day
-  items first, then timed ones in time order with a thin line marking now and what is over faded,
-  and tasks keep their checkbox. Options set the date field to place things by, how many days (1
-  to 14, three by default) and whether to include the events of your subscribed calendars, all or
-  some. A build without the layout shows it as a grid.
+  each, for a home page. What the query or view selects that has a date shows under its day:
+  all-day events as chips in one wrapping row, then timed items in time order with a thin line
+  marking now and what is over faded, and tasks keep their checkbox. Options set the date field to
+  place things by, how many days (1 to 14, three by default) and whether to include the events of
+  your subscribed calendars, all or some. Drag a task or an event of your own to another day (after
+  a long press on a phone) to move it there (see "Dragging a task moves its plan"); a timed one
+  keeps its time of day, and dragging near the top or bottom scrolls to days off screen. A build
+  without the layout shows it as a grid.
 - **Choose what a space opens on**, in Settings › Space: its first pinned item (as before), Today,
   or any page.
 - **"Copy link to page" in object menus**: the right-click menu of an object in the sidebar, a
   type view or query results, and the ⋯ More menu of an object's page and side pane now have a
   "Copy link to page" action. It copies `<server>/o/<id>` in the browser and `vasta://o/<id>`
   in the desktop app, matching existing block-link behaviour.
-- **Quick actions on a task's page**: buttons that change a task in one click, with Undo. By
-  default Done, Defer (tomorrow, next week or a day picked on a small calendar: it sets the task's
-  Do date and leaves the deadline alone) and Drop (a second
-  "done" status such as "Dropped"; without one there is no Drop). Type settings › Quick actions
-  edits them or adds your own: each sets fields to a value, a day (today, tomorrow, next week, in
-  N days), you (people), nothing, or asks for the value when pressed (a day, a line of text).
-  Deferring past the due date is allowed and said.
-- **Triage task lists with quick actions on each row**: turn on "Quick actions" in a task view's
-  menu or a query's settings, and every open task's row gets its quick actions; a text property
-  chosen in Type settings › Quick actions shows under the title as the task's next step. In a
-  table they are a "Quick actions" column, moved, resized and hidden in Columns like any other;
-  on a phone they go under each title instead, so they need no sideways scrolling.
 - **"Next week" in date pickers**, beside Today and Tomorrow.
 
 ### Changed
@@ -252,38 +203,70 @@ GitHub release page.
 - **One Done, everywhere.** The circle on a list, table, card, query or calendar row, a subtask's
   circle, the Done button, a swipe and a board drag into a Done column all run the task type's own
   Done action, so a Done you customised (extra changes, another name) behaves the same wherever you
-  press it, with the same notice and Undo. Dropped tasks now look dropped everywhere: a cross in
-  the circle, as on the calendar, instead of looking just like Done. A subtask's circle is the same
-  one lists have. "All subtasks done" in a task's page offers the type's Done, not whatever action
-  comes first.
+  press it, with the same notice and Undo. Dropped tasks look dropped everywhere: a cross in the
+  circle, as on the calendar, instead of looking just like Done. "All subtasks done" in a task's
+  page offers the type's Done, not whatever action comes first.
+- **A task you mark Done stays where it was until you leave.** On a type's page (in every layout:
+  list, table, phone rows, cards and board, plus the Done button, swipe and menu), in an agenda, in
+  a list embedded in a page (Home's Today, a project page, a dashboard) and on the Calendar page, a
+  completed task keeps its place, shows a checked circle and a muted, struck-through title, and
+  counts as done. It only leaves when you reload, leave the page, switch views or change the
+  filters, sort or layout; searching keeps matching rows. A list whose last open task you complete
+  keeps that task in view instead of saying nothing matches. Uncheck it, or press Undo in the
+  notice, to put back everything the completion changed, not only the status (a Next task returns to
+  Next). A repeating task says "Done this time · Next: <date>". A failed save puts the task back
+  with a Retry. Its Done, Defer and Drop buttons are hidden meanwhile, leaving the circle and Undo.
+  On a board, the card stays in its column; dragging it to a Done or Dropped column still moves it
+  and runs that status's action, with the same notice and Undo as the Done button. On a phone,
+  opening a task, marking it Done and going Back shows the list fresh, without it.
+- **Done and dropped tasks are hidden in every view, the calendar and embedded queries.** A task
+  list shows what is still open, so the rows you can swipe come first. Views hide them with a filter
+  you can see, **Status is not Done, Dropped**: new views and new queries of tasks start with it,
+  and your existing views and embedded queries got it once. Turn on **Show done and dropped** in a
+  view's filters (Filters on a phone, Filter on a desktop) to list them again: it is your own choice
+  for that view, on every device you use, and does not change the view for anyone else. The filter
+  count and **Clear** leave it alone. On the Calendar page, tick **Done and dropped tasks** in the
+  Show menu to show them (remembered for you). A view that asks for a closed status ("Status is
+  Done") and a board with a Done column show them as before. The count at the top of a type's page
+  counts what the view shows.
 - **A changed status counts as a review.** Whenever a task's status changes (Done, a board drag, a
   status picked on its page, the agent tools, a device working offline), its Last reviewed day
   becomes today in your time zone, unless that save sets the day itself. Undo puts the earlier day
-  back with the status. Review's own decisions that leave the status as it is (Keep, a next step)
-  still record it. In a task's history the change shows as "Last reviewed" next to the status. The Last reviewed
-  day is not an entry on the calendar or in agendas.
-- **Quick actions on the task page say what happened after it is saved.** Done, Defer and the
-  others on a task's page save at once instead of after a short pause, so a failed save says so and
-  shows no "Done" notice. Moving a task under another and saving a subtask no longer reload every
-  task of the type: only what changed is updated.
-- **Closing a task with open subtasks asks.** Whatever closes it (Done, Drop, a board drag, a
-  review) asks once "Close its 3 open subtasks too?" with **Close them too** or **Leave open**; they
-  close with Done, or Drop when the task was dropped, and one Undo puts the task and its subtasks
-  back. Leaving them open still says how many are open.
+  back with the status. In a task's history the change shows as "Last reviewed" next to the status.
+  The Last reviewed day is not an entry on the calendar or in agendas.
 - **Reopening a task from the calendar goes to a to-do status.** Unticking a done or dropped task
   (including the cross on a dropped row) sets the first to-do status that is not incoming, so a
   reopened task no longer falls back into the review's new tasks.
 - **Only Inbox tasks are new in a review.** A task type with no Inbox status (the built-in Task)
   used to count every To do task as new, in every review, forever. Now new means a task with no
   status, or one in an Inbox status (or the statuses you tick as incoming in Type settings ›
-  Quick actions); To do tasks are check-ins.
+  Review); To do tasks are check-ins.
+- **A task's dates mean something.** Each task type has a **Do date** (the day you will work on it)
+  and a **Due** date (the deadline); Type settings › a date's Meaning says which is which (a new
+  Task starts with both, and your existing task types were given them: the date your Defer set, or
+  a new "Do date", is the plan). The calendar, Review, Defer and Claude all read them the same way.
+  **Defer…** (one name on rows, pages and Review) plans the work: it sets the Do date
+  and keeps the deadline, a timed date keeps its time of day (also across a clock change), and a
+  repeating date moves only this occurrence. Planning after the deadline shows a warning, and the
+  question's box "Also move the due date, if the new day is after it", unticked, takes a
+  deadline along when you want it to; a repeating deadline never moves. A task's date picker shows
+  the other date and, when the deadline now falls before the plan, offers to plan for it too. A
+  repeating task you finish moves its due date to the next occurrence and clears a Do date on or
+  before the day just done.
+- **Defer questions are quick to answer.** The Defer question names the task, picks no day until
+  you do (today is only marked as today), and has Cancel and Save, on a computer as on a phone,
+  where it is a sheet along the bottom within reach of the thumb, with larger days and month arrows
+  and Save in reach when it has to scroll. **Tomorrow** and **Next week** save at once, with Undo in
+  the notice, unless that day is after the deadline: then the warning shows and Save waits. Any
+  other question (a next step, a number or link) shows Cancel and Save too, and a next step's sheet on a
+  phone has a Save button. If saving fails, the question stays open with what you typed and
+  offers Retry; a second tap while saving does nothing.
 - **Calendar plans and deadlines are clear.** The Day view separates planned work, deadlines,
   completed tasks and dropped tasks. Empty circles mean unfinished work; a checkmark means done.
   A task's plan and deadline on the same day are one entry with both badges (Planned, Due) on the
   Day view, week, month, agendas and the small month's dots alike, and each task shows its other
   date. A date that is neither (a "Check back") shows its own name. Planned after the deadline is
-  marked with a warning on every chip and row, not just the Day view. There are no extra
-  Reschedule buttons on the calendar.
+  marked with a warning on every chip and row. There are no extra Reschedule buttons on the calendar.
 - **Dragging a task moves its plan.** On the calendar (month, week, three days) and in agendas,
   dragging a task moves its Do date, never the deadline by accident: a task with only a deadline
   gets a plan on that day. Dragging a task's deadline when it has a plan asks "Move the deadline?"
@@ -293,193 +276,89 @@ GitHub release page.
   section: open tasks whose deadline or plan is before today, each saying what is late ("Due Tue",
   "Planned Mon") with a one-tap **Move to today** that plans it for today, keeps the deadline, and
   can be undone. A repeating task counts only at its current occurrence.
-- **A task's dates mean something.** Each task type has a **Do date** (the day you will work on it)
-  and a **Due** date (the deadline); Type settings › a date's Meaning says which is which (a new
-  Task starts with both, and your existing task types were given them: the date your Defer set, or
-  a new "Do date", is the plan). The calendar, Review, Defer and Claude all read them the same way.
-  Defer changes the Do date without moving the deadline unless you ask. Planning after the deadline
-  shows a warning. A task's date picker shows the other date and, when the deadline now falls before
-  the plan, offers to plan for it too; repeating dates stay separate.
-
-- **Simpler task rows.** Removed row multiselect, selection menus and the bulk-action bar from
-  lists and tables throughout Vasta. Task rows keep their completion circle; individual actions,
-  Review and triage remain available.
-
-- **Review the tasks you are looking at.** Review's check-ins come from the current task view's
-  filters, search and Mine, after every new task in the space, and the review's header names its scope. On a phone,
-  Mine also has a visible chip to remove it. **Review all tasks in Main** (using your space’s name) in ⋯ ignores those filters,
-  even when nothing waits in this view. Paused sessions keep and name their original scope. Metrics
-  and Agenda explicitly offer **Review all** for the whole space. Background space updates no longer
-  pause an active review.
-
+- **One row menu everywhere.** The menu of a task, note or other row is the same on a type's page
+  and in a query: Open, Copy link, Pin, its quick actions and steps, and **Move to trash** (queries
+  did not have it).
+- **Inbox: "Clear".** An inbox item's button is **Clear** (and **Bring back**), and the list says
+  "Show cleared". A word you chose in Settings › Inbox stays: the button reads "Mark" and your word.
+- **Buttons that look like buttons.** Buttons come in a few consistent kinds: the main action in
+  dark ink (New Task, Save), a light blue one for a way into a feature or the action a page leads
+  with (Review, Mark done), and grey for everyday actions (Cancel, Defer…, Drop, Sync now).
+  Settings' outlined buttons and dialogs' plain Cancel are grey now. The same kinds run through
+  Review, Quick capture, comments, type settings and templates, sprints, subtasks, the calendar's
+  quick create and event details, food logging and the Nutrition page, Trash (Empty trash and
+  Delete in red, Restore grey), Settings, password and login, and a notice's Undo. A task's page
+  buttons are named with verbs (**Mark done**, tinted so it stands out, **Defer…** and **Drop**);
+  an existing type keeps its names (Type settings › Quick actions), and none is filled, so none
+  looks like the task's current status. On a phone buttons, the page's ⋯ and a notice's Undo and
+  close are full finger size, and a notice with Undo stays while your finger or pointer is on it.
 - **Grouped tables read as one table.** Column headings appear once above all groups, with aligned
   columns and a shared horizontal scroll. Group labels and counts stay, without a box around each group.
-
 - **Queries in a page lose their boxes.** An embedded query is no longer a framed card holding a
   second framed table: its title sits in the page like a small heading, the results follow with only
   a hairline between rows, and Edit query shows when you point at it (always on touch). The same
-  table on a whiteboard card loses its inner box. Tables everywhere drop the shaded header row, and
-  a row's select box now appears over its icon instead of pushing every title to the right.
-- **Buttons that look like buttons, and Triage you can see.** Buttons now come in a few
-  consistent kinds: the main action in dark ink (New Task, Save), a light blue one for a way into a
-  feature or the action a page leads with (Triage, Mark done), and grey for everyday actions
-  (Cancel, Defer…, Drop, Sync now). Settings' outlined buttons and dialogs' plain Cancel are grey
-  now. On the Tasks page, **Triage** and **Review** sit beside New Task with how many tasks are
-  waiting; a press starts that queue at once, a paused one reads "Resume triage 4 of 12", and with
-  nothing waiting they turn grey. **Triage & review…** in the ⋯ menu still explains both queues and
-  ends a paused session. On a phone one button sits beside the view picker: Triage, else Review,
-  else Resume, with its count; the view picker and Filters are grey buttons. The same kinds now
-  run through review mode, Quick capture, comments, type settings and templates, sprints,
-  subtasks, the calendar's quick create and event details, food logging and the Nutrition page,
-  Trash (Empty trash and Delete in red, Restore grey), Settings, password and login, and a notice's
-  Undo.
-- **Done tasks stay put in agendas, and subtasks can be undone.** A task marked done in an agenda
-  (a Tasks view or a list in a page laid out as days) stays on its day, checked and struck through,
-  until you leave or reload; a repeating one says "Done this time · Next: …". Its checkbox undoes it,
-  back to its exact status. Marking a subtask done shows a notice with Undo, and the subtask's
-  checkbox also puts back the status it had. The Calendar page already kept done tasks in view; dragging one to another day moves it there, on the Calendar page as in an agenda.
-- **Done tasks stay put in lists inside pages too.** A task marked done in a list embedded in a page
-  (Home's Today, a project page, a dashboard) stays where it was, checked and struck through, until
-  you leave or reload the page; Undo puts back its exact status. A list whose last open task you
-  complete keeps that task in view instead of saying nothing matches.
-
-- **A task's page buttons look like buttons.** They are raised buttons named with verbs: **Mark
-  done** (tinted, so it stands out), **Defer…** and **Drop**. New task types name the first one Mark
-  done; an existing type keeps its names (Type settings › Quick actions). None is filled, so none
-  looks like the task's current status. On a phone these buttons, the page's ⋯ and the Undo and close buttons on a notice
-  are full finger size, and a notice with Undo stays while your finger or pointer is on it.
-- **Defer from a list says which task.** The Defer sheet opened from a row names the task, picks no
-  day until you do (today is only marked as today), has larger days and month arrows on a phone,
-  and keeps Cancel and Save in reach when the sheet has to scroll on a small screen.
-- **Done and dropped tasks are hidden in every view, the calendar and embedded queries.** A task
-  list shows what is still open, so the rows you can swipe come first. Views hide them with a filter
-  you can see, **Status is not Done, Dropped**: new views and new queries of tasks start with it,
-  and your existing views and embedded queries got it once. Turn on **Show done and dropped** in a
-  view's filters (Filters on a phone, Filter on a desktop) to list them again: it is your own choice
-  for that view, on every device you use, and does not change the view for anyone else. The filter
-  count and **Clear** leave it alone. On the Calendar page, tick **Done and dropped tasks** in the
-  Filter menu to show them (remembered for you). A task you finish stays on screen,
-  crossed out, until you leave the view, so Undo is still in reach. A view that asks for a closed
-  status ("Status is Done") and a board with a Done column show them as before.
-- **The phone's Filters sheet has a Done button** and says how many tasks the filters leave, since
-  changes apply as you make them. A filter's choices (a status's Inbox, Next, Done…) get a line of
-  their own and are big enough to tap.
-- **Swipes on a phone are less sticky.** A short swipe on a task row no longer springs back: a quick
-  flick counts as much as a long drag. Flick right (or drag a third of the way) to defer; a short,
-  slow swipe right uncovers the Defer button, and a short swipe left uncovers Done and the others.
-  Swipe back to close. Rows also settle more smoothly, and the review screen's swipe to defer or
-  skip needs a quarter of the screen, or a flick.
+  table on a whiteboard card loses its inner box. Tables everywhere drop the shaded header row.
 - **Whole titles on a phone.** Task lists, search results, a page's links and a tag's list wrap
   long titles onto more lines instead of cutting them off. Phone task rows no longer show when a task
-  was last edited or keep a blank indent for subtask arrows, so the title has the row's width, and
-  “Resume triage · 1 of 27” fits beside Triage & review.
-- **A quick action's question has Cancel and Save.** Every question (a next step, a day to defer
-  to, a number or link) shows both buttons, on a computer as on a phone. A day on the calendar only
-  picks the day: the question shows it, and where the due date ends up, before Save writes it.
-  **Tomorrow** and **Next week** save at once, with Undo in the notice, unless that day is after
-  the deadline: then the warning shows and Save waits. If saving fails, the question stays open
-  with what you typed and offers Retry; a second tap while saving does nothing.
-- **Defer can move the due date too when you put a task off past it.** The day picker has a box "Move
-  the due date too", unticked: tick it and a day after the due date takes the due date along, so the
-  task is not left overdue; Undo puts both back. Left unticked, a real deadline stays where it is. A
-  due date that repeats is never moved, and a timed one keeps its time of day, also across a clock
-  change. The same goes for process mode.
-- **On a phone, a quick action that asks (a day to defer to, a next step) asks in a sheet along the bottom of the screen**, within reach of the thumb, with larger buttons, instead of under the small button.
+  was last edited or keep a blank indent for subtask arrows, so the title has the row's width.
 - **The page a space opens on is calmer**: its icon is a small tile beside the title, and the tags
   row and the "Add property" line show only once there is something in them. Tags and Property
   join Icon and Cover in the buttons that appear when you hover the page's top, so they stay
   one click away. Other pages look as before.
-- **All-day events in an Agenda are chips**: one wrapping row under the day, lined up with the
-  titles below, so a school notice or a holiday takes one line instead of a row each. A task due
-  that day stays a row with its checkbox, now with an empty time column instead of "All day".
 - **Dates on list rows are shorter**: this year's show as "Tue Nov 17" (or "Tue Nov 17, 9:00 AM"
   with a time), without the year. Other years, tables and boards are unchanged.
-- **A compact query that finds nothing disappears**, with the heading right above it, instead of
-  saying "No objects match this query." The same goes for a compact embedded block that is empty.
-  It stays while it loads, while its settings are open and when the query fails. While you edit the
-  page it stays, with a faint "Nothing here yet", so you can still find and change it.
-- **A type remembers only a view you picked**: until you pick one, it still opens on its first
-  view, also after the views are reordered.
 
 ### Fixed
-- **One row menu everywhere.** The menu of a task, note or other row is the same on a type's page
-  and in a query: Open, Copy link, Pin, its quick actions and steps, and **Move to trash** (queries
-  did not have it). On a phone every row has the ⋯ button, not only those of types with quick actions.
-- **Inbox: "Clear".** An inbox item's button is **Clear** (and **Bring back**), and the list says
-  "Show cleared". A word you chose in Settings › Inbox stays: the button reads "Mark" and your word.
-- **Phone and page fixes.** A type's page names itself once on a phone (the top bar), not twice.
-  A link to a type in another space no longer flashes "Type not found" while it loads. The count at
-  the top of a type's page counts what the view shows, not the Done and Dropped it hides. Collapse
-  all and Expand all appear on a page's own groups, not above every grouped embed and whiteboard card.
-  Board column chips, the fields and columns ticks and the like are 44px to tap on a phone.
-- **Review keys.** A first status such as "Delegated" or "Soon" no longer takes D, F or X from Done,
-  Defer and Drop, a review of another type no longer says it "does not settle incoming tasks", and the
-  message for a deleted task names the button ("Decide later"). A review saved by an older version
-  that no longer fits is not offered to resume.
 
-- **Deferring a repeating or timed date keeps what it holds.** Defer, and any quick action that sets
-  a day, keeps a date's time of day and its end; on a repeating date it moves only this occurrence,
-  not the whole series. A due date at 9:00 moved across the November clock change is still 9:00.
-- **A repeating task done leaves no stale Do date.** Its due date moves to the next occurrence, and
-  a Do date on or before the day just done is cleared instead of left behind in the past.
-- **"Due for review" matches the review.** The filter shows the review's check-ins: open tasks that
-  are not new. New tasks (which have their own review queue) and closed ones no longer match.
 - **Saving a type never undoes another change.** Type settings, a view's settings, a new select
   option or property, and a duplicated or renamed view each save only what they changed, in order, so
   a view made while Type settings was open, or on another device, is no longer overwritten.
-
 - **A link to a type of another space** (its page, e.g. Habits) opens that space and shows the
-  page, as a link to an object already did; it used to stay blank.
+  page, as a link to an object already did; it used to stay blank, then flash "Type not found".
 - **Swiping back on an iPhone goes back.** A swipe from the screen's left edge could leave you on
   the same page: it also started opening the side menu, and Back then closed that menu instead of
   leaving. The edge swipe now only goes back; the side menu opens from the ☰ button (or Menu in the
   bottom menu) and still closes with a swipe left. Going back to a list returns to where you had
   scrolled, and a page you open starts at its top. Tapping the bottom-menu place you are already on
   no longer adds a step to Back: it scrolls to the top (Calendar goes back to today).
-
+- **Back on a phone closes what is open instead of leaving the page.** With a menu, a question such
+  as Defer, the Filters or View sheet, the side menu, Search, Quick capture, the quick card, a
+  full-screen whiteboard, a review or a dialog open, Back (the button, or swiping from the edge)
+  closes it and you stay where you were; in a menu's submenu it goes back to the menu. Before, the
+  page behind changed and a sheet like Defer stayed open over another page. Quick capture keeps
+  what you typed for next time. Every sheet is the same one now: the same backdrop, the same safe
+  space above the keyboard and under the home bar, tap outside to close, a bar at the top that can
+  be pulled down to close it, as on iOS, and 44px rows. Escape closes the sheet on top only.
+  Dialogs stay above the keyboard. On a computer, Back puts away Quick capture and the quick card
+  instead of leaving them over the page that came back.
 - **Enter in ⌘K always takes the top row of what you just typed.** Opening the palette again after
   picking a lower row could make Enter do nothing, so a line like `/food 300 kcal at snack` was not
-  logged and the palette stayed open.
-
+  logged and the palette stayed open. A ⌘K pressed while the app is still loading opens the palette
+  once it is ready instead of being lost.
 - **The desktop app's quick capture says where a capture goes.** With "Add quick captures to the
   daily note" off (the default), the capture box and the capture panel no longer promise "in
   today's note": they name the space, or the inbox when only that is on.
-
-- **Phone controls are easier to use.** View, Filters, template choices and
-  filter-building buttons have full-height touch targets. Capture types wrap in a bounded picker
-  without keyboard-only hints; subtasks have a visible Add button. Lists scroll clear of Capture,
-  including while a notice shows; Triage fills the status-bar area and says Saving only during a
-  save. Faint text and placeholders are more readable in both themes.
-
+- **Phone controls are easier to use.** View, Filters, template choices, filter-building buttons,
+  board column chips, the fields and columns ticks and "Open type" in a page's ⋯ menu have
+  full-height touch targets. Capture types wrap in a bounded picker without keyboard-only hints;
+  subtasks have a visible Add button. Lists scroll clear of the round "+", including while a notice
+  shows. Faint text and placeholders are more readable in both themes. On a phone a notice no
+  longer hides behind the keyboard, a picker's search box stays on screen while you type, and the
+  "Make subtask of…" search and a board's new card no longer zoom the page. A type's page names
+  itself once (the top bar), not twice.
+- **A menu on a phone stays open when the page moves under it.** The ⋯ menu of a day's Food block
+  (and any menu shown as a sheet) closed itself the moment the page scrolled, which opening it can do.
 - **Quick capture saves with no connection.** On a phone or computer that could not reach
   the server (Tailscale off, no signal), Save capture showed "null is not an object" and saved
   nothing. It now saves on this device and reaches the server when the connection is back, like
   the other changes made offline.
-- **Back on a phone closes what is open instead of leaving the page.** With a menu, a question such
-  as Defer, the Filters or View sheet, the side menu, Search, Quick capture, the quick card, a
-  full-screen whiteboard, Triage & review or a dialog open, Back (the button, or swiping from the edge) closes it and you stay where you were; in a
-  menu's submenu it goes back to the menu. Before, the page behind changed and a sheet like Defer
-  stayed open over another page. Quick capture keeps what you typed for next time. Every sheet's
-  bar at the top can now be pulled down to close it, as on iOS. Every sheet is the same one now: the
-  same backdrop, the same safe space above the keyboard and under the home bar, tap outside to
-  close, and 44px rows. Escape closes the sheet on top only. Dialogs stay above the keyboard. On a
-  computer, Back puts away Quick capture and the quick card instead of leaving them over the page
-  that came back.
 - **Copy link works where the clipboard is blocked** (such as the server's plain-http address): it
   copies another way, and failing that opens the phone's share sheet or a box with the link to copy
   by hand, instead of only saying it could not.
 - **No connection says so in words.** A change that cannot reach the server says "Couldn't reach the
   server. Check the connection and try again." instead of the browser's "Load failed".
-- **"Open type" in a page's ⋯ menu** is a full-height row on a phone like the others.
-- **A quick action that asks for a line of text (a next step) can be answered on a phone**: the
-  question's sheet has a Save button. Before there was no way to submit it: the keyboard's Enter
-  key only put the keyboard away, so the text was never saved. On a computer Enter still saves,
-  beside the button.
 - **Undo after Done on a repeating task** puts its date back on the occurrence it had; it stayed
   on the next one.
-- **On a phone, a notice no longer hides behind the keyboard**, a picker's search box stays on
-  screen while you type, and the "Make subtask of…" search and a board's new card no longer zoom the
-  page.
 - **The ⋮⋮ handle of a block in a second or third column** sits in the gap before that column
   and holds still while the pointer goes to it. It sat at the page's left edge, so on the way the
   pointer crossed the first column and the handle jumped to a block there.

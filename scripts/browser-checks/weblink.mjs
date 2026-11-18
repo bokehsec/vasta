@@ -17,9 +17,13 @@ const bundle = await (await page.request.get(`${base}/api/spaces/${spaces[0].id}
 const weblinkType = bundle.types.find((t) => t.system === 'weblink')
 await page.goto(`${base}/t/${weblinkType.id}`)
 await sleep(800)
+// New opens the quick card; nothing is made until it is added. Add and open puts the new weblink in the window.
 await page.locator(`button[title="New ${weblinkType.name}"]`).click()
+await page.locator('[data-quick-add-title]').fill('A saved page')
+await page.locator('[data-quick-add-open]').click()
 await page.waitForSelector('input[placeholder="Paste a link to save this page"]', { timeout: 10000 })
-const id = page.url().split('/o/')[1]?.split('?')[0]
+const id = new URL(page.url()).searchParams.get('popup')
+if (!id) throw new Error(`the weblink did not open in the window: ${page.url()}`)
 console.log('created locally:', id)
 await page.fill('input[placeholder="Paste a link to save this page"]', 'https://example.com/')
 await page.keyboard.press('Enter')

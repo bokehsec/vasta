@@ -78,16 +78,35 @@ migration and no longer exist. A day moves a date there keeping its time of day 
 in the user's zone, across clock changes), its end and the rest it holds; a date that repeats moves
 only its current occurrence (an exception, as moving one event in the calendar does), never the
 series. A day asked for a date other than the deadline (Defer's "Do date") that falls after the
-deadline takes the deadline along when the question's "Move the due date too" is ticked (it is not
+deadline takes the deadline along when the question's "Also move the due date" is ticked (it is not
 at first): the deadline moves to that day, keeping its time of day; a deadline that repeats is left
 alone. Done on a task whose deadline repeats moves the deadline to the next occurrence and clears
 a plan date on or before the occurrence just done.
 An object whose status (a task's, or another type's select with status categories) is an option
-meaning done shows no quick actions. For triage they also go on rows: a list view or query with
+meaning done shows no quick actions. They also go on rows: a list view or query with
 `quickActions: true` ends each row of a type with actions with them, and a table of such a type has a "Quick actions" column (`quickActions` in `table.columns`, hidden until shown, moved and sized
 like the others; the view menu's Quick actions shows it after the title; on a phone the column
 leaves the table and its buttons go under each title). `nextStepField`, a text
 property of a task type, shows under the title in the list.
+**Status and Review** ([`task-status.ts`](../packages/core/src/task-status.ts),
+[`task-review.ts`](../packages/core/src/task-review.ts), [`task-workflows.ts`](../packages/core/src/task-workflows.ts)):
+a status option's category (`todo`, `doing`, `done`) is what a task's status means, asked in one
+place: *closed* is an option meaning done (the first is Done, another such as "Dropped" ends the task
+without doing it), and *new* (incoming) is no status, or an option in `review.incoming`, else those
+called Inbox. Review (Tasks' Review button, a view's ⋯ for other types) goes through the new tasks
+of the space first, then the check-ins: open tasks that are not new and whose **Last reviewed**
+date (the built-in `reviewed` date, never an entry on the calendar) is `review.every` days old or
+more (default 7; 0 every time) — the same list the "Due for review" filter matches. `review`
+(Type settings › Review, column `types.review`) holds just those two settings. Keep records today
+in Last reviewed; any save that changes a task's status does too, in the saving user's day, unless
+it sets the date itself (`reviewedByStatusChange`). A review's paused session is a preference of
+the device, one for each type. A migration (2026-11-17) moved `reviewEvery` and `triageStatuses` out
+of the quick actions into `review` and dropped the unused Hold status.
+**Display choices** a person makes (folds, Show done, Mine, the last view of a type, the phone menu,
+the Habits display, the calendar's) are not data of the space: they are the user's `preferences`
+([accounts.md](accounts.md)), kept by the web app's `lib/preferences.ts`; page width and capture
+drafts stay on the device. Filters a person adds to a view are a temporary narrowing in the page;
+only Save to view writes them into the view's `filter`.
 **Subtasks** ([`subtasks.ts`](../packages/core/src/subtasks.ts)): a type's `subtasks.parentField`
 (Type settings › Subtasks, column `types.subtasks`) names a single relation whose targets include the
 type itself (or any type), such as a task's "Part of"; an object pointing to another through it is

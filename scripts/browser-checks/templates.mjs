@@ -19,7 +19,8 @@ const browser = launched ?? context
 if (process.env.MODE === 'json') await context.addInitScript(() => localStorage.setItem('vasta.replica', 'off'))
 const page = context.pages()[0] ?? (await context.newPage())
 const problems = []
-page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && !/401|TextSelection endpoint|due to access control checks/.test(m.text()) && problems.push(`${m.type()}: ${m.text()}`))
+// TipTap's Link registers Apple Mail's `message:` scheme in every editor it creates, and linkifyjs warns from the second one on.
+page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && !/401|TextSelection endpoint|due to access control checks|linkifyjs: already initialized - will not register custom scheme "message"/.test(m.text()) && problems.push(`${m.type()}: ${m.text()}`))
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const step = (name) => console.log(`• ${name}`)

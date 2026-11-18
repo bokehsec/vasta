@@ -65,6 +65,11 @@ for (const object of await get(`/api/spaces/${space.id}/search?q=CopyLink&limit=
 
 // Make a test object.
 const created = await post('/api/objects', { typeId: taskType.id, title: `CopyLink ${tag}` })
+// The sidebar lists what is pinned: put the object in its first section.
+const sidebar = space.sidebar.length ? space.sidebar : [{ id: 'pinned', name: 'Pinned', items: [] }]
+await put(`/api/spaces/${space.id}`, { ...space, sidebar: sidebar.map((section, i) => (i === 0 ? { ...section, items: [...section.items, created.id] } : section)) })
+await page.reload()
+await page.waitForSelector('nav', { timeout: 30000 })
 const copied = () => page.evaluate(() => window.__copied)
 const clearCopied = () => page.evaluate(() => { window.__copied = undefined })
 const expectedLink = `${base}/o/${created.id}`
@@ -81,7 +86,7 @@ await page.click('[role=menu] button:has-text("Copy link to page")')
 const sidebarLink = await until(() => copied(), 'sidebar copied link')
 if (sidebarLink !== expectedLink) throw new Error(`sidebar link: ${sidebarLink}, expected ${expectedLink}`)
 // The success notice should appear.
-await until(() => page.locator('[data-toast]').count() > 0, 'success toast after sidebar copy')
+await until(async () => (await page.locator('[role=status]', { hasText: 'Link to the page copied' }).count()) > 0, 'success toast after sidebar copy')
 await page.keyboard.press('Escape')
 
 // ---------------------------------------------------------------------------
@@ -104,8 +109,7 @@ await clearCopied()
 await page.goto(`${base}/o/${created.id}`)
 await page.waitForSelector('textarea[data-large-text]')
 await page.click('button[title="More"]')
-await page.waitForSelector('[role=menu]')
-await page.click('[role=menu] button:has-text("Copy link to page")')
+await page.click('[data-overlay] button:has-text("Copy link to page")')
 const pageLink = await until(() => copied(), 'page More menu copied link')
 if (pageLink !== expectedLink) throw new Error(`page More link: ${pageLink}, expected ${expectedLink}`)
 
@@ -114,20 +118,18 @@ step('side pane ⋯ More copies the pane object, not the page')
 // Set the type to open in pane so the object opens in the side pane.
 const type = await get(`/api/types/${taskType.id}`)
 await put(`/api/types/${taskType.id}`, { ...type, openIn: 'pane' })
-// Make a second object to serve as the underlying page.
+// A second object, listed beside the first: the pane must copy the one it shows, not another.
 const pageObject = await post('/api/objects', { typeId: taskType.id, title: `CopyLink Page ${tag}` })
 await clearCopied()
-await page.goto(`${base}/o/${pageObject.id}`)
-await page.waitForSelector('textarea[data-large-text]')
-// Click the test object in the sidebar to open it in the side pane.
-const sidebarRow2 = page.locator('nav a', { hasText: `CopyLink ${tag}` })
-await sidebarRow2.click()
-await until(() => page.locator('[data-side-pane]').count() > 0, 'side pane open')
+await page.goto(`${base}/t/${taskType.id}`)
+await page.waitForSelector('main')
+// A click on a row of the list opens it where its type says: the side pane.
+await page.locator('main a', { hasText: `CopyLink ${tag}` }).first().click()
+await until(async () => (await page.locator('[data-side-pane]').count()) > 0, 'side pane open')
 // Now use the ⋯ More menu in the side pane.
 const paneMore = page.locator('[data-side-pane] button[title="More"]')
 await paneMore.click()
-await page.waitForSelector('[role=menu]')
-await page.click('[role=menu] button:has-text("Copy link to page")')
+await page.click('[data-overlay] button:has-text("Copy link to page")')
 const paneLink = await until(() => copied(), 'pane More menu copied link')
 if (paneLink !== expectedLink) throw new Error(`pane link: ${paneLink}, expected ${expectedLink}`)
 // The pane link should be for the pane object, not the underlying page.
@@ -138,13 +140,12 @@ await put(`/api/types/${taskType.id}`, { ...type, openIn: undefined })
 // ---------------------------------------------------------------------------
 step('simulated desktop app copies vasta:// URL')
 await clearCopied()
-// Pretend we are in the desktop app.
-await page.evaluate(() => { window.__TAURI_INTERNALS__ = {} })
 await page.goto(`${base}/o/${created.id}`)
 await page.waitForSelector('textarea[data-large-text]')
+// Pretend we are in the desktop app (after the page loaded: a navigation drops it).
+await page.evaluate(() => { window.__TAURI_INTERNALS__ = {} })
 await page.click('button[title="More"]')
-await page.waitForSelector('[role=menu]')
-await page.click('[role=menu] button:has-text("Copy link to page")')
+await page.click('[data-overlay] button:has-text("Copy link to page")')
 const desktopLink = await until(() => copied(), 'desktop copied link')
 if (desktopLink !== expectedDesktop) throw new Error(`desktop link: ${desktopLink}, expected ${expectedDesktop}`)
 // Clean up the simulated desktop flag.
@@ -166,13 +167,12 @@ await page.evaluate(() => {
 })
 const copyFromMenu = async () => {
   await page.click('button[title="More"]')
-  await page.waitForSelector('[role=menu]')
-  await page.click('[role=menu] button:has-text("Copy link to page")')
+  await page.click('[data-overlay] button:has-text("Copy link to page")')
 }
 await copyFromMenu()
 const fallbackCopied = await until(() => page.evaluate(() => window.__copied), 'link copied by the copy command')
 if (fallbackCopied !== `${base}/o/${created.id}`) throw new Error(`copy command copied: ${fallbackCopied}`)
-await until(() => page.locator('[role=status]:has-text("Link to the page copied")').count(), 'copied notice after the copy command')
+await until(async () => (await page.locator('[role=status]:has-text("Link to the page copied")').count()) > 0, 'copied notice after the copy command')
 
 step('nothing copies: a box shows the link to copy by hand')
 await page.evaluate(() => {
@@ -200,8 +200,8 @@ await page.click('.vasta-doc')
 await page.keyboard.type('Block link test')
 await page.keyboard.press('Escape')
 await page.waitForSelector('.vasta-block-selected')
-// Click the block handle to open the block menu.
-await page.click('.vasta-block-handle')
+// Right-click the block for its menu (the handle shows only on hover).
+await page.locator('.vasta-doc p', { hasText: 'Block link test' }).click({ button: 'right' })
 await page.waitForSelector('[role=menu]')
 await clearCopied()
 await page.click('[role=menu] button:has-text("Copy link to block")')

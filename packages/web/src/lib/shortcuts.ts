@@ -2,10 +2,13 @@
 // shortcuts dialog (⌘/) shows, and the hints in the sidebar and ⌘K. ⌘1–3 (the sidebar's top rows,
 // in order) and ⌘D (today, "day") work while typing too; "G then a letter" (as in Linear or GitHub)
 // only outside text fields, and also in a browser tab, where ⌘1–3 switch tabs; so does Esc for the
-// side pane. ⌘K lives in CommandPalette, the desktop app's ⌘[ ⌘] ⌘, in platform.ts.
+// side pane. ⌘K lives in CommandPalette (one pressed while the app is still loading is kept here and
+// opens it once ready), the desktop app's ⌘[ ⌘] ⌘, in platform.ts.
+import { nextTick, watch } from 'vue'
 import { router } from '../router.ts'
 import { openToday } from './actions.ts'
 import { closePane, paneObjectId } from './open.ts'
+import { session } from './session.ts'
 import { systemType, ui, workspace } from './state.ts'
 
 export const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
@@ -72,9 +75,19 @@ const typing = (target: EventTarget | null) => target instanceof HTMLElement && 
 const overlayOpen = () => ui.paletteOpen || ui.captureOpen || ui.passwordOpen || !!document.querySelector('[role=dialog], [role=menu], [data-overlay]')
 
 let pendingG = 0
+/** ⌘K was pressed while the app was loading: the palette opens when it is ready (CommandPalette is not there yet). */
+let paletteWanted = false
 
 function onKey(event: KeyboardEvent) {
-  if (event.defaultPrevented || event.isComposing || !workspace.ready) return
+  if (event.defaultPrevented || event.isComposing) return
+  if (!workspace.ready) {
+    // Not on the login screen: a palette would pop up after signing in.
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k' && !(session.checked && !session.user)) {
+      event.preventDefault()
+      paletteWanted = true
+    }
+    return
+  }
   const command = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
   if (command && !event.altKey && !event.shiftKey) {
     const run = ({ Digit1: GO.calendar.run, Digit2: GO.inbox.run, Digit3: GO.tasks.run, KeyD: GO.today.run, Backslash: toggleSidebar, Slash: () => (ui.shortcutsOpen = !ui.shortcutsOpen) } as Record<string, () => unknown>)[event.code]
@@ -107,7 +120,28 @@ export function toggleSidebar() {
   ui.sidebarCollapsed = !ui.sidebarCollapsed
 }
 
+/**
+ * Opens the palette once the page has settled: the page a space opens on replaces "/" when the
+ * workspace is ready, and a page change closes what is open over it (App.vue).
+ */
+function openPaletteSettled() {
+  const open = () => void nextTick(() => (ui.paletteOpen = true))
+  if (router.currentRoute.value.path !== '/') return open()
+  const stopWaiting = watch(() => router.currentRoute.value.path, () => (clearTimeout(timer), stopWaiting(), open()))
+  const timer = setTimeout(() => (stopWaiting(), open()), 2000)
+}
+
 export function installShortcuts() {
   window.addEventListener('keydown', onKey)
-  return () => window.removeEventListener('keydown', onKey)
+  const stop = watch(
+    () => [workspace.ready, session.user] as const,
+    ([ready, user]) => {
+      if (ready && user && paletteWanted) openPaletteSettled()
+      if (ready || !user) paletteWanted = false
+    }
+  )
+  return () => {
+    window.removeEventListener('keydown', onKey)
+    stop()
+  }
 }

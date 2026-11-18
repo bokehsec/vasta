@@ -176,8 +176,9 @@ function onResize() {
   if (!sheet.value) closeContextMenu()
 }
 
+/** The page scrolling under a floating menu closes it; a sheet stays (focus moving into it can scroll the page). */
 function onScroll(event: Event) {
-  if (!inMenu(event.target)) closeContextMenu()
+  if (!sheet.value && !inMenu(event.target)) closeContextMenu()
 }
 
 onMounted(() => {

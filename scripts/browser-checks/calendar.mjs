@@ -149,6 +149,13 @@ if (!phone) {
   step('a long press drags an occurrence to another day: This event')
   await page.goto(`${base}/calendar?view=${view}&date=2027-03-01`)
   await entry(`Sync ${tag}`).waitFor()
+  // Scroll the middle of the drag (13:00) to the middle of the screen: near the edge of the grid a drag scrolls it, and the drop moves.
+  await page.evaluate((hour) => {
+    const column = document.querySelector('[data-timed]')
+    let scroller = column.parentElement
+    while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement
+    scroller.scrollTop += column.getBoundingClientRect().top + hour * 48 - innerHeight / 2
+  }, 13)
   const start = await entry(`Sync ${tag}`).boundingBox()
   await touchDrag({ x: start.x + start.width / 2, y: start.y + 8 }, await slotPoint('2027-03-02', 16 * 60, 8), 600)
   await choose('This event')

@@ -53,7 +53,8 @@ const shot = (page, selector, name) => process.env.SHOTS && page.locator(selecto
   await page.keyboard.press('ControlOrMeta+Comma')
   await page.waitForSelector('#desktop')
   console.log('⌘, →', new URL(page.url()).pathname)
-  const input = page.locator('#desktop input')
+  // The shortcut's box is the first input; the checkboxes of the quick capture settings follow it.
+  const input = page.locator('#desktop input[readonly]')
   await input.click()
   await page.keyboard.down('Control')
   await page.keyboard.down('Alt')

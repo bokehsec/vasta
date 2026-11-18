@@ -1,6 +1,6 @@
 // Fields on list rows in the test env: a query of tasks shown as a list, the Fields menu (turn the
 // due date on, wrap titles), a task's checkbox marking it done without opening it, and Reset to
-// default giving back the plain row.
+// default giving back the plain row (a task's checkbox is there with or without fields).
 //   node listrows.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -72,11 +72,11 @@ const row = (title) => page.locator('a', { hasText: title })
 const checks = page.locator('[data-task-check]')
 
 try {
-  step('the default row: no checkbox, no due date')
+  step('the default row: a checkbox, no due date')
   const url = `${base}/o/${query.id}`
   await page.goto(url)
   await until(async () => (await row(`Pay rent ${tag}`).count()) === 1 && (await row(`Water plants ${tag}`).count()) === 1, 'both rows')
-  if ((await checks.count()) !== 0) throw new Error('the default row has a checkbox')
+  if ((await checks.count()) !== 2) throw new Error(`the default rows' checkboxes: ${await checks.count()}`)
   if (/Mar/.test(await row(`Pay rent ${tag}`).innerText())) throw new Error('the default row shows the due date')
 
   step('turn Due on in the Fields menu')
@@ -105,7 +105,7 @@ try {
   await page.locator('button', { hasText: 'Fields' }).click()
   await page.locator('button', { hasText: 'Reset to default' }).click()
   await until(async () => (await savedList()) === undefined, 'list settings cleared')
-  await until(async () => (await checks.count()) === 0, 'the checkboxes gone')
+  if ((await checks.count()) !== 2) throw new Error(`checkboxes after the reset: ${await checks.count()}`)
   if (/Mar/.test(await row(`Pay rent ${tag}`).innerText())) throw new Error('the due date stayed after the reset')
 } finally {
   for (const id of [query.id, a.id, b.id]) await page.request.delete(`${base}/api/objects/${id}`, { headers })
