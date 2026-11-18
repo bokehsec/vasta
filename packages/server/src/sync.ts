@@ -102,6 +102,7 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   openIn: optional((v) => v === 'page' || v === 'pane' || v === 'popup'),
   subtasks: optional((v) => isObject(v) && isNonEmpty((v as { parentField?: unknown }).parentField)),
   habits: optional(isHabitProgressSettings),
+  rules: optional((v) => isObject(v) && Object.entries(v as object).every(([key, x]) => ['cover', 'tags'].includes(key) && typeof x === 'boolean')),
   quickActions: optional((v) => isObject(v) && Object.entries(v as object).every(([key, x]) => {
     if (key === 'actions') return Array.isArray(x) && x.every(isQuickAction)
     return key === 'nextStepField' && isNonEmpty(x)

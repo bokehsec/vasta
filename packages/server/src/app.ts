@@ -10,9 +10,12 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { streamSSE } from 'hono/streaming'
-import type { CalendarSource, ColorName, Icon, Id, InboxPreferences, ObjectRecord, ObjectType, QueryDef, Space, SpaceRole, StoredFile, TokenScope, TypePatch } from '@vasta/core'
+import type { CalendarSource, ColorName, Icon, Id, InboxPreferences, ObjectRecord, ObjectType, QueryDef, Space, SpaceRole, StoredFile, TokenScope, TypePatch, User } from '@vasta/core'
 import {
   ACTIVITY_RETENTION_CHOICES,
+  normalizeAgentSettings,
+  normalizeTypeRules,
+  typeRuleProblems,
   addDays,
   applyTypePatch,
   dayIn,
@@ -50,13 +53,14 @@ import { checkMediaKey, mediaKey, RangeNotSatisfiableError, type MediaStore } fr
 import { mapExport } from '@vasta/importer-capacities/export'
 import type { NodeStore } from '@vasta/core/node'
 import { AccountError, AccountService, type Auth } from './accounts.ts'
-import { currentActor, outsideActor, runAs } from './actor.ts'
+import { currentActor, currentVia, outsideActor, runAs } from './actor.ts'
 import { AgentTools } from './agent.ts'
 import { CalendarService, CalendarSyncError, normalizeCalendarUrl } from './calendars.ts'
 import { SparkyError, SparkyFitnessService } from './sparkyfitness.ts'
 import { CaptureError, CaptureService, mergeCaptures, type CaptureResult } from './capture.ts'
 import { PushError, type PushKinds, type PushService, type PushSubscriptionJson } from './push.ts'
 import { ReminderError, type ReminderService } from './reminders.ts'
+import { InsistentError, type InsistentReminders, type InsistentRule, type NagAnswer, type RuleInput } from './insistent.ts'
 import { ChannelSettings, type TelegramChat } from './channels.ts'
 import { findOrCreateDailyNote, isValidDay } from './daily.ts'
 import { ChangeFeed, type DesktopListeners } from './events.ts'
@@ -174,6 +178,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   app.use('/api/*', compress({ contentTypeFilter: /^application\/json/ }))
   const api = new Hono<Env>()
   store.actor = currentActor
+  store.via = currentVia
   const notifications = new NotificationService({ store, ...(reminders ? { reminders } : {}), now })
   const links = weblinks ?? new WeblinkService({ store, media, feed, now })
   const baseCapture = capture ?? new CaptureService({ store, media, feed, now, weblinks: links, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone })
@@ -199,13 +204,14 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     return session
   }
 
-  const requireAuth = (accept: (auth: Auth) => boolean, error: string) =>
+  /** `via`: the agent the request's writes are recorded as made through. */
+  const requireAuth = (accept: (auth: Auth) => boolean, error: string, via?: (auth: Auth) => string | undefined) =>
     createMiddleware<Env>(async (c, next) => {
       const auth = identify(c)
       if (!auth || !accept(auth)) return c.json({ error }, 401)
       if (auth.sessionId && !SAFE_METHODS.has(c.req.method) && !fromApp(c)) return c.json({ error: `send the ${CLIENT_HEADER}: ${CLIENT_VALUE} header` }, 403)
       c.set('auth', auth)
-      await runAs(auth.user.id, next)
+      await runAs(auth.user.id, next, via?.(auth))
     })
   /** The web app (session) or a token for the whole API. */
   const appAuth = requireAuth((auth) => !!auth.sessionId || auth.scope === 'api', 'log in first')
@@ -214,7 +220,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   /** The desktop app's notifications: its own token, or the web app. */
   const notifyAuth = requireAuth((auth) => auth.scope === 'notify' || !!auth.sessionId, 'invalid notification token')
   /** Agents (MCP): a token for the whole API. */
-  const agentAuth = requireAuth((auth) => auth.scope === 'api', 'send a token with scope api: Authorization: Bearer <token> (Settings › Capture tokens)')
+  const agentAuth = requireAuth((auth) => auth.scope === 'api', 'send a token with scope api: Authorization: Bearer <token> (Settings › Capture tokens)', (auth) => auth.tokenName)
 
   const authApi = new Hono<Env>()
 
@@ -432,6 +438,77 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     pushRoute((push, userId, c) => push.remove(userId, c.req.param('id')!))
   )
 
+  // Insistent reminders (Settings › Reminders, an object's "Remind me…"): rules with their stats,
+  // and the nags they make, answered on the page /remind/<id> (also the desktop takeover's).
+  const insistentRoute =
+    (handler: (insistent: InsistentReminders, user: User, c: Context<Env>) => Promise<Response> | Response) =>
+    async (c: Context<Env>) => {
+      if (!reminders) return c.json({ error: 'reminders are off on this server' }, 404)
+      try {
+        return await handler(reminders.insistent, c.get('auth').user, c)
+      } catch (error) {
+        if (error instanceof InsistentError) return c.json({ error: error.message }, 400)
+        throw error
+      }
+    }
+  const ruleView = (insistent: InsistentReminders, user: User, rule: InsistentRule) => {
+    const object = rule.objectId ? store.getObjectSummaries([rule.objectId])[0] : undefined
+    return {
+      ...rule,
+      name: insistent.titleOf(rule),
+      ...(object ? { object: { id: object.id, title: object.title, typeId: object.typeId, deleted: !!object.deletedAt } } : rule.objectId ? { object: { id: rule.objectId, title: '', typeId: '', deleted: true } } : {}),
+      stats: insistent.stats(user, rule.id),
+    }
+  }
+  authApi.get(
+    '/reminders/rules',
+    appAuth,
+    insistentRoute((insistent, user, c) => {
+      const objectId = c.req.query('object')
+      const rules = objectId ? insistent.rulesFor(user.id, objectId) : insistent.rules(user.id)
+      return c.json(rules.map((rule) => ruleView(insistent, user, rule)))
+    })
+  )
+  authApi.post(
+    '/reminders/rules',
+    appAuth,
+    insistentRoute(async (insistent, user, c) => c.json(ruleView(insistent, user, insistent.create(user, await c.req.json<RuleInput>().catch(() => ({})))), 201))
+  )
+  authApi.put(
+    '/reminders/rules/:id',
+    appAuth,
+    insistentRoute(async (insistent, user, c) => c.json(ruleView(insistent, user, insistent.update(user, c.req.param('id')!, await c.req.json<RuleInput>().catch(() => ({}))))))
+  )
+  authApi.delete(
+    '/reminders/rules/:id',
+    appAuth,
+    insistentRoute((insistent, user, c) => {
+      insistent.remove(user.id, c.req.param('id')!)
+      return c.body(null, 204)
+    })
+  )
+  authApi.get(
+    '/reminders/nags',
+    appAuth,
+    insistentRoute((insistent, user, c) => c.json(insistent.openNags(user.id).map((nag) => insistent.view(user, nag.id))))
+  )
+  authApi.get(
+    '/reminders/nags/:id',
+    appAuth,
+    insistentRoute((insistent, user, c) => c.json(insistent.view(user, c.req.param('id')!)))
+  )
+  authApi.post(
+    '/reminders/nags/:id',
+    appAuth,
+    insistentRoute(async (insistent, user, c) => {
+      type Body = { answer?: NagAnswer; texts?: unknown; reason?: unknown }
+      const body = await c.req.json<Body>().catch((): Body => ({}))
+      const texts = Array.isArray(body.texts) ? body.texts.slice(0, 10).map((t) => String(t).slice(0, 2000)) : undefined
+      await insistent.answer(user, c.req.param('id')!, { answer: body.answer as NagAnswer, ...(texts ? { texts } : {}), ...(typeof body.reason === 'string' ? { reason: body.reason } : {}) })
+      return c.json(insistent.view(user, c.req.param('id')!))
+    })
+  )
+
   /** Whether Telegram is linked, and the bot to write to (absent when the bot does not run). */
   authApi.get('/telegram', appAuth, (c) => {
     const user = store.getUser(c.get('auth').user.id)
@@ -460,7 +537,21 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   // The desktop app hears its user's reminders here, as SSE `notify` events, while it runs.
   app.get('/api/notifications', notifyAuth, (c) =>
     streamSSE(c, async (stream) => {
-      const unlisten = desktop ? desktop.listen(c.get('auth').user.id, (n) => void stream.writeSSE({ event: 'notify', data: JSON.stringify(n) })) : () => {}
+      const user = c.get('auth').user
+      // Apps that can take the screen say so (desktop 0.10 and later); older ones only hear `notify`.
+      const takes = c.req.query('takeover') === '1'
+      const unlisten = desktop
+        ? desktop.listen(
+            user.id,
+            (n) => void stream.writeSSE({ event: 'notify', data: JSON.stringify(n) }),
+            takes
+              ? {
+                  takeover: (t) => void stream.writeSSE({ event: 'takeover', data: JSON.stringify(t) }),
+                  dismiss: (id) => void stream.writeSSE({ event: 'dismiss', data: JSON.stringify({ id }) }),
+                }
+              : {}
+          )
+        : () => {}
       stream.onAbort(unlisten)
       while (!stream.aborted) {
         await stream.write(': ping\n\n')
@@ -469,6 +560,30 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
       unlisten()
     })
   )
+
+  // The desktop app says the user is at the computer (it came back from idle, the computer woke):
+  // insistent reminders waiting for that start. `away`: idle or asleep.
+  app.post('/api/notifications/presence', notifyAuth, async (c) => {
+    const body = await c.req.json<{ state?: string }>().catch(() => ({}) as { state?: string })
+    const user = c.get('auth').user
+    if (reminders) {
+      if (body.state === 'away') reminders.insistent.absent(user.id)
+      else await reminders.insistent.presence(user)
+    }
+    return c.body(null, 204)
+  })
+
+  // Buttons of ntfy and Web Push notifications: a link signed for one answer to one nag, no session.
+  app.post('/api/remind/:id/:answer', async (c) => {
+    if (!reminders) return c.json({ error: 'reminders are off on this server' }, 404)
+    try {
+      const nag = await reminders.insistent.signed(c.req.param('id'), c.req.param('answer'), c.req.query('s') ?? '')
+      return c.json({ outcome: nag.outcome ?? 'snoozed' })
+    } catch (error) {
+      if (error instanceof InsistentError) return c.json({ error: error.message }, 400)
+      throw error
+    }
+  })
 
   authApi.post('/telegram/code', appAuth, (c) => {
     const bot = telegram?.username()
@@ -774,6 +889,39 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
       return c.json({ error: (error as Error).message }, 400)
     }
     store.putSpace(space)
+    return c.json(space)
+  })
+
+  /**
+   * What agents (the MCP) may see and do in the space, and its instructions for them (core
+   * agents.ts): owners only. The objects marked as agent context are kept unless `context` is sent.
+   */
+  api.put('/spaces/:id/agents', ownerOnly, async (c) => {
+    const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>)
+    const existing = store.getSpace(c.req.param('id'))
+    if (!existing) return c.json({ error: 'not found' }, 404)
+    const agents = normalizeAgentSettings({ ...body, context: 'context' in body ? body.context : existing.agents?.context })
+    const { agents: _agents, ...rest } = existing
+    const space: Space = agents ? { ...rest, agents } : rest
+    store.putSpace(space)
+    feed.emit({ kind: 'space', id: space.id, spaceId: space.id })
+    return c.json(space)
+  })
+
+  /** Mark an object of the space as agent context (`{ id, on }`); any member, like pinning. */
+  api.post('/spaces/:id/agent-context', async (c) => {
+    const body = await c.req.json<{ id?: unknown; on?: unknown }>().catch(() => ({}) as { id?: unknown; on?: unknown })
+    const existing = store.getSpace(c.req.param('id'))
+    if (!existing) return c.json({ error: 'not found' }, 404)
+    const object = typeof body.id === 'string' ? store.getObject(body.id) : undefined
+    if (!object || object.spaceId !== existing.id) return c.json({ error: 'id must be an object of the space' }, 400)
+    const context = existing.agents?.context ?? []
+    const next = body.on === false ? context.filter((id) => id !== object.id) : context.includes(object.id) ? context : [...context, object.id]
+    const agents = normalizeAgentSettings({ ...existing.agents, context: next })
+    const { agents: _agents, ...rest } = existing
+    const space: Space = agents ? { ...rest, agents } : rest
+    store.putSpace(space)
+    feed.emit({ kind: 'space', id: space.id, spaceId: space.id })
     return c.json(space)
   })
 
@@ -1258,7 +1406,9 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     const existing = store.getType(c.req.param('id'))
     if (!existing) return c.json({ error: 'not found' }, 404)
     const body = await c.req.json<ObjectType>()
-    const type: ObjectType = { ...body, id: existing.id, spaceId: existing.spaceId, createdAt: existing.createdAt, updatedAt: now() }
+    const { rules: _rules, ...rest } = body
+    const rules = normalizeTypeRules(body.rules)
+    const type: ObjectType = { ...rest, ...(rules ? { rules } : {}), id: existing.id, spaceId: existing.spaceId, createdAt: existing.createdAt, updatedAt: now() }
     if (existing.system) type.system = existing.system
     store.putType(type)
     return c.json(type)
@@ -1266,9 +1416,10 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
 
   /** Change some fields of a type (name, icon, properties, views…); the fields the body leaves out keep what is stored. null takes an optional field away. */
   api.patch('/types/:id', async (c) => {
+    const body = await c.req.json<TypePatch>().catch(() => undefined)
+    // Read after the only await: another request may have saved independent fields while the body arrived.
     const existing = store.getType(c.req.param('id'))
     if (!existing) return c.json({ error: 'not found' }, 404)
-    const body = await c.req.json<TypePatch>().catch(() => undefined)
     if (!body || typeof body !== 'object' || Array.isArray(body)) return c.json({ error: 'send the fields to change' }, 400)
     let type: ObjectType
     try {
@@ -1407,6 +1558,17 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     return c.json(store.backlinks(c.req.param('id')).filter((b) => spaces.has(b.object.spaceId)))
   })
 
+  /**
+   * A type's rules (core agents.ts) hold scripts and agents, which send whole objects: a write by
+   * a token that leaves what they ask for out is refused. The app only warns, so nobody typing is
+   * stopped mid-edit.
+   */
+  const ruleProblems = (c: Context<Env>, type: ObjectType | undefined, object: ObjectRecord) => {
+    if (c.get('auth').sessionId) return undefined
+    const problems = typeRuleProblems(type, object)
+    return problems.length ? c.json({ error: `${type!.name} rules: ${problems.join('; ')}`, problems }, 422) : undefined
+  }
+
   // With `line`, the title and properties are read from it as captures read theirs (capture-line.ts).
   api.post('/objects', async (c) => {
     const { line, ...body } = await c.req.json<Partial<ObjectRecord> & { line?: string }>()
@@ -1425,6 +1587,8 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
       return c.json(store.getObject(made.object.id), 201)
     }
     const object = newObject(type, body, randomUUID(), now())
+    const broken = ruleProblems(c, type, object)
+    if (broken) return broken
     const stored = store.putObject(object)
     changed(stored)
     return c.json(stored, 201)
@@ -1463,6 +1627,8 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
         updatedAt: now(),
       }
     }
+    const broken = ruleProblems(c, store.getType(object.typeId), object)
+    if (broken) return broken
     const stored = store.putObject(settleTaskSave(object, existing, store.getType(object.typeId), userOf(c).timeZone ?? 'UTC', object.updatedAt, base && typeof base === 'object' ? base : existing))
     changed(stored)
     return c.json(stored)
@@ -1619,7 +1785,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     (c) => {
       const origin = new URL(c.req.url)
       const address = webUrl ?? `${isHttps(c) ? 'https' : origin.protocol.slice(0, -1)}://${c.req.header('x-forwarded-host') ?? origin.host}`
-      return handleMcp(c.req.raw, new AgentTools({ store, accounts: users, feed, now, user: userOf(c), webUrl: address }), MCP_VERSION)
+      return handleMcp(c.req.raw, new AgentTools({ store, accounts: users, feed, now, user: userOf(c), webUrl: address, ...(reminders ? { insistent: reminders.insistent } : {}) }), MCP_VERSION)
     }
   )
   app.route('/api/auth', authApi)

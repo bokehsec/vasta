@@ -3,6 +3,7 @@
 // fields it never meant to touch; a patch names only its own. The web app's queue (lib/type-patch.ts),
 // the replica's store and the server's PATCH route all apply it here.
 import type { ObjectType } from './model.ts'
+import { normalizeTypeRules } from './agents.ts'
 import { PLAIN_FIELDS } from './sync.ts'
 
 /** The fields of a type a patch may change (the type's synced fields, but not its trash state). */
@@ -16,7 +17,8 @@ const REQUIRED = ['name', 'pluralName', 'properties', 'views']
 /** The type with `patch` applied and `updatedAt` set; throws a message for a field that is not patchable or cannot be taken away. */
 export function applyTypePatch(type: ObjectType, patch: TypePatch, at: string): ObjectType {
   const next: Record<string, unknown> = { ...type, updatedAt: at }
-  for (const [field, value] of Object.entries(patch)) {
+  for (const [field, raw] of Object.entries(patch)) {
+    const value = field === 'rules' ? normalizeTypeRules(raw) : raw
     if (!(TYPE_PATCH_FIELDS as readonly string[]).includes(field)) throw new Error(`a type's ${field} cannot be changed this way`)
     if (value === null || value === undefined) {
       if (REQUIRED.includes(field)) throw new Error(`a type needs its ${field}`)

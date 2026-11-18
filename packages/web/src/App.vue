@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppSidebar from './components/AppSidebar.vue'
 import CommandPalette from './components/CommandPalette.vue'
@@ -14,15 +14,17 @@ import PopupHost from './components/PopupHost.vue'
 import QuickAdd from './components/QuickAdd.vue'
 import QuickAskHost from './components/QuickAskHost.vue'
 import QuickCapture from './components/QuickCapture.vue'
+import ReminderDialog from './components/ReminderDialog.vue'
 import ShortcutsDialog from './components/ShortcutsDialog.vue'
 import SidePane from './components/SidePane.vue'
 import TopBar from './components/TopBar.vue'
 import { closesOnBack } from './lib/back.ts'
 import { closeContextMenu } from './lib/overlays.ts'
 import { newCard } from './lib/new-item.ts'
-import { listenToDesktop, trafficLights } from './lib/platform.ts'
+import { closeTakeover, listenToDesktop, trafficLights } from './lib/platform.ts'
 import { quickAsk } from './lib/quick-actions.ts'
 import { keepsScroll } from './lib/scroll-memory.ts'
+import { closeReminderEditor, reminderEditor } from './lib/insistent.ts'
 import { installShortcuts } from './lib/shortcuts.ts'
 import { checkSession, session } from './lib/session.ts'
 import { lastError, notice, ui, workspace } from './lib/state.ts'
@@ -31,6 +33,14 @@ import { router } from './router.ts'
 import LoginView from './views/LoginView.vue'
 
 const route = useRoute()
+/** The desktop app's takeover window: an insistent reminder alone, over the whole screen. */
+const bare = computed(() => route.path.startsWith('/remind/') && route.query.takeover === '1')
+// Logged out (or the server failing), the takeover could only show a login: it goes at once.
+watch(
+  () => bare.value && session.checked && (!session.user || !!session.error),
+  (stuck) => stuck && closeTakeover(),
+  { immediate: true }
+)
 
 onMounted(checkSession)
 // The desktop app's shortcut and menu ask for quick capture and today's note (lib/platform.ts).
@@ -54,6 +64,7 @@ watch(
   () => route.path,
   () => {
     closeContextMenu()
+    closeReminderEditor()
     quickAsk.value?.answer(null)
     ui.captureOpen = false
     ui.paletteOpen = false
@@ -89,7 +100,12 @@ function onTouchEnd(event: TouchEvent) {
 </script>
 
 <template>
-  <div v-if="session.user && workspace.ready" class="flex h-full flex-col pt-[env(safe-area-inset-top)]" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
+  <!-- The takeover needs only the session, not the workspace (it may be loading the replica). -->
+  <!-- The pop-up's window is transparent: its page rounds its own corners. -->
+  <div v-if="bare && session.user" class="h-full overflow-y-auto text-ink" :class="route.query.popup === '1' ? 'bg-transparent' : 'bg-canvas'">
+    <RouterView />
+  </div>
+  <div v-else-if="session.user && workspace.ready" class="flex h-full flex-col pt-[env(safe-area-inset-top)]" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
     <!-- With the macOS traffic lights over the top-left corner, the banner goes below the top bar. -->
     <OfflineBanner v-if="!trafficLights" />
     <div class="relative flex min-h-0 flex-1">
@@ -135,6 +151,7 @@ function onTouchEnd(event: TouchEvent) {
     <QuickAdd v-if="newCard" :key="newCard.id" :type="newCard.type" :initial="newCard.initial" :capture="newCard.capture" @close="newCard = null" @capture="(newCard = null), (ui.captureOpen = true)" />
     <QuickCapture v-if="ui.captureOpen" />
     <ShortcutsDialog v-if="ui.shortcutsOpen" />
+    <ReminderDialog v-if="reminderEditor.open" />
   </div>
   <LoginView v-else-if="session.checked && !session.user && !session.error" />
   <div v-else class="grid h-full place-items-center text-sm text-ink-soft">

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ARTICLE_PROPERTY_ID, HABIT_REMIND_PROPERTY_ID, afterSave, canonicalJson, formulaFromNames, formulaToNames, habitRemindAt, type ColorName, type DateValue, type Doc, type Icon, type Id, type ObjectRecord, type ObjectSummary, type PropertyDef, type PropertyValue, type QueryDef, type SelectOption } from '@vasta/core'
+import { ARTICLE_PROPERTY_ID, HABIT_REMIND_PROPERTY_ID, afterSave, typeRuleProblems, canonicalJson, formulaFromNames, formulaToNames, habitRemindAt, type ColorName, type DateValue, type Doc, type Icon, type Id, type ObjectRecord, type ObjectSummary, type PropertyDef, type PropertyValue, type QueryDef, type SelectOption } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import BacklinksPanel from '../components/BacklinksPanel.vue'
 import ObjectActivity from '../components/ObjectActivity.vue'
@@ -39,7 +39,8 @@ import WeblinkPanel from '../components/WeblinkPanel.vue'
 import WhiteboardCanvas from '../components/whiteboard/WhiteboardCanvas.vue'
 import DocEditor from '../editor/DocEditor.vue'
 import { addSelectOption, dayKey, deleteForeverFlow, deleteObjectFlow, isInSidebar, openDay, pinItems, restoreObjectFlow, tagFromPath } from '../lib/actions.ts'
-import { api, mediaUrl, serverApi } from '../lib/api.ts'
+import { api, authApi, mediaUrl, serverApi, type InsistentRule } from '../lib/api.ts'
+import { openReminderEditor } from '../lib/insistent.ts'
 import { mainButton } from '../lib/buttons.ts'
 import { onChange } from '../lib/events.ts'
 import { offline } from '../lib/network.ts'
@@ -107,15 +108,50 @@ const valueFields = computed(() => (type.value?.properties ?? []).filter((p) => 
 const hasValue = (def: PropertyDef) => (def.kind === 'formula' ? !!object.value && formulaValue(object.value, def).kind !== 'empty' : !!object.value?.props[def.id])
 /** Fields shown only once they have a value: marked so, or a person field in a space nobody else is in. */
 const quiet = (def: PropertyDef) => def.hideWhenEmpty || (def.kind === 'person' && !sharedSpace.value)
-const visibleFields = computed(() => valueFields.value.filter((p) => !quiet(p) || hasValue(p) || showAllFields.value))
-/** Who made it and who changed it last, in a shared space. */
+const required = (def: PropertyDef) => !!def.required && def.kind !== 'formula'
+const visibleFields = computed(() => valueFields.value.filter((p) => !quiet(p) || hasValue(p) || required(p) || showAllFields.value))
+/** What the type's rules ask for that the object lacks: a warning here, a refusal for agents and scripts. */
+const ruleProblems = computed(() => (object.value && !info.value ? typeRuleProblems(type.value, object.value) : []))
+/** Who made it and who changed it last (in a shared space), and the agent it was written through. */
 const authorship = computed(() => {
   const o = object.value
-  if (!o || !sharedSpace.value) return { by: '', title: '' }
-  const by = o.updatedBy ? ` by ${personName(o.updatedBy)}` : ''
-  const created = `Created ${formatRelative(o.createdAt)}${o.createdBy ? ` by ${personName(o.createdBy)}` : ''}`
-  return { by, title: created }
+  if (!o) return { by: '', title: '' }
+  const shared = sharedSpace.value
+  const via = (agent: string | undefined) => (agent ? ` via ${agent}` : '')
+  const by = `${shared && o.updatedBy ? ` by ${personName(o.updatedBy)}` : ''}${via(o.updatedVia)}`
+  const created = `Created ${formatRelative(o.createdAt)}${shared && o.createdBy ? ` by ${personName(o.createdBy)}` : ''}${via(o.createdVia)}`
+  return { by, title: shared || o.createdVia || o.updatedVia ? created : '' }
 })
+/** Marked as agent context: what agents read first (Settings › Agents). */
+const agentContext = computed(() => !!object.value && (workspace.spaces.find((s) => s.id === object.value!.spaceId)?.agents?.context ?? []).includes(object.value.id))
+// Insistent reminders about this object (lib/insistent.ts): "Remind me…" opens the one it has, or a new one.
+const reminderRule = ref<InsistentRule | null>(null)
+async function loadReminder() {
+  try {
+    reminderRule.value = (await authApi.reminderRules(props.id))[0] ?? null
+  } catch {
+    reminderRule.value = null
+  }
+}
+onMounted(loadReminder)
+function remindMe() {
+  menuOpen.value = false
+  openReminderEditor({ objectId: props.id, ...(reminderRule.value ? { rule: reminderRule.value } : {}), saved: (rule) => (reminderRule.value = rule) })
+}
+
+async function toggleAgentContext() {
+  const o = object.value
+  if (!o) return
+  menuOpen.value = false
+  try {
+    const saved = await api.setAgentContext(o.spaceId, o.id, !agentContext.value)
+    const index = workspace.spaces.findIndex((s) => s.id === saved.id)
+    if (index >= 0) workspace.spaces[index] = saved
+    if (workspace.space?.id === saved.id) workspace.space = saved
+  } catch (failure) {
+    lastError.value = (failure as Error).message
+  }
+}
 const showAllFields = ref(false)
 /** Rows of what links here by a relation (ReverseRelations reports them). */
 const reverseCount = ref(0)
@@ -907,6 +943,14 @@ async function startFrom(template: ObjectRecord) {
               <AppIcon fallback="ph:push-pin" /> {{ isInSidebar(object.id) ? 'Pinned in sidebar' : 'Pin to sidebar' }}
               <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
             </button>
+            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" title="A reminder that keeps asking until you answer" data-remind-me @click="remindMe">
+              <AppIcon fallback="ph:bell-ringing" /> {{ reminderRule ? 'Reminder…' : 'Remind me…' }}
+              <AppIcon v-if="reminderRule" fallback="ph:check" :size="13" class="ml-auto text-accent" />
+            </button>
+            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" title="What agents read first (the MCP's recall)" @click="toggleAgentContext">
+              <AppIcon fallback="ph:robot" /> Agent context
+              <AppIcon v-if="agentContext" fallback="ph:check" :size="13" class="ml-auto text-accent" />
+            </button>
             <button v-if="!object.deletedAt" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="coverMenuFrom">
               <AppIcon fallback="ph:image" /> {{ coverUploading ? 'Uploading cover…' : object.coverUrl ? 'Change cover…' : 'Add cover…' }}
             </button>
@@ -1065,6 +1109,9 @@ async function startFrom(template: ObjectRecord) {
           </PropertyValueEditor>
         </div>
         <ReverseRelations v-if="!info" :object-id="object.id" :type-id="object.typeId" :show-empty="showAllFields" :hide="hiddenReverse" @count="reverseCount = $event" />
+        <p v-if="ruleProblems.length" class="mt-1 flex items-center gap-1.5 px-1 text-xs text-amber-600 dark:text-amber-400" :title="`Agents and scripts can't save a ${type?.name ?? 'object'} like this`">
+          <AppIcon fallback="ph:warning" :size="13" /> {{ type?.name }}: {{ ruleProblems.join('; ') }}
+        </p>
         <div v-if="!hideAddProperty" class="mt-1 flex gap-3 text-xs text-ink-faint">
           <button v-if="hiddenCount" class="rounded px-1 py-1 hover:text-ink" @click="showAllFields = true">Show {{ hiddenCount }} empty properties</button>
           <button ref="addAnchor" class="flex items-center gap-1 rounded px-1 py-1 hover:text-ink" @click="addOpen = !addOpen">

@@ -108,6 +108,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* The desktop app's reminder pop-up (?popup=1, main.ts): a transparent window, so the page can
+   round its corners. */
+html.vasta-popup,
+html.vasta-popup body {
+  background: transparent;
+}
+
 /* An object's properties: a table of name | value rows (ObjectPage, ReverseRelations). */
 /* A popover drawn as a sheet on a phone (PopoverMenu): full-width rows reach the 44px a finger needs,
    and text boxes are 16px so iOS does not zoom in on them. */

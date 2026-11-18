@@ -2,7 +2,7 @@
 // it runs, and by the server over HTTP otherwise. What only the server can do (fetch a page, store
 // a file, delete for good, members, subscriptions) always goes to it, with the replica synced
 // before and after.
-import type { PropertyValue, ActivityEntry, ApiToken, FlowMetrics, Backlink, CalendarEntry, CalendarSource, ColorName, DocNode, FoodEntry, FoodLineAnswer, Icon, Id, InboxPreferences, Invite, LogFoodInput, NutritionSettings, ObjectRecord, ObjectSummary, ObjectType, OpensOn, QueryDef, Space, SpaceRole, TokenScope, TypePatch, User } from '@vasta/core'
+import type { PropertyValue, ActivityEntry, AgentSettings, ApiToken, FlowMetrics, Backlink, CalendarEntry, CalendarSource, ColorName, DocNode, FoodEntry, FoodLineAnswer, Icon, Id, InboxPreferences, Invite, LogFoodInput, NutritionSettings, ObjectRecord, ObjectSummary, ObjectType, OpensOn, QueryDef, Space, SpaceRole, TokenScope, TypePatch, User } from '@vasta/core'
 import { SYNC_PROTOCOL, dayIn, type CaptureDestinations } from '@vasta/core'
 import type { OccurrenceEdit } from '@vasta/core/calendar'
 import type { CaptureAnswer } from '@vasta/core/client'
@@ -91,7 +91,11 @@ export interface ReminderSettings {
   telegramReady: boolean
   /** Desktop apps listening for this user right now. */
   desktopApps: number
+  /** Of those, the ones that can take the screen (desktop 0.10 and later). */
+  takeoverApps: number
   work: WorkNotifications
+  /** Quiet hours: insistent reminders wait them out. */
+  quiet: { from: string; to: string } | null
   /** Web Push, when the server sends it: its key and the devices that turned it on. */
   push?: { publicKey: string; devices: PushDevice[] }
 }
@@ -102,6 +106,7 @@ export interface PushKinds {
   events: boolean
   food: boolean
   work: boolean
+  insistent: boolean
 }
 
 /** A browser that gets reminders as notifications (server/src/push.ts). */
@@ -152,6 +157,93 @@ export interface ReminderChanges {
   eventsBefore?: number | null
   food?: Partial<FoodReminders>
   work?: Partial<WorkNotifications>
+  quiet?: { from: string; to: string } | null
+}
+
+// Insistent reminders (server/src/insistent.ts) ---------------------------------
+
+export type NagChannel = 'push' | 'desktop' | 'ntfy' | 'telegram' | 'popup' | 'takeover'
+export interface LadderStep {
+  /** Minutes after it starts, snoozes left out. */
+  after: number
+  channels: NagChannel[]
+  urgent?: boolean
+}
+export type RuleWhen = { kind: 'object'; before?: number } | { kind: 'daily'; at: string; days?: number[] } | { kind: 'wake'; after: string; latest?: string; days?: number[] }
+export type RuleContent = { kind: 'target' } | { kind: 'tag'; tagId: Id; count?: number } | { kind: 'query'; queryId: Id; count?: number } | { kind: 'tasks' }
+export type AckMode = 'ok' | 'done' | 'type' | 'say'
+export type NagOutcome = 'ok' | 'done' | 'typed' | 'said' | 'skipped' | 'escaped' | 'ignored'
+export type NagAnswer = 'ok' | 'done' | 'typed' | 'said' | 'snooze' | 'skip' | 'escape'
+
+export interface RuleStats {
+  total: number
+  open: number
+  done: number
+  ok: number
+  typed: number
+  said: number
+  skipped: number
+  escaped: number
+  ignored: number
+  snoozes: number
+  answered: number
+  medianMinutes: number | null
+  tookOver: number
+  escalated: number
+  reasons: { day: string; reason: string }[]
+  days: { day: string; outcome: NagOutcome | 'open' | null }[]
+}
+
+export interface InsistentRule {
+  id: string
+  objectId?: Id
+  spaceId: Id
+  title?: string
+  when: RuleWhen
+  content: RuleContent
+  ack: AckMode
+  repeat: number | null
+  steps: LadderStep[]
+  snooze: number
+  climbAfter: number | null
+  escapeAfter: number
+  /** An object the desktop app opens once it is answered; none: it stays out of the way. */
+  openAfter?: Id
+  paused?: boolean
+  createdAt: string
+  /** What the list shows: its title, or its object's. */
+  name: string
+  object?: { id: Id; title: string; typeId: Id; deleted: boolean }
+  stats: RuleStats
+}
+
+export type RuleInput = Partial<Omit<InsistentRule, 'id' | 'createdAt' | 'name' | 'object' | 'stats' | 'openAfter'>> & { openAfter?: Id | null }
+
+/** An insistent reminder going on (or answered), as its page shows it. */
+export interface NagView {
+  acknowledgementOnly?: boolean
+  id: string
+  ruleId: string
+  title: string
+  object?: { id: Id; title: string; typeId: Id; system: string | null }
+  day: string
+  startedAt: string
+  ack: AckMode
+  items: { id: Id; title: string; text: string; typeId: Id }[]
+  tasks?: { id: Id; title: string; due: string }[]
+  /** The texts to type or say. */
+  expected: string[]
+  snooze: number
+  snoozes: number
+  climbAfter: number | null
+  step: number
+  steps: number
+  sent: number
+  escapeAfter: number
+  /** What to open once it is answered (the desktop app brings its window forward with it). */
+  openAfter?: { id: Id; title: string }
+  outcome?: NagOutcome
+  reason?: string
 }
 
 export interface CalendarData {
@@ -228,6 +320,15 @@ export const authApi = {
   updatePushDevice: (id: string, changes: { name?: string; kinds?: Partial<PushKinds> }) => request<ReminderSettings>('PATCH', `/api/auth/reminders/devices/${id}`, changes),
   removePushDevice: (id: string) => request<ReminderSettings>('DELETE', `/api/auth/reminders/devices/${id}`),
   testReminders: () => request<{ channel: string; ok: boolean; error?: string }[]>('POST', '/api/auth/reminders/test'),
+  /** Insistent reminders: all of them, or those about an object. */
+  reminderRules: (objectId?: Id) => request<InsistentRule[]>('GET', `/api/auth/reminders/rules${objectId ? `?object=${encodeURIComponent(objectId)}` : ''}`),
+  createReminderRule: (input: RuleInput & { objectId?: Id }) => request<InsistentRule>('POST', '/api/auth/reminders/rules', input),
+  updateReminderRule: (id: string, input: RuleInput) => request<InsistentRule>('PUT', `/api/auth/reminders/rules/${id}`, input),
+  deleteReminderRule: (id: string) => request<void>('DELETE', `/api/auth/reminders/rules/${id}`),
+  /** The insistent reminders going on now. */
+  nags: () => request<NagView[]>('GET', '/api/auth/reminders/nags'),
+  nag: (id: string) => request<NagView>('GET', `/api/auth/reminders/nags/${id}`),
+  answerNag: (id: string, answer: NagAnswer, extra: { texts?: string[]; reason?: string } = {}) => request<NagView>('POST', `/api/auth/reminders/nags/${id}`, { answer, ...extra }),
   /** A token for the desktop app to hear reminders with (scope notify); replaces the device's last one. */
   desktopToken: (device: string) => request<{ token: string }>('POST', '/api/auth/desktop-token', { device }),
   telegramCode: () => request<{ code: string; expiresAt: string; bot?: string }>('POST', '/api/auth/telegram/code'),
@@ -412,6 +513,10 @@ const http = {
   /** Days a space keeps activity (0: everything); only owners change it. */
   activitySettings: (spaceId: Id) => request<{ retentionDays: number }>('GET', `/api/spaces/${spaceId}/activity-settings`),
   setActivitySettings: (spaceId: Id, retentionDays: number) => request<{ retentionDays: number }>('PUT', `/api/spaces/${spaceId}/activity-settings`, { retentionDays }),
+  /** What agents see and do in a space, and its instructions for them; only owners change it. */
+  setAgentSettings: (spaceId: Id, settings: AgentSettings) => request<Space>('PUT', `/api/spaces/${spaceId}/agents`, settings),
+  /** Mark an object as agent context (what agents read first), or unmark it. */
+  setAgentContext: (spaceId: Id, id: Id, on: boolean) => request<Space>('POST', `/api/spaces/${spaceId}/agent-context`, { id, on }),
   /** Add a member by their exact username. */
   addMember: (spaceId: Id, username: string, role: SpaceRole) => request<Member[]>('POST', `/api/spaces/${spaceId}/members`, { username, role }),
   setMemberRole: (spaceId: Id, userId: Id, role: SpaceRole) => request<Member[]>('PUT', `/api/spaces/${spaceId}/members/${userId}`, { role }),
@@ -550,6 +655,8 @@ const local: Partial<Api> = {
   restoreSpace: viaServer(http.restoreSpace),
   createSpace: viaServer(http.createSpace),
   deleteSpace: viaServer(http.deleteSpace),
+  setAgentSettings: viaServer(http.setAgentSettings),
+  setAgentContext: viaServer(http.setAgentContext),
   addMember: viaServer(http.addMember),
   setMemberRole: viaServer(http.setMemberRole),
   removeMember: viaServer(http.removeMember),
