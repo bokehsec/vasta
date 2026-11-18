@@ -1120,7 +1120,7 @@ export class AgentTools {
     const byId = this.store.getObject(query)
     if (byId && !byId.deletedAt && byId.spaceId === spaceId && this.store.getType(byId.typeId)?.system === 'habit') return this.object(byId.id)
     const type = this.store.getType(builtinTypeId(spaceId, 'habit'))
-    const match = type ? this.store.listObjects(type.id).find((h) => fold(h.title) === fold(query)) : undefined
+    const match = type ? this.store.listObjects(type.id).find((h) => !h.deletedAt && this.visible(h) && fold(h.title) === fold(query)) : undefined
     if (!match) throw new AgentError(`no habit "${query}" (list_habits shows them)`)
     return this.object(match.id)
   }

@@ -61,4 +61,19 @@ describe('the server store\'s putType', () => {
     const row = store.db.prepare('SELECT name, future FROM types WHERE id = ?').get(task.id) as { name: string; future: string }
     expect(row).toEqual({ name: 'Renamed', future: '{"keep":true}' })
   })
+
+  it('keeps an object column this build does not name, and its search entry', () => {
+    const store = new NodeStore(':memory:')
+    store.putSpace({ id: 's', name: 's', sidebar: [], createdAt: AT })
+    store.putType(task)
+    const page = { id: 'o', spaceId: 's', typeId: task.id, title: 'Before', aliases: [], tagIds: [], collectionIds: [], props: {}, content: {}, createdAt: AT, updatedAt: AT }
+    store.putObject(page)
+    store.db.exec('ALTER TABLE objects ADD COLUMN future TEXT')
+    store.db.prepare('UPDATE objects SET future = ? WHERE id = ?').run('{"keep":true}', 'o')
+    store.putObject({ ...page, title: 'After', updatedAt: LATER })
+    const row = store.db.prepare('SELECT title, future FROM objects WHERE id = ?').get('o') as { title: string; future: string }
+    expect(row).toEqual({ title: 'After', future: '{"keep":true}' })
+    expect(store.search('s', 'after').map((o) => o.id)).toEqual(['o'])
+    expect(store.search('s', 'before')).toEqual([])
+  })
 })

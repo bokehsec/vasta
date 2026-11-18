@@ -34,7 +34,6 @@ import {
   isHabitScheduled,
   habitWeeklyTarget,
   habitSparkyRule,
-  habitSparkyKey,
   taskDatesOf,
   taskReminderField,
   isClosedTask,
@@ -584,6 +583,22 @@ export class InsistentReminders {
     return false
   }
 
+  /**
+   * The task's time was changed since the nag started (put off, dragged, edited): a reminder at its
+   * own time is about the old one. The new time starts its own when it comes.
+   */
+  private timeMoved(rule: InsistentRule, nag: Pick<Nag, 'occurrence'>): boolean {
+    const object = rule.objectId && rule.when.kind === 'object' ? this.store.getObject(rule.objectId) : undefined
+    const type = object && this.store.getType(object.typeId)
+    if (!object || type?.system !== 'task' || nag.occurrence.startsWith('now:')) return false
+    const field = taskReminderField(type, object)
+    const value = field ? object.props[field] : undefined
+    const prefix = field ? `${object.id}:${field}:` : ''
+    if (value?.kind !== 'date' || !nag.occurrence.startsWith(prefix)) return true
+    // A repeating task moves on by itself (see isDone).
+    return !value.value.rrule && Date.parse(nag.occurrence.slice(prefix.length)) !== Date.parse(value.value.start)
+  }
+
   /** The habit is not due that day: not on its days, paused, or done already. */
   private skipsDay(rule: InsistentRule, day: string): boolean {
     const object = rule.objectId ? this.store.getObject(rule.objectId) : undefined
@@ -734,6 +749,10 @@ export class InsistentReminders {
   /** Close it, send it, or wait: what an open nag does now. */
   private async advance(user: User, rule: InsistentRule, nag: Nag, now: number) {
     if (this.isDone(rule, nag)) return this.close(nag, 'done', now)
+    if (this.timeMoved(rule, nag)) {
+      nag.reason = 'The task was moved to another time'
+      return this.close(nag, 'skipped', now)
+    }
     if (!nag.occurrence.startsWith('now:') && this.skipsDay(rule, nag.day)) {
       nag.reason = 'The habit is no longer scheduled for this day'
       return this.close(nag, 'skipped', now)
@@ -842,7 +861,13 @@ export class InsistentReminders {
       // In Telegram everything comes as one message: the phrases, in order, on lines or not.
       const joined = expected.join(' ')
       if (textMatch(joined, text) < TYPED_MATCH) return expected.length > 1 ? 'Not quite. Type all of them, in order.' : 'Not quite. Type it again.'
-      this.complete(user, rule, nag)
+      try {
+        this.complete(user, rule, nag)
+      } catch (error) {
+        // A task with open steps is not closed: say so, and it keeps asking.
+        if (error instanceof InsistentError) return `Not done. ${error.message}`
+        throw error
+      }
       this.close(nag, 'typed', this.now())
       return this.view(user, nag.id).acknowledgementOnly ? 'Acknowledged ✓ — progress still comes from its source.' : 'Done ✓'
     }
@@ -871,8 +896,9 @@ export class InsistentReminders {
     return nag.contentIds.map((id) => this.store.getObjectSummaries([id])[0]?.title ?? '').filter((t) => normalizeText(t))
   }
 
+  /** Linked to SparkyFitness now; amounts kept from before an unlink do not count. */
   private importedHabit(object: Pick<ObjectRecord, 'props'>): boolean {
-    return !!habitSparkyRule(object) || Object.keys(object.props).some((key) => key.startsWith(habitSparkyKey('')))
+    return !!habitSparkyRule(object)
   }
 
   /** Mark the habit done for the day, or the task done (the occurrence it is at, for a repeating one). */
@@ -973,24 +999,35 @@ export class InsistentReminders {
     return object?.title || 'A reminder'
   }
 
-  /** Tasks due today or overdue, not done (up to 8, earliest first). */
-  tasks(user: User, spaceId: Id): { id: Id; title: string; due: string }[] {
+  /** Open tasks whose date of a role (of the role given) is today or earlier, earliest first. */
+  private datedTasks(user: User, spaceId: Id, role: 'plan' | 'deadline'): { id: Id; title: string; at: string; day: string }[] {
     const type = this.store.getType(builtinTypeId(spaceId, 'task'))
     if (!type) return []
     const timeZone = this.timeZone(user)
     const today = dayIn(this.now(), timeZone)
+    const def = taskDatesOf(type)[role]
+    if (!def) return []
     return this.store
       .listObjects(type.id)
       .filter((t) => !t.deletedAt && !isFinished(t, type))
       .flatMap((t) => {
-        const deadline = taskDatesOf(type).deadline
-        const due = deadline ? t.props[deadline.id] : undefined
-        if (due?.kind !== 'date') return []
-        const day = due.value.resolution === 'day' ? due.value.start.slice(0, 10) : dayIn(due.value.start, timeZone)
-        return day <= today ? [{ id: t.id, title: t.title || 'Untitled', due: due.value.start }] : []
+        const value = t.props[def.id]
+        if (value?.kind !== 'date') return []
+        const day = value.value.resolution === 'day' ? value.value.start.slice(0, 10) : dayIn(value.value.start, timeZone)
+        return day <= today ? [{ id: t.id, title: t.title || 'Untitled', at: value.value.start, day }] : []
       })
-      .sort((a, b) => a.due.localeCompare(b.due))
-      .slice(0, 8)
+      .sort((a, b) => a.at.localeCompare(b.at))
+  }
+
+  /** Tasks due today or overdue, not done (up to 8, earliest first). */
+  tasks(user: User, spaceId: Id): { id: Id; title: string; due: string }[] {
+    return this.datedTasks(user, spaceId, 'deadline').slice(0, 8).map((t) => ({ id: t.id, title: t.title, due: t.at }))
+  }
+
+  /** Open tasks planned (Do date) for today or earlier that are not on the due list (up to 8, earliest first). */
+  planned(user: User, spaceId: Id): { id: Id; title: string; day: string }[] {
+    const due = new Set(this.datedTasks(user, spaceId, 'deadline').map((t) => t.id))
+    return this.datedTasks(user, spaceId, 'plan').filter((t) => !due.has(t.id)).slice(0, 8).map((t) => ({ id: t.id, title: t.title, day: t.day }))
   }
 
   /** Each rule's stats over the last `days` days. */
@@ -1045,7 +1082,14 @@ export class InsistentReminders {
     const type = object && this.store.getType(object.typeId)
     if (rule.content.kind === 'tasks') {
       const tasks = this.tasks(user, rule.spaceId)
-      lines.push(tasks.length ? tasks.map((t) => `• ${t.title}`).join('\n') : 'No tasks due today.')
+      const planned = this.planned(user, rule.spaceId)
+      if (!tasks.length && !planned.length) lines.push('No tasks due today.')
+      else {
+        if (tasks.length) lines.push(...(planned.length ? ['Due'] : []), ...tasks.map((t) => `• ${t.title}`))
+        // An earlier plan is still open: say since when.
+        const today = dayIn(this.now(), this.timeZone(user))
+        if (planned.length) lines.push('Planned today', ...planned.map((t) => `• ${t.title}${t.day < today ? ` (planned ${t.day})` : ''}`))
+      }
     } else if (rule.content.kind === 'target') {
       if (object?.description) lines.push(object.description)
     } else {

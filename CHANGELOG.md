@@ -201,6 +201,9 @@ GitHub release page.
 
 ### Changed
 
+- **The tasks reminder lists planned work.** Besides tasks due today or overdue, it now lists open
+  tasks planned (Do date) for today or earlier under "Planned today"; a task in both appears once,
+  under its due date.
 - **One Done, everywhere.** The circle on a list, table, card, query or calendar row, a subtask's
   circle, the Done button, a swipe and a board drag into a Done column all run the task type's own
   Done action, so a Done you customised (extra changes, another name) behaves the same wherever you
@@ -312,6 +315,17 @@ GitHub release page.
 
 ### Fixed
 
+- **Saving an object after going back to an older version no longer blanks newer details.** Objects
+  are saved by changing only the fields Vasta knows, so details a newer version stored (such as who
+  or what made a change) survive.
+- **Moving a task stops its old reminder.** When you put a task off, drag it or change its date, the
+  reminder that was asking about the old time ends, and one starts at the new time.
+- **Telegram says when a task isn't closed.** Typing a reminder's text for a task with open steps
+  now answers "Not done" with the reason, and the reminder keeps asking.
+- **A habit unlinked from SparkyFitness reminds like any other habit.** Marking it done from a
+  reminder works again; old imported amounts no longer make it acknowledge-only.
+- **Agents find the visible habit by name.** A trashed or hidden habit with the same name no longer
+  gets picked instead.
 - **Saving a type never undoes another change.** Type settings, a view's settings, a new select
   option or property, and a duplicated or renamed view each save only what they changed, in order, so
   a view made while Type settings was open, or on another device, is no longer overwritten.

@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { builtinTypeId, createBuiltinTypes, DONE_VALUE, habitDoneKey, type ObjectRecord } from '@vasta/core'
+import { builtinTypeId, createBuiltinTypes, DONE_VALUE, habitDoneKey, newObject, type ObjectRecord } from '@vasta/core'
 import { NodeMediaStore } from '@vasta/core/media-node'
 import { NodeStore } from '@vasta/core/node'
 import { AccountService } from '../src/accounts.ts'
@@ -44,5 +44,22 @@ describe('list_habits', () => {
       done: 5,
       expected: 5,
     })
+  })
+
+  it('finds a habit by name among the visible ones, not a trashed duplicate', () => {
+    const store = new NodeStore(':memory:')
+    store.putSpace({ id: 's', name: 'Space', sidebar: [], createdAt: at })
+    for (const type of createBuiltinTypes('s', at)) store.putType(type)
+    const media = new NodeMediaStore(mkdtempSync(path.join(tmpdir(), 'vasta-habits-')))
+    const feed = new ChangeFeed()
+    const capture = new CaptureService({ store, media, feed, now: () => at, timeZone: 'UTC' })
+    const app = createApp({ store, media, feed, capture, now: () => at })
+    const user = asUser(app, store, { spaces: ['s'] })
+    const agent = new AgentTools({ store, accounts: new AccountService({ store, now: () => at, capture }), feed, now: () => at, user: user.user, webUrl: 'https://vasta.test' })
+    const habit = store.getType(builtinTypeId('s', 'habit'))!
+    store.putObject({ ...newObject(habit, { title: 'Gym' }, 'old', '2026-10-01T00:00:00.000Z'), deletedAt: '2026-10-02T00:00:00.000Z' })
+    store.putObject(newObject(habit, { title: 'Gym' }, 'gym', '2026-10-03T00:00:00.000Z'))
+    expect(agent.logHabit({ habit: 'gym', space: 's', done: true })).toMatchObject({ id: 'gym' })
+    expect(store.getObject('old')!.props[habitDoneKey('2026-10-22')]).toBeUndefined()
   })
 })

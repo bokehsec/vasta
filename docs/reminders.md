@@ -35,7 +35,7 @@ reminders, and the channels everything goes through, are Settings › Reminder c
   the user is at the computer** after an hour (the desktop app says when they come back: input after
   5 minutes without any, or the computer waking; "by 11:00 anyway" starts it wherever they are).
 - **What it shows**, so even an ignored notification gets read: the object, 1 to 5 random objects
-  with a tag (sub-tags too) or from a saved query (the ones of last time come last), or today's tasks.
+  with a tag (sub-tags too) or from a saved query (the ones of last time come last), or today's tasks (due today or overdue, then those planned for today or earlier).
 - **How it is answered**: OK, doing the habit or task (wherever it is marked done), typing its text
   word for word, or saying it out loud (the page listens with the browser's speech recognition; typing
   works where it cannot). Typing or saying it on a habit also marks the habit done. Text is compared

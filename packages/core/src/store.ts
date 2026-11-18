@@ -749,13 +749,21 @@ export class Store {
     })
   }
 
+  // An upsert, like putType: a column this build does not name (one a later build added) keeps its value.
   private writeObjectRow(object: ObjectRecord, stamp: { rev: number; clock: string }) {
     this.db
       .prepare(
-        `INSERT OR REPLACE INTO objects (id, space_id, type_id, title, description, icon, cover_url, color, parent_id, aliases, tag_ids,
+        `INSERT INTO objects (id, space_id, type_id, title, description, icon, cover_url, color, parent_id, aliases, tag_ids,
            collection_ids, props, content, date_start, date_end, date_res, date_rrule, date_tz, date_exceptions, query, media, template, created_at, updated_at, deleted_at,
            created_by, updated_by, created_via, updated_via, rev, clock)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (id) DO UPDATE SET space_id = excluded.space_id, type_id = excluded.type_id, title = excluded.title, description = excluded.description, icon = excluded.icon,
+           cover_url = excluded.cover_url, color = excluded.color, parent_id = excluded.parent_id, aliases = excluded.aliases, tag_ids = excluded.tag_ids,
+           collection_ids = excluded.collection_ids, props = excluded.props, content = excluded.content, date_start = excluded.date_start, date_end = excluded.date_end,
+           date_res = excluded.date_res, date_rrule = excluded.date_rrule, date_tz = excluded.date_tz, date_exceptions = excluded.date_exceptions, query = excluded.query,
+           media = excluded.media, template = excluded.template, created_at = excluded.created_at, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at,
+           created_by = excluded.created_by, updated_by = excluded.updated_by, created_via = excluded.created_via, updated_via = excluded.updated_via,
+           rev = excluded.rev, clock = excluded.clock`
       )
       .run(
         object.id, object.spaceId, object.typeId, object.title, object.description ?? null, json(object.icon),

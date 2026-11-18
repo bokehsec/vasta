@@ -424,6 +424,69 @@ describe('insistent reminders', () => {
     expect(t.insistent.nag(view.id)!.outcome).toBeUndefined()
   })
 
+  it('tells Telegram a typed completion was refused for open steps, and keeps asking', async () => {
+    const t = setup()
+    const type = t.store.getType(builtinTypeId('s', 'task'))!
+    t.store.putType({ ...type, subtasks: { parentField: 'parent' }, properties: [...type.properties, { id: 'parent', name: 'Part of', kind: 'relation', targetTypeIds: [type.id], multiple: false }] })
+    t.store.putObject(newObject(type, { title: 'Step', props: { parent: { kind: 'relation', value: ['rent'] } } }, 'step', AT))
+    const rule = t.insistent.create(t.user, { objectId: 'rent', ack: 'type' })
+    const view = await t.insistent.startNow(t.user, rule.id)
+    t.insistent.sentTelegram(view.id, 42, 700)
+    expect(await t.insistent.telegramReply(t.user, 700, 'Pay rent')).toMatch(/^Not done\. .*open steps/)
+    expect(t.store.getObject('rent')!.props.status).toEqual({ kind: 'select', value: ['todo'] })
+    expect(t.insistent.nag(view.id)!.outcome).toBeUndefined()
+  })
+
+  it('ends a task reminder when its time is moved, and starts one at the new time', async () => {
+    const t = setup()
+    await t.reminders.tick(t.now)
+    t.insistent.create(t.user, { objectId: 'rent', steps: [{ after: 0, channels: ['ntfy'] }], repeat: 10 })
+    await t.runTo('2026-10-20T11:00:30')
+    const [nag] = t.insistent.openNags('u')
+    expect(nag?.occurrence).toContain(':due:2026-10-20T14:00:00.000Z')
+    const sent = t.ntfy.length
+    // Put off to the afternoon: the 11:00 reminder stops asking.
+    const rent = t.store.getObject('rent')!
+    t.store.putObject({ ...rent, props: { ...rent.props, dodate: { kind: 'date', value: { start: '2026-10-20T18:00:00.000Z', resolution: 'time' } } } })
+    await t.runTo('2026-10-20T11:30:00')
+    expect(t.insistent.nag(nag!.id)).toMatchObject({ outcome: 'skipped', reason: 'The task was moved to another time' })
+    expect(t.ntfy).toHaveLength(sent)
+    // It reminds again at the new time.
+    await t.runTo('2026-10-20T15:00:30')
+    expect(t.insistent.openNags('u')[0]?.occurrence).toContain(':dodate:2026-10-20T18:00:00.000Z')
+  })
+
+  it('acknowledges only the habits linked to SparkyFitness now, not ones unlinked since', async () => {
+    const t = setup()
+    const habit = t.store.getObject('ritual')!
+    const rule = t.insistent.create(t.user, { objectId: habit.id, ack: 'done', steps: [{ after: 0, channels: ['ntfy'] }] })
+    t.store.putObject({ ...habit, props: { ...habit.props, [habitSparkyKey('2026-10-19')]: DONE_VALUE } })
+    const view = await t.insistent.startNow(t.user, rule.id)
+    expect(view).not.toHaveProperty('acknowledgementOnly')
+    await t.insistent.answer(t.user, view.id, { answer: 'done' })
+    expect(isHabitDone(t.store.getObject(habit.id)!, '2026-10-20')).toBe(true)
+  })
+
+  it('lists tasks planned for today or earlier under their own heading, once', async () => {
+    const t = setup()
+    const rent = t.store.getObject('rent')!
+    const type = t.store.getType(builtinTypeId('s', 'task'))!
+    const day = (d: string) => ({ kind: 'date' as const, value: { start: `${d}T00:00:00.000Z`, resolution: 'day' as const } })
+    const status = { kind: 'select' as const, value: ['todo'] }
+    // Due and planned (once, under Due), planned only (late and today), planned later, planned but done.
+    t.store.putObject({ ...rent, props: { status, due: day('2026-10-20'), dodate: day('2026-10-19') } })
+    t.store.putObject(newObject(type, { title: 'Late plan', props: { status, dodate: day('2026-10-18') } }, 'late', AT))
+    t.store.putObject(newObject(type, { title: 'Plan today', props: { status, dodate: day('2026-10-20') } }, 'today', AT))
+    t.store.putObject(newObject(type, { title: 'Plan later', props: { status, dodate: day('2026-10-21') } }, 'later', AT))
+    t.store.putObject(newObject(type, { title: 'Plan done', props: { status: { kind: 'select', value: ['done'] }, dodate: day('2026-10-20') } }, 'finished', AT))
+    expect(t.insistent.tasks(t.user, 's').map((x) => x.id)).toEqual(['rent'])
+    expect(t.insistent.planned(t.user, 's')).toEqual([{ id: 'late', title: 'Late plan', day: '2026-10-18' }, { id: 'today', title: 'Plan today', day: '2026-10-20' }])
+    await t.reminders.tick(t.now)
+    t.insistent.create(t.user, { title: 'Digest', content: { kind: 'tasks' }, when: { kind: 'daily', at: '07:30' }, steps: [{ after: 0, channels: ['ntfy'] }], repeat: null })
+    await t.runTo('2026-10-20T07:30:30')
+    expect(t.ntfy[0]!.message.split('\n').slice(0, 5)).toEqual(['Due', '• Pay rent', 'Planned today', '• Late plan (planned 2026-10-18)', '• Plan today'])
+  })
+
   it('checks its rules', () => {
     const t = setup()
     expect(() => t.insistent.create(t.user, { content: { kind: 'tasks' } })).toThrow('title')
