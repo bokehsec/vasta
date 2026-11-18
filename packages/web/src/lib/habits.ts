@@ -44,6 +44,7 @@ export const habitColor = (habit: Pick<ObjectSummary, 'color'> | undefined): Col
  * daily notes, loaded when one is in the list and again when a daily note changes).
  */
 export function useFoodHabits(habits: Ref<ObjectSummary[]>) {
+  const today = useToday()
   const days = ref<NutritionDay[]>([])
   const { goals } = useGoals()
   const linked = computed(() => habits.value.some((h) => habitFoodRule(h)))
@@ -54,9 +55,8 @@ export function useFoodHabits(habits: Ref<ObjectSummary[]>) {
     notes.value = [...(await dailyNotesBetween(addDays(today, -FOOD_HABIT_DAYS), today)).values()]
   }
   watch(linked, load, { immediate: true })
-  watch([notes, goals], () => {
-    const today = dayKey()
-    days.value = linked.value ? nutritionDays(notes.value, goals.value, addDays(today, -FOOD_HABIT_DAYS), today) : []
+  watch([notes, goals, today], () => {
+    days.value = linked.value ? nutritionDays(notes.value, goals.value, addDays(today.value, -FOOD_HABIT_DAYS), today.value) : []
   })
   let timer: ReturnType<typeof setTimeout> | undefined
   const stop = onChange((event) => {
@@ -68,7 +68,7 @@ export function useFoodHabits(habits: Ref<ObjectSummary[]>) {
     stop()
     clearTimeout(timer)
   })
-  return computed(() => (days.value.length ? habits.value.map((h) => withFood(h, days.value)) : habits.value))
+  return computed(() => (days.value.length ? habits.value.map((h) => withFood(h, days.value, today.value)) : habits.value))
 }
 
 /** Today's day key, kept current: checked every minute and when the page comes back into view, so a view left open rolls over at midnight. */
@@ -93,7 +93,8 @@ export function useToday() {
 /** A habit done from food can't be checked by hand: say so. */
 function fromFood(habit: Pick<ObjectSummary, 'props' | 'title'> | undefined): boolean {
   if (!habit || !habitFoodRule(habit)) return false
-  notice.value = { message: `“${habit.title || 'This habit'}” is done from what you log in Food.` }
+  const rule = habitFoodRule(habit)!
+  notice.value = { message: `“${habit.title || 'This habit'}” is done from what you log in Food.${rule.endsWith('-max') || rule === 'on-target' ? ' Counted once the day is over.' : ''}` }
   return true
 }
 

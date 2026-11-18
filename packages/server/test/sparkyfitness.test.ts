@@ -58,7 +58,8 @@ describe('SparkyFitness sync', () => {
     expect(habitValue(store.getObject(steps)!, '2026-11-15')).toBe(4000)
     expect(habitValue(store.getObject(water)!, '2026-11-16')).toBe(2)
     expect(habitValue(store.getObject(sleep)!, '2026-11-16')).toBe(7)
-    expect(habitValue(store.getObject(calories)!, '2026-11-16')).toBe(1)
+    expect(store.getObject(calories)!.props['sf:2026-11-16']).toBeUndefined()
+    expect(habitValue(store.getObject(calories)!, '2026-11-15')).toBe(1)
     expect(habitValue(store.getObject(workout)!, '2026-11-16')).toBe(1)
     expect(habitValue(store.getObject(active)!, '2026-11-16')).toBe(0)
     const rev = store.syncRow('objects', steps)
@@ -73,14 +74,30 @@ describe('SparkyFitness sync', () => {
     expect(habitValue(store.getObject(water)!, '2026-11-16')).toBe(2)
   })
 
+  it('leaves today undecided in sync and preview, removes stale imports and keeps hand entries', async () => {
+    const { store, service, add } = setup()
+    const id = add('calories')
+    await service.sync('s')
+    const object = store.getObject(id)!
+    store.putObject({ ...object, props: { ...object.props, 'sf:2026-11-16': { kind: 'checkbox', value: true }, 'done:2026-11-16': { kind: 'checkbox', value: true } } })
+    await service.sync('s')
+    const props = store.getObject(id)!.props
+    expect(props['sf:2026-11-16']).toBeUndefined()
+    expect(props['sf:2026-11-15']).toEqual({ kind: 'checkbox', value: true })
+    expect(props['done:2026-11-16']).toEqual({ kind: 'checkbox', value: true })
+    const preview = await service.preview(id, { rule: 'calories' })
+    expect(preview.at(-1)).toEqual({ day: '2026-11-16', value: null, manual: { kind: 'checkbox', value: true } })
+    expect(preview.at(-2)?.value).toEqual({ kind: 'checkbox', value: true })
+  })
+
   it('uses the exercise-adjusted budget and rejects days over it', async () => {
     const { store, service, add, overBudget } = setup()
     const id = add('calories')
     await service.sync('s')
-    expect(habitValue(store.getObject(id)!, '2026-11-16')).toBe(1)
+    expect(habitValue(store.getObject(id)!, '2026-11-15')).toBe(1)
     overBudget()
     await service.sync('s')
-    expect(habitValue(store.getObject(id)!, '2026-11-16')).toBe(0)
+    expect(habitValue(store.getObject(id)!, '2026-11-15')).toBe(0)
   })
 
   it('requires food to be logged and records safe errors without discarding data', async () => {
@@ -88,12 +105,12 @@ describe('SparkyFitness sync', () => {
     const id = add('calories')
     noFood()
     await service.sync('s')
-    expect(habitValue(store.getObject(id)!, '2026-11-16')).toBe(0)
+    expect(habitValue(store.getObject(id)!, '2026-11-15')).toBe(0)
     fail()
     await service.sync('s')
     expect(service.status('s')?.error).toContain('401')
     expect(JSON.stringify(service.status('s'))).not.toContain('secret-key')
-    expect(store.getObject(id)!.props['sf:2026-11-16']).toEqual({ kind: 'checkbox', value: false })
+    expect(store.getObject(id)!.props['sf:2026-11-15']).toEqual({ kind: 'checkbox', value: false })
   })
 
   it('reimports history when a habit is linked, its rule changes or history changes', async () => {

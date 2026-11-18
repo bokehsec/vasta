@@ -48,7 +48,7 @@ export function sparkySleep(seconds: number, unit: string): number {
 interface DayData { names: string[]; steps: Measurement[]; water?: { water_ml: number }; sleep: Sleep[]; summary?: Summary }
 export interface SparkyPreviewDay { day: string; value: PropertyValue | null; manual: PropertyValue | null }
 
-function dayValue(habit: Pick<ObjectSummary, 'props' | 'createdAt'>, day: string, data: DayData): PropertyValue | null {
+function dayValue(habit: Pick<ObjectSummary, 'props' | 'createdAt'>, day: string, data: DayData, today: string): PropertyValue | null {
   const rule = habitSparkyRule(habit)
   // Without a goal there is no telling what a day's amount means: nothing is imported.
   if (AMOUNT_RULES.includes(rule ?? '') && !habitTarget(habit)) return null
@@ -61,7 +61,7 @@ function dayValue(habit: Pick<ObjectSummary, 'props' | 'createdAt'>, day: string
     const rows = data.sleep.filter((r) => r.entry_date.slice(0, 10) === day)
     return rows.length ? { kind: 'number', value: sparkySleep(rows.reduce((n, r) => n + Number(r.time_asleep_in_seconds ?? r.duration_in_seconds), 0), habitUnit(habit)) } : null
   }
-  if (rule === 'calories') return data.summary ? { kind: 'checkbox', value: !!data.summary.foodEntries.length && Number.isFinite(data.summary.calorieBalance.remaining) && data.summary.calorieBalance.remaining >= 0 } : null
+  if (rule === 'calories') return day < today && data.summary ? { kind: 'checkbox', value: !!data.summary.foodEntries.length && Number.isFinite(data.summary.calorieBalance.remaining) && data.summary.calorieBalance.remaining >= 0 } : null
   const prop = habit.props[HABIT_SPARKY_WORKOUTS_PROPERTY_ID]
   const wanted = prop?.kind === 'text' ? prop.value.split(',').map((n) => n.trim().toLowerCase()).filter(Boolean) : []
   return { kind: 'checkbox', value: data.names.some((name) => wanted.includes(name.toLowerCase())) }
@@ -191,7 +191,7 @@ export class SparkyFitnessService {
     try {
       for (let day = addDays(today, -6); day <= today; day = addDays(day, 1)) {
         const data = await this.dayData(row, day, new Set([input.rule]))
-        days.push({ day, value: dayValue(candidate, day, data), manual: habit.props[habitDoneKey(day)] ?? null })
+        days.push({ day, value: dayValue(candidate, day, data, today), manual: habit.props[habitDoneKey(day)] ?? null })
       }
     } catch (error) { throw new SparkyError(safeError(error)) }
     return days
@@ -257,6 +257,7 @@ export class SparkyFitnessService {
     const habits = type ? store.listObjects(type.id).filter((h) => habitSparkyRule(h)) : []
     // A habit whose link changed starts over: what was imported with the old one goes.
     for (const habit of habits) if (signatures[habit.id] && signatures[habit.id] !== this.signature(habit)) this.strip(habit, spaceId, (key) => !key.startsWith('sf:'))
+    for (const habit of habits) if (habitSparkyRule(habit) === 'calories') this.strip(habit, spaceId, (key) => key !== habitSparkyKey(today))
     const starts = new Map(habits.map((h) => [h.id, signatures[h.id] === this.signature(h) ? routineStart : historyStart]))
     // The workout names of the last month are kept for the link form to suggest.
     const workoutStart = lastSync ? [addDays(today, -29), addDays(lastSync, -OVERLAP_DAYS)].sort().at(-1)! : addDays(today, -29)
@@ -273,7 +274,7 @@ export class SparkyFitnessService {
         if (day >= addDays(today, -29)) workouts[day] = data.names
         if (this.generation.get(spaceId) !== generation || this.connection(spaceId)?.api_key !== row.api_key || this.connection(spaceId)?.base_url !== row.base_url) return
         for (const habit of active) {
-          const value = dayValue(habit, day, data)
+          const value = dayValue(habit, day, data, today)
           if (!value) continue
           // Re-read after the fetch: a hand check-in may have arrived while waiting for the server.
           const object = store.getObject(habit.id)

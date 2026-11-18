@@ -35,6 +35,7 @@ import {
   setNutritionEnabled,
   sourceUsage,
   weekBudget,
+  habitDayState,
   habitStats,
   habitValue,
   isHabitDone,
@@ -396,10 +397,10 @@ describe('habits done from food', () => {
   })
   const days = [day('2026-10-17', 1990, 160), day('2026-10-18', 2400, 90), day('2026-10-19', 0, 0, { entries: 0 }), day('2026-10-20', 1500, 120, { counted: false })]
   const habit = (rule: string, props: Record<string, PropertyValue> = {}) => ({ createdAt: AT, props: { food: { kind: 'select', value: [rule] }, 'done:2026-10-16': { kind: 'checkbox', value: true }, ...props } as Record<string, PropertyValue> })
-  const done = (h: ReturnType<typeof habit>) => ['2026-10-17', '2026-10-18', '2026-10-19', '2026-10-20'].filter((d) => isHabitDone(withFood(h, days), d))
+  const done = (h: ReturnType<typeof habit>) => ['2026-10-17', '2026-10-18', '2026-10-19', '2026-10-20'].filter((d) => isHabitDone(withFood(h, days, '2026-10-20'), d))
 
   it('fills toward the daily goal, or the nutrition goal without one; ignores days checked by hand', () => {
-    const protein = withFood(habit('protein-min', { target: num(150) }), days)
+    const protein = withFood(habit('protein-min', { target: num(150) }), days, '2026-10-20')
     expect([habitValue(protein, '2026-10-17'), habitValue(protein, '2026-10-18'), habitValue(protein, '2026-10-16')]).toEqual([160, 90, 0])
     expect(done(habit('protein-min', { target: num(150) }))).toEqual(['2026-10-17'])
     expect(done(habit('protein-min'))).toEqual(['2026-10-17'])
@@ -409,8 +410,24 @@ describe('habits done from food', () => {
     expect(done(habit('logged'))).toEqual(['2026-10-17', '2026-10-18'])
   })
 
+  it('waits until the day is over for limits and on target, while minimums still fill today', () => {
+    const days = ['2026-10-19', '2026-10-20', '2026-10-21'].map((d) => day(d, 1990, 160))
+    for (const rule of ['kcal-max', 'on-target']) {
+      const h = withFood(habit(rule), days, '2026-10-20')
+      expect(isHabitDone(h, '2026-10-19')).toBe(true)
+      expect(isHabitDone(h, '2026-10-20')).toBe(false)
+      expect(habitDayState(h, '2026-10-20', '2026-10-20')).toBe('later')
+      expect(h.props['done:2026-10-20']).toBeUndefined()
+      expect(h.props['done:2026-10-21']).toBeUndefined()
+    }
+    const protein = withFood(habit('protein-min', { target: num(150) }), days, '2026-10-20')
+    expect(habitValue(protein, '2026-10-20')).toBe(160)
+    expect(isHabitDone(protein, '2026-10-20')).toBe(true)
+    expect(isHabitDone(withFood(habit('logged'), days, '2026-10-20'), '2026-10-20')).toBe(true)
+  })
+
   it('makes days not counted days off, so they keep a streak', () => {
-    const h = withFood(habit('logged'), days)
+    const h = withFood(habit('logged'), days, '2026-10-20')
     expect(isHabitScheduled(h, '2026-10-20')).toBe(false)
     expect(habitStats(h, '2026-10-18').current).toBe(2)
   })

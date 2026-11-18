@@ -315,6 +315,10 @@ GitHub release page.
 
 ### Fixed
 
+- **Calorie-limit habits wait for the day to end.** A habit done by staying under your calories
+  (SparkyFitness "Calories on target", or "kcal, at most" and "Day on target" from food) no longer
+  shows as done in the middle of the day while you are still logging food. Today shows as not
+  needed yet, and the day is counted once it is over.
 - **Saving an object after going back to an older version no longer blanks newer details.** Objects
   are saved by changing only the fields Vasta knows, so details a newer version stored (such as who
   or what made a change) survive.

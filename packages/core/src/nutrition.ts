@@ -1257,7 +1257,7 @@ export const habitFoodRule = (habit: Pick<ObjectSummary, 'props'>): string | und
 }
 
 /** A habit with its days from food, as the habit functions (habits.ts) read them; others as they are. */
-export function withFood<T extends Pick<ObjectSummary, 'props' | 'createdAt'>>(habit: T, days: NutritionDay[]): T {
+export function withFood<T extends Pick<ObjectSummary, 'props' | 'createdAt'>>(habit: T, days: NutritionDay[], today: string): T {
   const rule = habitFoodRule(habit)
   if (!rule) return habit
   const props: Record<Id, PropertyValue> = Object.fromEntries(Object.entries(habit.props).filter(([key]) => !key.startsWith('done:')))
@@ -1267,7 +1267,7 @@ export function withFood<T extends Pick<ObjectSummary, 'props' | 'createdAt'>>(h
       props[habitOffKey(day.day)] = { kind: 'checkbox', value: true }
       continue
     }
-    if (!day.entries) continue
+    if (!day.entries || (day.day >= today && (rule.endsWith('-max') || rule === 'on-target'))) continue
     let done = false
     let amount: number | undefined
     if (rule === 'logged') done = true
@@ -1296,5 +1296,5 @@ export function habitsWithFood<T extends ObjectSummary>(store: Store, spaceId: I
   const notes = store.listObjects(builtinTypeId(spaceId, 'daily-note')).filter((n) => (n.date?.start.slice(0, 10) ?? '') >= from)
   const goals = readGoals(store.listObjects(builtinTypeId(spaceId, 'nutrition-goal')))
   const days = nutritionDays(notes, goals, from, today)
-  return habits.map((h) => withFood(h, days))
+  return habits.map((h) => withFood(h, days, today))
 }

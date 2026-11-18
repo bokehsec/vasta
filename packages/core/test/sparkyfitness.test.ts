@@ -9,7 +9,7 @@ describe('SparkyFitness habit values', () => {
   it('keeps SparkyFitness habits checkable when a food rule is also selected', () => {
     const h = habit({ sparkyfitness: { kind: 'select', value: ['water'] }, food: { kind: 'select', value: ['logged'] } })
     expect(habitFoodRule(h)).toBeUndefined()
-    expect(withFood(h, [])).toBe(h)
+    expect(withFood(h, [], '2026-11-16')).toBe(h)
   })
   it('falls back to fetched values across days, stats and the start date', () => {
     const h = habit({ 'sf:2026-11-15': { kind: 'checkbox', value: true } })

@@ -556,12 +556,12 @@ export class InsistentReminders {
   }
 
   /** The habit or task is done for the nag's day (wherever that happened). */
-  private isDone(rule: InsistentRule, nag: Pick<Nag, 'day' | 'occurrence' | 'taskOccurrence'>): boolean {
+  private isDone(user: User, rule: InsistentRule, nag: Pick<Nag, 'day' | 'occurrence' | 'taskOccurrence'>): boolean {
     const object = rule.objectId ? this.store.getObject(rule.objectId) : undefined
     if (!object) return false
     const type = this.store.getType(object.typeId)
     if (type?.system === 'habit') {
-      const [withFood] = habitFoodRule(object) ? habitsWithFood(this.store, object.spaceId, [{ ...object, preview: '' }], nag.day) : [object]
+      const [withFood] = habitFoodRule(object) ? habitsWithFood(this.store, object.spaceId, [{ ...object, preview: '' }], dayIn(this.now(), this.timeZone(user))) : [object]
       const habit = withFood ?? object
       return isHabitDone(habit, nag.day) || (!!habitWeeklyTarget(habit) && isHabitScheduled(habit, nag.day) && !isHabitDue(habit, nag.day))
     }
@@ -600,11 +600,11 @@ export class InsistentReminders {
   }
 
   /** The habit is not due that day: not on its days, paused, or done already. */
-  private skipsDay(rule: InsistentRule, day: string): boolean {
+  private skipsDay(user: User, rule: InsistentRule, day: string): boolean {
     const object = rule.objectId ? this.store.getObject(rule.objectId) : undefined
     const type = object && this.store.getType(object.typeId)
     if (!object || type?.system !== 'habit') return false
-    const [habit] = habitFoodRule(object) ? habitsWithFood(this.store, object.spaceId, [{ ...object, preview: '' }], day) : [object]
+    const [habit] = habitFoodRule(object) ? habitsWithFood(this.store, object.spaceId, [{ ...object, preview: '' }], dayIn(this.now(), this.timeZone(user))) : [object]
     return !isHabitDue(habit ?? object, day)
   }
 
@@ -667,7 +667,7 @@ export class InsistentReminders {
     const at = this.now()
     const day = dayIn(at, this.timeZone(user))
     const occurrence = { occurrence: `now:${at}`, day, at }
-    if (this.isDone(rule, occurrence)) throw new InsistentError(`“${this.titleOf(rule)}” is already done today, so it has nothing to ask`)
+    if (this.isDone(user, rule, occurrence)) throw new InsistentError(`“${this.titleOf(rule)}” is already done today, so it has nothing to ask`)
     const nag = this.start(user, rule, occurrence, true)
     if (!nag) throw new InsistentError('it was just started')
     await this.advance(user, rule, nag, at)
@@ -677,7 +677,7 @@ export class InsistentReminders {
   /** A new nag for an occurrence, unless it already had one, the habit is not due (`manual`: start anyway), or it is done. */
   private start(user: User, rule: InsistentRule, occurrence: { occurrence: string; day: string; at: number }, manual = false): Nag | undefined {
     if (this.store.db.prepare('SELECT 1 FROM reminder_nags WHERE rule_id = ? AND occurrence = ?').get(rule.id, occurrence.occurrence)) return undefined
-    if ((!manual && this.skipsDay(rule, occurrence.day)) || this.isDone(rule, occurrence)) return undefined
+    if ((!manual && this.skipsDay(user, rule, occurrence.day)) || this.isDone(user, rule, occurrence)) return undefined
     const now = Math.max(occurrence.at, this.now())
     // The one before ends (it was ignored) when the next one starts.
     for (const open of this.openNags(user.id).filter((n) => n.ruleId === rule.id)) this.close(open, open.outcome ?? 'ignored', now)
@@ -748,12 +748,12 @@ export class InsistentReminders {
 
   /** Close it, send it, or wait: what an open nag does now. */
   private async advance(user: User, rule: InsistentRule, nag: Nag, now: number) {
-    if (this.isDone(rule, nag)) return this.close(nag, 'done', now)
+    if (this.isDone(user, rule, nag)) return this.close(nag, 'done', now)
     if (this.timeMoved(rule, nag)) {
       nag.reason = 'The task was moved to another time'
       return this.close(nag, 'skipped', now)
     }
-    if (!nag.occurrence.startsWith('now:') && this.skipsDay(rule, nag.day)) {
+    if (!nag.occurrence.startsWith('now:') && this.skipsDay(user, rule, nag.day)) {
       nag.reason = 'The habit is no longer scheduled for this day'
       return this.close(nag, 'skipped', now)
     }
@@ -907,7 +907,7 @@ export class InsistentReminders {
     const type = object && this.store.getType(object.typeId)
     if (!object || object.deletedAt || !type) return
     if (type.system !== 'habit' && type.system !== 'task') return
-    if (this.isDone(rule, nag)) return
+    if (this.isDone(user, rule, nag)) return
     const at = new Date(this.now()).toISOString()
     runAs(user.id, () => {
       let next: ObjectRecord
