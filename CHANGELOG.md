@@ -294,7 +294,8 @@ GitHub release page.
   looks like the task's current status. On a phone buttons, the page's ⋯ and a notice's Undo and
   close are full finger size, and a notice with Undo stays while your finger or pointer is on it.
 - **Grouped tables read as one table.** Column headings appear once above all groups, with aligned
-  columns and a shared horizontal scroll. Group labels and counts stay, without a box around each group.
+  columns and a shared horizontal scroll. Group labels and counts stay, as shaded rows inside the
+  same rounded box an ungrouped table has, so a type's views look alike grouped or not.
 - **Queries in a page lose their boxes.** An embedded query is no longer a framed card holding a
   second framed table: its title sits in the page like a small heading, the results follow with only
   a hairline between rows, and Edit query shows when you point at it (always on touch). The same

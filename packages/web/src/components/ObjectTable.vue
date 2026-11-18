@@ -149,7 +149,8 @@ async function saveQuick(object: ObjectSummary, values: Record<Id, PropertyValue
 
 <template>
   <!-- Table: fixed column widths; the last, empty column takes the space left. -->
-  <div ref="container" class="overflow-x-auto" :class="bare || groupField ? '' : 'rounded-xl border border-line'">
+  <!-- Grouped or not, a page's table sits in the same box, its groups' headings rows inside it. -->
+  <div ref="container" class="overflow-x-auto" :class="bare ? '' : 'rounded-xl border border-line'">
     <table class="table-fixed text-sm" :style="{ width: `max(100%, ${tableWidth}px)` }">
       <colgroup>
         <col v-for="column in columns" :key="column.field" :style="{ width: `${widthOf(column)}px` }" />
@@ -165,8 +166,8 @@ async function saveQuick(object: ObjectSummary, values: Record<Id, PropertyValue
         </tr>
       </thead>
       <tbody v-for="(section, index) in sections" :key="section.group.key">
-        <tr v-if="groupField">
-          <th :colspan="columns.length + 1" scope="rowgroup" class="pb-3 text-left font-normal" :class="index ? 'pt-6' : 'pt-3'">
+        <tr v-if="groupField" :class="bare ? '' : 'border-t border-line bg-hover/40'">
+          <th :colspan="columns.length + 1" scope="rowgroup" class="text-left font-normal" :class="bare ? ['pb-3', index ? 'pt-6' : 'pt-3'] : 'px-1.5 py-1.5'">
             <GroupHeading :group="section.group" :field="groupField" :collapsed="section.collapsed" :addable="addable" @toggle="emit('toggle', section.group)" @add="emit('add', section.group)" />
           </th>
         </tr>

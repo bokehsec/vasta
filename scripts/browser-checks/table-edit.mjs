@@ -280,7 +280,7 @@ try {
   await until(async () => (await page.locator('tbody th[scope=rowgroup]').count()) >= 2, 'groups shown')
   if (await page.locator('main table').count() !== 1 || await page.locator('main thead').count() !== 1) throw new Error('grouped rows repeat the table or headings')
   const frame = page.locator('main table').locator('..')
-  if (await frame.evaluate((el) => getComputedStyle(el).borderTopWidth !== '0px' || getComputedStyle(el).borderRadius !== '0px')) throw new Error('grouped table still has a frame')
+  if (await frame.evaluate((el) => getComputedStyle(el).borderTopWidth === '0px' || getComputedStyle(el).borderRadius === '0px')) throw new Error('grouped table has no frame like an ungrouped one')
   await frame.evaluate((el) => { el.scrollLeft = 0 })
   const titleHeading = page.locator('thead th[data-column=title]')
   const widthBefore = (await titleHeading.boundingBox()).width
