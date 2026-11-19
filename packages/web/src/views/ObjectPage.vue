@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ARTICLE_PROPERTY_ID, HABIT_REMIND_PROPERTY_ID, afterSave, typeRuleProblems, canonicalJson, formulaFromNames, formulaToNames, habitRemindAt, type ColorName, type DateValue, type Doc, type Icon, type Id, type ObjectRecord, type ObjectSummary, type PropertyDef, type PropertyValue, type QueryDef, type SelectOption } from '@vasta/core'
+import { childTag, ARTICLE_PROPERTY_ID, HABIT_REMIND_PROPERTY_ID, afterSave, typeRuleProblems, canonicalJson, formulaFromNames, formulaToNames, habitRemindAt, type ColorName, type DateValue, type Doc, type Icon, type Id, type ObjectRecord, type ObjectSummary, type PropertyDef, type PropertyValue, type QueryDef, type SelectOption } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import BacklinksPanel from '../components/BacklinksPanel.vue'
 import ObjectActivity from '../components/ObjectActivity.vue'
@@ -55,7 +55,7 @@ import { chip, iconTextClasses, swatchClasses } from '../lib/colors.ts'
 import { colorSource, tagAncestors, tagColor } from '../lib/tags.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
 import { PROPERTY_KINDS, formulaValue, kindIcon, newPropertyDef } from '../lib/properties.ts'
-import { lastError, loadWorkspace, primeFromObject, systemType, typesById, ui, workspace } from '../lib/state.ts'
+import { lastError, loadWorkspace, primeFromObject, primeSummaries, summaryOf, systemType, typesById, ui, workspace } from '../lib/state.ts'
 import { preference } from '../lib/preferences.ts'
 import { currentType, patchType } from '../lib/type-patch.ts'
 import { personName, sharedSpace } from '../lib/people.ts'
@@ -555,6 +555,37 @@ async function addOption(def: PropertyDef, option: SelectOption) {
 const tagAnchor = ref<HTMLElement | null>(null)
 const tagHeaderAnchor = ref<HTMLElement | null>(null)
 const tagOpen = ref(false)
+const homeTag = computed(() => childTag(
+  (object.value?.tagIds ?? []).map(summaryOf).filter((tag): tag is ObjectSummary => !!tag && tag.typeId === tagType.value?.id && !tag.deletedAt),
+  undefined,
+  'home'
+))
+const pinnedToHome = computed(() => !!homeTag.value)
+const canPinToHome = computed(() => !!object.value && !object.value.deletedAt && !info.value && !isStartPage.value && object.value.id !== myHomeId.value && !(isTagObject.value && childTag([object.value], undefined, 'home')))
+const pinningToHome = ref(false)
+const homePinLabel = computed(() => pinnedToHome.value ? 'Pinned to Home — click to unpin' : 'Pin to Home')
+
+async function toggleHomePin() {
+  const page = object.value
+  if (!page || !canPinToHome.value || pinningToHome.value) return
+  if (homeTag.value) {
+    removeTag(homeTag.value.id)
+    return
+  }
+  pinningToHome.value = true
+  try {
+    const tag = await tagFromPath('home')
+    if (tag && object.value === page && canPinToHome.value) {
+      const summary = { preview: '', ...tag }
+      primeSummaries([summary])
+      addTag(summary)
+    }
+  } catch (error) {
+    lastError.value = (error as Error).message
+  } finally {
+    pinningToHome.value = false
+  }
+}
 
 function addTag(tag: ObjectSummary) {
   if (!object.value || object.value.tagIds.includes(tag.id)) return
@@ -921,6 +952,18 @@ async function startFrom(template: ObjectRecord) {
         </div>
         <div class="ml-auto flex items-center gap-1 text-ink-faint" :class="metaText">
           <span v-if="!boardLayout" :class="status === 'unsaved' && offline ? 'text-amber-600' : status === 'saved' ? 'max-sm:hidden' : ''" :title="authorship.title || undefined">{{ status === 'saved' ? `Edited ${formatRelative(object.updatedAt)}${authorship.by}` : status === 'saving' ? 'Saving…' : offline ? 'Not saved (offline)' : 'Unsaved' }}</span>
+          <button
+            v-if="canPinToHome"
+            class="grid h-7 w-7 place-items-center rounded-md ring-1 ring-line hover:bg-hover max-md:h-11 max-md:w-11"
+            :class="pinnedToHome ? 'text-accent' : 'text-ink-soft hover:text-ink'"
+            :title="homePinLabel"
+            :aria-label="homePinLabel"
+            :aria-pressed="pinnedToHome"
+            :disabled="pinningToHome"
+            @click="toggleHomePin"
+          >
+            <AppIcon :fallback="pinnedToHome ? 'ph:push-pin-fill' : 'ph:push-pin'" :size="17" />
+          </button>
           <button ref="menuAnchor" class="grid h-7 w-7 place-items-center rounded-md text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink max-md:h-11 max-md:w-11" title="More" @click="menuOpen = !menuOpen">
             <AppIcon fallback="ph:dots-three" :size="17" />
           </button>
@@ -943,7 +986,7 @@ async function startFrom(template: ObjectRecord) {
               <AppIcon fallback="ph:copy-simple" /> Save as template…
             </button>
             <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-ink hover:bg-hover" :class="bodyText" @click="pinFrom">
-              <AppIcon fallback="ph:push-pin" /> {{ isInSidebar(object.id) ? 'Pinned in sidebar' : 'Pin to sidebar' }}
+              <AppIcon fallback="ph:sidebar-simple" /> {{ isInSidebar(object.id) ? 'In sidebar' : 'Add to sidebar' }}
               <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
             </button>
             <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-ink hover:bg-hover" :class="bodyText" title="A reminder that keeps asking until you answer" data-remind-me @click="remindMe">

@@ -360,7 +360,7 @@ export function toggleInSection(id: Id, sectionId: string) {
   return inIt ? removeFromSection(id, sectionId) : pinToSidebar(id, sectionId)
 }
 
-const sectionIcon = (section: { name: string; icon?: Icon }) => section.icon ?? (section.name === PINNED ? 'ph:push-pin' : 'ph:folder-simple')
+const sectionIcon = (section: { name: string; icon?: Icon }) => section.icon ?? (section.name === PINNED ? 'ph:sidebar-simple' : 'ph:folder-simple')
 
 /** One checkbox per sidebar section, and a new section, for a type or an object. */
 export function pinItems(id: Id): MenuItem[] {
@@ -373,8 +373,8 @@ export function pinItems(id: Id): MenuItem[] {
   ]
 }
 
-/** "Pin to sidebar ›" for any right-click menu on a type or an object. */
-export const pinMenu = (id: Id): MenuItem => ({ kind: 'submenu', label: isInSidebar(id) ? 'Pinned in sidebar' : 'Pin to sidebar', icon: 'ph:push-pin', items: pinItems(id) })
+/** "Add to sidebar ›" for any right-click menu on a type or an object. */
+export const pinMenu = (id: Id): MenuItem => ({ kind: 'submenu', label: isInSidebar(id) ? 'In sidebar' : 'Add to sidebar', icon: 'ph:sidebar-simple', items: pinItems(id) })
 
 /**
  * Put an item at a place in a section (a drop in the sidebar). `from` is the section it was dragged

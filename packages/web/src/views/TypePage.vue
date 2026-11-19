@@ -235,7 +235,7 @@ async function newMenu(event: MouseEvent) {
     </header>
     <PopoverMenu v-model:open="menuOpen" :anchor="menuAnchor" placement="bottom-end" width="15rem">
       <MenuRow icon="ph:gear-six" @click="(settingsOpen = true), (menuOpen = false)">Type settings…</MenuRow>
-      <MenuRow icon="ph:push-pin" caret @click="pinFrom($event, props.id)">{{ pinned ? 'Pinned in sidebar' : 'Pin to sidebar' }}</MenuRow>
+      <MenuRow icon="ph:sidebar-simple" caret @click="pinFrom($event, props.id)">{{ pinned ? 'In sidebar' : 'Add to sidebar' }}</MenuRow>
       <MenuRow v-if="review.isTask.value && review.reviewable.value" icon="ph:arrows-clockwise" data-workflows data-review-view @click="choose(() => review.choose('view', menuAnchor))">
         Review this view…
         <template #hint>{{ review.chooser.value.viewScope }}</template>
@@ -253,7 +253,7 @@ async function newMenu(event: MouseEvent) {
         <MenuRow v-if="review.reviewable.value && !review.isTask.value" icon="ph:play" data-review-view @click="choose(() => review.choose('view', menuAnchor))">Review this view…</MenuRow>
         <MenuRow icon="ph:pencil-simple" @click="choose(views.renameView)">Rename view</MenuRow>
         <MenuRow icon="ph:copy" @click="choose(views.duplicateView)">Duplicate view</MenuRow>
-        <MenuRow icon="ph:push-pin" caret @click="pinFrom($event, viewItem(props.id, view.id))">{{ viewPinned ? 'View pinned in sidebar' : 'Pin view to sidebar' }}</MenuRow>
+        <MenuRow icon="ph:sidebar-simple" caret @click="pinFrom($event, viewItem(props.id, view.id))">{{ viewPinned ? 'View in sidebar' : 'Add view to sidebar' }}</MenuRow>
         <MenuRow icon="ph:trash-simple" :disabled="type.views.length <= 1" @click="choose(views.deleteView)">Delete view</MenuRow>
       </template>
       <template v-if="!type.system">
