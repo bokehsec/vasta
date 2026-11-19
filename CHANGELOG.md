@@ -201,6 +201,9 @@ GitHub release page.
 
 ### Changed
 
+- **Habits on a phone: earlier days are easy to fix.** Pick any of the last two weeks to use
+  each row's round check for that day, or tap a habit's ticks to open all fourteen days as large
+  checks. Plain habits offer **Done** and **Not done** instead of asking you to type 1 or 0.
 - Text sizes are the same across Today, Home's lists and widgets: section headings match, and
   small text is one size.
 - **The tasks reminder lists planned work.** Besides tasks due today or overdue, it now lists open

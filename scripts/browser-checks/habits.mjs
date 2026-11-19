@@ -5,7 +5,8 @@
 // switch kept on reload, its chart choice (a trend line or a calendar, the same two in the Tracker's
 // Display menu) and each habit's weeks, settings saved with the old chart ids read as the nearest of
 // the two, Pause and Resume on a habit's page, the habit page's "last 4 weeks" matching the report,
-// a past day fixed from a phone row by long press, and (on 5184, the built app) the same numbers
+// past days fixed with the phone day picker and a habit's two-week sheet, Done / Not done choices
+// on long press, and (on 5184, the built app) the same numbers
 // after reloading offline. SHOTS=<dir> saves light and dark screenshots; PHONE=1 a 390px width (Today left out).
 // The Tracker's own progress is checked too: where it shows (above, beside, off), the chart and
 // the range are picked in its Display menu (kept with the account, so they survive a reload).
@@ -311,21 +312,68 @@ await page.locator('[data-habit-resume]').click()
 await until(async () => !(`pause:${today}` in (await get(`/api/objects/${read.id}`)).props), 'resumed')
 
 if (process.env.PHONE) {
-  step('Phone: a past day is fixed from its row by long press')
+  step('Phone: pick a past day, check it from the row, then return to today')
   await page.goto(`${base}/t/${habitType.id}?view=__tracker`)
   const row = main.locator('[data-habit-row]', { hasText: `Stretch ${tag}` })
   await until(() => row.count(), 'the phone row for Stretch')
-  // The first day of the last two weeks that Stretch (Mon/Wed/Fri) is asked and not done.
-  const tick = row.locator('i[data-state="missed"]').first()
-  const day = await tick.getAttribute('data-day')
-  const box = await tick.boundingBox()
-  await row.locator('[data-habit-ticks]').evaluate((el, at) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: at.x, clientY: at.y })), { x: box.x + box.width / 2, y: box.y + box.height / 2 })
-  const dialog = page.locator('form', { hasText: /Done on/ })
-  await dialog.waitFor()
-  await dialog.locator('input').fill('1')
-  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
   const stretch = habits.find((h) => h.title.startsWith('Stretch'))
+  const picker = main.locator('[data-habit-rows] [data-habit-days]')
+  const todayPick = picker.locator(`[data-habit-day="${today}"]`)
+  if ((await todayPick.getAttribute('aria-pressed')) !== 'true') throw new Error('today not initially selected')
+  const inView = await todayPick.evaluate((el) => {
+    const cell = el.getBoundingClientRect()
+    const strip = el.parentElement.getBoundingClientRect()
+    return cell.left >= strip.left && cell.right <= strip.right + 1
+  })
+  if (!inView) throw new Error('today not initially visible')
+  const missed = row.locator(`i[data-state="missed"]:not([data-day="${today}"])`)
+  const day = await missed.first().getAttribute('data-day')
+  await picker.locator(`[data-habit-day="${day}"]`).click()
+  await row.locator('[data-habit-row-check]').click()
   await until(async () => (await get(`/api/objects/${stretch.id}`)).props[`done:${day}`]?.value === true, `${day} saved from the phone row`)
+  const shots = async (name) => {
+    if (!process.env.SHOTS) return
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((dark) => document.documentElement.classList.toggle('dark', dark), theme === 'dark')
+      await sleep(300)
+      await page.screenshot({ path: path.join(process.env.SHOTS, `habits-phone-${name}-${theme}.png`), fullPage: true })
+    }
+    await page.evaluate(() => document.documentElement.classList.remove('dark'))
+  }
+  await shots('past-day')
+  await page.getByRole('button', { name: 'Back to today', exact: true }).click()
+  await until(async () => (await todayPick.getAttribute('aria-pressed')) === 'true', 'back to today')
+  if ((await row.locator('[data-habit-row-check]').getAttribute('aria-pressed')) !== 'false') throw new Error('the row check did not return to today')
+
+  step('Phone: tap the ticks and check another past day in the sheet')
+  await row.locator('[data-habit-ticks]').click()
+  const sheet = page.locator('[data-habit-sheet]')
+  await sheet.waitFor()
+  if ((await sheet.locator('[data-habit-day]').count()) !== 14) throw new Error('not fourteen sheet checks')
+  const cell = sheet.locator(`[data-state="missed"]:not([data-habit-day="${today}"])`).first()
+  const sheetDay = await cell.getAttribute('data-habit-day')
+  await cell.click()
+  await until(async () => (await get(`/api/objects/${stretch.id}`)).props[`done:${sheetDay}`]?.value === true, `${sheetDay} saved from the sheet`)
+  await shots('sheet')
+
+  step('Phone: long press offers Done / Not done and cancel without a number field')
+  const plainCell = sheet.locator(`[data-habit-day="${day}"]`)
+  const press = () => plainCell.dispatchEvent('contextmenu')
+  const dialog = page.locator('form', { hasText: /Done on/ })
+  await press()
+  await dialog.waitFor()
+  if (await dialog.locator('input').count()) throw new Error('plain habit still asks for a number')
+  await dialog.getByRole('button', { name: 'Not done', exact: true }).click()
+  await until(async () => (await get(`/api/objects/${stretch.id}`)).props[`done:${day}`]?.value !== true, `${day} cleared from the choices`)
+  await press()
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  if ((await get(`/api/objects/${stretch.id}`)).props[`done:${day}`]?.value === true) throw new Error('cancel changed the day')
+  if (!(await sheet.isVisible())) throw new Error('the sheet closed with the choices')
+  await press()
+  await dialog.getByRole('button', { name: 'Done', exact: true }).click()
+  await until(async () => (await get(`/api/objects/${stretch.id}`)).props[`done:${day}`]?.value === true, `${day} saved with Done`)
+  await sheet.getByRole('button', { name: 'Close', exact: true }).click()
+  await sheet.waitFor({ state: 'detached' })
 }
 
 if (built) {

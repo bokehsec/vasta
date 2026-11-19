@@ -3,6 +3,7 @@
 // the habit as stored. A habit done from food ("From food") has its days worked out from what is
 // logged (core's withFood) and is not checked by hand. A habit linked to SparkyFitness is never
 // changed by a tap: its marks ask for the amount, and a hand entry can be taken away again.
+// Plain habits ask Done / Not done; habits with a daily goal keep exact amount entry.
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import {
   FOOD_HABIT_DAYS,
@@ -32,7 +33,7 @@ import { onChange } from './events.ts'
 import { dayKey } from './actions.ts'
 import { formatLongDay } from './format.ts'
 import { dailyNotesBetween, useGoals } from './nutrition.ts'
-import { amountDialog, promptDialog } from './overlays.ts'
+import { amountDialog, choiceDialog, promptDialog } from './overlays.ts'
 import { lastError, notice, primeFromObject, primeSummaries, systemType } from './state.ts'
 
 export const DEFAULT_HABIT_COLOR: ColorName = 'emerald'
@@ -167,9 +168,18 @@ export async function askHabitAmount(habit: ObjectSummary, day: string) {
   const target = habitTarget(habit)
   const unit = habitUnit(habit)
   const date = formatLongDay(`${day}T00:00:00.000Z`)
+  const linked = !!habitSparkyRule(habit)
+  if (!target && !linked) {
+    const answer = await choiceDialog({
+      title: habit.title || 'Habit',
+      message: `Done on ${date}?`,
+      choices: [{ value: 'done', label: 'Done' }, { value: 'not-done', label: 'Not done' }],
+    })
+    if (answer !== null) await setHabitAmount(habit.id, day, answer === 'done' ? 1 : 0, habit)
+    return
+  }
   const hand = habitHasHandValue(habit, day)
   const question = target ? `How much on ${date}? The goal is ${target}${unit ? ` ${unit}` : ''}.` : `Done on ${date}? 1 for yes, 0 for no.`
-  const linked = !!habitSparkyRule(habit)
   const synced = `From SparkyFitness: ${habitSyncedText(habit, day) || 'nothing for this day'}.`
   const options = {
     title: habit.title || 'Habit',

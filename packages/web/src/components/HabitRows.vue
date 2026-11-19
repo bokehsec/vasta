@@ -1,31 +1,43 @@
 <script setup lang="ts">
-// The Habits Tracker on a phone: one row per habit, as in the Habit Tracker app. Its whole name,
-// then "2 of 3 this week", its amount today, its streak or its goal; its last two weeks as ticks
-// (a tall bar on a day done, a short one partway to a goal, a dot on a day missed, a dash on a day
-// off or paused, an underline for a day not needed yet); and a round check for today. A long press
-// on a day's tick changes that day, as the check does for today. Paused habits sit at the bottom,
-// faded.
-import { computed } from 'vue'
+// The phone Tracker's day picker makes every row's round check work on the chosen day, starting
+// with today again at midnight. Each row keeps its name, amount, streak or weekly count and its
+// last two weeks as ticks; tapping the ticks opens large checks for that habit's days. Habits
+// paused today sit at the bottom, faded; a day off or paused has a faded check, as on the desktop.
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { addDays, habitDayState, habitPausedOn, habitProgress, habitSince, habitStats, habitTarget, habitWeekdays, type ObjectSummary } from '@vasta/core'
 import { swatchClasses } from '../lib/colors.ts'
-import { askHabitAmount, habitAmountLabel, habitColor, habitStateWord } from '../lib/habits.ts'
+import { quietButton } from '../lib/buttons.ts'
+import { habitAmountLabel, habitColor, habitStateWord } from '../lib/habits.ts'
 import { longDayLabel } from '../lib/habit-progress.ts'
 import { bodyText, metaText } from '../lib/type-scale.ts'
 import HabitCheck from './HabitCheck.vue'
+import HabitDaysSheet from './HabitDaysSheet.vue'
 import ObjectLink from './ObjectLink.vue'
 
 const props = defineProps<{ habits: ObjectSummary[]; today: string }>()
 const emit = defineEmits<{ menu: [event: MouseEvent, object: ObjectSummary] }>()
 
-/** A long press (a right click) on the ticks changes the day under the finger: the nearest tick. */
-function pressTicks(event: MouseEvent, habit: ObjectSummary) {
-  const ticks = [...(event.currentTarget as HTMLElement).children] as HTMLElement[]
-  const rects = ticks.map((tick) => tick.getBoundingClientRect())
-  const nearest = rects.reduce((best, rect, i) => (Math.abs(rect.left + rect.width / 2 - event.clientX) < Math.abs(rects[best]!.left + rects[best]!.width / 2 - event.clientX) ? i : best), 0)
-  const day = days.value[nearest]
-  if (day) void askHabitAmount(habit, day)
+const selectedDay = ref(props.today)
+const picker = ref<HTMLElement | null>(null)
+const sheetId = ref<string | null>(null)
+const sheetHabit = computed(() => props.habits.find((habit) => habit.id === sheetId.value))
+const sheetOpener = ref<HTMLElement | null>(null)
+
+function openDays(event: MouseEvent, habit: ObjectSummary) {
+  sheetOpener.value = event.currentTarget as HTMLElement
+  sheetId.value = habit.id
 }
 
+/** Keep today in view when the rows open, the day rolls over or the person returns to today. */
+async function showToday() {
+  await nextTick()
+  if (picker.value) picker.value.scrollLeft = picker.value.scrollWidth
+}
+onMounted(showToday)
+watch(() => props.today, () => { selectedDay.value = props.today; void showToday() })
+watch(selectedDay, (day) => { if (day === props.today) void showToday() })
+
+const weekday = new Intl.DateTimeFormat(typeof navigator !== 'undefined' ? navigator.language : 'en', { weekday: 'narrow', timeZone: 'UTC' })
 const WEEKDAY_IDS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 const weekdayName = new Intl.DateTimeFormat(typeof navigator !== 'undefined' ? navigator.language : 'en', { weekday: 'short', timeZone: 'UTC' })
 // 2026-11-16 is a Monday: the weekday ids in order from it.
@@ -41,13 +53,14 @@ const rows = computed(() =>
       const paused = habitPausedOn(habit, props.today)
       const days_ = habitWeekdays(habit)
       const goal = days_.length && days_.length < 7 ? WEEKDAY_IDS.filter((d) => days_.includes(d)).map(weekdayLabel).join(', ') : 'Every day'
-      const amount = habitTarget(habit) ? habitAmountLabel(habit, props.today) : ''
-      const line = paused
+      const amount = habitTarget(habit) ? habitAmountLabel(habit, selectedDay.value) : ''
+      const state = habitDayState(habit, selectedDay.value, props.today, since)
+      const line = state === 'paused'
         ? { text: 'Paused', streak: false }
         : stats.weekly
           ? { text: `${stats.thisWeek.done} of ${stats.thisWeek.of} this week`, streak: false }
           : amount
-            ? { text: `${amount} today`, streak: false }
+            ? { text: selectedDay.value === props.today ? `${amount} today` : amount, streak: false }
             : stats.current > 0
               ? { text: `${stats.current}-day streak`, streak: true }
               : { text: goal, streak: false }
@@ -56,7 +69,7 @@ const rows = computed(() =>
         const part = state === 'done' ? 1 : habitProgress(habit, day)
         return { day, state, part, title: `${longDayLabel(day)}: ${habitStateWord(state, part)}` }
       })
-      return { habit, paused, line, ticks }
+      return { habit, paused, state, line, ticks }
     })
     .sort((a, b) => Number(a.paused) - Number(b.paused) || a.habit.title.localeCompare(b.habit.title))
 )
@@ -64,6 +77,26 @@ const rows = computed(() =>
 
 <template>
   <div data-habit-rows>
+    <div class="flex min-h-11 items-center justify-between gap-2" aria-live="polite">
+      <p class="font-medium" :class="bodyText" data-habit-selected-day>{{ selectedDay === today ? 'Today' : longDayLabel(selectedDay) }}</p>
+      <button v-if="selectedDay !== today" :class="quietButton" @click="selectedDay = today">Back to today</button>
+    </div>
+    <div ref="picker" class="mb-2 flex gap-1 overflow-x-auto py-1" aria-label="Day to check" data-habit-days>
+      <button
+        v-for="day in days"
+        :key="day"
+        class="min-h-12 min-w-11 shrink-0 rounded-lg px-2 py-1 text-center focus-visible:outline-2 focus-visible:outline-accent"
+        :class="[day === selectedDay ? 'bg-accent/12 ring-1 ring-inset ring-accent/40' : 'hover:bg-hover', day === today || day === selectedDay ? 'text-accent' : 'text-ink-faint']"
+        :aria-label="longDayLabel(day)"
+        :aria-pressed="day === selectedDay"
+        :aria-current="day === today ? 'date' : undefined"
+        :data-habit-day="day"
+        @click="selectedDay = day"
+      >
+        <span class="block first-letter:uppercase" :class="metaText">{{ weekday.format(new Date(`${day}T00:00:00Z`)) }}</span>
+        <span class="block tabular-nums" :class="[bodyText, day === today || day === selectedDay ? 'font-semibold' : '']">{{ Number(day.slice(8)) }}</span>
+      </button>
+    </div>
     <div
       v-for="row in rows"
       :key="row.habit.id"
@@ -79,7 +112,7 @@ const rows = computed(() =>
         </ObjectLink>
         <div class="ml-[18px] mt-0.5 tabular-nums" :class="[metaText, row.line.streak ? 'text-orange-600 dark:text-orange-400' : 'text-ink-faint']">{{ row.line.text }}</div>
       </div>
-      <div class="flex h-[26px] items-end gap-[3px]" role="img" :aria-label="`${row.habit.title}: the last two weeks`" data-habit-ticks @contextmenu.stop.prevent="pressTicks($event, row.habit)">
+      <button class="flex min-h-11 items-end gap-[3px] rounded-md pb-2 focus-visible:outline-2 focus-visible:outline-accent" :aria-label="`${row.habit.title}: last two weeks, edit days`" aria-haspopup="dialog" data-habit-ticks @click.stop="openDays($event, row.habit)" @contextmenu.stop.prevent="openDays($event, row.habit)">
         <i
           v-for="(tick, i) in row.ticks"
           :key="tick.day"
@@ -87,16 +120,18 @@ const rows = computed(() =>
           :class="[
             tick.state === 'missed' ? 'h-1 bg-line-strong' : tick.state === 'off' || tick.state === 'paused' ? 'h-0.5 bg-line' : tick.state === 'later' ? 'h-[3px] bg-ink-faint' : swatchClasses[habitColor(row.habit)],
             i === 6 ? 'mr-1' : '',
+            tick.day === selectedDay ? 'ring-1 ring-accent/50 ring-offset-2 ring-offset-surface' : '',
           ]"
           :style="tick.state === 'done' || tick.state === 'partial' ? { height: `${Math.max(6, Math.round(tick.part * 22))}px`, opacity: tick.part < 1 ? 0.55 : 1 } : undefined"
           :data-state="tick.state"
           :data-day="tick.day"
           :title="tick.title"
         />
-      </div>
+      </button>
       <!-- 36px drawn, 44px to tap. -->
-      <HabitCheck :habit="row.habit" :day="today" :size="36" class="justify-self-end after:absolute after:-inset-1 after:content-['']" />
+      <HabitCheck :habit="row.habit" :day="selectedDay" :size="36" class="justify-self-end after:absolute after:-inset-1 after:content-['']" :class="['off', 'paused'].includes(row.state) ? 'opacity-40' : ''" data-habit-row-check />
     </div>
     <p v-if="!rows.length" class="py-10 text-center text-ink-faint" :class="bodyText">No habits match the filter.</p>
+    <HabitDaysSheet v-if="sheetHabit" :habit="sheetHabit" :today="today" :opener="sheetOpener" @close="sheetId = null" />
   </div>
 </template>
