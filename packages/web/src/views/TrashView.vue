@@ -15,6 +15,7 @@ import { displayTitle, formatRelative } from '../lib/format.ts'
 import { confirmDialog, openContextMenu } from '../lib/overlays.ts'
 import { lastError, loadWorkspace, notice, refreshCounts, typesById, workspace } from '../lib/state.ts'
 import { openObject } from '../lib/open.ts'
+import { bodyText, metaText, pageTitle } from '../lib/type-scale.ts'
 
 const router = useRouter()
 const trash = ref<Trash>({ types: [], objects: [] })
@@ -185,7 +186,7 @@ function remaining(deletedAt: string) {
   <div class="mx-auto max-w-3xl px-4 py-8 sm:px-8 md:py-12">
     <div class="flex flex-wrap items-center gap-3">
       <AppIcon fallback="ph:trash" :size="26" class="text-ink-soft" />
-      <h1 class="text-2xl font-semibold">Trash</h1>
+      <h1 :class="pageTitle">Trash</h1>
       <button
         v-if="entries.length"
         class="ml-auto"
@@ -196,10 +197,10 @@ function remaining(deletedAt: string) {
         Empty trash
       </button>
     </div>
-    <p class="mt-2 text-sm text-ink-soft">Deleted types and objects of {{ workspace.space?.name }} stay here for 30 days, then go for good.</p>
+    <p class="mt-2 text-ink-soft" :class="bodyText">Deleted types and objects of {{ workspace.space?.name }} stay here for 30 days, then go for good.</p>
 
-    <p v-if="loading" class="mt-10 text-sm text-ink-faint">Loading…</p>
-    <div v-else-if="!entries.length" class="mt-16 flex flex-col items-center gap-2 text-sm text-ink-faint">
+    <p v-if="loading" class="mt-10 text-ink-faint" :class="bodyText">Loading…</p>
+    <div v-else-if="!entries.length" class="mt-16 flex flex-col items-center gap-2 text-ink-faint" :class="bodyText">
       <AppIcon fallback="ph:trash" :size="36" class="opacity-50" />
       The trash is empty.
     </div>
@@ -222,8 +223,8 @@ function remaining(deletedAt: string) {
             <AppIcon :icon="entry.icon" :fallback="entry.fallback" :size="18" :class="entry.type?.color ? iconTextClasses[entry.type.color] : 'text-ink-soft'" />
           </span>
           <span class="min-w-0 flex-1">
-            <span class="block truncate text-sm font-medium">{{ entry.title }}</span>
-            <span class="flex flex-wrap items-center gap-x-1.5 text-xs text-ink-faint">
+            <span class="block truncate font-medium" :class="bodyText">{{ entry.title }}</span>
+            <span class="flex flex-wrap items-center gap-x-1.5 text-ink-faint" :class="metaText">
               <span v-if="entry.detail" class="rounded px-1 py-px font-medium" :class="chip(entry.type?.color)">{{ entry.detail }}</span>
               <span>{{ formatRelative(entry.deletedAt) }}</span>
               <span class="max-sm:hidden">· {{ remaining(entry.deletedAt) }}</span>
@@ -235,7 +236,8 @@ function remaining(deletedAt: string) {
             Restore
           </button>
           <button
-            class="rounded-lg px-2 py-1 text-sm text-ink-faint hover:bg-hover hover:text-red-600 max-md:py-1.5"
+            class="rounded-lg px-2 py-1 text-ink-faint hover:bg-hover hover:text-red-600 max-md:py-1.5"
+            :class="bodyText"
             title="Delete forever"
             :disabled="busy.has(entry.id)"
             @click="deleteForever(entry)"
@@ -248,16 +250,16 @@ function remaining(deletedAt: string) {
     </ul>
 
     <template v-if="spaces.length">
-      <h2 class="mt-12 text-sm font-semibold text-ink-soft">Deleted spaces</h2>
-      <p class="mt-1 text-sm text-ink-faint">Spaces you owned, with everything in them.</p>
+      <h2 class="mt-12 font-semibold text-ink-soft" :class="bodyText">Deleted spaces</h2>
+      <p class="mt-1 text-ink-faint" :class="bodyText">Spaces you owned, with everything in them.</p>
       <ul class="mt-3 divide-y divide-line rounded-xl border border-line">
         <li v-for="space in spaces" :key="space.id" class="flex items-center gap-3 px-3 py-2.5" :class="busy.has(space.id) ? 'opacity-50' : ''">
           <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-hover">
             <AppIcon :icon="space.icon" fallback="ph:planet" :size="18" class="text-ink-soft" />
           </span>
           <span class="min-w-0 flex-1">
-            <span class="block truncate text-sm font-medium">{{ space.name }}</span>
-            <span class="text-xs text-ink-faint">{{ formatRelative(space.deletedAt) }} · {{ remaining(space.deletedAt) }}</span>
+            <span class="block truncate font-medium" :class="bodyText">{{ space.name }}</span>
+            <span class="text-ink-faint" :class="metaText">{{ formatRelative(space.deletedAt) }} · {{ remaining(space.deletedAt) }}</span>
           </span>
           <button :class="greyButton" :disabled="busy.has(space.id)" @click="restoreSpace(space)">Restore</button>
         </li>

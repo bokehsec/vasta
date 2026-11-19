@@ -9,6 +9,7 @@ import { iconTextClasses } from '../lib/colors.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
 import { MERMAID } from '../lib/mermaid.ts'
 import { safeHref } from '../lib/safe-href.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import MermaidDiagram from './MermaidDiagram.vue'
 import ObjectChip from './ObjectChip.vue'
@@ -52,8 +53,8 @@ function embed(objectId: string): VNode {
           h(AppIcon, { icon: summary?.icon ?? type?.icon, fallback: 'ph:file-text', class: type?.color ? iconTextClasses[type.color] : 'text-ink-soft' }),
         ]),
     h('span', { class: 'min-w-0' }, [
-      h('span', { class: 'block truncate text-sm font-medium' }, title),
-      summary?.media?.host || type ? h('span', { class: 'block truncate text-xs text-ink-faint' }, summary?.media?.host ?? type?.name) : null,
+      h('span', { class: `block truncate font-medium ${bodyText}` }, title),
+      summary?.media?.host || type ? h('span', { class: `block truncate text-ink-faint ${metaText}` }, summary?.media?.host ?? type?.name) : null,
     ]),
   ])
 }
@@ -86,7 +87,7 @@ function block(node: DocNode): VNode | null {
       return h('blockquote', { class: 'my-1 border-l-2 border-line-strong pl-3 text-ink-soft' }, children())
     case 'codeBlock':
       if (node.attrs?.language === MERMAID) return h(MermaidDiagram, { text: (node.content ?? []).map((n) => n.text ?? '').join('') })
-      return h('pre', { class: 'my-1 overflow-x-auto rounded-lg bg-hover p-2 text-xs' }, inline(node.content))
+      return h('pre', { class: `my-1 overflow-x-auto rounded-lg bg-hover p-2 ${metaText}` }, inline(node.content))
     case 'objectEmbed':
       return typeof node.attrs?.objectId === 'string' ? embed(node.attrs.objectId) : null
     default:
@@ -97,5 +98,5 @@ function block(node: DocNode): VNode | null {
 export default defineComponent({
   name: 'DocPreview',
   props: { content: { type: Array as PropType<DocNode[]>, required: true } },
-  setup: (props) => () => h('div', { class: 'min-w-0 text-[15px] leading-relaxed' }, props.content.map(block)),
+  setup: (props) => () => h('div', { class: 'min-w-0 text-base leading-relaxed' }, props.content.map(block)),
 })

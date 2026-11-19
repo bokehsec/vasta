@@ -9,6 +9,7 @@ import { chip, iconTextClasses } from '../lib/colors.ts'
 import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
 import { displayTitle } from '../lib/format.ts'
 import { formulaValue } from '../lib/properties.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectChip from './ObjectChip.vue'
 import PropertyDisplay from './PropertyDisplay.vue'
@@ -49,14 +50,14 @@ const shownProps = computed(() =>
       alt=""
       loading="lazy"
       class="w-full bg-hover object-cover"
-      @error="broken = true"
       :class="variant === 'gallery' ? 'aspect-[4/3]' : variant === 'wall' ? 'max-h-64' : 'h-32'"
+      @error="broken = true"
     />
     <div v-else-if="variant === 'gallery'" class="grid aspect-[4/3] w-full place-items-center bg-hover text-ink-faint">
       <AppIcon :icon="type?.icon" fallback="ph:image" :size="28" />
     </div>
-    <div class="flex flex-1 flex-col gap-1.5 p-3">
-      <span v-if="variant !== 'kanban'" class="inline-flex w-fit items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium" :class="chip(type?.color)">
+    <div class="flex flex-1 flex-col gap-1.5 p-3" :class="bodyText">
+      <span v-if="variant !== 'kanban'" class="inline-flex w-fit items-center gap-1 rounded-md px-1.5 py-0.5 font-medium" :class="[metaText, chip(type?.color)]">
         <AppIcon :icon="type?.icon" fallback="ph:cube" :size="12" />{{ type?.name }}
       </span>
       <div class="flex items-start gap-1.5 font-semibold leading-snug">
@@ -65,20 +66,20 @@ const shownProps = computed(() =>
         <span
           class="line-clamp-3 transition-colors duration-150 motion-reduce:transition-none"
           :class="isTask ? ['task-title', completed ? 'task-title-done text-ink-faint line-through' : ''] : ''"
-          >{{ displayTitle(object, type) }}</span>
-        <span v-if="blocked" class="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-md bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300" title="Blocked">
+        >{{ displayTitle(object, type) }}</span>
+        <span v-if="blocked" class="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-md bg-red-100 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-950 dark:text-red-300" :class="metaText" title="Blocked">
           <AppIcon fallback="ph:flag-fill" :size="11" /> Blocked
         </span>
       </div>
       <TaskCompletionNote v-if="isTask" :object="object" />
       <p
         v-if="object.preview && variant !== 'gallery'"
-        class="text-sm text-ink-soft"
-        :class="variant === 'wall' ? 'line-clamp-[10] whitespace-pre-line' : 'line-clamp-2'"
+        class="text-ink-soft"
+        :class="[bodyText, variant === 'wall' ? 'line-clamp-[10] whitespace-pre-line' : 'line-clamp-2']"
       >
         {{ object.preview }}
       </p>
-      <div v-for="def in shownProps" :key="def.id" class="flex min-w-0 gap-1 text-xs text-ink-soft">
+      <div v-for="def in shownProps" :key="def.id" class="flex min-w-0 gap-1 text-ink-soft" :class="metaText">
         <!-- A computed number or text says what it is. -->
         <span v-if="def.kind === 'formula'" class="shrink-0 text-ink-faint">{{ def.name }}</span>
         <PropertyDisplay :def="def" :value="object.props[def.id]" :object="object" />

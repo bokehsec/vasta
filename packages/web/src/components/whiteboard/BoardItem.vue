@@ -11,6 +11,7 @@ import BoardCardEmbed from './BoardCardEmbed.vue'
 import BoardCardProperties from './BoardCardProperties.vue'
 import { iconTextClasses } from '../../lib/colors.ts'
 import { displayTitle } from '../../lib/format.ts'
+import { bodyText } from '../../lib/type-scale.ts'
 
 const props = defineProps<{
   element: PlacedElement
@@ -128,7 +129,7 @@ function onInput(event: Event) {
         <BoardCardProperties v-else-if="element.view === 'properties'" :object="summary" :type="type" :fields="element.fields" class="pointer-events-none" />
         <ObjectCard v-else :object="summary" :type="type" variant="grid" class="pointer-events-none h-full" />
       </template>
-      <div v-if="!summary" class="grid h-full place-items-center rounded-xl border border-dashed border-line-strong bg-surface text-sm text-ink-faint">Loading…</div>
+      <div v-if="!summary" class="grid h-full place-items-center rounded-xl border border-dashed border-line-strong bg-surface text-ink-faint" :class="bodyText">Loading…</div>
     </template>
 
     <!-- Loose arrow: only its line takes the pointer -->
@@ -215,8 +216,8 @@ function onInput(event: Event) {
           :ref="(el) => setEditor(el as HTMLTextAreaElement | null)"
           v-model="draft"
           rows="1"
-          class="w-full resize-none overflow-hidden bg-transparent text-[15px] leading-snug text-ink outline-none"
-          :class="element.kind === 'shape' ? 'text-center' : element.kind === 'sticky' ? 'h-full p-3' : 'h-full p-1'"
+          class="w-full resize-none overflow-hidden bg-transparent leading-snug text-ink outline-none"
+          :class="[bodyText, element.kind === 'shape' ? 'text-center' : element.kind === 'sticky' ? 'h-full p-3' : 'h-full p-1']"
           :style="{ color: textColor, fontSize }"
           :placeholder="element.kind === 'text' ? 'Text' : ''"
           @input="onInput"
@@ -225,8 +226,8 @@ function onInput(event: Event) {
       </div>
       <div
         v-else
-        class="relative h-full w-full overflow-hidden whitespace-pre-wrap break-words text-[15px] leading-snug text-ink"
-        :class="textClass"
+        class="relative h-full w-full overflow-hidden whitespace-pre-wrap break-words leading-snug text-ink"
+        :class="[bodyText, textClass]"
         :style="{ color: textColor, fontSize }"
       >
         <span>{{ text }}</span>

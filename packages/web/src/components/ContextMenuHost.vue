@@ -9,6 +9,7 @@ import type { ColorName, Icon } from '@vasta/core'
 import { blockBackgroundClasses, blockTextClasses, colorNames } from '../lib/colors.ts'
 import { closeContextMenu, contextMenu, type MenuItem } from '../lib/overlays.ts'
 import { isPhone } from '../lib/viewport.ts'
+import { bodyText, metaText, phoneText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import BottomSheet from './BottomSheet.vue'
 
@@ -202,20 +203,20 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <!-- A phone: one sheet; a submenu takes its place with a Back row. -->
     <BottomSheet v-if="contextMenu.open && sheet" ref="sheetFrame" role="menu" label="Actions" data-menu-sheet @close="closeSheet" @contextmenu.prevent>
-      <button v-if="sheetLevel" class="flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[15px] font-medium text-ink-soft" data-menu-back @click="closeSub">
+      <button v-if="sheetLevel" class="flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left font-medium text-ink-soft" :class="phoneText" data-menu-back @click="closeSub">
         <AppIcon fallback="ph:caret-left" :size="16" /> {{ sub !== null && isSubmenu(contextMenu.items[sub]) ? (contextMenu.items[sub] as Submenu).label : 'Back' }}
       </button>
       <template v-for="(item, i) in itemsOf(sheetLevel)" :key="`${sheetLevel}-${i}`">
         <div v-if="item.kind === 'separator'" class="my-1 border-t border-line" />
-        <div v-else-if="item.kind === 'heading'" class="truncate px-2.5 pb-1 pt-1.5 text-[13px] text-ink-faint">{{ item.label }}</div>
+        <div v-else-if="item.kind === 'heading'" class="truncate px-2.5 pb-1 pt-1.5 text-ink-faint" :class="metaText">{{ item.label }}</div>
         <div v-else-if="item.kind === 'colors'" class="px-1.5 pb-1" :data-colors="item.sample">
-          <div class="px-1 pb-1 pt-1.5 text-[13px] text-ink-faint">{{ item.label }}</div>
+          <div class="px-1 pb-1 pt-1.5 text-ink-faint" :class="metaText">{{ item.label }}</div>
           <div class="grid grid-cols-[repeat(10,1fr)] gap-1">
             <button
               v-for="color in swatches"
               :key="color ?? 'none'"
-              class="grid h-9 place-items-center rounded-md text-sm font-medium"
-              :class="[
+              class="grid h-9 place-items-center rounded-md font-medium"
+              :class="[bodyText,
                 item.sample === 'text' ? (color ? blockTextClasses[color] : '') : color ? blockBackgroundClasses[color] : 'text-ink-faint',
                 item.current === color ? 'ring-2 ring-accent' : 'ring-1 ring-line',
               ]"
@@ -233,8 +234,8 @@ onBeforeUnmount(() => {
           :aria-checked="item.kind !== 'submenu' && typeof item.checked === 'boolean' ? item.checked : undefined"
           :aria-haspopup="item.kind === 'submenu' ? 'menu' : undefined"
           :data-row="i"
-          class="flex min-h-11 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[15px] active:bg-hover disabled:opacity-40"
-          :class="item.kind !== 'submenu' && item.danger ? 'text-red-600' : ''"
+          class="flex min-h-11 w-full items-center gap-3 rounded-lg px-2.5 text-left active:bg-hover disabled:opacity-40"
+          :class="[phoneText, item.kind !== 'submenu' && item.danger ? 'text-red-600' : '']"
           :disabled="item.kind !== 'submenu' && item.disabled"
           @click="choose(sheetLevel, i)"
         >
@@ -266,15 +267,15 @@ onBeforeUnmount(() => {
       >
         <template v-for="(item, i) in itemsOf(at)" :key="i">
           <div v-if="item.kind === 'separator'" class="my-1 border-t border-line" />
-          <div v-else-if="item.kind === 'heading'" class="truncate px-2.5 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">{{ item.label }}</div>
+          <div v-else-if="item.kind === 'heading'" class="truncate px-2.5 pb-1 pt-1.5 font-medium uppercase tracking-wide text-ink-faint" :class="metaText">{{ item.label }}</div>
           <div v-else-if="item.kind === 'colors'" class="px-1.5 pb-1" :data-colors="item.sample">
-            <div class="px-1 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">{{ item.label }}</div>
+            <div class="px-1 pb-1 pt-1.5 font-medium uppercase tracking-wide text-ink-faint" :class="metaText">{{ item.label }}</div>
             <div class="grid w-60 grid-cols-[repeat(10,1fr)] gap-0.5">
               <button
                 v-for="color in swatches"
                 :key="color ?? 'none'"
-                class="grid h-6 place-items-center rounded-md text-sm font-medium"
-                :class="[
+                class="grid h-6 place-items-center rounded-md font-medium"
+                :class="[bodyText,
                   item.sample === 'text' ? (color ? blockTextClasses[color] : '') : color ? blockBackgroundClasses[color] : 'text-ink-faint',
                   item.current === color ? 'ring-2 ring-accent' : 'ring-1 ring-line hover:ring-line-strong',
                 ]"
@@ -293,8 +294,8 @@ onBeforeUnmount(() => {
             :aria-haspopup="item.kind === 'submenu' ? 'menu' : undefined"
             :aria-expanded="item.kind === 'submenu' ? sub === i : undefined"
             :data-row="i"
-            class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm disabled:opacity-40"
-            :class="[item.kind !== 'submenu' && item.danger ? 'text-red-600' : '', active[at] === i || (!at && sub === i) ? 'bg-hover' : 'hover:bg-hover']"
+            class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left disabled:opacity-40"
+            :class="[bodyText, item.kind !== 'submenu' && item.danger ? 'text-red-600' : '', active[at] === i || (!at && sub === i) ? 'bg-hover' : 'hover:bg-hover']"
             :disabled="item.kind !== 'submenu' && item.disabled"
             @mouseenter="hover(at, i)"
             @click="choose(at, i)"
@@ -310,7 +311,7 @@ onBeforeUnmount(() => {
             >
               <AppIcon v-if="item.checked" fallback="ph:check-bold" :size="11" />
             </span>
-            <span v-else-if="item.hint" class="pl-4 text-xs text-ink-faint [@media(hover:none)]:hidden">{{ item.hint }}</span>
+            <span v-else-if="item.hint" class="pl-4 text-ink-faint [@media(hover:none)]:hidden" :class="metaText">{{ item.hint }}</span>
           </button>
         </template>
       </div>

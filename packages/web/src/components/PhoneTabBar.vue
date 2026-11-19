@@ -11,6 +11,7 @@ import { phonePlacePath, visiblePhonePlaces, type PhonePlace } from '../lib/phon
 import { newPlace, startNew } from '../lib/new-item.ts'
 import { lastError, notice, typesById, ui, workspace } from '../lib/state.ts'
 import { keyboardInset } from '../lib/viewport.ts'
+import { metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 
 const route = useRoute()
@@ -64,8 +65,8 @@ const hidden = computed(() => keyboardInset.value > 80 || ui.surfaceFull)
         <RouterLink v-if="phonePlacePath(tab)" v-slot="{ href, navigate }" :to="phonePlacePath(tab)!" custom>
           <a
             :href="href"
-            class="flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[11px]"
-            :class="active(tab) ? 'text-accent' : 'text-ink-soft'"
+            class="flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1"
+            :class="[metaText, active(tab) ? 'text-accent' : 'text-ink-soft']"
             :aria-current="active(tab) ? 'page' : undefined"
             :aria-label="tab.label"
             :data-tab="tab.label"
@@ -74,7 +75,7 @@ const hidden = computed(() => keyboardInset.value > 80 || ui.surfaceFull)
             <AppIcon :icon="tab.icon" :fallback="tab.fallback" :size="22" /><span class="w-full truncate text-center">{{ tab.label }}</span>
           </a>
         </RouterLink>
-        <button v-else class="flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] text-ink-soft" :data-tab="tab.label" @click="tab.id === 'menu' ? (ui.sidebarOpen = true) : (ui.paletteOpen = true)">
+        <button v-else class="flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-ink-soft" :class="metaText" :data-tab="tab.label" @click="tab.id === 'menu' ? (ui.sidebarOpen = true) : (ui.paletteOpen = true)">
           <AppIcon :fallback="tab.fallback" :size="22" />{{ tab.label }}
         </button>
       </template>

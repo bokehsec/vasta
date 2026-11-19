@@ -12,6 +12,7 @@ import { swatchClasses } from '../lib/colors.ts'
 import { habitColor, useFoodHabits, useToday } from '../lib/habits.ts'
 import { percentText, useHabitDisplay, useHabitProgress } from '../lib/habit-progress.ts'
 import { isPhone } from '../lib/viewport.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import HabitCheck from './HabitCheck.vue'
 import HabitProgressSummary from './HabitProgressSummary.vue'
@@ -69,9 +70,9 @@ const progressLink = computed(() => `${route.path}?view=__progress`)
     <div :class="beside && !isPhone ? 'grid grid-cols-[minmax(0,1fr)_16.25rem] gap-7' : ''">
     <HabitRows v-if="isPhone" :habits="shown" :today="today" @menu="(event, object) => emit('menu', event, object)" />
     <div v-else class="min-w-0 overflow-x-auto">
-    <table class="w-full border-separate border-spacing-0 text-sm">
+    <table class="w-full border-separate border-spacing-0" :class="bodyText">
       <thead>
-        <tr class="text-[11px] text-ink-faint">
+        <tr class="text-ink-faint" :class="metaText">
           <th class="sticky left-0 z-10 bg-surface pb-2 text-left font-medium">Habit</th>
           <th v-for="day in days" :key="day" class="w-8 pb-2 text-center font-normal" :class="day === today ? 'text-accent' : ''">
             <div class="first-letter:uppercase">{{ weekday.format(utc(day)) }}</div>
@@ -87,8 +88,8 @@ const progressLink = computed(() => `${route.path}?view=__progress`)
             <ObjectLink :id="row.habit.id" class="flex min-w-0 items-center gap-2 hover:underline">
               <span class="h-2.5 w-2.5 shrink-0 rounded-full" :class="swatchClasses[habitColor(row.habit)]" />
               <span class="truncate font-medium">{{ row.habit.title || 'Untitled' }}</span>
-              <span v-if="row.paused" class="text-xs text-ink-faint">paused</span>
-              <span v-else-if="habitTarget(row.habit)" class="shrink-0 text-xs text-ink-faint">{{ habitTarget(row.habit) }} {{ habitUnit(row.habit) }}</span>
+              <span v-if="row.paused" class="text-ink-faint" :class="metaText">paused</span>
+              <span v-else-if="habitTarget(row.habit)" class="shrink-0 text-ink-faint" :class="metaText">{{ habitTarget(row.habit) }} {{ habitUnit(row.habit) }}</span>
             </ObjectLink>
           </td>
           <td v-for="day in days" :key="day" class="border-t border-line/70 py-1.5 text-center">
@@ -102,7 +103,7 @@ const progressLink = computed(() => `${route.path}?view=__progress`)
         </tr>
       </tbody>
     </table>
-    <p v-if="!rows.length" class="py-10 text-center text-sm text-ink-faint">No habits match the filter.</p>
+    <p v-if="!rows.length" class="py-10 text-center text-ink-faint" :class="bodyText">No habits match the filter.</p>
     </div>
     <HabitProgressSummary
       v-if="beside && shown.length"

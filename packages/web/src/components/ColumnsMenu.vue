@@ -4,6 +4,7 @@
 import { computed, ref } from 'vue'
 import type { Id, TableSettings } from '@vasta/core'
 import { tableColumns, tableSettings, type Column } from '../lib/columns.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 
 const props = defineProps<{ table: TableSettings | undefined; typeIds: Id[] }>()
@@ -52,8 +53,8 @@ function endDrag() {
 </script>
 
 <template>
-  <div ref="list" class="flex flex-col p-1 text-sm">
-    <div class="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Columns</div>
+  <div ref="list" class="flex flex-col p-1" :class="bodyText">
+    <div class="px-2 pb-1 pt-0.5 font-medium uppercase tracking-wide text-ink-faint" :class="metaText">Columns</div>
     <div
       v-for="(column, index) in columns"
       :key="column.field"
@@ -96,7 +97,8 @@ function endDrag() {
     </div>
     <button
       v-if="table"
-      class="mt-1 rounded-lg px-2 py-1.5 text-left text-xs text-ink-faint hover:bg-hover hover:text-ink max-md:min-h-11"
+      class="mt-1 rounded-lg px-2 py-1.5 text-left text-ink-faint hover:bg-hover hover:text-ink max-md:min-h-11"
+      :class="metaText"
       @click="emit('update', undefined)"
     >
       Reset columns

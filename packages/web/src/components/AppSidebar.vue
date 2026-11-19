@@ -37,6 +37,7 @@ import TypeIcon from './TypeIcon.vue'
 import PopoverMenu from './PopoverMenu.vue'
 import TypePicker from './TypePicker.vue'
 import { copyObjectLink, objectPath, openObject } from '../lib/open.ts'
+import { bodyText, metaText, phoneUiText } from '../lib/type-scale.ts'
 
 const route = useRoute()
 const router = useRouter()
@@ -365,8 +366,8 @@ const row = (active: boolean) =>
     'group flex items-center gap-2 rounded-md px-2 py-[5px] max-md:py-2',
     active ? 'bg-surface font-medium text-ink shadow-sm ring-1 ring-line' : 'text-ink/90 hover:bg-hover',
   ].join(' ')
-const sectionHeader = 'group/section flex w-full cursor-default select-none items-center gap-1.5 px-2 py-1 text-xs font-medium text-ink-faint hover:text-ink-soft'
-const hint = 'ml-auto font-sans text-[11px] text-ink-faint opacity-0 transition-opacity group-hover:opacity-100 max-md:hidden'
+const sectionHeader = `group/section flex w-full cursor-default select-none items-center gap-1.5 px-2 py-1 font-medium text-ink-faint hover:text-ink-soft ${metaText}`
+const hint = `ml-auto font-sans text-ink-faint opacity-0 transition-opacity group-hover:opacity-100 max-md:hidden ${metaText}`
 const tool = 'flex h-8 min-w-8 items-center justify-center rounded-md hover:bg-hover hover:text-ink max-md:h-10 max-md:min-w-10'
 
 const initial = computed(() => (workspace.space?.name ?? '?').trim().charAt(0).toUpperCase())
@@ -382,9 +383,9 @@ async function pickType(type: ObjectType) {
   <aside class="flex h-full w-60 shrink-0 flex-col bg-canvas md:border-r-0 max-md:border-r max-md:border-line" :class="trafficLights ? 'md:w-[17rem]' : ''">
     <div class="flex h-12 shrink-0 items-center gap-1 px-2" :class="trafficLights ? 'pl-[76px]' : ''" data-tauri-drag-region="deep">
       <button class="mr-auto flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover" title="Spaces and account" @click="spaceMenu">
-        <span class="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-ink text-[11px] font-semibold text-surface" v-if="!workspace.space?.icon">{{ initial }}</span>
+        <span class="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-ink font-semibold text-surface" :class="metaText" v-if="!workspace.space?.icon">{{ initial }}</span>
         <AppIcon v-else :icon="workspace.space?.icon" :size="18" class="text-ink-soft" />
-        <span class="truncate text-sm font-semibold">{{ workspace.space?.name }}</span>
+        <span class="truncate font-semibold" :class="bodyText">{{ workspace.space?.name }}</span>
         <AppIcon fallback="ph:caret-up-down" :size="12" class="shrink-0 text-ink-faint" />
       </button>
       <button class="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-hover hover:text-ink max-md:hidden" :title="`Hide sidebar (${keysOf('sidebar')})`" @click="toggleSidebar">
@@ -395,7 +396,8 @@ async function pickType(type: ObjectType) {
     <div class="flex gap-1.5 px-2 pb-2">
       <button
         ref="newButton"
-        class="flex flex-1 items-center gap-2 rounded-lg bg-surface px-2.5 py-1.5 text-sm font-medium shadow-sm ring-1 ring-line hover:bg-raised max-md:py-2"
+        class="flex flex-1 items-center gap-2 rounded-lg bg-surface px-2.5 py-1.5 font-medium shadow-sm ring-1 ring-line hover:bg-raised max-md:py-2"
+        :class="bodyText"
         @click="newOpen = !newOpen"
       >
         <AppIcon fallback="ph:plus" /> New
@@ -415,7 +417,7 @@ async function pickType(type: ObjectType) {
       <IconPicker :icon="iconSectionIcon" allow-remove @pick="pickSectionIcon" />
     </PopoverMenu>
 
-    <nav class="vasta-sidebar-nav flex-1 overflow-y-auto px-2 pb-6 text-sm max-md:text-[15px]" @dragleave="leaveNav" @drop="dropHere">
+    <nav class="vasta-sidebar-nav flex-1 overflow-y-auto px-2 pb-6" :class="[phoneUiText, bodyText]" @dragleave="leaveNav" @drop="dropHere">
       <RouterLink to="/calendar" :class="row(route.path === '/calendar')" :title="`Calendar (${keysOf('calendar')}); today: ${keysOf('today')}`">
         <AppIcon fallback="ph:calendar-dots" class="text-ink-soft" /> Calendar
         <kbd :class="hint">{{ keysOf('calendar') }}</kbd>
@@ -426,7 +428,7 @@ async function pickType(type: ObjectType) {
       </RouterLink>
       <RouterLink v-if="taskType" :to="`/t/${taskType.id}`" :class="row(isActive(`/t/${taskType.id}`))">
         <AppIcon fallback="ph:check-circle" class="text-ink-soft" /> Tasks
-        <span v-if="workspace.counts[taskType.id]" class="ml-auto text-xs tabular-nums text-ink-faint group-hover:hidden">{{ workspace.counts[taskType.id] }}</span>
+        <span v-if="workspace.counts[taskType.id]" class="ml-auto tabular-nums text-ink-faint group-hover:hidden" :class="metaText">{{ workspace.counts[taskType.id] }}</span>
         <kbd :class="hint" class="hidden group-hover:inline">{{ keysOf('tasks') }}</kbd>
       </RouterLink>
 
@@ -485,8 +487,8 @@ async function pickType(type: ObjectType) {
           <!-- An empty section takes a drop while something is dragged. -->
           <div
             v-if="draggingItem && !section.entries.length"
-            class="mx-1 rounded-md border border-dashed px-2 py-1.5 text-xs text-ink-faint"
-            :class="itemDrop?.sectionId === section.id ? 'border-accent text-ink-soft' : 'border-line'"
+            class="mx-1 rounded-md border border-dashed px-2 py-1.5 text-ink-faint"
+            :class="[metaText, itemDrop?.sectionId === section.id ? 'border-accent text-ink-soft' : 'border-line']"
             @dragover="overEmpty($event, section.id)"
           >
             Drop here
@@ -517,7 +519,7 @@ async function pickType(type: ObjectType) {
         >
           <TypeIcon :icon="type.icon" fallback="ph:cube" :color="type.color" />
           <span class="truncate">{{ type.pluralName }}</span>
-          <span class="ml-auto text-xs tabular-nums text-ink-faint">{{ workspace.counts[type.id] ?? '' }}</span>
+          <span class="ml-auto tabular-nums text-ink-faint" :class="metaText">{{ workspace.counts[type.id] ?? '' }}</span>
         </RouterLink>
       </template>
     </nav>
@@ -535,7 +537,7 @@ async function pickType(type: ObjectType) {
       <NotificationBell :button-class="tool" />
       <RouterLink to="/trash" :class="[tool, 'ml-auto gap-1 px-2', route.path === '/trash' ? 'bg-hover text-ink' : '']" title="Trash">
         <AppIcon fallback="ph:trash" :size="17" />
-        <span v-if="workspace.trash" class="text-xs tabular-nums">{{ workspace.trash }}</span>
+        <span v-if="workspace.trash" class="tabular-nums" :class="metaText">{{ workspace.trash }}</span>
       </RouterLink>
     </div>
   </aside>

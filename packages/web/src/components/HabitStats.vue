@@ -9,6 +9,7 @@ import { dayKey } from '../lib/actions.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { askHabitAmount, formatAmount, habitAmountLabel, habitColor, habitStateWord, setHabitAmount, stepHabit, useFoodHabits } from '../lib/habits.ts'
 import { percentText } from '../lib/habit-progress.ts'
+import { bodyText, metaText, tinyText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import HabitCheck from './HabitCheck.vue'
 import HabitPauses from './HabitPauses.vue'
@@ -114,9 +115,9 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
     <div class="mb-4 flex flex-wrap items-center gap-3">
       <div class="flex items-center gap-2.5 rounded-xl border border-line py-1.5 pl-2 pr-3">
         <HabitCheck :habit="habit" :day="today" :size="26" />
-        <div class="text-sm">
+        <div :class="bodyText">
           <div class="font-medium">{{ doneToday ? 'Done today' : 'Today' }}</div>
-          <div v-if="target" class="text-xs tabular-nums text-ink-faint">{{ habitAmountLabel(habit, today) }}</div>
+          <div v-if="target" class="tabular-nums text-ink-faint" :class="metaText">{{ habitAmountLabel(habit, today) }}</div>
         </div>
         <div v-if="target && !fromFood && !fromSparky" class="ml-2 flex items-center gap-1">
           <button class="grid h-7 w-7 place-items-center rounded-md ring-1 ring-line hover:bg-hover" title="Take 1 away" @click="setHabitAmount(habit.id, today, Math.max(0, habitValue(habit, today) - 1), habit)">
@@ -127,19 +128,19 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
           </button>
         </div>
       </div>
-      <span v-if="todayState === 'paused'" class="text-xs text-ink-faint">Paused today.</span>
-      <span v-else-if="todayState === 'off' && stats.weekly" class="text-xs text-ink-faint">This week’s goal is met.</span>
-      <span v-else-if="todayState === 'off'" class="text-xs text-ink-faint">Today is a day off for this habit.</span>
-      <span v-else-if="stats.weekly" class="text-xs text-ink-faint">{{ stats.weekly }} a week, on any days.</span>
-      <span v-if="fromSparky" class="text-xs text-ink-faint" data-habit-from-sparkyfitness>From SparkyFitness · a hand entry takes priority</span>
-      <span v-if="fromFood" class="flex items-center gap-1 text-xs text-ink-faint" data-habit-from-food><AppIcon fallback="ph:bowl-food" :size="13" /> Done from what you log in Food</span>
+      <span v-if="todayState === 'paused'" class="text-ink-faint" :class="metaText">Paused today.</span>
+      <span v-else-if="todayState === 'off' && stats.weekly" class="text-ink-faint" :class="metaText">This week’s goal is met.</span>
+      <span v-else-if="todayState === 'off'" class="text-ink-faint" :class="metaText">Today is a day off for this habit.</span>
+      <span v-else-if="stats.weekly" class="text-ink-faint" :class="metaText">{{ stats.weekly }} a week, on any days.</span>
+      <span v-if="fromSparky" class="text-ink-faint" :class="metaText" data-habit-from-sparkyfitness>From SparkyFitness · a hand entry takes priority</span>
+      <span v-if="fromFood" class="flex items-center gap-1 text-ink-faint" :class="metaText" data-habit-from-food><AppIcon fallback="ph:bowl-food" :size="13" /> Done from what you log in Food</span>
     </div>
 
     <HabitPauses :habit="props.habit" />
 
     <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
       <div v-for="card in cards" :key="card.label" class="rounded-xl border border-line px-3 py-2.5">
-        <div class="flex items-center gap-1.5 text-xs text-ink-faint"><AppIcon :fallback="card.icon" :class="card.tint" :size="14" /> {{ card.label }}</div>
+        <div class="flex items-center gap-1.5 text-ink-faint" :class="metaText"><AppIcon :fallback="card.icon" :class="card.tint" :size="14" /> {{ card.label }}</div>
         <div class="mt-1 truncate text-xl font-semibold tabular-nums">{{ card.value }}</div>
       </div>
     </div>
@@ -149,9 +150,10 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
         <span
           v-for="label in monthLabels"
           :key="label.column"
-          class="absolute top-0 text-[10px] leading-none text-ink-faint first-letter:uppercase"
+          class="absolute top-0 leading-none text-ink-faint first-letter:uppercase"
+          :class="tinyText"
           :style="{ left: `${label.column * (CELL + GAP)}px` }"
-          >{{ label.text }}</span
+        >{{ label.text }}</span
         >
       </div>
       <div class="grid w-fit gap-[3px]" :style="{ gridTemplateColumns: `repeat(${weeks.length}, ${CELL}px)`, gridTemplateRows: `repeat(7, ${CELL}px)`, gridAutoFlow: 'column' }">
@@ -182,7 +184,8 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
       </div>
       <div
         v-if="hovered && details"
-        class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-xs text-surface shadow-lg"
+        class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-surface shadow-lg"
+        :class="metaText"
         :style="{ left: `${hovered.left}px`, top: `${hovered.top - 6}px` }"
         role="tooltip"
       >
@@ -191,7 +194,7 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
           <template v-if="details.amount">{{ details.amount }} · </template>{{ details.status }}
         </div>
       </div>
-      <p class="mt-2 text-xs text-ink-faint">
+      <p class="mt-2 text-ink-faint" :class="metaText">
         <template v-if="fromSparky">Click a day to type its amount or go back to SparkyFitness’s.</template>
         <template v-else>Click a day to {{ target ? 'add 1' : 'mark it' }}, right click to type {{ target ? 'the amount' : 'it' }}.</template>
         Counting since {{ longDay.format(utc(stats.since)) }}.

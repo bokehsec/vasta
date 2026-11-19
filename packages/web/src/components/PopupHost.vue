@@ -8,6 +8,7 @@
 import { defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { closePopup, expandPopup, pageObjectId, popupBlockId, popupCursor, popupIsNew, popupObjectId } from '../lib/open.ts'
 import { isPhone } from '../lib/viewport.ts'
+import { bodyText, phoneText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import BottomSheet from './BottomSheet.vue'
 
@@ -64,7 +65,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <button class="grid h-11 w-11 place-items-center rounded-lg active:bg-hover" title="Close" aria-label="Close" @click="closePopup()">
         <AppIcon fallback="ph:x" :size="20" />
       </button>
-      <button class="flex h-11 items-center gap-1.5 rounded-lg px-3 text-[15px] active:bg-hover" title="Open full page" @click="expandPopup()">
+      <button class="flex h-11 items-center gap-1.5 rounded-lg px-3 active:bg-hover" :class="phoneText" title="Open full page" @click="expandPopup()">
         <AppIcon fallback="ph:arrows-out-simple" :size="16" />Open full page
       </button>
     </div>
@@ -84,7 +85,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       class="absolute inset-x-0 top-[6vh] mx-auto flex max-h-[86vh] w-[min(56rem,94vw)] flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-[0_12px_40px_rgb(0_0_0/0.18)] outline-none"
     >
       <div class="flex shrink-0 items-center justify-end gap-0.5 border-b border-line px-2 py-1 text-ink-soft">
-        <button class="flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] hover:bg-hover hover:text-ink" title="Open full page" @click="expandPopup()">
+        <button class="flex h-7 items-center gap-1.5 rounded-md px-2 hover:bg-hover hover:text-ink" :class="bodyText" title="Open full page" @click="expandPopup()">
           <AppIcon fallback="ph:arrows-out-simple" :size="14" />Open full page
         </button>
         <button class="grid h-7 w-7 place-items-center rounded-md hover:bg-hover hover:text-ink" title="Close (Esc)" @click="closePopup()">

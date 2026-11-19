@@ -6,6 +6,7 @@
 import { ref } from 'vue'
 import { greyButton, quietButton, tintedButton } from '../lib/buttons.ts'
 import type { ViewToolbar } from '../lib/view-toolbar.ts'
+import { metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import MenuRow from './MenuRow.vue'
 import PopoverMenu from './PopoverMenu.vue'
@@ -15,7 +16,7 @@ const props = defineProps<{ toolbar: ViewToolbar; /** How many rows the page sho
 const t = props.toolbar
 const open = ref(false)
 const anchor = ref<HTMLElement | null>(null)
-const heading = 'px-2.5 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-ink-faint'
+const heading = `px-2.5 pb-1 pt-3 font-medium uppercase tracking-wide text-ink-faint ${metaText}`
 </script>
 
 <template>
@@ -27,7 +28,7 @@ const heading = 'px-2.5 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wid
     <div class="flex items-center gap-1 px-2.5 pb-1">
       <div class="min-w-0">
         <p class="text-base font-semibold">Search and filter</p>
-        <p class="text-[13px] text-ink-faint" data-filters-shown>{{ shown }} {{ shown === 1 ? t.type.value!.name.toLowerCase() : t.type.value!.pluralName.toLowerCase() }} shown</p>
+        <p class="text-ink-faint" :class="metaText" data-filters-shown>{{ shown }} {{ shown === 1 ? t.type.value!.name.toLowerCase() : t.type.value!.pluralName.toLowerCase() }} shown</p>
       </div>
       <button v-if="t.activeFilterCount.value" :class="[quietButton, 'ml-auto']" data-filters-clear @click="t.clearFilters">Clear</button>
       <button :class="[greyButton, t.activeFilterCount.value ? '' : 'ml-auto']" data-filters-done @click="open = false">Done</button>

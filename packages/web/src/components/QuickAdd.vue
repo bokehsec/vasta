@@ -13,6 +13,7 @@ import { openObject } from '../lib/open.ts'
 import { sharedSpace } from '../lib/people.ts'
 import { kindIcon } from '../lib/properties.ts'
 import { isPhone } from '../lib/viewport.ts'
+import { bodyText, metaText, phoneUiText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import BottomSheet from './BottomSheet.vue'
 import PropertyValueEditor from './PropertyValueEditor.vue'
@@ -121,7 +122,7 @@ onMounted(() => titleInput.value?.focus())
 
 <template>
   <BottomSheet :label="`New ${typeName}`" flush layer="surface" desktop="top" width="36rem" :aria-busy="busy || undefined" data-quick-add @close="emit('close')" @keydown="onCardKey">
-    <div v-if="added" class="flex items-center gap-2 border-b border-line bg-raised px-4 py-2 text-[13px] text-ink-soft max-md:text-sm" role="status" data-quick-add-added>
+    <div v-if="added" class="flex items-center gap-2 border-b border-line bg-raised px-4 py-2 text-ink-soft" :class="metaText" role="status" data-quick-add-added>
       <AppIcon fallback="ph:check-circle" :size="15" class="shrink-0 text-green-600 dark:text-green-400" />
       <span class="min-w-0 truncate">Added “{{ added.title }}”</span>
       <span class="flex-1" />
@@ -148,12 +149,13 @@ onMounted(() => titleInput.value?.focus())
           ref="noteInput"
           v-model="note"
           rows="2"
-          class="mt-1.5 block w-full resize-none bg-transparent text-sm leading-relaxed text-ink outline-none [field-sizing:content] placeholder:text-ink-faint max-md:text-base"
+          class="mt-1.5 block w-full resize-none bg-transparent leading-relaxed text-ink outline-none [field-sizing:content] placeholder:text-ink-faint max-md:text-base"
+          :class="bodyText"
           placeholder="A note"
           aria-label="Note"
           data-quick-add-note
         />
-        <button v-else class="mt-1 flex items-center gap-1.5 rounded-md py-0.5 text-sm text-ink-faint hover:text-ink max-md:min-h-11 max-md:text-[15px]" @click="showNote">
+        <button v-else class="mt-1 flex items-center gap-1.5 rounded-md py-0.5 text-ink-faint hover:text-ink max-md:min-h-11" :class="[phoneUiText, bodyText]" @click="showNote">
           <AppIcon fallback="ph:text-align-left" :size="14" />Add a note
         </button>
       </template>
@@ -166,8 +168,8 @@ onMounted(() => titleInput.value?.focus())
         <div
           v-for="def in fields"
           :key="def.id"
-          class="flex h-8 shrink-0 items-center rounded-lg pl-2.5 text-[13px] ring-1 ring-inset ring-line max-md:h-11 max-md:text-[15px] [&_button]:min-h-0 [&_button]:py-0.5"
-          :class="[values[def.id] ? 'text-ink' : 'text-ink-soft', def.kind === 'text' || def.kind === 'number' || def.kind === 'url' ? 'w-40' : '']"
+          class="flex h-8 shrink-0 items-center rounded-lg pl-2.5 ring-1 ring-inset ring-line max-md:h-11 [&_button]:min-h-0 [&_button]:py-0.5"
+          :class="[bodyText, phoneUiText, values[def.id] ? 'text-ink' : 'text-ink-soft', def.kind === 'text' || def.kind === 'number' || def.kind === 'url' ? 'w-40' : '']"
           :title="def.name"
           :data-quick-add-field="def.name"
         >
@@ -176,16 +178,16 @@ onMounted(() => titleInput.value?.focus())
           <span v-if="def.kind === 'checkbox'" class="pr-2.5">{{ def.name }}</span>
         </div>
       </div>
-      <p v-if="error" class="mt-2 text-xs text-red-600 dark:text-red-400" role="alert">{{ error }}</p>
+      <p v-if="error" class="mt-2 text-red-600 dark:text-red-400" :class="metaText" role="alert">{{ error }}</p>
     </div>
 
     <div class="flex items-center gap-2 border-t border-line bg-raised px-3 py-2.5 max-md:px-4 max-md:py-3">
-      <span class="flex min-w-0 items-center gap-1.5 pl-1 text-sm text-ink-soft max-md:hidden">
+      <span class="flex min-w-0 items-center gap-1.5 pl-1 text-ink-soft max-md:hidden" :class="bodyText">
         <TypeIcon :icon="type.icon" :color="type.color" fallback="ph:cube" :size="14" />{{ type.name }}
       </span>
-      <button v-if="capture" type="button" class="min-h-11 shrink-0 rounded-md px-1 text-sm text-ink-soft underline md:hidden" data-quick-add-capture @click="emit('capture')">Capture a note instead</button>
+      <button v-if="capture" type="button" class="min-h-11 shrink-0 rounded-md px-1 text-ink-soft underline md:hidden" :class="bodyText" data-quick-add-capture @click="emit('capture')">Capture a note instead</button>
       <span class="flex-1" />
-      <span class="text-xs text-ink-faint max-lg:hidden">↵ add · ⌘↵ add and open</span>
+      <span class="text-ink-faint max-lg:hidden" :class="metaText">↵ add · ⌘↵ add and open</span>
       <button v-if="!isPhone" type="button" :class="greyButton" @click="emit('close')">Cancel</button>
       <button type="button" :class="greyButton" :disabled="!canAdd" title="Add and open (⌘↩)" aria-label="Open" data-quick-add-open @click="add(true)">
         <AppIcon fallback="ph:arrows-out-simple" :size="14" /><span class="max-md:hidden">Open</span>

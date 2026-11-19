@@ -6,6 +6,7 @@ import { parentFieldOf } from '@vasta/core'
 import type { ViewToolbar } from '../lib/view-toolbar.ts'
 import { LAYOUTS } from '../lib/view-toolbar.ts'
 import { isPhone } from '../lib/viewport.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import AgendaMenu from './AgendaMenu.vue'
 import AppIcon from './AppIcon.vue'
 import ColumnsMenu from './ColumnsMenu.vue'
@@ -16,7 +17,7 @@ import PopoverMenu from './PopoverMenu.vue'
 const props = defineProps<{ toolbar: ViewToolbar }>()
 const { view, menus, anchors, updateView } = props.toolbar
 const typeIds = [props.toolbar.type.value!.id]
-const heading = 'px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint'
+const heading = `px-2.5 pb-1 pt-0.5 font-medium uppercase tracking-wide text-ink-faint ${metaText}`
 </script>
 
 <template>
@@ -31,7 +32,7 @@ const heading = 'px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-w
   </PopoverMenu>
   <PopoverMenu v-model:open="menus.cards.value" :anchor="anchors.cards" placement="bottom-end" width="15rem">
     <div :class="heading">Swimlanes</div>
-    <select :value="view.board?.swimlanes ?? ''" class="mx-1.5 mb-2 w-[calc(100%-0.75rem)] rounded-md bg-hover px-2 py-1 text-sm outline-none max-md:min-h-11" aria-label="Swimlanes" @change="toolbar.setSwimlanes(($event.target as HTMLSelectElement).value)">
+    <select :value="view.board?.swimlanes ?? ''" class="mx-1.5 mb-2 w-[calc(100%-0.75rem)] rounded-md bg-hover px-2 py-1 outline-none max-md:min-h-11" :class="bodyText" aria-label="Swimlanes" @change="toolbar.setSwimlanes(($event.target as HTMLSelectElement).value)">
       <option value="">None</option>
       <option v-for="f in toolbar.groupFields.value.filter((g) => g.field && g.field !== toolbar.groupField.value)" :key="f.field" :value="f.field">{{ f.label }}</option>
     </select>
@@ -39,8 +40,8 @@ const heading = 'px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-w
       Card fields
       <button v-if="toolbar.cardFieldIds.value" class="ml-auto normal-case tracking-normal text-ink-faint hover:text-ink max-md:min-h-11" @click="toolbar.resetCardFields">Automatic</button>
     </div>
-    <p v-if="!toolbar.cardFieldIds.value" class="px-2.5 pb-1 text-xs text-ink-faint">The first two with a value. Pick to choose.</p>
-    <button v-for="p in toolbar.cardFieldChoices.value" :key="p.id" type="button" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover max-md:min-h-11" @click="toolbar.toggleCardField(p.id)">
+    <p v-if="!toolbar.cardFieldIds.value" class="px-2.5 pb-1 text-ink-faint" :class="metaText">The first two with a value. Pick to choose.</p>
+    <button v-for="p in toolbar.cardFieldChoices.value" :key="p.id" type="button" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-hover max-md:min-h-11" :class="bodyText" @click="toolbar.toggleCardField(p.id)">
       <AppIcon :fallback="toolbar.cardFieldIds.value?.includes(p.id) ? 'ph:check-square-fill' : 'ph:square'" :class="toolbar.cardFieldIds.value?.includes(p.id) ? 'text-accent' : 'text-ink-faint'" />
       {{ p.name }}
     </button>

@@ -22,6 +22,7 @@ import { foldedSteps as folded } from '../lib/subtasks.ts'
 import { hideSwipeTip, swipeTipHidden } from '../lib/tips.ts'
 import { objectColor } from '../lib/tags.ts'
 import { isPhone, isTouch } from '../lib/viewport.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import FieldValue from './FieldValue.vue'
 import ObjectChip from './ObjectChip.vue'
@@ -126,11 +127,11 @@ const titleWrap = computed(() => props.list?.wrap || isPhone.value)
 </script>
 
 <template>
-  <p v-if="swipeTip" class="mb-3 flex items-center gap-2 rounded-lg border border-line bg-raised py-1 pl-3 text-[13px] text-ink-soft" data-swipe-tip>
+  <p v-if="swipeTip" class="mb-3 flex items-center gap-2 rounded-lg border border-line bg-raised py-1 pl-3 text-ink-soft" :class="metaText" data-swipe-tip>
     <AppIcon fallback="ph:hand-swipe-right" :size="16" class="shrink-0" /><span class="flex-1">{{ swipeTip }}</span>
     <button class="grid h-11 w-11 shrink-0 place-items-center text-ink-faint hover:text-ink" aria-label="Hide this tip" @click="hideSwipeTip"><AppIcon fallback="ph:x" :size="14" /></button>
   </p>
-  <div class="divide-y divide-line/70" :data-phone-rows="phoneRows || undefined">
+  <div class="divide-y divide-line/70" :class="bodyText" :data-phone-rows="phoneRows || undefined">
     <SwipeRow v-for="{ object, depth, hasChildren } in drawn" :key="object.id" :enabled="!!swipeType(object)" :right="swipesOf(object).right" :left="swipesOf(object).left">
       <ObjectLink
         :id="object.id"
@@ -157,14 +158,14 @@ const titleWrap = computed(() => props.list?.wrap || isPhone.value)
         <TypeIcon v-else :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
         <span class="min-w-0 flex-1">
           <span class="block font-medium max-md:text-base max-md:leading-snug" :class="[titleWrap ? 'break-words' : 'truncate', titleClass(object)]">{{ displayTitle(object, typeOf(object)) }}</span>
-          <span v-if="nextStepOf(object)" class="mt-0.5 flex items-center gap-1 text-xs text-ink-soft max-md:text-[13px]" data-next-step-line>
+          <span v-if="nextStepOf(object)" class="mt-0.5 flex items-center gap-1 text-ink-soft" :class="metaText" data-next-step-line>
             <AppIcon fallback="ph:arrow-right" :size="11" class="shrink-0 text-ink-faint" /><span class="truncate">{{ nextStepOf(object) }}</span>
           </span>
         </span>
         <TaskCompletionNote :object="object" class="order-last w-full pl-[30px]" />
         <StepProgress v-if="progressOf(object)" :progress="progressOf(object)!" />
-        <span v-if="absentParent(object)" class="order-last w-full truncate pl-[30px] text-xs text-ink-faint max-md:text-[13px]" data-absent-parent>in {{ absentParent(object) }}</span>
-        <span v-if="listColumns" class="flex min-w-0 shrink-0 items-center gap-2 text-xs max-md:text-[13px] @max-2xl:order-last @max-2xl:w-full @max-2xl:flex-wrap @max-2xl:pl-[30px]" data-row-fields @click.prevent>
+        <span v-if="absentParent(object)" class="order-last w-full truncate pl-[30px] text-ink-faint" :class="metaText" data-absent-parent>in {{ absentParent(object) }}</span>
+        <span v-if="listColumns" class="flex min-w-0 shrink-0 items-center gap-2 @max-2xl:order-last @max-2xl:w-full @max-2xl:flex-wrap @max-2xl:pl-[30px]" :class="metaText" data-row-fields @click.prevent>
           <FieldValue v-for="field in fieldsOf(object)" :key="field.field" :object="object" :field="field.field" :def="field.def" row />
         </span>
         <template v-else>
@@ -172,7 +173,7 @@ const titleWrap = computed(() => props.list?.wrap || isPhone.value)
             <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
           </span>
           <!-- A phone leaves out when a task was last changed: the title needs the room more. -->
-          <span v-if="!quickType(object) && !(isPhone && typeOf(object)?.system === 'task')" class="w-24 shrink-0 text-right text-xs text-ink-faint max-md:w-auto">{{ formatRelative(object.updatedAt) }}</span>
+          <span v-if="!quickType(object) && !(isPhone && typeOf(object)?.system === 'task')" class="w-24 shrink-0 text-right text-ink-faint max-md:w-auto" :class="metaText">{{ formatRelative(object.updatedAt) }}</span>
         </template>
         <!-- In a narrow column the actions take a line of their own under the title; on a phone swipes replace them. -->
         <TaskQuickActions v-if="rowButtons(object)" :type="quickType(object)!" :object="object" variant="row" class="@max-md:order-last @max-md:w-full @max-md:pl-6" @set="saveQuick(object, $event)" />

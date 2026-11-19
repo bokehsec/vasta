@@ -9,6 +9,7 @@ import { HABIT_WEEKS_RANGES, type HabitProgressPlace, type ObjectType } from '@v
 import { greyButton } from '../lib/buttons.ts'
 import { CHARTS, useHabitDisplay } from '../lib/habit-progress.ts'
 import { isPhone } from '../lib/viewport.ts'
+import { bodyText, metaText, phoneUiText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import PopoverMenu from './PopoverMenu.vue'
 
@@ -21,7 +22,7 @@ const places = computed<{ id: HabitProgressPlace; label: string }[]>(() => [
   { id: 'above', label: 'Above' },
   { id: 'beside', label: isPhone.value ? 'Below' : 'Beside' },
 ])
-const seg = 'min-h-8 flex-1 rounded-md px-2 max-md:min-h-11 max-md:text-[15px]'
+const seg = `min-h-8 flex-1 rounded-md px-2 max-md:min-h-11 ${phoneUiText}`
 const segOn = (on: boolean) => (on ? 'bg-surface font-medium shadow-sm' : 'text-ink-soft hover:text-ink')
 </script>
 
@@ -37,7 +38,7 @@ const segOn = (on: boolean) => (on ? 'bg-surface font-medium shadow-sm' : 'text-
     <AppIcon fallback="ph:sliders-horizontal" :size="isPhone ? 16 : 14" /> Display
   </button>
   <PopoverMenu v-model:open="open" :anchor="anchor" placement="bottom-end" width="20rem" label="Progress on the Tracker">
-    <div class="text-sm" data-progress-options>
+    <div data-progress-options :class="bodyText">
       <p class="px-2.5 pb-1.5 pt-1 text-base font-semibold md:text-sm">Progress on the Tracker</p>
       <div class="mx-1.5 flex rounded-lg bg-hover p-0.5" role="group" aria-label="Where progress shows">
         <button v-for="p in places" :key="p.id" :class="[seg, segOn(settings.place === p.id)]" :aria-pressed="settings.place === p.id" :data-place="p.id" @click="save({ place: p.id })">
@@ -56,7 +57,7 @@ const segOn = (on: boolean) => (on ? 'bg-surface font-medium shadow-sm' : 'text-
           </button>
         </div>
       </template>
-      <p v-else class="px-2.5 pb-1 pt-2 text-xs text-ink-faint">Just the habits. The Progress tab still has the full report.</p>
+      <p v-else class="px-2.5 pb-1 pt-2 text-ink-faint" :class="metaText">Just the habits. The Progress tab still has the full report.</p>
     </div>
   </PopoverMenu>
 </template>

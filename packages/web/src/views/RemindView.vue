@@ -261,7 +261,7 @@ watch(
         </div>
         <blockquote
           class="rounded-2xl border bg-surface text-center leading-snug font-medium shadow-sm transition-colors"
-          :class="[popup ? 'px-5 py-5 text-xl' : 'px-6 py-7 text-2xl md:text-[1.75rem]', matched ? 'border-emerald-400 text-emerald-700 dark:text-emerald-300' : 'border-line']"
+          :class="[popup ? 'px-5 py-5 text-xl' : 'px-6 py-7 text-2xl md:text-3xl', matched ? 'border-emerald-400 text-emerald-700 dark:text-emerald-300' : 'border-line']"
           data-phrase
         >
           “{{ current }}”

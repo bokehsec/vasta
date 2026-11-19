@@ -201,6 +201,8 @@ GitHub release page.
 
 ### Changed
 
+- Text sizes are the same across Today, Home's lists and widgets: section headings match, and
+  small text is one size.
 - **The tasks reminder lists planned work.** Besides tasks due today or overdue, it now lists open
   tasks planned (Do date) for today or earlier under "Planned today"; a task in both appears once,
   under its due date.

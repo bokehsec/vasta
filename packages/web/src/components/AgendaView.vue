@@ -25,6 +25,7 @@ import { onChange } from '../lib/events.ts'
 import { useEntryCompletion } from '../lib/use-completion.ts'
 import { queryContext } from '../lib/query.ts'
 import { cachedSummary, primeSummaries, summaryOf, typesById, workspace } from '../lib/state.ts'
+import { bodyText } from '../lib/type-scale.ts'
 import CalendarEntryItem from './calendar/CalendarEntryItem.vue'
 import EventDetails from './calendar/EventDetails.vue'
 import OccurrenceDetails from './calendar/OccurrenceDetails.vue'
@@ -183,12 +184,12 @@ async function detailsDone() {
 
 <template>
   <div ref="root" data-agenda>
-    <p v-if="!loaded" class="py-3 text-sm text-ink-faint">Loading…</p>
-    <p v-else-if="failed && !entries.length" class="py-3 text-sm text-red-600">Could not load the agenda.</p>
+    <p v-if="!loaded" class="py-3 text-ink-faint" :class="bodyText">Loading…</p>
+    <p v-else-if="failed && !entries.length" class="py-3 text-red-600" :class="bodyText">Could not load the agenda.</p>
     <template v-else>
       <OverdueSection :entries="late" variant="row" @details="showDetails" @moved="load" />
       <section v-for="{ day, allDay, timed } in placed" :key="day" class="mt-4 rounded-lg first:mt-0" :class="dropDay === day ? 'bg-accent/10' : ''" :data-agenda-day="day" :data-day="day">
-        <h3 class="mb-1 px-1.5 text-sm">
+        <h3 class="mb-1 px-1.5" :class="bodyText">
           <template v-if="heading(day).lead">
             <span class="font-semibold" :class="day === today ? 'text-accent' : 'text-ink'">{{ heading(day).lead }}</span>
             <span class="text-ink-faint"> · {{ heading(day).date }}</span>
@@ -217,7 +218,7 @@ async function detailsDone() {
           </template>
         </div>
 
-        <p v-if="!allDay.length && !timed.length" class="px-1.5 py-1 text-sm text-ink-faint">Nothing planned</p>
+        <p v-if="!allDay.length && !timed.length" class="px-1.5 py-1 text-ink-faint" :class="bodyText">Nothing planned</p>
       </section>
     </template>
 

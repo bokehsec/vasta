@@ -39,6 +39,7 @@ import { useReviewSession } from '../lib/use-review-session.ts'
 import { useTypeViews } from '../lib/use-type-views.ts'
 import { useViewToolbar, viewFields } from '../lib/view-toolbar.ts'
 import { isPhone } from '../lib/viewport.ts'
+import { bodyText, metaText, pageTitle } from '../lib/type-scale.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -212,8 +213,8 @@ async function newMenu(event: MouseEvent) {
         <AppIcon :icon="type.icon" fallback="ph:cube" :size="22" />
       </button>
       <!-- A phone's top bar already names the page. -->
-      <h1 class="min-w-0 text-2xl font-bold tracking-tight max-md:sr-only md:truncate">{{ type.pluralName }}</h1>
-      <span class="text-sm text-ink-faint max-md:hidden" data-type-count>{{ visible.length }}</span>
+      <h1 class="min-w-0 max-md:sr-only md:truncate" :class="pageTitle">{{ type.pluralName }}</h1>
+      <span class="text-ink-faint max-md:hidden" :class="bodyText" data-type-count>{{ visible.length }}</span>
       <span class="flex-1" />
       <ReviewButton v-if="!isPhone" :review="review" :loading="loading" />
       <button ref="menuAnchor" :class="quietButton" class="max-md:px-3" title="More" aria-label="More" @click="menuOpen = !menuOpen">
@@ -248,7 +249,7 @@ async function newMenu(event: MouseEvent) {
       </MenuRow>
       <div class="my-1 border-t border-line" />
       <template v-if="!fixedActive">
-        <div class="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">View “{{ view.name }}”</div>
+        <div class="px-2.5 pb-1 pt-0.5 font-medium uppercase tracking-wide text-ink-faint" :class="metaText">View “{{ view.name }}”</div>
         <MenuRow v-if="review.reviewable.value && !review.isTask.value" icon="ph:play" data-review-view @click="choose(() => review.choose('view', menuAnchor))">Review this view…</MenuRow>
         <MenuRow icon="ph:pencil-simple" @click="choose(views.renameView)">Rename view</MenuRow>
         <MenuRow icon="ph:copy" @click="choose(views.duplicateView)">Duplicate view</MenuRow>
@@ -261,7 +262,7 @@ async function newMenu(event: MouseEvent) {
       </template>
     </PopoverMenu>
     <TypeSettings v-if="settingsOpen" :type="type" @close="closeSettings" />
-    <p v-if="type.description" class="mt-2 max-w-2xl text-sm text-ink-soft">{{ type.description }}</p>
+    <p v-if="type.description" class="mt-2 max-w-2xl text-ink-soft" :class="bodyText">{{ type.description }}</p>
 
     <div class="mt-6 flex flex-wrap items-center gap-1 border-b border-line pb-2">
       <ViewSwitcher :type="type" :views="views" />
@@ -279,8 +280,8 @@ async function newMenu(event: MouseEvent) {
     </div>
     <WorkflowChooser v-model:open="review.chooserOpen.value" :type="type" v-bind="review.chooser.value" @start="review.start" @resume="review.resume" @end="review.discard" />
 
-    <p v-if="loading" class="py-10 text-sm text-ink-faint">Loading…</p>
-    <div v-else-if="!objects.length" class="py-16 text-center text-sm text-ink-faint">
+    <p v-if="loading" class="py-10 text-ink-faint" :class="bodyText">Loading…</p>
+    <div v-else-if="!objects.length" class="py-16 text-center text-ink-faint" :class="bodyText">
       No {{ type.pluralName.toLowerCase() }} yet.<template v-if="type.system === 'habit'"> Make one with New {{ type.name }}, then check it off each day from Today.</template
       ><template v-else> Make one with New {{ type.name }}, or press {{ keysOf('search') }} and type “/{{ type.name }}” and a title.</template>
       <TipsCard class="mx-auto mt-10 max-w-xl text-left" />
@@ -290,7 +291,7 @@ async function newMenu(event: MouseEvent) {
     <HabitProgress v-else-if="views.progressActive.value" :type="type" :habits="objects" :filter="filterText" @menu="objectMenu" />
     <TagTree v-else-if="fixedActive && type.system === 'tag'" :tags="objects" :filter="filterText" @menu="objectMenu" />
     <HabitBoard v-else-if="fixedActive && type.system === 'habit'" :type="type" :habits="objects" :filter="filterText" @menu="objectMenu" />
-    <p v-else-if="!visible.length && !toolbar.agendaActive.value" class="py-16 text-center text-sm text-ink-faint">No {{ type.pluralName.toLowerCase() }} match the filter.</p>
+    <p v-else-if="!visible.length && !toolbar.agendaActive.value" class="py-16 text-center text-ink-faint" :class="bodyText">No {{ type.pluralName.toLowerCase() }} match the filter.</p>
     <ObjectCollection
       v-else
       class="mt-6 max-md:mt-3"
@@ -330,6 +331,6 @@ async function newMenu(event: MouseEvent) {
       @open="review.openFrom"
     />
   </div>
-  <p v-else-if="loading" class="py-10 text-center text-sm text-ink-faint">Loading…</p>
-  <div v-else class="grid h-full place-items-center text-sm text-ink-soft">Type not found.</div>
+  <p v-else-if="loading" class="py-10 text-center text-ink-faint" :class="bodyText">Loading…</p>
+  <div v-else class="grid h-full place-items-center text-ink-soft" :class="bodyText">Type not found.</div>
 </template>

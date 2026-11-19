@@ -27,6 +27,7 @@ import { closesOnBack } from '../lib/back.ts'
 import { isPhone, keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import DocPreview from './DocPreview.ts'
+import { bodyText, metaText, sheetTitle } from '../lib/type-scale.ts'
 import PropertyDisplay from './PropertyDisplay.vue'
 import PropertyValueEditor from './PropertyValueEditor.vue'
 import ReviewDecisionBar from './ReviewDecisionBar.vue'
@@ -394,12 +395,12 @@ onBeforeUnmount(() => {
 
 const summary = computed(() => summarize(props.session))
 const wide = computed(() => !isPhone.value)
-const sectionName = 'text-xs font-semibold text-ink-faint'
+const sectionName = `font-semibold text-ink-faint ${metaText}`
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-40 grid" :style="isPhone && keyboardInset ? { bottom: `${keyboardInset}px` } : undefined" :class="isPhone ? 'bg-surface pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]' : 'place-items-center bg-black/30 p-6'" data-process-mode>
+    <div class="fixed inset-0 z-40 grid" :class="isPhone ? 'bg-surface pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]' : 'place-items-center bg-black/30 p-6'" :style="isPhone && keyboardInset ? { bottom: `${keyboardInset}px` } : undefined" data-process-mode>
       <section
         ref="panel"
         tabindex="-1"
@@ -415,13 +416,13 @@ const sectionName = 'text-xs font-semibold text-ink-faint'
           <div class="flex items-center gap-2">
             <button v-if="isPhone && !done" class="-ml-2 grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg text-ink-soft hover:bg-hover disabled:opacity-40" :disabled="index === 0 || blocked" aria-label="Back to the previous task" data-process-back @click="move(-1)"><AppIcon fallback="ph:caret-left" :size="18" /></button>
             <h2 class="min-w-0 flex-1 truncate font-semibold" data-process-heading>{{ title }}<span class="font-normal text-ink-soft max-md:hidden"> · {{ session.scopeLabel }}</span></h2>
-            <span class="text-sm tabular-nums text-ink-soft" aria-live="polite" data-process-position>{{ saving ? 'Saving…' : position }}</span>
-            <button class="-mr-2 min-h-11 shrink-0 rounded-lg px-3 text-sm text-ink-soft hover:bg-hover disabled:opacity-50" :disabled="blocked" :aria-label="`Pause ${title.toLowerCase()} (resume later)`" data-process-close @click="pause">{{ done ? 'Close' : 'Pause' }}</button>
+            <span class="tabular-nums text-ink-soft" :class="bodyText" aria-live="polite" data-process-position>{{ saving ? 'Saving…' : position }}</span>
+            <button class="-mr-2 min-h-11 shrink-0 rounded-lg px-3 text-ink-soft hover:bg-hover disabled:opacity-50" :class="bodyText" :disabled="blocked" :aria-label="`Pause ${title.toLowerCase()} (resume later)`" data-process-close @click="pause">{{ done ? 'Close' : 'Pause' }}</button>
           </div>
-          <p class="mt-1 break-words text-xs text-ink-soft md:hidden" data-process-scope>{{ session.scopeLabel }}</p>
+          <p class="mt-1 break-words text-ink-soft md:hidden" :class="metaText" data-process-scope>{{ session.scopeLabel }}</p>
           <div class="mt-2 flex items-center gap-1.5" aria-hidden="true">
             <template v-for="part in parts" :key="part.label">
-              <span v-if="part.label && wide" class="whitespace-nowrap pr-1 text-xs tabular-nums text-ink-soft">{{ part.label }} {{ part.at }}/{{ part.size }}</span>
+              <span v-if="part.label && wide" class="whitespace-nowrap pr-1 tabular-nums text-ink-soft" :class="metaText">{{ part.label }} {{ part.at }}/{{ part.size }}</span>
               <span class="h-1 min-w-6 rounded-full bg-line" :style="{ flexGrow: part.size }"><span class="block h-full rounded-full bg-ink-soft transition-[width] duration-200" :style="{ width: `${part.size ? (part.at / part.size) * 100 : 0}%` }" /></span>
             </template>
           </div>
@@ -431,7 +432,7 @@ const sectionName = 'text-xs font-semibold text-ink-faint'
         <div v-if="done" class="flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto px-5 py-8 text-center" data-process-end>
           <AppIcon fallback="ph:check-circle" :size="32" class="text-[var(--color-flow-done)]" />
           <p class="text-lg font-semibold">{{ title }}: finished</p>
-          <p class="text-sm text-ink-soft" data-process-summary>
+          <p class="text-ink-soft" :class="bodyText" data-process-summary>
             <template v-if="summary.outcomes.length || summary.skipped">
               {{ [...summary.outcomes.map((o) => `${quickActionDoneName(o.name)} ${o.count}`), ...(summary.skipped ? [`${summary.skipped} left for later`] : [])].join(' · ') }}
             </template>
@@ -458,21 +459,21 @@ const sectionName = 'text-xs font-semibold text-ink-faint'
               @touchend="onTouchEnd"
               @touchcancel="onTouchCancel"
             >
-              <p v-if="missing" class="text-sm text-ink-soft" data-process-missing>This {{ noun }} is no longer here (deleted or moved since the review started). Choose Decide later to go on.</p>
+              <p v-if="missing" class="text-ink-soft" :class="bodyText" data-process-missing>This {{ noun }} is no longer here (deleted or moved since the review started). Choose Decide later to go on.</p>
               <template v-else-if="current">
-                <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-soft md:text-sm" data-process-meta>
+                <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-ink-soft md:text-sm" :class="metaText" data-process-meta>
                   <span v-if="meta.kind" class="rounded-md px-1.5 py-0.5 font-semibold" :class="isNew ? 'bg-accent/12 text-accent' : 'bg-hover text-ink'">{{ meta.kind }}</span>
                   <span>{{ meta.detail }}</span>
                 </p>
-                <h2 class="mt-2 max-w-[34ch] break-words text-[1.4rem] font-semibold leading-tight tracking-[-0.01em] md:text-[1.75rem]" data-process-title>{{ displayTitle(current, type) }}</h2>
-                <p v-if="outcome" class="mt-2 inline-flex items-center gap-1.5 rounded-md bg-hover px-2 py-0.5 text-xs text-ink-soft" data-process-outcome>
+                <h2 class="mt-2 max-w-[34ch] break-words" :class="sheetTitle" data-process-title>{{ displayTitle(current, type) }}</h2>
+                <p v-if="outcome" class="mt-2 inline-flex items-center gap-1.5 rounded-md bg-hover px-2 py-0.5 text-ink-soft" :class="metaText" data-process-outcome>
                   <AppIcon fallback="ph:check" :size="12" />{{ quickActionDoneName(outcome) }}
                 </p>
 
                 <!-- A phone: the plan here, two fields to a row; a wide screen has it beside the text. -->
                 <div v-if="isPhone && plan.length" class="mt-3 grid grid-cols-2 gap-x-3" data-process-plan>
                   <div v-for="def in plan" :key="def.id" class="min-w-0 border-b border-line py-1">
-                    <p class="text-xs text-ink-soft">{{ def.name }}</p>
+                    <p class="text-ink-soft" :class="metaText">{{ def.name }}</p>
                     <PropertyValueEditor v-if="editable(def)" :def="def" :value="current.props[def.id]" class="-ml-2" @update="setField(def, $event)" @add-option="addOption(def, $event)" />
                     <div v-else class="flex min-h-8 items-center"><PropertyDisplay :def="def" :value="current.props[def.id]" :object="current" short /></div>
                   </div>
@@ -481,19 +482,19 @@ const sectionName = 'text-xs font-semibold text-ink-faint'
                 <div v-if="shownTexts.length" class="mt-5 space-y-5" data-process-text>
                   <section v-for="text in shownTexts" :key="text.field" class="max-w-[70ch]">
                     <h3 :class="sectionName">{{ text.name }}</h3>
-                    <div class="vasta-doc mt-1 text-[15px] leading-relaxed [&_p+p]:mt-2.5"><DocPreview :content="text.doc.content" /></div>
+                    <div class="vasta-doc mt-1 text-base leading-relaxed [&_p+p]:mt-2.5"><DocPreview :content="text.doc.content" /></div>
                   </section>
                 </div>
-                <p v-else-if="notes" class="mt-5 max-w-[70ch] whitespace-pre-line text-[15px] leading-relaxed">{{ notes }}</p>
+                <p v-else-if="notes" class="mt-5 max-w-[70ch] whitespace-pre-line text-base leading-relaxed">{{ notes }}</p>
 
                 <section v-if="steps.length || breakingDown" class="mt-6 max-w-[70ch]" data-process-steps>
                   <h3 :class="sectionName">Steps · {{ steps.length }}</h3>
                   <ul class="mt-1">
                     <li v-for="step in steps" :key="step.id" class="border-b border-line">
-                      <button class="flex min-h-11 w-full items-center gap-2.5 text-left text-sm hover:text-accent" :disabled="blocked" @click="open(step.id)">
+                      <button class="flex min-h-11 w-full items-center gap-2.5 text-left hover:text-accent" :class="bodyText" :disabled="blocked" @click="open(step.id)">
                         <AppIcon :fallback="isClosedTask(type, step) ? 'ph:check-circle' : 'ph:circle'" :size="16" class="shrink-0" :class="isClosedTask(type, step) ? 'text-[var(--color-flow-done)]' : 'text-ink-faint'" />
                         <span class="min-w-0 flex-1 truncate" :class="isClosedTask(type, step) ? 'text-ink-faint line-through' : ''">{{ displayTitle(step, type) }}</span>
-                        <span v-if="stepDate(step)" class="shrink-0 text-xs tabular-nums text-ink-soft">{{ stepDate(step) }}</span>
+                        <span v-if="stepDate(step)" class="shrink-0 tabular-nums text-ink-soft" :class="metaText">{{ stepDate(step) }}</span>
                       </button>
                     </li>
                   </ul>
@@ -501,7 +502,7 @@ const sectionName = 'text-xs font-semibold text-ink-faint'
                 <form v-if="breakingDown" class="mt-3 max-w-[70ch] space-y-2" @submit.prevent="addStep">
                   <div class="flex items-center gap-2 rounded-lg border border-line px-2.5">
                     <AppIcon fallback="ph:plus" :size="16" class="text-ink-faint" />
-                    <input ref="stepInput" v-model="stepTitle" class="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-ink-faint max-md:text-base" placeholder="A step" aria-label="New step" data-process-step />
+                    <input ref="stepInput" v-model="stepTitle" class="min-w-0 flex-1 bg-transparent py-2 outline-none placeholder:text-ink-faint max-md:text-base" :class="bodyText" placeholder="A step" aria-label="New step" data-process-step />
                   </div>
                   <div class="flex justify-end gap-2">
                     <button type="button" :class="greyButton" data-process-step-done @click="breakingDown = false">Done adding</button>
@@ -524,7 +525,7 @@ const sectionName = 'text-xs font-semibold text-ink-faint'
             <template v-if="current">
               <h3 :class="sectionName">The plan now</h3>
               <div class="mt-1" data-process-plan>
-                <div v-for="def in plan" :key="def.id" class="flex min-h-10 items-center border-b border-line/70 text-sm">
+                <div v-for="def in plan" :key="def.id" class="flex min-h-10 items-center border-b border-line/70" :class="bodyText">
                   <span class="w-24 shrink-0 truncate text-ink-soft">{{ def.name }}</span>
                   <PropertyValueEditor v-if="editable(def)" :def="def" :value="current.props[def.id]" @update="setField(def, $event)" @add-option="addOption(def, $event)" />
                   <div v-else class="flex min-h-8 min-w-0 flex-1 items-center px-2"><PropertyDisplay :def="def" :value="current.props[def.id]" :object="current" short /></div>

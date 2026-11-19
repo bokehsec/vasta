@@ -9,6 +9,7 @@ import { swatchClasses } from '../lib/colors.ts'
 import { habitColor } from '../lib/habits.ts'
 import { percentText, type ProgressDay, type ProgressWeek } from '../lib/habit-progress.ts'
 import { isPhone } from '../lib/viewport.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import HabitDaysChart from './HabitDaysChart.vue'
 import HabitTrendChart from './HabitTrendChart.vue'
 
@@ -30,11 +31,11 @@ const calendarDays = computed(() => (props.beside ? props.days : props.days.slic
 </script>
 
 <template>
-  <component :is="beside ? 'aside' : 'div'" :class="beside ? 'text-sm' : 'mb-5'" data-progress-summary :data-layout="beside ? 'beside' : 'above'" :data-chart="chart">
+  <component :is="beside ? 'aside' : 'div'" :class="beside ? bodyText : 'mb-5'" data-progress-summary :data-layout="beside ? 'beside' : 'above'" :data-chart="chart">
     <div class="flex flex-wrap items-end gap-x-7 gap-y-3">
       <div class="min-w-0 flex-1" data-progress-headline>
-        <div class="text-[15px] font-semibold tabular-nums">{{ percentText(total) }} over the last {{ weeks }} weeks</div>
-        <div class="mt-0.5 text-[13px] text-ink-soft">
+        <div class="font-semibold tabular-nums" :class="bodyText">{{ percentText(total) }} over the last {{ weeks }} weeks</div>
+        <div class="mt-0.5 text-ink-soft" :class="metaText">
           <span class="tabular-nums">{{ total.done }} of {{ total.expected }} done</span>
           <span v-if="thisWeek" class="tabular-nums"> · this week {{ thisWeek.tally.done }} so far</span> ·
           <RouterLink :to="progressLink" class="text-accent hover:underline">See progress</RouterLink>
@@ -48,7 +49,7 @@ const calendarDays = computed(() => (props.beside ? props.days : props.days.slic
 
     <!-- Beside the habits: each habit's share over the range, best first. -->
     <div v-if="beside" class="mt-4 grid gap-2 border-t border-line pt-3.5">
-      <div v-for="r in habitRows" :key="r.habit.id" class="grid grid-cols-[minmax(0,1fr)_4.5rem_2.25rem] items-center gap-2 text-xs" :class="r.paused ? 'opacity-50' : ''" :title="`${r.habit.title}: ${r.row.total.done} of ${r.row.total.expected}`">
+      <div v-for="r in habitRows" :key="r.habit.id" class="grid grid-cols-[minmax(0,1fr)_4.5rem_2.25rem] items-center gap-2" :class="[metaText, r.paused ? 'opacity-50' : '']" :title="`${r.habit.title}: ${r.row.total.done} of ${r.row.total.expected}`">
         <span class="flex min-w-0 items-center gap-1.5"><span class="size-2 shrink-0 rounded-full" :class="swatchClasses[habitColor(r.habit)]" /><span class="truncate">{{ r.habit.title || 'Untitled' }}</span></span>
         <span class="h-1.5 overflow-hidden rounded bg-hover"><i class="block h-full bg-[var(--color-chart)]" :style="{ width: `${habitPercent(r.row.total) ?? 0}%` }" /></span>
         <span class="text-right tabular-nums text-ink-soft">{{ percentText(r.row.total) }}</span>

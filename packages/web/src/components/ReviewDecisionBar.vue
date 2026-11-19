@@ -8,6 +8,7 @@ import type { ObjectType, QuickActionDef, ReviewButton } from '@vasta/core'
 import { askOf } from '@vasta/core'
 import { greyButton, mainButton, quietButton } from '../lib/buttons.ts'
 import type { ReviewDecisions } from '../lib/review-choices.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 
 const props = defineProps<{
@@ -34,8 +35,8 @@ const keepLabel = computed(() => (props.outcome ? `Next ${props.noun}` : props.c
 const keepHint = computed(() => (props.outcome ? 'Decided. Go on to the next one.' : props.every ? `Marks it reviewed today. It comes back in ${props.every} ${props.every === 1 ? 'day' : 'days'}.` : 'Marks it reviewed today.'))
 const laterHint = 'Not reviewed; it stays in the queue.'
 const choose = (action: QuickActionDef, event: Event) => emit('act', action, event.currentTarget as HTMLElement)
-const link = 'min-h-11 rounded-md px-1.5 text-sm text-ink underline decoration-line-strong underline-offset-[3px] hover:bg-hover hover:decoration-ink-soft disabled:opacity-40'
-const kbd = 'rounded border border-line-strong px-1.5 py-0.5 text-[11px] leading-none text-ink-faint'
+const link = `min-h-11 rounded-md px-1.5 text-ink underline decoration-line-strong underline-offset-[3px] hover:bg-hover hover:decoration-ink-soft disabled:opacity-40 ${bodyText}`
+const kbd = `rounded border border-line-strong px-1.5 py-0.5 leading-none text-ink-faint ${metaText}`
 </script>
 
 <template>
@@ -43,7 +44,7 @@ const kbd = 'rounded border border-line-strong px-1.5 py-0.5 text-[11px] leading
     <template v-if="active">
       <div :class="wide ? 'flex flex-wrap justify-center gap-2' : 'grid grid-cols-2 gap-2'">
         <button v-if="choices.reviewed" :class="[mainButton, 'min-w-0', wide ? '' : 'min-h-12']" :disabled="blocked" :title="keepHint" data-process-reviewed @click="choose(choices.reviewed, $event)">
-          <AppIcon fallback="ph:check" :size="18" class="shrink-0" /><span class="truncate">{{ keepLabel }}</span><kbd v-if="wide && !outcome" class="ml-1 rounded border border-surface/35 px-1.5 py-0.5 text-[11px] leading-none text-surface/75">K</kbd>
+          <AppIcon fallback="ph:check" :size="18" class="shrink-0" /><span class="truncate">{{ keepLabel }}</span><kbd v-if="wide && !outcome" class="ml-1 rounded border border-surface/35 px-1.5 py-0.5 leading-none text-surface/75" :class="metaText">K</kbd>
         </button>
         <button v-for="button in choices.main" :key="button.action.id" :class="[greyButton, 'min-w-0', wide ? '' : 'min-h-12']" :disabled="blocked" :data-key="choices.keyOf(button)" :data-process-choice="button.option?.id ?? button.role" :data-process-role="button.role" :data-process-action="button.option ? undefined : button.action.id" @click="choose(button.action, $event)">
           <AppIcon :icon="button.option ? undefined : button.action.icon" :fallback="icon(button)" :size="18" class="shrink-0" :class="tone(button)" /><span class="truncate">{{ label(button) }}</span><kbd v-if="wide && choices.keyOf(button)" :class="[kbd, 'ml-1']">{{ choices.keyOf(button) }}</kbd>
@@ -52,7 +53,7 @@ const kbd = 'rounded border border-line-strong px-1.5 py-0.5 text-[11px] leading
     </template>
     <div class="mt-1 flex items-center gap-2" :class="wide ? 'grid grid-cols-[1fr_auto_1fr]' : 'justify-between'">
       <button v-if="wide" :class="[quietButton, 'justify-self-start']" :disabled="atFirst || blocked" data-process-back @click="emit('back')"><AppIcon fallback="ph:caret-left" :size="14" />Back</button>
-      <p v-if="active && choices.links.length" class="flex min-w-0 flex-wrap items-center text-sm text-ink-soft" :class="wide ? 'justify-center' : ''" data-process-links>
+      <p v-if="active && choices.links.length" class="flex min-w-0 flex-wrap items-center text-ink-soft" :class="[bodyText, wide ? 'justify-center' : '']" data-process-links>
         <span class="pr-0.5">{{ choices.hasButtons ? 'Move to' : 'Or' }}</span>
         <template v-for="(button, i) in choices.links" :key="button.action.id">
           <span v-if="i" aria-hidden="true">·</span>

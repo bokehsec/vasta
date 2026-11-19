@@ -8,6 +8,7 @@ import { chip } from '../lib/colors.ts'
 import { displayTitle } from '../lib/format.ts'
 import { NO_VALUE, type Group } from '../lib/query.ts'
 import { summaryOf } from '../lib/state.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectChip from './ObjectChip.vue'
 import PersonChip from './PersonChip.vue'
@@ -19,18 +20,18 @@ const label = computed(() => props.group.objectId ? displayTitle(summaryOf(props
 </script>
 
 <template>
-  <div class="flex min-w-0 items-center gap-2 text-sm" :data-group-heading="group.key">
+  <div class="flex min-w-0 items-center gap-2" :class="bodyText" :data-group-heading="group.key">
     <button type="button" class="max-w-full" :class="quietButton" :aria-expanded="!collapsed" :aria-label="`${collapsed ? 'Expand' : 'Collapse'} ${label}, ${group.items.length} ${group.items.length === 1 ? 'item' : 'items'}`" data-fold-group @click="emit('toggle')">
       <AppIcon :fallback="collapsed ? 'ph:caret-right' : 'ph:caret-down'" :size="13" />
       <template v-if="!linked">
-        <span class="truncate rounded-md px-2 py-0.5 font-medium" :class="group.key === NO_VALUE ? 'text-ink-faint' : chip(group.color as never)">{{ group.label }}</span>
-        <span class="text-xs tabular-nums text-ink-faint">{{ group.items.length }}</span>
+        <span class="truncate rounded-md px-2 py-0.5 font-medium" :class="[bodyText, group.key === NO_VALUE ? 'text-ink-faint' : chip(group.color as never)]">{{ group.label }}</span>
+        <span class="tabular-nums text-ink-faint" :class="metaText">{{ group.items.length }}</span>
       </template>
     </button>
     <template v-if="linked">
       <ObjectChip v-if="group.objectId" :id="group.objectId" :tag="field === 'tags'" />
       <PersonChip v-else-if="group.personId" :id="group.personId" />
-      <span class="text-xs tabular-nums text-ink-faint">{{ group.items.length }}</span>
+      <span class="tabular-nums text-ink-faint" :class="metaText">{{ group.items.length }}</span>
     </template>
     <button v-if="addable" type="button" :class="quietButton" :aria-label="`Add to ${label}`" :title="`Add to ${label}`" data-group-add @click="emit('add')">
       <AppIcon fallback="ph:plus" :size="14" />

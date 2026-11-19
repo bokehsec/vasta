@@ -23,6 +23,7 @@ import { lastError } from '../lib/state.ts'
 import { addSubtask, noteSaved, subtaskMenuItems, subtasksOf } from '../lib/subtasks.ts'
 import { useCompletion } from '../lib/use-completion.ts'
 import { isPhone, isTouch } from '../lib/viewport.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectLink from './ObjectLink.vue'
 import SwipeRow from './SwipeRow.vue'
@@ -114,7 +115,7 @@ function stepMore(event: MouseEvent, step: ObjectSummary) {
 
 <template>
   <section class="mt-5" data-subtasks>
-    <header class="flex items-baseline justify-between px-1 pb-1.5 text-xs font-semibold text-ink-soft">
+    <header class="flex items-baseline justify-between px-1 pb-1.5 font-semibold text-ink-soft" :class="metaText">
       <span>Subtasks</span>
       <span v-if="progress.total" class="flex items-center gap-2 font-medium tabular-nums text-ink-faint">
         <span class="h-[3px] w-16 overflow-hidden rounded-full bg-line" aria-hidden="true" data-subtask-bar>
@@ -127,10 +128,10 @@ function stepMore(event: MouseEvent, step: ObjectSummary) {
       <SwipeRow v-for="step in steps" :key="step.id" :enabled="!!swipes(step).right" :right="swipes(step).right" :left="swipes(step).left">
         <div class="flex items-start gap-2 px-1 py-1.5 max-md:py-2.5" data-subtask @contextmenu="stepMenu($event, step)">
           <TaskCompletionCheck v-if="statusDef" :object="step" :type="type" class="mt-px" data-subtask-check />
-          <ObjectLink :id="step.id" class="min-w-0 flex-1 text-sm hover:underline max-md:text-base max-md:leading-snug" :class="completion.done(step) ? 'text-ink-faint line-through' : ''">
+          <ObjectLink :id="step.id" class="min-w-0 flex-1 hover:underline max-md:text-base max-md:leading-snug" :class="[bodyText, completion.done(step) ? 'text-ink-faint line-through' : '']">
             {{ displayTitle(step, type) }}
           </ObjectLink>
-          <span v-if="dueOf(step)" class="shrink-0 pt-0.5 text-xs text-ink-faint max-md:text-[13px]">{{ dueOf(step) }}</span>
+          <span v-if="dueOf(step)" class="shrink-0 pt-0.5 text-ink-faint" :class="metaText">{{ dueOf(step) }}</span>
           <!-- A phone: a visible way to the step's menu, 44px to touch (a long press is not found by looking). -->
           <button
             v-if="isPhone"
@@ -148,7 +149,8 @@ function stepMore(event: MouseEvent, step: ObjectSummary) {
         <input
           ref="input"
           v-model="title"
-          class="min-w-0 flex-1 bg-transparent py-1 text-sm outline-none placeholder:text-ink-faint max-md:text-base"
+          class="min-w-0 flex-1 bg-transparent py-1 outline-none placeholder:text-ink-faint max-md:text-base"
+          :class="bodyText"
           placeholder="Add subtask"
           aria-label="Add subtask"
           :disabled="adding"
@@ -160,7 +162,7 @@ function stepMore(event: MouseEvent, step: ObjectSummary) {
         <button v-if="isTouch" type="submit" :class="mainButton" :disabled="adding || !title.trim()" data-add-subtask-button>Add</button>
       </form>
     </div>
-    <div v-if="progress.readyToClose && parentOpen" class="mt-2 flex items-center gap-2 rounded-lg border border-line px-3 py-1.5 text-sm" data-ready-to-close>
+    <div v-if="progress.readyToClose && parentOpen" class="mt-2 flex items-center gap-2 rounded-lg border border-line px-3 py-1.5" :class="bodyText" data-ready-to-close>
       <AppIcon fallback="ph:check-circle" :size="16" class="shrink-0 text-[var(--color-flow-done)]" />
       <span class="flex-1">All subtasks done</span>
       <button v-if="closeAction" :class="tintedButton" data-close-parent @click="closeParent">

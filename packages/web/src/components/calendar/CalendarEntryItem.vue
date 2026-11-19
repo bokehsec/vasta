@@ -17,6 +17,7 @@ import { displayTitle, formatDateShort } from '../../lib/format.ts'
 import { lastError, summaryOf, typesById } from '../../lib/state.ts'
 import { setTaskDone } from '../../lib/task-completion.ts'
 import { entryBadges, entryNote, plannedAfterDeadline, taskDateRole, taskEntryCheckable } from '../../lib/calendar-tasks.ts'
+import { bodyText, metaText, tinyText } from '../../lib/type-scale.ts'
 import AppIcon from '../AppIcon.vue'
 import ObjectLink from '../ObjectLink.vue'
 
@@ -115,7 +116,7 @@ function onContextMenu(event: MouseEvent) {
     data-calendar-entry
     class="vasta-entry group/entry relative flex w-full min-w-0 text-left leading-tight"
     :class="[
-      variant === 'day-task' ? 'rounded-lg border border-line bg-hover/50 px-3 py-2 text-sm hover:bg-hover' : variant === 'row' ? 'items-start gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-hover' : ['text-xs', chip(color)],
+      variant === 'day-task' ? [bodyText, 'rounded-lg border border-line bg-hover/50 px-3 py-2 hover:bg-hover'] : variant === 'row' ? [bodyText, 'items-start gap-2 rounded-md px-1.5 py-1 hover:bg-hover'] : [metaText, chip(color)],
       variant === 'chip' ? 'items-center gap-1 rounded-md px-1.5 py-[3px]' : variant === 'block' ? 'h-full flex-col gap-0.5 overflow-hidden rounded-md border-l-[3px] border-current/40 px-1.5 py-1' : '',
       done ? 'opacity-60' : '',
       continued ? 'rounded-l-none' : '',
@@ -128,7 +129,7 @@ function onContextMenu(event: MouseEvent) {
     @pointerdown="onPointerDown($event, 'move')"
     @contextmenu="onContextMenu"
   >
-    <span v-if="variant === 'row'" class="w-[4.25rem] shrink-0 pt-px text-xs tabular-nums text-ink-soft">{{ entry.allDay || entry.overdue ? '' : formatClock(entry.start) }}</span>
+    <span v-if="variant === 'row'" class="w-[4.25rem] shrink-0 pt-px tabular-nums text-ink-soft" :class="metaText">{{ entry.allDay || entry.overdue ? '' : formatClock(entry.start) }}</span>
     <!-- A row wraps its title (an agenda sits in narrow columns); chips and blocks cut it short. -->
     <span class="flex min-w-0 gap-1" :class="variant === 'day-task' ? 'w-full items-start gap-2' : variant === 'row' ? 'items-start' : 'items-center'">
       <button
@@ -150,17 +151,17 @@ function onContextMenu(event: MouseEvent) {
       <span v-if="variant === 'chip' && time && !continued" class="shrink-0 tabular-nums opacity-70">{{ time.split(' – ')[0] }}</span>
       <span v-if="variant === 'day-task'" class="min-w-0 flex-1">
         <span class="block break-words font-medium" :class="done ? 'line-through' : ''">{{ title }}</span>
-        <span v-if="(time && !entry.overdue) || taskNote" class="mt-1 block text-xs text-ink-soft">{{ time && !entry.overdue ? `${time}${taskNote ? ' · ' : ''}` : '' }}{{ taskNote }}</span>
-        <span v-if="afterDeadline" class="mt-1 block text-xs text-amber-700 dark:text-amber-400">Planned after deadline</span>
-        <span v-if="nextDue" data-completion-note class="mt-1 block text-xs text-ink-soft">Done this time · Next: {{ formatDateShort(nextDue) }}</span>
+        <span v-if="(time && !entry.overdue) || taskNote" class="mt-1 block text-ink-soft" :class="metaText">{{ time && !entry.overdue ? `${time}${taskNote ? ' · ' : ''}` : '' }}{{ taskNote }}</span>
+        <span v-if="afterDeadline" class="mt-1 block text-amber-700 dark:text-amber-400" :class="metaText">Planned after deadline</span>
+        <span v-if="nextDue" data-completion-note class="mt-1 block text-ink-soft" :class="metaText">Done this time · Next: {{ formatDateShort(nextDue) }}</span>
       </span>
       <span v-else-if="variant === 'row'" class="min-w-0 break-words"
-        ><span class="font-medium" :class="done ? 'line-through' : ''">{{ title }}</span
-        ><span v-if="origin" class="text-xs text-ink-faint"> · {{ origin }}</span
-        ><span v-if="nextDue" data-completion-note class="block text-xs text-ink-soft">Done this time · Next: {{ formatDateShort(nextDue) }}</span></span
+      ><span class="font-medium" :class="done ? 'line-through' : ''">{{ title }}</span
+        ><span v-if="origin" class="text-ink-faint" :class="metaText"> · {{ origin }}</span
+        ><span v-if="nextDue" data-completion-note class="block text-ink-soft" :class="metaText">Done this time · Next: {{ formatDateShort(nextDue) }}</span></span
       >
       <span v-else class="truncate font-medium" :class="done ? 'line-through' : ''">{{ title }}</span>
-      <span v-for="badge in badges" :key="badge.label" data-entry-badge class="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium" :class="BADGE_TONES[badge.tone]">{{ badge.label }}</span>
+      <span v-for="badge in badges" :key="badge.label" data-entry-badge class="shrink-0 rounded px-1 py-0.5 font-medium" :class="[tinyText, BADGE_TONES[badge.tone]]">{{ badge.label }}</span>
       <AppIcon v-if="afterDeadline && variant !== 'day-task'" fallback="ph:warning" :size="12" class="shrink-0 text-amber-700 dark:text-amber-400" title="Planned after its deadline" aria-label="Planned after its deadline" data-after-deadline />
       <AppIcon v-if="entry.recurring" fallback="ph:repeat" :size="11" class="shrink-0 opacity-60" />
     </span>

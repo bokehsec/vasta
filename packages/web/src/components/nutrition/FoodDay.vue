@@ -55,6 +55,7 @@ import FoodPicker from './FoodPicker.vue'
 import NutrientLine from './NutrientLine.vue'
 import WeekBudgetCard from './WeekBudgetCard.vue'
 import { openObject } from '../../lib/open.ts'
+import { bodyText, metaText, sectionHeading } from '../../lib/type-scale.ts'
 
 const props = defineProps<{ day: string }>()
 const { note, entries, goal, budget, loaded, setNote } = useFoodDay(toRef(props, 'day'))
@@ -228,13 +229,13 @@ function dayMenu(event: MouseEvent) {
 </script>
 
 <template>
-  <section v-if="nutritionOn && loaded" class="text-sm" data-food-day>
+  <section v-if="nutritionOn && loaded" data-food-day :class="bodyText">
     <div class="mb-2 flex items-center gap-2">
-      <h2 class="flex items-center gap-1.5 font-semibold text-ink-soft"><AppIcon fallback="ph:bowl-food" /> Food</h2>
-      <span v-if="!compact" class="text-xs tabular-nums text-ink-faint">
+      <h2 :class="sectionHeading"><AppIcon fallback="ph:bowl-food" /> Food</h2>
+      <span v-if="!compact" class="tabular-nums text-ink-faint" :class="metaText">
         {{ formatKcal(totals.kcal) }}<template v-if="goal"> / {{ formatKcal(goal.kcal) }}</template> kcal
       </span>
-      <span v-if="!counted" class="rounded-md bg-hover px-1.5 py-0.5 text-[11px] text-ink-faint">not counted</span>
+      <span v-if="!counted" class="rounded-md bg-hover px-1.5 py-0.5 text-ink-faint" :class="metaText">not counted</span>
       <div class="ml-auto flex items-center gap-1">
         <button
           v-if="!future"
@@ -255,7 +256,7 @@ function dayMenu(event: MouseEvent) {
 
       <div class="mb-3 grid grid-cols-4 gap-3 max-md:grid-cols-2">
         <div v-for="bar in bars" :key="bar.label" :data-nutrient="bar.key">
-          <div class="flex items-baseline gap-1 text-xs">
+          <div class="flex items-baseline gap-1" :class="metaText">
             <span class="h-2 w-2 shrink-0 self-center rounded-full" :style="{ background: nutrientColor(bar.key) }" />
             <span class="text-ink-soft">{{ bar.label }}</span>
             <span class="ml-auto tabular-nums" :class="over(bar.value, bar.target) ? 'text-amber-700 dark:text-amber-400' : 'text-ink-faint'" :title="over(bar.value, bar.target) ? 'Past the goal' : undefined">
@@ -268,7 +269,7 @@ function dayMenu(event: MouseEvent) {
           </div>
         </div>
       </div>
-      <p v-if="missingData" class="mb-2 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+      <p v-if="missingData" class="mb-2 flex items-center gap-1.5 text-amber-700 dark:text-amber-400" :class="metaText">
         <AppIcon fallback="ph:warning" :size="13" /> {{ missingData }} {{ missingData === 1 ? 'item needs' : 'items need' }} nutrition data: fill in the food, then "Update from the food".
       </p>
 
@@ -276,7 +277,7 @@ function dayMenu(event: MouseEvent) {
         <div v-for="group in groups" :key="group.meal.id" class="rounded-lg" data-food-meal @contextmenu="mealMenu($event, group.meal, group.entries)">
           <div class="flex items-center gap-2 px-1.5 py-1">
             <span class="font-medium" :class="group.entries.length ? '' : 'text-ink-faint'">{{ group.meal.name }}</span>
-            <span v-if="group.entries.length" class="text-xs tabular-nums text-ink-faint">{{ formatKcal(group.totals.kcal) }} kcal</span>
+            <span v-if="group.entries.length" class="tabular-nums text-ink-faint" :class="metaText">{{ formatKcal(group.totals.kcal) }} kcal</span>
             <div class="ml-auto flex items-center">
               <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink max-md:p-2" :title="`More for ${group.meal.name}`" @click="mealMenu($event, group.meal, group.entries)">
                 <AppIcon fallback="ph:dots-three" :size="15" />
@@ -296,7 +297,7 @@ function dayMenu(event: MouseEvent) {
           >
             <span class="min-w-0 flex-1 truncate" :class="item.entry.quick && !item.entry.name ? 'text-ink-soft' : ''">{{ entryLabel(item.entry) }} <span class="text-ink-faint">{{ item.entry.amount }}</span></span>
             <AppIcon v-if="!item.entry.nutrients" fallback="ph:warning" class="shrink-0 text-amber-600" :size="13" title="Needs nutrition data" />
-            <span v-else class="shrink-0 text-xs tabular-nums text-ink-faint">{{ formatKcal(item.entry.nutrients.kcal) }}</span>
+            <span v-else class="shrink-0 tabular-nums text-ink-faint" :class="metaText">{{ formatKcal(item.entry.nutrients.kcal) }}</span>
           </button>
         </div>
       </div>
@@ -307,36 +308,36 @@ function dayMenu(event: MouseEvent) {
     <ModalDialog v-if="editing" :title="entryLabel(editing.entry)" width="26rem" @close="editing = null">
       <form class="space-y-3" @submit.prevent="saveEdit">
         <template v-if="editing.quick">
-          <label class="block text-xs text-ink-faint">
+          <label class="block text-ink-faint" :class="metaText">
             Name <span class="text-ink-faint">(optional)</span>
-            <input v-model="editing.quick.name" class="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-line-strong max-md:text-base" placeholder="Muffin" />
+            <input v-model="editing.quick.name" class="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 outline-none focus:border-line-strong max-md:text-base" :class="bodyText" placeholder="Muffin" />
           </label>
           <div class="grid grid-cols-4 gap-2">
-            <label v-for="[key, name] in QUICK_FIELDS" :key="key" class="text-xs text-ink-faint">
+            <label v-for="[key, name] in QUICK_FIELDS" :key="key" class="text-ink-faint" :class="metaText">
               {{ name }}
-              <input v-model="editing.quick[key]" class="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm tabular-nums outline-none focus:border-line-strong max-md:text-base" inputmode="decimal" :placeholder="key === 'kcal' ? '0' : 'g'" :autofocus="key === 'kcal'" />
+              <input v-model="editing.quick[key]" class="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 tabular-nums outline-none focus:border-line-strong max-md:text-base" :class="bodyText" inputmode="decimal" :placeholder="key === 'kcal' ? '0' : 'g'" :autofocus="key === 'kcal'" />
             </label>
           </div>
-          <p class="text-xs text-ink-faint">Logged without a food: only these numbers count.</p>
+          <p class="text-ink-faint" :class="metaText">Logged without a food: only these numbers count.</p>
         </template>
-        <label v-else class="block text-xs text-ink-faint">
+        <label v-else class="block text-ink-faint" :class="metaText">
           Amount
-          <input v-model="editing.amount" class="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-line-strong max-md:text-base" autofocus />
+          <input v-model="editing.amount" class="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 outline-none focus:border-line-strong max-md:text-base" :class="bodyText" autofocus />
         </label>
-        <p v-if="editError" class="text-xs text-red-600 dark:text-red-400">{{ editError }}</p>
+        <p v-if="editError" class="text-red-600 dark:text-red-400" :class="metaText">{{ editError }}</p>
         <div class="flex flex-wrap gap-1.5">
           <button
             v-for="m in meals"
             :key="m.id"
             type="button"
-            class="rounded-full px-2.5 py-1 text-xs ring-1 max-md:py-1.5 max-md:text-sm"
-            :class="editing.meal === m.id ? 'bg-ink text-surface ring-ink' : 'text-ink-soft ring-line hover:bg-hover'"
+            class="rounded-full px-2.5 py-1 ring-1 max-md:py-1.5 max-md:text-sm"
+            :class="[metaText, editing.meal === m.id ? 'bg-ink text-surface ring-ink' : 'text-ink-soft ring-line hover:bg-hover']"
             @click="editing.meal = m.id"
           >
             {{ m.name }}
           </button>
         </div>
-        <p v-if="editing.entry.nutrients && !editing.quick" class="text-xs tabular-nums text-ink-faint">
+        <p v-if="editing.entry.nutrients && !editing.quick" class="tabular-nums text-ink-faint" :class="metaText">
           {{ formatGrams(editing.entry.grams) }} g · <NutrientLine :nutrients="editing.entry.nutrients" />
         </p>
         <div class="flex items-center gap-2">

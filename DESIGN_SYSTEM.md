@@ -8,8 +8,13 @@ where it carries meaning (types, select options, tags), the content as the loude
 **Color**: surface and text tokens in `packages/web/src/style.css` (`@theme`, redefined under
 `.dark`); the 18 named colors' class sets (chips, icons, groups, highlights) in
 `packages/web/src/lib/colors.ts`.
-**Typography**: the system font (`--font-sans`); UI at 14px (`text-sm`), 15px in the phone drawer;
-notes at 16px, line height 1.6. Page titles bold with tight tracking.
+**Typography** (`packages/web/src/lib/type-scale.ts`): the system font (`--font-sans`). **Title**:
+1.8rem → 2.1rem from `md`, bold, tight leading and tracking; **section heading**: 14px semibold,
+soft ink, icon + gap-2 (Overdue stays red); **body/UI**: 14px (`text-sm`); **meta**: 12px (`text-xs`)
+for counts, times, hints and captions. Phone controls, drawer and sheets keep 15px where applied.
+Review sheet titles use 1.4rem → 1.75rem. **Tiny**: 10px only for habit heatmap axes (11px cells),
+notification counts and calendar entry badges; `type-scale.test.ts` guards these exceptions and
+rejects arbitrary font sizes outside the module. Notes keep 16px, line height 1.6, and their own headings.
 **Spacing**: Tailwind's 4px scale. Sidebar rows 30px on desktop, 40px+ on phones.
 **Theme**: system, light or dark per browser (`lib/theme.ts`, Settings › Appearance and the sidebar's
 footer).

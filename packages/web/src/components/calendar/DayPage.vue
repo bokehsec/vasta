@@ -13,6 +13,7 @@ import { dayTaskGroups } from '../../lib/calendar-tasks.ts'
 import { ENTRY_COMPLETION } from '../../lib/completion-feedback.ts'
 import { pageWidthClass } from '../../lib/page-width.ts'
 import { templatesOf } from '../../lib/templates.ts'
+import { bodyText, metaText, pageTitle, sectionHeading } from '../../lib/type-scale.ts'
 import ObjectPage from '../../views/ObjectPage.vue'
 import AppIcon from '../AppIcon.vue'
 import TipsCard from '../TipsCard.vue'
@@ -68,18 +69,17 @@ const taskSections = computed(() => [
   { id: 'completed', title: 'Completed', icon: 'ph:check-circle', rows: grouped.value.completed },
   { id: 'dropped', title: 'Dropped', icon: 'ph:x-circle', rows: grouped.value.dropped },
 ].filter((section) => section.rows.length))
-const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
 </script>
 
 <template>
   <div class="mx-auto px-6 pb-32 pt-8 md:px-10 md:pt-12" :class="pageWidthClass(noteColumns)">
-    <div class="flex items-center gap-2 text-sm font-medium">
+    <div class="flex items-center gap-2 font-medium" :class="bodyText">
       <span class="text-accent first-letter:uppercase">{{ weekday }}</span>
-      <span v-if="isToday(day)" class="rounded-md bg-accent/10 px-1.5 py-0.5 text-xs text-accent">Today</span>
+      <span v-if="isToday(day)" class="rounded-md bg-accent/10 px-1.5 py-0.5 text-accent" :class="metaText">Today</span>
     </div>
-    <h1 class="mt-1 flex flex-wrap items-baseline gap-x-3 text-[1.8rem] font-bold leading-tight tracking-tight md:text-[2.1rem]">
+    <h1 class="mt-1 flex flex-wrap items-baseline gap-x-3" :class="pageTitle">
       <span>{{ date }}</span>
-      <span class="text-sm font-normal tracking-normal text-ink-faint">Week {{ isoWeek(day) }}</span>
+      <span class="font-normal tracking-normal text-ink-faint" :class="bodyText">Week {{ isoWeek(day) }}</span>
     </h1>
 
     <OverdueSection v-if="isToday(day) && overdue?.length" :entries="overdue" variant="day-task" class="!mt-6" @details="(e, el) => emit('details', e, el)" @moved="emit('moved')" />
@@ -89,16 +89,16 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
 
     <section class="mt-8">
       <div class="mb-2 flex items-center">
-        <h2 :class="heading"><AppIcon fallback="ph:clock" /> On this day</h2>
+        <h2 :class="sectionHeading"><AppIcon fallback="ph:clock" /> On this day</h2>
         <button class="ml-auto" :class="greyButton" @click="emit('create', $event.currentTarget as HTMLElement)">
           <AppIcon fallback="ph:plus" :size="13" /> Add
         </button>
       </div>
-      <p v-if="!scheduled.length && !taskSections.length" class="rounded-lg border border-dashed border-line px-3 py-3 text-sm text-ink-faint">Nothing scheduled. Planned tasks, deadlines, dated objects and events show here.</p>
+      <p v-if="!scheduled.length && !taskSections.length" class="rounded-lg border border-dashed border-line px-3 py-3 text-ink-faint" :class="bodyText">Nothing scheduled. Planned tasks, deadlines, dated objects and events show here.</p>
       <div v-if="scheduled.length" class="space-y-1">
         <div v-for="entry in scheduled" :key="entry.key" class="flex items-stretch gap-3">
-          <span class="w-14 shrink-0 pt-1 text-right text-xs tabular-nums text-ink-faint">{{ entry.allDay ? 'All day' : formatClock(entry.start) }}</span>
-          <div class="min-w-0 flex-1 text-sm">
+          <span class="w-14 shrink-0 pt-1 text-right tabular-nums text-ink-faint" :class="metaText">{{ entry.allDay ? 'All day' : formatClock(entry.start) }}</span>
+          <div class="min-w-0 flex-1" :class="bodyText">
             <CalendarEntryItem :entry="entry" variant="block" :source="sources.get(entry.sourceId ?? '')" @details="(e, el) => emit('details', e, el)" />
           </div>
         </div>
@@ -106,7 +106,7 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
     </section>
 
     <section v-for="section in taskSections" :key="section.id" class="mt-8" :data-task-section="section.id">
-      <h2 :class="heading" class="mb-3"><AppIcon :fallback="section.icon" /> {{ section.title }} <span class="font-normal text-ink-faint">{{ section.rows.length }}</span></h2>
+      <h2 :class="sectionHeading" class="mb-3"><AppIcon :fallback="section.icon" /> {{ section.title }} <span class="font-normal text-ink-faint" :class="metaText">{{ section.rows.length }}</span></h2>
       <div class="space-y-1.5">
         <CalendarEntryItem v-for="row in section.rows" :key="row.key" :entry="row" variant="day-task" @details="(e, el) => emit('details', e, el)" />
       </div>
@@ -114,8 +114,8 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
 
     <section class="mt-10">
       <div class="mb-3 flex items-center">
-        <h2 :class="heading"><AppIcon fallback="ph:calendar-check" /> Daily note</h2>
-        <ObjectLink v-if="noteId" :id="noteId" class="ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-faint hover:bg-hover hover:text-ink">
+        <h2 :class="sectionHeading"><AppIcon fallback="ph:calendar-check" /> Daily note</h2>
+        <ObjectLink v-if="noteId" :id="noteId" class="ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-ink-faint hover:bg-hover hover:text-ink" :class="metaText">
           Open <AppIcon fallback="ph:arrow-up-right" :size="12" />
         </ObjectLink>
       </div>
@@ -124,7 +124,7 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
         <AppIcon fallback="ph:plus" /> {{ starting ? 'Starting…' : 'Start the daily note' }}
       </button>
       <form v-else class="space-y-2" @submit.prevent="draft.trim() && emit('start-note', draft)">
-        <textarea v-model="draft" :disabled="starting" aria-label="Daily note" placeholder="Write something about this day…" class="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" rows="3" />
+        <textarea v-model="draft" :disabled="starting" aria-label="Daily note" placeholder="Write something about this day…" class="w-full rounded-lg border border-line bg-surface px-3 py-2" :class="bodyText" rows="3" />
         <button :class="mainButton" :disabled="starting || !draft.trim()">
           {{ starting ? 'Saving…' : 'Save daily note' }}
         </button>
@@ -132,11 +132,11 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
     </section>
 
     <section v-if="created.length" class="mt-10">
-      <h2 :class="heading" class="mb-2"><AppIcon fallback="ph:sparkle" /> Created on this day <span class="font-normal text-ink-faint">{{ created.length }}</span></h2>
-      <ObjectLink v-for="object in created" :key="object.id" :id="object.id" class="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-hover">
+      <h2 :class="sectionHeading" class="mb-2"><AppIcon fallback="ph:sparkle" /> Created on this day <span class="font-normal text-ink-faint" :class="metaText">{{ created.length }}</span></h2>
+      <ObjectLink v-for="object in created" :key="object.id" :id="object.id" class="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-hover" :class="bodyText">
         <TypeIcon :icon="object.icon ?? typesById.get(object.typeId)?.icon" fallback="ph:file-text" :color="typesById.get(object.typeId)?.color" />
         <span class="min-w-0 flex-1 truncate">{{ displayTitle(object, typesById.get(object.typeId)) }}</span>
-        <span class="shrink-0 text-xs text-ink-faint">{{ typesById.get(object.typeId)?.name }}</span>
+        <span class="shrink-0 text-ink-faint" :class="metaText">{{ typesById.get(object.typeId)?.name }}</span>
       </ObjectLink>
     </section>
   </div>

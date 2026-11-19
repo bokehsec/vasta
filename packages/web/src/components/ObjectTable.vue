@@ -14,6 +14,7 @@ import { useRowTypes, type Section } from '../lib/collection-rows.ts'
 import { displayTitle } from '../lib/format.ts'
 import type { Group } from '../lib/query.ts'
 import { lastError } from '../lib/state.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import FieldValue from './FieldValue.vue'
 import GroupHeading from './GroupHeading.vue'
@@ -151,12 +152,12 @@ async function saveQuick(object: ObjectSummary, values: Record<Id, PropertyValue
   <!-- Table: fixed column widths; the last, empty column takes the space left. -->
   <!-- Grouped or not, a page's table sits in the same box, its groups' headings rows inside it. -->
   <div ref="container" class="overflow-x-auto" :class="bare ? '' : 'rounded-xl border border-line'">
-    <table class="table-fixed text-sm" :style="{ width: `max(100%, ${tableWidth}px)` }">
+    <table class="table-fixed" :class="bodyText" :style="{ width: `max(100%, ${tableWidth}px)` }">
       <colgroup>
         <col v-for="column in columns" :key="column.field" :style="{ width: `${widthOf(column)}px` }" />
         <col />
       </colgroup>
-      <thead class="text-left text-xs text-ink-faint">
+      <thead class="text-left text-ink-faint" :class="metaText">
         <tr>
           <th v-for="column in columns" scope="col" :key="column.field" class="relative px-3 py-2 font-medium" :class="bare ? 'first:pl-0' : ''" :data-column="column.field">
             <span class="block truncate">{{ column.field === 'title' ? 'Title' : column.label }}</span>

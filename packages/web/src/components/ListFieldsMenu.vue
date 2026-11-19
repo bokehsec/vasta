@@ -4,6 +4,7 @@
 import { computed, ref } from 'vue'
 import type { Id, ListSettings } from '@vasta/core'
 import { listFields, listSettings, type ListField } from '../lib/columns.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 
 const props = defineProps<{ list: ListSettings | undefined; typeIds: Id[] }>()
@@ -56,8 +57,8 @@ function endDrag() {
 </script>
 
 <template>
-  <div ref="rows" class="flex flex-col p-1 text-sm">
-    <div class="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Fields after the title</div>
+  <div ref="rows" class="flex flex-col p-1" :class="bodyText">
+    <div class="px-2 pb-1 pt-0.5 font-medium uppercase tracking-wide text-ink-faint" :class="metaText">Fields after the title</div>
     <div
       v-for="field in fields"
       :key="field.field"
@@ -96,7 +97,8 @@ function endDrag() {
     </button>
     <button
       v-if="list"
-      class="mt-1 rounded-lg px-2 py-1.5 text-left text-xs text-ink-faint hover:bg-hover hover:text-ink max-md:min-h-11"
+      class="mt-1 rounded-lg px-2 py-1.5 text-left text-ink-faint hover:bg-hover hover:text-ink max-md:min-h-11"
+      :class="metaText"
       @click="emit('update', undefined)"
     >
       Reset to default

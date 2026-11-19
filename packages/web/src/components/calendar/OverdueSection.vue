@@ -12,6 +12,7 @@ import { moveToToday } from '../../lib/calendar-drop.ts'
 import { taskDate } from '../../lib/calendar-tasks.ts'
 import { ENTRY_COMPLETION } from '../../lib/completion-feedback.ts'
 import { cachedSummary, typesById } from '../../lib/state.ts'
+import { metaText, overdueHeading } from '../../lib/type-scale.ts'
 import AppIcon from '../AppIcon.vue'
 import CalendarEntryItem from './CalendarEntryItem.vue'
 
@@ -36,14 +37,14 @@ async function move(entry: CalendarEntry) {
   if (await moveToToday(entry)) emit('moved')
 }
 
-const heading = computed(() => (props.variant === 'row' ? 'mb-1 px-1.5 text-sm font-semibold text-red-700 dark:text-red-400' : 'mb-3 flex items-center gap-2 text-sm font-semibold text-red-700 dark:text-red-400'))
+const heading = computed(() => [overdueHeading, props.variant === 'row' ? 'mb-1 px-1.5' : 'mb-3'])
 </script>
 
 <template>
   <section v-if="entries.length" :class="variant === 'row' ? '' : 'mt-8'" data-overdue>
     <h3 :class="heading">
       <AppIcon v-if="variant === 'day-task'" fallback="ph:warning-circle" />
-      Overdue <span class="font-normal text-ink-faint">{{ entries.length }}</span>
+      Overdue <span class="font-normal text-ink-faint" :class="metaText">{{ entries.length }}</span>
     </h3>
     <div :class="variant === 'row' ? '' : 'space-y-1.5'">
       <div v-for="entry in entries" :key="entry.key" class="flex items-center gap-2" data-overdue-row>

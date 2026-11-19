@@ -11,6 +11,7 @@ import { CHARTS, dayLabel, percentText, useHabitDisplay, useHabitProgress } from
 import { isPhone } from '../lib/viewport.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { habitColor, useFoodHabits, useToday } from '../lib/habits.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import HabitDaysChart from './HabitDaysChart.vue'
 import HabitTrendChart from './HabitTrendChart.vue'
 import ObjectLink from './ObjectLink.vue'
@@ -67,7 +68,7 @@ const nothingYet = computed(() => !report.value.total.expected && !report.value.
 <template>
   <div class="mt-6 space-y-6 max-md:pb-24" data-habit-progress>
     <div class="flex flex-wrap items-center gap-3">
-      <div class="inline-flex rounded-lg bg-hover p-0.5 text-sm max-md:min-w-[14.5rem] max-md:flex-1" role="group" aria-label="Range">
+      <div class="inline-flex rounded-lg bg-hover p-0.5 max-md:min-w-[14.5rem] max-md:flex-1" :class="bodyText" role="group" aria-label="Range">
         <button
           v-for="count in RANGES"
           :key="count"
@@ -80,7 +81,7 @@ const nothingYet = computed(() => !report.value.total.expected && !report.value.
           {{ count }} weeks
         </button>
       </div>
-      <div class="inline-flex rounded-lg bg-hover p-0.5 text-sm max-md:min-w-[14.5rem] max-md:flex-1" role="group" aria-label="Chart" data-chart-picker="progress">
+      <div class="inline-flex rounded-lg bg-hover p-0.5 max-md:min-w-[14.5rem] max-md:flex-1" :class="bodyText" role="group" aria-label="Chart" data-chart-picker="progress">
         <button
           v-for="c in CHARTS"
           :key="c.id"
@@ -96,19 +97,19 @@ const nothingYet = computed(() => !report.value.total.expected && !report.value.
       </div>
     </div>
 
-    <p v-if="!rows.length" class="py-10 text-center text-sm text-ink-faint">No habits match the filter.</p>
-    <p v-else-if="nothingYet" class="py-10 text-center text-sm text-ink-faint">Nothing to count yet. Check habits off from Today.</p>
+    <p v-if="!rows.length" class="py-10 text-center text-ink-faint" :class="bodyText">No habits match the filter.</p>
+    <p v-else-if="nothingYet" class="py-10 text-center text-ink-faint" :class="bodyText">Nothing to count yet. Check habits off from Today.</p>
     <template v-else>
       <div data-progress-headline>
         <div class="text-3xl font-semibold tabular-nums">{{ percentText(report.total) }}</div>
-        <div class="mt-0.5 text-sm text-ink-soft">
+        <div class="mt-0.5 text-ink-soft" :class="bodyText">
           <span class="tabular-nums">{{ report.total.done }} of {{ report.total.expected }}</span> done over {{ weeks }} weeks
           <span class="text-ink-faint"> · using your current goals</span>
         </div>
       </div>
 
       <section>
-        <h3 class="mb-2 text-sm font-semibold">{{ chart === 'line' ? 'Each week' : 'Each day' }}</h3>
+        <h3 class="mb-2 font-semibold" :class="bodyText">{{ chart === 'line' ? 'Each week' : 'Each day' }}</h3>
         <div data-report-chart :data-chart="chart">
           <HabitTrendChart v-if="chart === 'line'" :weeks="byWeek" :height="150" labels />
           <HabitDaysChart v-else :days="days" :cell="isPhone ? 16 : 22" labels />
@@ -116,10 +117,10 @@ const nothingYet = computed(() => !report.value.total.expected && !report.value.
       </section>
 
       <section>
-        <h3 class="mb-2 text-sm font-semibold">Each habit</h3>
-        <table class="w-full border-separate border-spacing-0 text-sm">
+        <h3 class="mb-2 font-semibold" :class="bodyText">Each habit</h3>
+        <table class="w-full border-separate border-spacing-0" :class="bodyText">
           <thead>
-            <tr class="text-[11px] text-ink-faint">
+            <tr class="text-ink-faint" :class="metaText">
               <th class="pb-2 text-left font-medium">Habit</th>
               <th class="pb-2 pl-3 text-left font-medium max-sm:hidden">Goal</th>
               <th class="pb-2 pl-3 text-right font-medium">Weeks</th>
@@ -133,7 +134,7 @@ const nothingYet = computed(() => !report.value.total.expected && !report.value.
                 <ObjectLink :id="row.habit.id" class="flex min-w-0 items-center gap-2 hover:underline">
                   <span class="h-2.5 w-2.5 shrink-0 rounded-full" :class="swatchClasses[habitColor(row.habit)]" />
                   <span class="truncate font-medium">{{ row.habit.title || 'Untitled' }}</span>
-                  <span v-if="row.paused" class="text-xs text-ink-faint">paused</span>
+                  <span v-if="row.paused" class="text-ink-faint" :class="metaText">paused</span>
                 </ObjectLink>
               </td>
               <td class="border-t border-line/70 py-2 pl-3 text-ink-soft max-sm:hidden">{{ goalText(row.habit) }}</td>

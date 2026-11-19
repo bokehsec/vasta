@@ -8,6 +8,7 @@ import { api } from '../lib/api.ts'
 import { greyButton } from '../lib/buttons.ts'
 import { startPage } from '../lib/start-page.ts'
 import { typesById, ui, workspace } from '../lib/state.ts'
+import { bodyText, pageTitle } from '../lib/type-scale.ts'
 import AppIcon from '../components/AppIcon.vue'
 
 const router = useRouter()
@@ -33,8 +34,8 @@ function open(page: ReturnType<typeof startPage>) {
 
 <template>
   <div v-if="!looking" class="mx-auto max-w-xl px-8 py-24 text-center">
-    <h1 class="text-2xl font-semibold">{{ workspace.space?.name }}</h1>
-    <div class="mt-6 flex justify-center gap-2 text-sm">
+    <h1 :class="pageTitle">{{ workspace.space?.name }}</h1>
+    <div class="mt-6 flex justify-center gap-2" :class="bodyText">
       <button :class="greyButton" @click="openToday">
         <AppIcon fallback="ph:calendar-check" /> Today
       </button>

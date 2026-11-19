@@ -13,6 +13,7 @@ import { imageOf } from '../lib/media.ts'
 import { PAGE_OBJECT_ID } from '../lib/page.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
 import { openObject } from '../lib/open.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 
 const props = defineProps(nodeViewProps)
 const objectId = computed(() => props.node.attrs.objectId as string)
@@ -63,7 +64,7 @@ const player = computed(() => (display.value === 'embed' && type.value?.system =
           @error="broken = true"
         />
       </button>
-      <figcaption v-if="summary?.preview" class="mt-1 text-sm text-ink-faint">{{ summary.preview }}</figcaption>
+      <figcaption v-if="summary?.preview" class="mt-1 text-ink-faint" :class="bodyText">{{ summary.preview }}</figcaption>
     </figure>
 
     <!-- Queries show their live results; any display but "compact" (including ones an older build wrote) is the full frame -->
@@ -72,7 +73,7 @@ const player = computed(() => (display.value === 'embed' && type.value?.system =
     <!-- Weblink player, with a line that opens the weblink -->
     <div v-else-if="player" class="max-w-2xl">
       <EmbedFrame :embed="player" />
-      <button class="mt-1 flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-xs text-ink-faint hover:bg-hover hover:text-ink" @click="open">
+      <button class="mt-1 flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-ink-faint hover:bg-hover hover:text-ink" :class="metaText" @click="open">
         <AppIcon :icon="summary?.icon ?? type?.icon" fallback="ph:globe-hemisphere-west" :size="13" />
         <span class="truncate">{{ title }}</span>
       </button>
@@ -95,11 +96,11 @@ const player = computed(() => (display.value === 'embed' && type.value?.system =
         @error="broken = true"
       />
       <div class="min-w-0 flex-1 p-3">
-        <span class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium" :class="chip(type?.color)">
+        <span class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium" :class="[metaText, chip(type?.color)]">
           <AppIcon :icon="type?.icon" fallback="ph:cube" :size="12" />{{ type?.name }}
         </span>
         <div class="mt-1.5 truncate font-semibold">{{ title }}</div>
-        <p v-if="summary?.preview" class="mt-1 line-clamp-3 text-sm text-ink-soft">{{ summary.preview }}</p>
+        <p v-if="summary?.preview" class="mt-1 line-clamp-3 text-ink-soft" :class="bodyText">{{ summary.preview }}</p>
       </div>
     </button>
   </NodeViewWrapper>

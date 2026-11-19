@@ -7,6 +7,7 @@ import { newTypeFlow, openToday } from '../lib/actions.ts'
 import { keysOf } from '../lib/shortcuts.ts'
 import { ui } from '../lib/state.ts'
 import { askServerAdmin, hideTips, serverAdmin, tipsHidden } from '../lib/tips.ts'
+import { bodyText, metaText, sectionHeading } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 
 const router = useRouter()
@@ -23,17 +24,16 @@ const tips = computed(() => [
 </script>
 
 <template>
-  <section v-if="!tipsHidden" class="rounded-xl border border-line bg-canvas/60 p-4 text-sm text-ink" data-tips>
+  <section v-if="!tipsHidden" class="rounded-xl border border-line bg-canvas/60 p-4 text-ink" :class="bodyText" data-tips>
     <div class="mb-2 flex items-center gap-2">
-      <AppIcon fallback="ph:lightbulb" class="text-accent" />
-      <h2 class="font-semibold">Getting started</h2>
-      <button class="ml-auto rounded-md px-2 py-0.5 text-xs text-ink-faint hover:bg-hover hover:text-ink" @click="hideTips">Hide tips</button>
+      <h2 :class="sectionHeading"><AppIcon fallback="ph:lightbulb" class="text-accent" /> Getting started</h2>
+      <button class="ml-auto rounded-md px-2 py-0.5 text-ink-faint hover:bg-hover hover:text-ink" :class="metaText" @click="hideTips">Hide tips</button>
     </div>
     <ul class="space-y-1.5">
       <li v-for="tip in tips" :key="tip.icon" class="flex items-start gap-2.5">
         <AppIcon :fallback="tip.icon" class="mt-0.5 shrink-0 text-ink-faint" />
         <span class="min-w-0 flex-1 text-ink-soft">{{ tip.text }}</span>
-        <button v-if="tip.action" class="shrink-0 rounded-md px-2 py-0.5 text-xs text-accent hover:bg-hover" @click="tip.run">{{ tip.action }}</button>
+        <button v-if="tip.action" class="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-hover" :class="metaText" @click="tip.run">{{ tip.action }}</button>
       </li>
     </ul>
   </section>

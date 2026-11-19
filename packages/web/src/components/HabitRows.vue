@@ -10,6 +10,7 @@ import { addDays, habitDayState, habitPausedOn, habitProgress, habitSince, habit
 import { swatchClasses } from '../lib/colors.ts'
 import { askHabitAmount, habitAmountLabel, habitColor, habitStateWord } from '../lib/habits.ts'
 import { longDayLabel } from '../lib/habit-progress.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import HabitCheck from './HabitCheck.vue'
 import ObjectLink from './ObjectLink.vue'
 
@@ -76,7 +77,7 @@ const rows = computed(() =>
           <span class="size-2.5 shrink-0 -translate-y-px rounded-full" :class="swatchClasses[habitColor(row.habit)]" />
           <span class="min-w-0 break-words">{{ row.habit.title || 'Untitled' }}</span>
         </ObjectLink>
-        <div class="ml-[18px] mt-0.5 text-[13px] tabular-nums" :class="row.line.streak ? 'text-orange-600 dark:text-orange-400' : 'text-ink-faint'">{{ row.line.text }}</div>
+        <div class="ml-[18px] mt-0.5 tabular-nums" :class="[metaText, row.line.streak ? 'text-orange-600 dark:text-orange-400' : 'text-ink-faint']">{{ row.line.text }}</div>
       </div>
       <div class="flex h-[26px] items-end gap-[3px]" role="img" :aria-label="`${row.habit.title}: the last two weeks`" data-habit-ticks @contextmenu.stop.prevent="pressTicks($event, row.habit)">
         <i
@@ -96,6 +97,6 @@ const rows = computed(() =>
       <!-- 36px drawn, 44px to tap. -->
       <HabitCheck :habit="row.habit" :day="today" :size="36" class="justify-self-end after:absolute after:-inset-1 after:content-['']" />
     </div>
-    <p v-if="!rows.length" class="py-10 text-center text-sm text-ink-faint">No habits match the filter.</p>
+    <p v-if="!rows.length" class="py-10 text-center text-ink-faint" :class="bodyText">No habits match the filter.</p>
   </div>
 </template>

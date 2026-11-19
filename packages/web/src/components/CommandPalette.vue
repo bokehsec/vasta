@@ -24,6 +24,7 @@ import { cycleTheme } from '../lib/theme.ts'
 import AppIcon from './AppIcon.vue'
 import TypeIcon from './TypeIcon.vue'
 import { openObject } from '../lib/open.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 
 type Result =
   | { kind: 'object'; object: ObjectSummary }
@@ -231,13 +232,14 @@ const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
           <input
             ref="input"
             v-model="query"
-            class="w-full bg-transparent py-3.5 text-[15px] outline-none placeholder:text-ink-faint max-md:text-base"
+            class="w-full bg-transparent py-3.5 outline-none placeholder:text-ink-faint max-md:text-base"
+            :class="bodyText"
             placeholder="Search or create…"
             @keydown="onKey"
             @keyup="readCursor"
             @click="readCursor"
           />
-          <kbd class="rounded border border-line px-1.5 text-[11px] text-ink-faint max-md:hidden">esc</kbd>
+          <kbd class="rounded border border-line px-1.5 text-ink-faint max-md:hidden" :class="metaText">esc</kbd>
           <button class="-mr-2 rounded-md p-2 text-ink-faint md:hidden" title="Close" @click="ui.paletteOpen = false"><AppIcon fallback="ph:x" /></button>
         </div>
         <div class="max-h-[45dvh] overflow-y-auto p-1.5 md:max-h-[55vh]">
@@ -252,60 +254,60 @@ const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
             <template v-if="result.kind === 'object'">
               <TypeIcon :icon="result.object.icon ?? typeOf(result.object)?.icon" fallback="ph:file-text" :size="18" :color="objectColor(result.object, typeOf(result.object))" />
               <div class="min-w-0 flex-1">
-                <div class="truncate text-sm font-medium max-md:whitespace-normal max-md:break-words">{{ displayTitle(result.object, typeOf(result.object)) }}</div>
-                <div v-if="result.object.preview" class="truncate text-xs text-ink-faint">{{ result.object.preview }}</div>
+                <div class="truncate font-medium max-md:whitespace-normal max-md:break-words" :class="bodyText">{{ displayTitle(result.object, typeOf(result.object)) }}</div>
+                <div v-if="result.object.preview" class="truncate text-ink-faint" :class="metaText">{{ result.object.preview }}</div>
               </div>
-              <span class="shrink-0 text-xs text-ink-faint">{{ typeOf(result.object)?.name }}</span>
+              <span class="shrink-0 text-ink-faint" :class="metaText">{{ typeOf(result.object)?.name }}</span>
             </template>
             <template v-else-if="result.kind === 'command'">
               <AppIcon :fallback="result.command.icon" :size="18" class="text-ink-soft" />
-              <span class="flex-1 text-sm">{{ result.command.label }}</span>
-              <kbd v-if="result.command.shortcut" class="rounded border border-line px-1.5 font-sans text-[11px] text-ink-faint max-md:hidden">{{ keysOf(result.command.shortcut) }}</kbd>
+              <span class="flex-1" :class="bodyText">{{ result.command.label }}</span>
+              <kbd v-if="result.command.shortcut" class="rounded border border-line px-1.5 font-sans text-ink-faint max-md:hidden" :class="metaText">{{ keysOf(result.command.shortcut) }}</kbd>
             </template>
             <template v-else-if="result.kind === 'type'">
               <TypeIcon :icon="result.type.icon" fallback="ph:cube" :size="18" :color="result.type.color" />
-              <span class="flex-1 text-sm">{{ result.type.pluralName }}</span>
-              <span class="text-xs text-ink-faint">Type</span>
+              <span class="flex-1" :class="bodyText">{{ result.type.pluralName }}</span>
+              <span class="text-ink-faint" :class="metaText">Type</span>
             </template>
             <template v-else-if="result.kind === 'weblink'">
               <AppIcon fallback="ph:link" :size="18" class="text-accent" />
               <div class="min-w-0 flex-1">
-                <div class="text-sm">Save as weblink</div>
-                <div class="truncate text-xs text-ink-faint">{{ result.url }}</div>
+                <div :class="bodyText">Save as weblink</div>
+                <div class="truncate text-ink-faint" :class="metaText">{{ result.url }}</div>
               </div>
-              <span class="text-xs text-ink-faint">{{ systemType('weblink')?.name }}</span>
+              <span class="text-ink-faint" :class="metaText">{{ systemType('weblink')?.name }}</span>
             </template>
             <template v-else-if="result.kind === 'complete'">
               <AppIcon :icon="result.item.icon" fallback="ph:cube" :size="18" class="text-ink-soft" />
-              <span class="min-w-0 flex-1 truncate text-sm">{{ result.item.label }}</span>
-              <span class="shrink-0 text-xs text-ink-faint">{{ result.item.detail }}</span>
+              <span class="min-w-0 flex-1 truncate" :class="bodyText">{{ result.item.label }}</span>
+              <span class="shrink-0 text-ink-faint" :class="metaText">{{ result.item.detail }}</span>
             </template>
             <template v-else-if="result.kind === 'typed'">
               <AppIcon :icon="result.type.icon" fallback="ph:plus-circle" :size="18" class="text-accent" />
               <div class="min-w-0 flex-1">
-                <div class="truncate text-sm">Create {{ result.preview.title ? `“${result.preview.title}”` : `a ${result.type.name}` }}</div>
-                <div v-if="result.preview.unknownTemplate" class="truncate text-xs text-amber-700 dark:text-amber-400">{{ result.type.name }} has no template “{{ result.preview.unknownTemplate }}”</div>
-                <div v-else-if="result.preview.errors.length" class="truncate text-xs text-amber-700 dark:text-amber-400">Cannot read {{ result.preview.errors.join('; ') }}</div>
-                <div v-else-if="result.preview.parts.length || result.preview.template" class="truncate text-xs text-ink-faint">{{ [...(result.preview.template ? [`from ${result.preview.template}`] : []), ...result.preview.parts].join(', ') }}</div>
-                <div v-else-if="result.preview.properties.length" class="truncate text-xs text-ink-faint">name:value sets {{ result.preview.properties.join(', ') }}</div>
+                <div class="truncate" :class="bodyText">Create {{ result.preview.title ? `“${result.preview.title}”` : `a ${result.type.name}` }}</div>
+                <div v-if="result.preview.unknownTemplate" class="truncate text-amber-700 dark:text-amber-400" :class="metaText">{{ result.type.name }} has no template “{{ result.preview.unknownTemplate }}”</div>
+                <div v-else-if="result.preview.errors.length" class="truncate text-amber-700 dark:text-amber-400" :class="metaText">Cannot read {{ result.preview.errors.join('; ') }}</div>
+                <div v-else-if="result.preview.parts.length || result.preview.template" class="truncate text-ink-faint" :class="metaText">{{ [...(result.preview.template ? [`from ${result.preview.template}`] : []), ...result.preview.parts].join(', ') }}</div>
+                <div v-else-if="result.preview.properties.length" class="truncate text-ink-faint" :class="metaText">name:value sets {{ result.preview.properties.join(', ') }}</div>
               </div>
-              <span class="shrink-0 text-xs text-ink-faint">{{ result.type.name }}</span>
+              <span class="shrink-0 text-ink-faint" :class="metaText">{{ result.type.name }}</span>
             </template>
             <template v-else-if="result.kind === 'food'">
               <AppIcon fallback="ph:bowl-food" :size="18" class="text-accent" />
               <div class="min-w-0 flex-1">
-                <div class="text-sm">{{ result.preview.text }}</div>
-                <div v-if="result.preview.problem" class="text-xs text-amber-700 dark:text-amber-400">{{ result.preview.problem }}</div>
+                <div :class="bodyText">{{ result.preview.text }}</div>
+                <div v-if="result.preview.problem" class="text-amber-700 dark:text-amber-400" :class="metaText">{{ result.preview.problem }}</div>
               </div>
-              <span class="shrink-0 text-xs text-ink-faint">Food</span>
+              <span class="shrink-0 text-ink-faint" :class="metaText">Food</span>
             </template>
             <template v-else>
               <AppIcon fallback="ph:plus-circle" :size="18" class="text-accent" />
-              <span class="flex-1 text-sm">Create “{{ result.title }}”</span>
-              <span class="text-xs text-ink-faint">{{ result.type.name }}</span>
+              <span class="flex-1" :class="bodyText">Create “{{ result.title }}”</span>
+              <span class="text-ink-faint" :class="metaText">{{ result.type.name }}</span>
             </template>
           </button>
-          <p v-if="!results.length" class="px-3 py-6 text-center text-sm text-ink-faint">Nothing found</p>
+          <p v-if="!results.length" class="px-3 py-6 text-center text-ink-faint" :class="bodyText">Nothing found</p>
         </div>
       </div>
     </div>

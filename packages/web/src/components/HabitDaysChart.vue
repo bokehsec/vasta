@@ -5,6 +5,7 @@
 // weekdays and each week's date.
 import { computed } from 'vue'
 import { dayLabel, heatStyle, longDayLabel, type ProgressDay } from '../lib/habit-progress.ts'
+import { metaText } from '../lib/type-scale.ts'
 
 const props = defineProps<{ days: ProgressDay[][]; cell: number; labels?: boolean }>()
 
@@ -19,12 +20,12 @@ const title = (d: ProgressDay) =>
 <template>
   <div class="max-w-full overflow-x-auto" data-habit-days>
     <div class="flex w-fit gap-1.5" role="img" :aria-label="`Share of each day's habits done, last ${days.length} weeks`">
-      <div v-if="labels" class="grid text-[10px] leading-none text-ink-faint" :style="{ gridTemplateRows: `${cell}px repeat(7, ${cell}px)`, rowGap: `${GAP}px` }">
+      <div v-if="labels" class="grid leading-none text-ink-faint" :class="metaText" :style="{ gridTemplateRows: `${cell}px repeat(7, ${cell}px)`, rowGap: `${GAP}px` }">
         <span />
         <span v-for="(d, i) in WEEKDAYS" :key="i" class="grid items-center">{{ d }}</span>
       </div>
       <div>
-        <div v-if="labels" class="relative text-[10px] leading-none text-ink-faint" :style="{ height: `${cell + GAP}px` }">
+        <div v-if="labels" class="relative leading-none text-ink-faint" :class="metaText" :style="{ height: `${cell + GAP}px` }">
           <template v-for="(week, i) in days" :key="week[0]!.day">
             <span v-if="i % labelEvery === 0" class="absolute top-0 whitespace-nowrap" :style="{ left: `${i * (cell + GAP)}px` }">{{ dayLabel(week[0]!.day) }}</span>
           </template>
@@ -36,7 +37,7 @@ const title = (d: ProgressDay) =>
         </div>
       </div>
     </div>
-    <p v-if="labels" class="mt-2 flex items-center gap-1 text-[11px] text-ink-faint">
+    <p v-if="labels" class="mt-2 flex items-center gap-1 text-ink-faint" :class="metaText">
       Share of the day's habits done
       <span class="inline-flex gap-0.5"><i v-for="s in [0, 0.25, 0.5, 0.75, 1]" :key="s" class="inline-block size-2.5 rounded-[2px]" :style="heatStyle(s)" /></span>
       less to more

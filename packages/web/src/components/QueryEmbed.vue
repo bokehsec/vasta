@@ -11,6 +11,7 @@ import { displayTitle } from '../lib/format.ts'
 import { greyButton } from '../lib/buttons.ts'
 import { openObject } from '../lib/open.ts'
 import { primeFromObject, summaryOf, typesById } from '../lib/state.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import QueryEditor from './QueryEditor.vue'
 import QueryResults from './QueryResults.vue'
@@ -66,13 +67,13 @@ onBeforeUnmount(() => {
 <template>
   <!-- Frameless: the title reads as a small heading in the page, the results sit under it with
        no box of their own, and Edit query shows on hover (always on touch) or while editing. -->
-  <div ref="root" class="vasta-ui group/query" :data-empty="hidden ? '' : undefined">
+  <div ref="root" class="vasta-ui group/query" :class="bodyText" :data-empty="hidden ? '' : undefined">
     <header v-if="!compact" class="flex min-h-8 items-center gap-2 pb-1" data-drag-handle>
       <AppIcon :icon="summary?.icon ?? type?.icon" fallback="ph:funnel" class="text-ink-soft" />
-      <ObjectLink :id="objectId" class="truncate text-sm font-semibold hover:underline">{{ displayTitle(summary, type) }}</ObjectLink>
+      <ObjectLink :id="objectId" class="truncate font-semibold hover:underline" :class="bodyText">{{ displayTitle(summary, type) }}</ObjectLink>
       <button
-        class="ml-auto flex items-center gap-1 rounded-md px-1.5 py-1 text-xs"
-        :class="editing ? 'bg-hover text-ink' : 'text-ink-faint opacity-0 hover:bg-hover hover:text-ink focus-visible:opacity-100 group-hover/query:opacity-100 [@media(hover:none)]:opacity-100'"
+        class="ml-auto flex items-center gap-1 rounded-md px-1.5 py-1"
+        :class="[metaText, editing ? 'bg-hover text-ink' : 'text-ink-faint opacity-0 hover:bg-hover hover:text-ink focus-visible:opacity-100 group-hover/query:opacity-100 [@media(hover:none)]:opacity-100']"
         @click="editing = !editing"
       >
         <AppIcon fallback="ph:sliders-horizontal" :size="13" /> {{ editing ? 'Done' : 'Edit query' }}

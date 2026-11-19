@@ -20,6 +20,7 @@ import { groupObjects, movableField, NO_VALUE, typesOf, type Group } from '../li
 import { lastError, typesById } from '../lib/state.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
+import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectCard from './ObjectCard.vue'
 import ObjectChip from './ObjectChip.vue'
@@ -237,8 +238,8 @@ async function addCard(column: Group, lane: Group) {
       <button
         v-for="column in columns"
         :key="column.key"
-        class="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px]"
-        :class="shownKey === column.key ? 'border-ink bg-ink text-surface' : 'border-line text-ink-soft'"
+        class="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5"
+        :class="[bodyText, shownKey === column.key ? 'border-ink bg-ink text-surface' : 'border-line text-ink-soft']"
         :aria-current="shownKey === column.key || undefined"
         :data-board-chip="column.key"
         @click="showColumn(column)"
@@ -256,11 +257,11 @@ async function addCard(column: Group, lane: Group) {
       <div class="inline-flex min-w-full flex-col gap-4">
         <div v-for="(lane, laneIndex) in lanes" :key="lane.key">
           <!-- A lane's header: what its cards share. -->
-          <header v-if="laneField" class="sticky left-0 mb-2 flex w-fit items-center gap-2 text-sm">
+          <header v-if="laneField" class="sticky left-0 mb-2 flex w-fit items-center gap-2" :class="bodyText">
             <ObjectChip v-if="lane.objectId" :id="lane.objectId" :tag="laneField === 'tags'" />
             <PersonChip v-else-if="lane.personId" :id="lane.personId" />
             <span v-else class="rounded-md px-2 py-0.5 font-medium" :class="lane.key === NO_VALUE ? 'text-ink-faint' : chip(lane.color as never)">{{ lane.label }}</span>
-            <span class="text-xs text-ink-faint">{{ lane.items.length }}</span>
+            <span class="text-ink-faint" :class="metaText">{{ lane.items.length }}</span>
           </header>
           <div class="flex gap-3">
             <section
@@ -274,8 +275,8 @@ async function addCard(column: Group, lane: Group) {
               <!-- Column headers on the first lane only; a folded column shows its name upright. -->
               <header
                 v-if="laneIndex === 0 || collapsed.has(column.key)"
-                class="group/col flex items-center gap-2 text-sm"
-                :class="collapsed.has(column.key) ? 'cursor-pointer flex-col py-1' : 'px-1 py-1'"
+                class="group/col flex items-center gap-2"
+                :class="[bodyText, collapsed.has(column.key) ? 'cursor-pointer flex-col py-1' : 'px-1 py-1']"
                 @click="collapsed.has(column.key) && toggleFold(column.key)"
                 @contextmenu.prevent="columnMenu($event, column)"
               >
@@ -285,12 +286,12 @@ async function addCard(column: Group, lane: Group) {
                   <span v-else class="truncate rounded-md px-2 py-0.5 font-medium" :class="column.key === NO_VALUE ? 'text-ink-faint' : chip(column.color as never)">{{ column.label }}</span>
                 </template>
                 <span
-                  class="text-xs tabular-nums"
-                  :class="over(column) ? 'rounded-md bg-red-100 px-1.5 font-semibold text-red-700 dark:bg-red-950 dark:text-red-300' : 'text-ink-faint'"
+                  class="tabular-nums"
+                  :class="[metaText, over(column) ? 'rounded-md bg-red-100 px-1.5 font-semibold text-red-700 dark:bg-red-950 dark:text-red-300' : 'text-ink-faint']"
                   :title="wip(column) ? `WIP limit ${wip(column)}` : undefined"
-                  >{{ column.items.length }}<template v-if="wip(column)">/{{ wip(column) }}</template></span
+                >{{ column.items.length }}<template v-if="wip(column)">/{{ wip(column) }}</template></span
                 >
-                <span v-if="collapsed.has(column.key)" class="text-xs font-medium text-ink-soft [writing-mode:vertical-rl]">{{ column.label || '…' }}</span>
+                <span v-if="collapsed.has(column.key)" class="font-medium text-ink-soft [writing-mode:vertical-rl]" :class="metaText">{{ column.label || '…' }}</span>
                 <button
                   v-else
                   class="ml-auto rounded-md p-0.5 text-ink-faint opacity-0 hover:bg-hover hover:text-ink group-hover/col:opacity-100 [@media(hover:none)]:opacity-100 max-md:-my-2.5 max-md:-mr-2 max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center"
@@ -326,7 +327,8 @@ async function addCard(column: Group, lane: Group) {
                     v-if="addingIn === cellKey(column, lane)"
                     ref="newInput"
                     v-model="newTitle"
-                    class="w-full rounded-lg border border-line-strong bg-surface px-2.5 py-2 text-sm outline-none max-md:min-h-11 max-md:text-base"
+                    class="w-full rounded-lg border border-line-strong bg-surface px-2.5 py-2 outline-none max-md:min-h-11 max-md:text-base"
+                    :class="bodyText"
                     placeholder="Title, then Enter"
                     @keydown.enter.prevent="addCard(column, lane)"
                     @keydown.esc="addingIn = ''"

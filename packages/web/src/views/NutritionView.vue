@@ -28,6 +28,7 @@ import BarChart, { type Bar } from '../components/charts/BarChart.vue'
 import WeekBudgetCard from '../components/nutrition/WeekBudgetCard.vue'
 import ObjectLink from '../components/ObjectLink.vue'
 import { preference } from '../lib/preferences.ts'
+import { bodyText, metaText, pageTitle } from '../lib/type-scale.ts'
 
 const today = dayKey()
 const RANGES = [7, 30, 90] as const
@@ -174,16 +175,16 @@ async function turnOn() {
   }
 }
 
-const input = 'w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm tabular-nums outline-none focus:border-line-strong max-md:py-2 max-md:text-base'
-const heading = 'mb-3 flex items-center gap-2 text-sm font-semibold text-ink-soft'
+const input = `w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 tabular-nums outline-none focus:border-line-strong max-md:py-2 max-md:text-base ${bodyText}`
+const heading = `mb-3 flex items-center gap-2 font-semibold text-ink-soft ${bodyText}`
 </script>
 
 <template>
   <div class="mx-auto max-w-3xl px-6 pb-32 pt-8 md:px-10 md:pt-12">
-    <h1 class="flex items-center gap-2.5 text-[1.8rem] font-bold leading-tight tracking-tight md:text-[2.1rem]">Nutrition</h1>
-    <p class="mt-1 text-sm text-ink-faint">{{ workspace.space?.name }} · log food in each day’s Food block, or with /food</p>
+    <h1 class="flex items-center gap-2.5" :class="pageTitle">Nutrition</h1>
+    <p class="mt-1 text-ink-faint" :class="bodyText">{{ workspace.space?.name }} · log food in each day’s Food block, or with /food</p>
 
-    <div v-if="!nutritionOn" class="mt-8 rounded-xl border border-dashed border-line p-5 text-sm text-ink-soft">
+    <div v-if="!nutritionOn" class="mt-8 rounded-xl border border-dashed border-line p-5 text-ink-soft" :class="bodyText">
       <p>This space does not track food. Turning it on adds a Food block to each day, and Foods, Recipes and Nutrition goals.</p>
       <button class="mt-3" :class="mainButton" :disabled="turningOn" @click="turnOn">Track food in {{ workspace.space?.name }}</button>
     </div>
@@ -194,7 +195,7 @@ const heading = 'mb-3 flex items-center gap-2 text-sm font-semibold text-ink-sof
         <WeekBudgetCard v-if="budget" :budget="budget" :today="true" class="mb-4" />
         <template v-else>
           <h2 :class="heading"><AppIcon fallback="ph:calendar-dots" /> This week</h2>
-          <p v-if="currentGoal" class="mb-3 text-xs text-ink-faint">The goal is per day. Turn on "Weekly budget" in a new goal to share it across the week.</p>
+          <p v-if="currentGoal" class="mb-3 text-ink-faint" :class="metaText">The goal is per day. Turn on "Weekly budget" in a new goal to share it across the week.</p>
         </template>
         <BarChart :bars="weekBars" :format="formatKcal" unit=" kcal" label="Kcal each day of this week against the day's goal" :height="150" />
       </section>
@@ -202,38 +203,38 @@ const heading = 'mb-3 flex items-center gap-2 text-sm font-semibold text-ink-sof
       <section class="mt-10" data-nutrition-range>
         <div class="mb-3 flex flex-wrap items-center gap-2">
           <h2 :class="heading" class="!mb-0"><AppIcon fallback="ph:chart-bar" /> Last days</h2>
-          <div class="ml-auto flex rounded-lg bg-hover p-0.5 text-xs">
+          <div class="ml-auto flex rounded-lg bg-hover p-0.5" :class="metaText">
             <button v-for="r in RANGES" :key="r" class="rounded-md px-2.5 py-1 max-md:py-1.5" :class="range === r ? 'bg-surface font-medium text-ink shadow-sm' : 'text-ink-soft hover:text-ink'" @click="range = r">{{ r }} days</button>
           </div>
         </div>
         <div class="mb-4 grid grid-cols-4 gap-3 max-md:grid-cols-2" data-nutrition-stats>
           <div class="rounded-lg border border-line px-3 py-2">
-            <div class="flex items-center gap-1.5 text-xs text-ink-faint"><span class="h-2 w-2 rounded-full" :style="{ background: nutrientColor('kcal') }" />Average a day</div>
-            <div class="text-lg font-semibold">{{ formatKcal(stats.average.kcal) }} <span class="text-xs font-normal text-ink-faint">kcal</span></div>
-            <div v-if="averageGoal" class="text-xs text-ink-faint">goal {{ formatKcal(averageGoal.kcal) }}</div>
+            <div class="flex items-center gap-1.5 text-ink-faint" :class="metaText"><span class="h-2 w-2 rounded-full" :style="{ background: nutrientColor('kcal') }" />Average a day</div>
+            <div class="text-lg font-semibold">{{ formatKcal(stats.average.kcal) }} <span class="font-normal text-ink-faint" :class="metaText">kcal</span></div>
+            <div v-if="averageGoal" class="text-ink-faint" :class="metaText">goal {{ formatKcal(averageGoal.kcal) }}</div>
           </div>
           <div class="rounded-lg border border-line px-3 py-2">
-            <div class="flex items-center gap-1.5 text-xs text-ink-faint"><span class="h-2 w-2 rounded-full" :style="{ background: nutrientColor('protein') }" />Protein a day</div>
-            <div class="text-lg font-semibold">{{ formatGrams(stats.average.protein) }} <span class="text-xs font-normal text-ink-faint">g</span></div>
-            <div v-if="averageGoal?.protein" class="text-xs text-ink-faint">goal {{ formatGrams(averageGoal.protein) }} g</div>
+            <div class="flex items-center gap-1.5 text-ink-faint" :class="metaText"><span class="h-2 w-2 rounded-full" :style="{ background: nutrientColor('protein') }" />Protein a day</div>
+            <div class="text-lg font-semibold">{{ formatGrams(stats.average.protein) }} <span class="font-normal text-ink-faint" :class="metaText">g</span></div>
+            <div v-if="averageGoal?.protein" class="text-ink-faint" :class="metaText">goal {{ formatGrams(averageGoal.protein) }} g</div>
           </div>
           <div class="rounded-lg border border-line px-3 py-2">
-            <div class="text-xs text-ink-faint">On target</div>
-            <div class="text-lg font-semibold">{{ stats.onTarget }} <span class="text-xs font-normal text-ink-faint">of {{ stats.loggedDays }} days</span></div>
-            <div class="text-xs text-ink-faint">within 5% of the goal</div>
+            <div class="text-ink-faint" :class="metaText">On target</div>
+            <div class="text-lg font-semibold">{{ stats.onTarget }} <span class="font-normal text-ink-faint" :class="metaText">of {{ stats.loggedDays }} days</span></div>
+            <div class="text-ink-faint" :class="metaText">within 5% of the goal</div>
           </div>
           <div class="rounded-lg border border-line px-3 py-2">
-            <div class="text-xs text-ink-faint">Streak</div>
-            <div class="text-lg font-semibold">{{ stats.currentStreak }} <span class="text-xs font-normal text-ink-faint">{{ stats.currentStreak === 1 ? 'day' : 'days' }}</span></div>
-            <div class="text-xs text-ink-faint">best {{ stats.bestStreak }}</div>
+            <div class="text-ink-faint" :class="metaText">Streak</div>
+            <div class="text-lg font-semibold">{{ stats.currentStreak }} <span class="font-normal text-ink-faint" :class="metaText">{{ stats.currentStreak === 1 ? 'day' : 'days' }}</span></div>
+            <div class="text-ink-faint" :class="metaText">best {{ stats.bestStreak }}</div>
           </div>
         </div>
         <BarChart :bars="rangeBars" :format="formatKcal" unit=" kcal" :label="`Kcal each day of the last ${range} days against the day's goal`" />
-        <div v-if="split" class="mt-4 text-sm" data-nutrition-split>
-          <div class="mb-1.5 text-xs text-ink-faint">Where the kcal came from, on average</div>
+        <div v-if="split" class="mt-4" :class="bodyText" data-nutrition-split>
+          <div class="mb-1.5 text-ink-faint" :class="metaText">Where the kcal came from, on average</div>
           <div class="grid grid-cols-3 gap-3">
             <div v-for="[key, label] in [['protein', 'Protein'], ['carbs', 'Carbs'], ['fat', 'Fat']] as const" :key="key">
-              <div class="flex items-baseline gap-1.5 text-xs">
+              <div class="flex items-baseline gap-1.5" :class="metaText">
                 <span class="h-2 w-2 shrink-0 self-center rounded-full" :style="{ background: nutrientColor(key) }" />
                 <span class="mr-auto text-ink-soft">{{ label }}</span>
                 <span class="tabular-nums text-ink">{{ pct(split[key]) }}<span v-if="currentSplit" class="text-ink-faint"> / {{ currentSplit[key] }}%</span></span>
@@ -245,7 +246,7 @@ const heading = 'mb-3 flex items-center gap-2 text-sm font-semibold text-ink-sof
             </div>
           </div>
         </div>
-        <p class="mt-3 text-xs text-ink-faint">Days not counted (a day's ⋯ menu in its Food block) are left out of the averages and streaks; the week's budget still counts what was eaten.</p>
+        <p class="mt-3 text-ink-faint" :class="metaText">Days not counted (a day's ⋯ menu in its Food block) are left out of the averages and streaks; the week's budget still counts what was eaten.</p>
       </section>
 
       <section id="goals" class="mt-10 scroll-mt-6" data-nutrition-goals>
@@ -257,47 +258,47 @@ const heading = 'mb-3 flex items-center gap-2 text-sm font-semibold text-ink-sof
         </div>
 
         <form v-if="form" class="mb-4 space-y-3 rounded-xl border border-line p-4" @submit.prevent="saveGoal">
-          <div class="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 text-sm max-md:grid-cols-1">
+          <div class="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 max-md:grid-cols-1" :class="bodyText">
             <label class="text-ink-soft" for="goal-start">Starts on</label>
             <input id="goal-start" v-model="form.start" type="date" :class="input" class="max-w-44" />
             <label class="text-ink-soft" for="goal-kcal">Daily kcal</label>
             <input id="goal-kcal" v-model="form.kcal" :class="input" class="max-w-32" inputmode="numeric" placeholder="2000" />
             <span class="text-ink-soft">Split</span>
             <div class="flex flex-wrap items-center gap-2">
-              <label v-for="[key, label] in [['protein', 'Protein'], ['carbs', 'Carbs'], ['fat', 'Fat']] as const" :key="key" class="flex items-center gap-1.5 text-xs text-ink-faint">
+              <label v-for="[key, label] in [['protein', 'Protein'], ['carbs', 'Carbs'], ['fat', 'Fat']] as const" :key="key" class="flex items-center gap-1.5 text-ink-faint" :class="metaText">
                 {{ label }} <input v-model="form[key]" :class="input" class="w-16" inputmode="decimal" :aria-label="`${label} %`" /> %
               </label>
             </div>
           </div>
-          <label class="flex items-start gap-2.5 text-sm">
+          <label class="flex items-start gap-2.5" :class="bodyText">
             <input v-model="form.weekly" type="checkbox" class="mt-0.5 h-4 w-4 accent-[var(--color-accent)]" />
-            <span>Weekly budget <span class="block text-xs text-ink-faint">The days of a week (Monday to Sunday) share their kcal: a big Saturday is fine if the week stays on budget.</span></span>
+            <span>Weekly budget <span class="block text-ink-faint" :class="metaText">The days of a week (Monday to Sunday) share their kcal: a big Saturday is fine if the week stays on budget.</span></span>
           </label>
-          <label class="flex items-center gap-2.5 text-sm">
+          <label class="flex items-center gap-2.5" :class="bodyText">
             <input v-model="form.byDay" type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" /> Different kcal on some weekdays
           </label>
           <div v-if="form.byDay" class="grid grid-cols-7 gap-1.5 max-md:grid-cols-4">
-            <label v-for="[id, label] in WEEKDAYS" :key="id" class="text-xs text-ink-faint">
+            <label v-for="[id, label] in WEEKDAYS" :key="id" class="text-ink-faint" :class="metaText">
               {{ label }}
               <input v-model="form.weekdays[id]" :class="input" class="mt-0.5" inputmode="numeric" :placeholder="form.kcal || 'kcal'" />
             </label>
           </div>
-          <p v-if="formError" class="text-xs text-amber-700 dark:text-amber-400">{{ formError }}</p>
+          <p v-if="formError" class="text-amber-700 dark:text-amber-400" :class="metaText">{{ formError }}</p>
           <div class="flex gap-2">
             <button type="submit" :class="mainButton" :disabled="!!formError">Save goal</button>
             <button type="button" :class="greyButton" @click="form = null">Cancel</button>
           </div>
-          <p class="text-xs text-ink-faint">A goal applies from its day on; the days before keep the goal they had.</p>
+          <p class="text-ink-faint" :class="metaText">A goal applies from its day on; the days before keep the goal they had.</p>
         </form>
 
-        <p v-if="!history.length && !form" class="rounded-lg border border-dashed border-line px-3 py-3 text-sm text-ink-faint">No goal yet. Set one to see each day and week against it.</p>
-        <ObjectLink v-for="{ object, goal } in history" :key="object.id" :id="object.id" class="flex items-baseline gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-hover" :class="goal.start > today ? 'opacity-70' : ''">
+        <p v-if="!history.length && !form" class="rounded-lg border border-dashed border-line px-3 py-3 text-ink-faint" :class="bodyText">No goal yet. Set one to see each day and week against it.</p>
+        <ObjectLink v-for="{ object, goal } in history" :key="object.id" :id="object.id" class="flex items-baseline gap-3 rounded-lg px-2 py-1.5 hover:bg-hover" :class="[bodyText, goal.start > today ? 'opacity-70' : '']">
           <span class="w-28 shrink-0 tabular-nums text-ink-soft">{{ shortDay.format(at(goal.start)) }}</span>
           <span class="min-w-0 flex-1 text-ink">{{ goalLine(goal) }}</span>
-          <span v-if="goal.id === currentId" class="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-[11px] text-accent">current</span>
-          <span v-else-if="goal.start > today" class="shrink-0 text-[11px] text-ink-faint">from then on</span>
+          <span v-if="goal.id === currentId" class="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-accent" :class="metaText">current</span>
+          <span v-else-if="goal.start > today" class="shrink-0 text-ink-faint" :class="metaText">from then on</span>
         </ObjectLink>
-        <p v-if="unfinished.length" class="mt-2 text-xs text-ink-faint">
+        <p v-if="unfinished.length" class="mt-2 text-ink-faint" :class="metaText">
           {{ unfinished.length }} {{ unfinished.length === 1 ? 'goal has' : 'goals have' }} no start day or kcal yet and {{ unfinished.length === 1 ? 'does' : 'do' }} not count:
           <template v-for="(o, i) in unfinished" :key="o.id"><ObjectLink :id="o.id" class="text-ink-soft hover:underline">{{ o.title || 'Untitled' }}</ObjectLink>{{ i < unfinished.length - 1 ? ', ' : '.' }}</template>
         </p>

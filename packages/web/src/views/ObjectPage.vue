@@ -64,6 +64,7 @@ import DocPreview from '../components/DocPreview.ts'
 import ModalDialog from '../components/ModalDialog.vue'
 import { writeContent, type JsonDoc } from '@vasta/editor-schema/yjs'
 import { pageWidthClass } from '../lib/page-width.ts'
+import { bodyText, metaText, pageTitle } from '../lib/type-scale.ts'
 
 /**
  * `variant`: 'page' (its own page), 'pane' (the side pane next to another page), 'popup' (the
@@ -790,16 +791,16 @@ async function startFrom(template: ObjectRecord) {
 </script>
 
 <template>
-  <div v-if="missing" class="grid h-full place-items-center text-sm text-ink-soft">This object does not exist or was deleted for good.</div>
+  <div v-if="missing" class="grid h-full place-items-center text-ink-soft" :class="bodyText">This object does not exist or was deleted for good.</div>
 
   <article v-else-if="object" ref="article" :class="boardLayout ? 'flex h-full flex-col' : embedded ? '' : inFrame ? 'pb-16' : 'pb-32'">
-    <div v-if="object.deletedAt && !embedded" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
+    <div v-if="object.deletedAt && !embedded" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-red-200 bg-red-50 px-4 py-2 text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200" :class="bodyText">
       <AppIcon fallback="ph:trash" class="shrink-0" />
       <span class="min-w-0 flex-1 max-sm:min-w-[80%]">In the trash since {{ formatDate({ start: object.deletedAt, resolution: 'time' }) }}. It goes for good 30 days later.</span>
       <button class="rounded-lg bg-surface px-2.5 py-1 font-medium text-ink shadow-sm ring-1 ring-line hover:bg-hover max-md:py-2" @click="restore">Restore</button>
       <button class="rounded-lg px-2.5 py-1 font-medium hover:bg-red-100 dark:hover:bg-red-900/40 max-md:py-2" @click="deleteForever">Delete forever</button>
     </div>
-    <div v-if="info && !embedded" class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-violet-200 bg-violet-50 px-4 py-2 text-sm text-violet-900 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-200" data-template-banner>
+    <div v-if="info && !embedded" class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-violet-200 bg-violet-50 px-4 py-2 text-violet-900 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-200" :class="bodyText" data-template-banner>
       <AppIcon :fallback="info.kind === 'snippet' ? 'ph:brackets-curly' : 'ph:copy-simple'" class="shrink-0" />
       <span class="min-w-0 flex-1 max-sm:min-w-[70%]">
         <template v-if="info.kind === 'template'">Template <button class="font-semibold hover:underline" title="Rename" @click="renameTemplate">{{ info.name }}</button> of {{ type?.name }}<template v-if="info.default"> · default</template></template>
@@ -813,20 +814,20 @@ async function startFrom(template: ObjectRecord) {
     <ModalDialog v-if="previewOpen && preview" :title="`Preview of ${info?.name ?? ''}`" @close="previewOpen = false">
       <div class="space-y-4 p-5">
         <h1 v-if="info?.kind === 'template'" class="text-2xl font-bold">{{ preview.title || titlePlaceholder }}</h1>
-        <dl v-if="previewProps.length" class="space-y-1 text-sm">
+        <dl v-if="previewProps.length" class="space-y-1" :class="bodyText">
           <div v-for="def in previewProps" :key="def.id" class="flex gap-3">
             <dt class="w-32 shrink-0 text-ink-soft">{{ def.name }}</dt>
             <dd class="min-w-0 flex-1"><PropertyDisplay :def="def" :value="preview.props[def.id]" :object="{ ...object, props: preview.props }" wrap /></dd>
           </div>
         </dl>
         <DocPreview v-for="(doc, field) in preview.content" :key="field" :content="doc.content" />
-        <p class="text-xs text-ink-faint">As made now. Questions show their own words; a daily note's template leaves out the time, you and the answers.</p>
+        <p class="text-ink-faint" :class="metaText">As made now. Questions show their own words; a daily note's template leaves out the time, you and the answers.</p>
       </div>
     </ModalDialog>
     <!-- A board on its own page: a thin bar, the board, and the details beside it -->
     <template v-if="boardLayout">
       <div class="flex h-12 shrink-0 items-center gap-2 border-b border-line px-3 md:px-4">
-        <RouterLink :to="`/t/${object.typeId}`" class="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium hover:brightness-95" :class="chip(type?.color)">
+        <RouterLink :to="`/t/${object.typeId}`" class="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 font-medium hover:brightness-95" :class="[metaText, chip(type?.color)]">
           <AppIcon :icon="type?.icon" fallback="ph:cube" :size="13" /><span class="max-sm:hidden">{{ type?.name }}</span>
         </RouterLink>
         <input
@@ -837,12 +838,12 @@ async function startFrom(template: ObjectRecord) {
           @input="changed()"
           @keydown.enter="($event.target as HTMLInputElement).blur()"
         />
-        <span class="shrink-0 text-xs text-ink-faint" :class="status === 'unsaved' && offline ? 'text-amber-600' : status === 'saved' ? 'max-md:hidden' : ''" :title="authorship.title || undefined">{{
+        <span class="shrink-0 text-ink-faint" :class="[metaText, status === 'unsaved' && offline ? 'text-amber-600' : status === 'saved' ? 'max-md:hidden' : '']" :title="authorship.title || undefined">{{
           status === 'saved' ? `Edited ${formatRelative(object.updatedAt)}` : status === 'saving' ? 'Saving…' : offline ? 'Not saved (offline)' : 'Unsaved'
         }}</span>
         <button
-          class="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm ring-1 ring-line hover:bg-hover"
-          :class="detailsOpen ? 'bg-hover text-ink' : 'text-ink-soft'"
+          class="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 ring-1 ring-line hover:bg-hover"
+          :class="[bodyText, detailsOpen ? 'bg-hover text-ink' : 'text-ink-soft']"
           :aria-pressed="detailsOpen"
           title="Tags, properties, comments and backlinks"
           @click="detailsOpen = !detailsOpen"
@@ -857,7 +858,7 @@ async function startFrom(template: ObjectRecord) {
           class="w-[24rem] shrink-0 overflow-y-auto border-l border-line bg-surface pb-16 max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-30 max-md:w-full max-md:max-w-[26rem] max-md:shadow-2xl"
         >
           <div class="flex items-center justify-between px-5 pt-3 md:hidden">
-            <span class="text-sm font-semibold">Details</span>
+            <span class="font-semibold" :class="bodyText">Details</span>
             <button class="grid h-9 w-9 place-items-center rounded-lg text-ink-soft hover:bg-hover" aria-label="Close details" @click="detailsOpen = false"><AppIcon fallback="ph:x" :size="16" /></button>
           </div>
           <div :id="detailsSlot" />
@@ -868,7 +869,8 @@ async function startFrom(template: ObjectRecord) {
     <div v-if="object.coverUrl && !embedded && !boardLayout" class="group/cover relative w-full overflow-hidden bg-hover" :class="inFrame ? 'h-32' : 'h-56 max-md:h-40'">
       <img :src="object.coverUrl" alt="" class="h-full w-full object-cover" />
       <button
-        class="absolute right-3 top-3 flex items-center gap-1.5 rounded-lg bg-surface/90 px-2.5 py-1 text-xs font-medium text-ink shadow-sm ring-1 ring-line backdrop-blur transition-opacity hover:bg-surface md:opacity-0 md:group-hover/cover:opacity-100 md:focus-visible:opacity-100 [@media(hover:none)]:opacity-100 max-md:py-1.5"
+        class="absolute right-3 top-3 flex items-center gap-1.5 rounded-lg bg-surface/90 px-2.5 py-1 font-medium text-ink shadow-sm ring-1 ring-line backdrop-blur transition-opacity hover:bg-surface md:opacity-0 md:group-hover/cover:opacity-100 md:focus-visible:opacity-100 [@media(hover:none)]:opacity-100 max-md:py-1.5"
+        :class="metaText"
         @click="coverMenuFrom"
       >
         <AppIcon fallback="ph:image" :size="14" /> {{ coverUploading ? 'Uploading…' : 'Change cover' }}
@@ -893,16 +895,16 @@ async function startFrom(template: ObjectRecord) {
       </PopoverMenu>
 
       <div class="group/header flex min-h-7 flex-wrap items-center gap-1.5">
-        <RouterLink v-if="!boardLayout" :to="`/t/${object.typeId}`" class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium hover:brightness-95" :class="chip(type?.color)">
+        <RouterLink v-if="!boardLayout" :to="`/t/${object.typeId}`" class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium hover:brightness-95" :class="[metaText, chip(type?.color)]">
           <AppIcon :icon="type?.icon" fallback="ph:cube" :size="13" />{{ type?.name }}
         </RouterLink>
         <div v-if="day" class="flex items-center gap-0.5 text-ink-faint">
           <button class="rounded-md p-1 hover:bg-hover hover:text-ink" title="Previous day" @click="stepDay(-1)"><AppIcon fallback="ph:caret-left" :size="14" /></button>
-          <button v-if="!isToday" class="rounded-md px-1.5 py-0.5 text-xs hover:bg-hover hover:text-ink" @click="openDay(dayKey())">Today</button>
+          <button v-if="!isToday" class="rounded-md px-1.5 py-0.5 hover:bg-hover hover:text-ink" :class="metaText" @click="openDay(dayKey())">Today</button>
           <button class="rounded-md p-1 hover:bg-hover hover:text-ink" title="Next day" @click="stepDay(1)"><AppIcon fallback="ph:caret-right" :size="14" /></button>
         </div>
         <!-- Icon, cover and, on a start page, tags and property: on hover, so an object without them shows nothing there (always on touch). -->
-        <div v-if="!object.deletedAt" class="flex items-center gap-0.5 text-xs text-ink-faint opacity-0 transition-opacity group-hover/header:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+        <div v-if="!object.deletedAt" class="flex items-center gap-0.5 text-ink-faint opacity-0 transition-opacity group-hover/header:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100" :class="metaText">
           <button v-if="!object.icon" ref="iconAnchor" class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink" @click="iconOpen = !iconOpen">
             <AppIcon fallback="ph:smiley" :size="14" /> <span class="max-sm:hidden">Icon</span>
           </button>
@@ -916,56 +918,56 @@ async function startFrom(template: ObjectRecord) {
             <AppIcon fallback="ph:plus" :size="14" /> <span class="max-sm:hidden">Property</span>
           </button>
         </div>
-        <div class="ml-auto flex items-center gap-1 text-xs text-ink-faint">
+        <div class="ml-auto flex items-center gap-1 text-ink-faint" :class="metaText">
           <span v-if="!boardLayout" :class="status === 'unsaved' && offline ? 'text-amber-600' : status === 'saved' ? 'max-sm:hidden' : ''" :title="authorship.title || undefined">{{ status === 'saved' ? `Edited ${formatRelative(object.updatedAt)}${authorship.by}` : status === 'saving' ? 'Saving…' : offline ? 'Not saved (offline)' : 'Unsaved' }}</span>
           <button ref="menuAnchor" class="grid h-7 w-7 place-items-center rounded-md text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink max-md:h-11 max-md:w-11" title="More" @click="menuOpen = !menuOpen">
             <AppIcon fallback="ph:dots-three" :size="17" />
           </button>
           <PopoverMenu v-model:open="menuOpen" :anchor="menuAnchor" placement="bottom-end" width="12rem">
-            <RouterLink :to="`/t/${object.typeId}`" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover">
+            <RouterLink :to="`/t/${object.typeId}`" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-ink hover:bg-hover" :class="bodyText">
               <AppIcon fallback="ph:cube" /> Open type
             </RouterLink>
-            <button v-if="!object.deletedAt" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="copyObjectLink(object.id), (menuOpen = false)">
+            <button v-if="!object.deletedAt" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-ink hover:bg-hover" :class="bodyText" @click="copyObjectLink(object.id), (menuOpen = false)">
               <AppIcon fallback="ph:link" /> Copy link to page
             </button>
             <template v-if="parentField && !object.deletedAt && !info">
-              <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" data-make-subtask @click="moveUnder(true)">
+              <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-ink hover:bg-hover" :class="bodyText" data-make-subtask @click="moveUnder(true)">
                 <AppIcon fallback="ph:tree-structure" /> Make subtask of…
               </button>
-              <button v-if="hasParent" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="moveUnder(false)">
+              <button v-if="hasParent" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-ink hover:bg-hover" :class="bodyText" @click="moveUnder(false)">
                 <AppIcon fallback="ph:arrow-elbow-up-left" /> Remove from parent
               </button>
             </template>
-            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="saveTemplateFrom">
+            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-ink hover:bg-hover" :class="bodyText" @click="saveTemplateFrom">
               <AppIcon fallback="ph:copy-simple" /> Save as template…
             </button>
-            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="pinFrom">
+            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-ink hover:bg-hover" :class="bodyText" @click="pinFrom">
               <AppIcon fallback="ph:push-pin" /> {{ isInSidebar(object.id) ? 'Pinned in sidebar' : 'Pin to sidebar' }}
               <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
             </button>
-            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" title="A reminder that keeps asking until you answer" data-remind-me @click="remindMe">
+            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-ink hover:bg-hover" :class="bodyText" title="A reminder that keeps asking until you answer" data-remind-me @click="remindMe">
               <AppIcon fallback="ph:bell-ringing" /> {{ reminderRule ? 'Reminder…' : 'Remind me…' }}
               <AppIcon v-if="reminderRule" fallback="ph:check" :size="13" class="ml-auto text-accent" />
             </button>
-            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" title="What agents read first (the MCP's recall)" @click="toggleAgentContext">
+            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-ink hover:bg-hover" :class="bodyText" title="What agents read first (the MCP's recall)" @click="toggleAgentContext">
               <AppIcon fallback="ph:robot" /> Agent context
               <AppIcon v-if="agentContext" fallback="ph:check" :size="13" class="ml-auto text-accent" />
             </button>
-            <button v-if="!object.deletedAt" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="coverMenuFrom">
+            <button v-if="!object.deletedAt" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-ink hover:bg-hover" :class="bodyText" @click="coverMenuFrom">
               <AppIcon fallback="ph:image" /> {{ coverUploading ? 'Uploading cover…' : object.coverUrl ? 'Change cover…' : 'Add cover…' }}
             </button>
             <template v-if="object.deletedAt">
-              <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="restore">
+              <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-ink hover:bg-hover" :class="bodyText" @click="restore">
                 <AppIcon fallback="ph:arrow-counter-clockwise" /> Restore
               </button>
-              <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-red-600 hover:bg-hover" @click="deleteForever">
+              <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-red-600 hover:bg-hover" :class="bodyText" @click="deleteForever">
                 <AppIcon fallback="ph:trash" /> Delete forever…
               </button>
             </template>
-            <button v-else-if="info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-red-600 hover:bg-hover" @click="menuOpen = false, removeTemplate()">
+            <button v-else-if="info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-red-600 hover:bg-hover" :class="bodyText" @click="menuOpen = false, removeTemplate()">
               <AppIcon fallback="ph:trash" /> Delete {{ info.kind }}…
             </button>
-            <button v-else class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-red-600 hover:bg-hover" @click="remove">
+            <button v-else class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-red-600 hover:bg-hover" :class="bodyText" @click="remove">
               <AppIcon fallback="ph:trash" /> Move to trash
             </button>
           </PopoverMenu>
@@ -987,15 +989,15 @@ async function startFrom(template: ObjectRecord) {
           v-model="object.title"
           data-large-text
           rows="1"
-          class="w-full resize-none overflow-hidden bg-transparent text-[1.8rem] font-bold md:text-[2.1rem] leading-tight tracking-tight outline-none placeholder:text-ink-faint/60"
-          :class="isStartPage ? 'min-w-0 flex-1' : 'mt-2'"
+          class="w-full resize-none overflow-hidden bg-transparent outline-none placeholder:text-ink-faint/60"
+          :class="[pageTitle, isStartPage ? 'min-w-0 flex-1' : 'mt-2']"
           :placeholder="titlePlaceholder"
           @input="autosize(), changed()"
           @keydown.enter.prevent="focusBody"
         />
       </div>
 
-      <div v-if="offeredTemplates.length && bodyEmpty" class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-ink-faint" data-template-offer>
+      <div v-if="offeredTemplates.length && bodyEmpty" class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-ink-faint" :class="bodyText" data-template-offer>
         <AppIcon fallback="ph:copy-simple" :size="14" />
         <span>Start from a template:</span>
         <template v-for="(t, i) in offeredTemplates" :key="t.id">
@@ -1007,7 +1009,7 @@ async function startFrom(template: ObjectRecord) {
       <div v-if="info?.kind !== 'snippet' && !hideTagsRow" class="mt-2 flex flex-wrap items-center gap-1.5">
         <AppIcon fallback="ph:tag" class="text-ink-faint" />
         <ObjectChip v-for="id in object.tagIds" :key="id" :id="id" tag removable @remove="removeTag(id)" />
-        <button ref="tagAnchor" class="rounded-md px-1.5 py-0.5 text-sm text-ink-faint hover:bg-hover hover:text-ink" @click="tagOpen = !tagOpen">
+        <button ref="tagAnchor" class="rounded-md px-1.5 py-0.5 text-ink-faint hover:bg-hover hover:text-ink" :class="bodyText" @click="tagOpen = !tagOpen">
           {{ object.tagIds.length ? '+' : 'Add tags' }}
         </button>
       </div>
@@ -1018,7 +1020,8 @@ async function startFrom(template: ObjectRecord) {
       <TaskQuickActions v-if="type && hasQuickActions && !info && !object.deletedAt" :type="type" :object="object" @set="saveProps" />
       <button
         v-if="foldFields"
-        class="mt-4 flex w-full items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-left text-sm"
+        class="mt-4 flex w-full items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-left"
+        :class="bodyText"
         :aria-expanded="fieldsOpen"
         data-fields-summary
         @click="fieldsOpen = !fieldsOpen"
@@ -1053,7 +1056,7 @@ async function startFrom(template: ObjectRecord) {
               <PopoverMenu v-model:open="colorOpen" :anchor="colorAnchor" width="auto">
                 <div class="space-y-2 p-2">
                   <ColorPicker :color="object.color" @pick="setColor" />
-                  <button v-if="object.color" class="w-full rounded-md px-2 py-1 text-left text-xs text-ink-soft hover:bg-hover" @click="setColor(undefined)">{{ object.parentId ? 'Take the parent tag’s color' : 'Use the default color' }}</button>
+                  <button v-if="object.color" class="w-full rounded-md px-2 py-1 text-left text-ink-soft hover:bg-hover" :class="metaText" @click="setColor(undefined)">{{ object.parentId ? 'Take the parent tag’s color' : 'Use the default color' }}</button>
                 </div>
               </PopoverMenu>
             </div>
@@ -1090,29 +1093,29 @@ async function startFrom(template: ObjectRecord) {
             <button v-if="habitRemindAt(object)" class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" title="No reminder" @click="setRemindAt(def, '')">
               <AppIcon fallback="ph:x" :size="13" />
             </button>
-            <span v-else class="text-xs text-ink-faint">No reminder</span>
+            <span v-else class="text-ink-faint" :class="metaText">No reminder</span>
           </div>
           <!-- A formula is computed: shown, not edited (its expression is in the type's settings). -->
           <div v-else-if="def.kind === 'formula'" class="flex min-h-8 min-w-0 flex-1 items-center py-1 pl-3.5 pr-2" :title="formulaToNames(def.expression, type!, workspace.types)">
             <PropertyDisplay :def="def" :value="undefined" :object="object" wrap />
           </div>
           <div v-else-if="fills[def.id] !== undefined" class="flex min-h-8 flex-1 items-center gap-1 pl-2">
-            <button class="rounded-md bg-violet-50 px-1.5 py-0.5 font-mono text-xs text-violet-700 ring-1 ring-violet-200 hover:brightness-95 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900" title="Edit placeholder" @click="setFill(def)" v-text="braced(fills[def.id]!)" />
+            <button class="rounded-md bg-violet-50 px-1.5 py-0.5 font-mono text-violet-700 ring-1 ring-violet-200 hover:brightness-95 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900" :class="metaText" title="Edit placeholder" @click="setFill(def)" v-text="braced(fills[def.id]!)" />
             <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" title="A value instead" @click="clearFill(def)"><AppIcon fallback="ph:x" :size="13" /></button>
           </div>
           <div v-else-if="fillable(def)" class="group/fill flex min-w-0 flex-1 items-center">
             <PropertyValueEditor :def="def" :value="object.props[def.id]" @update="setProp(def, $event)" @add-option="addOption(def, $event)" />
-            <button class="mr-1 shrink-0 rounded-md px-1.5 py-0.5 font-mono text-xs text-ink-faint opacity-0 hover:bg-hover hover:text-ink group-hover/fill:opacity-100 [@media(hover:none)]:opacity-100" title="Fill from a placeholder (date:+7d, me…)" @click="setFill(def)" v-text="braced(' ')" />
+            <button class="mr-1 shrink-0 rounded-md px-1.5 py-0.5 font-mono text-ink-faint opacity-0 hover:bg-hover hover:text-ink group-hover/fill:opacity-100 [@media(hover:none)]:opacity-100" :class="metaText" title="Fill from a placeholder (date:+7d, me…)" @click="setFill(def)" v-text="braced(' ')" />
           </div>
           <PropertyValueEditor v-else :def="def" :value="object.props[def.id]" @update="setProp(def, $event)" @add-option="addOption(def, $event)">
             <template #date-options><TaskDateOptions v-if="type?.system === 'task'" :type="type" :object="object" :field="def.id" @change="setProps" /></template>
           </PropertyValueEditor>
         </div>
         <ReverseRelations v-if="!info" :object-id="object.id" :type-id="object.typeId" :show-empty="showAllFields" :hide="hiddenReverse" @count="reverseCount = $event" />
-        <p v-if="ruleProblems.length" class="mt-1 flex items-center gap-1.5 px-1 text-xs text-amber-600 dark:text-amber-400" :title="`Agents and scripts can't save a ${type?.name ?? 'object'} like this`">
+        <p v-if="ruleProblems.length" class="mt-1 flex items-center gap-1.5 px-1 text-amber-600 dark:text-amber-400" :class="metaText" :title="`Agents and scripts can't save a ${type?.name ?? 'object'} like this`">
           <AppIcon fallback="ph:warning" :size="13" /> {{ type?.name }}: {{ ruleProblems.join('; ') }}
         </p>
-        <div v-if="!hideAddProperty" class="mt-1 flex gap-3 text-xs text-ink-faint">
+        <div v-if="!hideAddProperty" class="mt-1 flex gap-3 text-ink-faint" :class="metaText">
           <button v-if="hiddenCount" class="rounded px-1 py-1 hover:text-ink" @click="showAllFields = true">Show {{ hiddenCount }} empty properties</button>
           <button ref="addAnchor" class="flex items-center gap-1 rounded px-1 py-1 hover:text-ink" @click="addOpen = !addOpen">
             <AppIcon fallback="ph:plus" :size="12" /> Add property to {{ type?.name }}
@@ -1121,15 +1124,16 @@ async function startFrom(template: ObjectRecord) {
         <PopoverMenu v-model:open="addOpen" :anchor="hideAddProperty ? addHeaderAnchor : addAnchor" width="15rem">
           <input
             v-model="newProperty.name"
-            class="mb-1 w-full rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint"
+            class="mb-1 w-full rounded-lg bg-hover px-2.5 py-1.5 outline-none placeholder:text-ink-faint"
+            :class="bodyText"
             placeholder="Property name"
             @keydown.enter.prevent="addProperty"
           />
           <button
             v-for="k in KINDS"
             :key="k.kind"
-            class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover"
-            :class="newProperty.kind === k.kind ? 'bg-hover' : ''"
+            class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-hover"
+            :class="[bodyText, newProperty.kind === k.kind ? 'bg-hover' : '']"
             @click="newProperty.kind = k.kind"
           >
             <AppIcon :fallback="k.icon" class="text-ink-soft" /> {{ k.label }}
@@ -1138,7 +1142,8 @@ async function startFrom(template: ObjectRecord) {
           <input
             v-if="newProperty.kind === 'formula'"
             v-model="newProperty.formula"
-            class="mt-1 w-full rounded-lg bg-hover px-2.5 py-1.5 font-mono text-xs outline-none placeholder:text-ink-faint"
+            class="mt-1 w-full rounded-lg bg-hover px-2.5 py-1.5 font-mono outline-none placeholder:text-ink-faint"
+            :class="metaText"
             placeholder="{Price} * {Quantity}"
             @keydown.enter.prevent="addProperty"
           />
@@ -1162,7 +1167,7 @@ async function startFrom(template: ObjectRecord) {
 
       <section v-if="isQuery" class="mt-8">
         <div class="rounded-xl border border-line">
-          <button class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-ink-soft hover:text-ink" @click="queryOpen = !queryOpen">
+          <button class="flex w-full items-center gap-2 px-3 py-2 text-left font-medium text-ink-soft hover:text-ink" :class="bodyText" @click="queryOpen = !queryOpen">
             <AppIcon fallback="ph:sliders-horizontal" /> Query settings
             <AppIcon :fallback="queryOpen ? 'ph:caret-up' : 'ph:caret-down'" class="ml-auto" :size="14" />
           </button>
@@ -1181,7 +1186,7 @@ async function startFrom(template: ObjectRecord) {
           @keydown.esc="!$event.defaultPrevented && (boardFull = false)"
         >
           <WhiteboardCanvas v-if="board" :doc="board.doc" :board-id="object.id" :title="object.title" :readonly="!!object.deletedAt" />
-          <div v-else class="grid h-full place-items-center text-sm text-ink-faint">{{ boardFailed ? 'This board needs a connection to the server.' : 'Opening the board…' }}</div>
+          <div v-else class="grid h-full place-items-center text-ink-faint" :class="bodyText">{{ boardFailed ? 'This board needs a connection to the server.' : 'Opening the board…' }}</div>
           <button
             class="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface text-ink-soft shadow-sm hover:bg-hover hover:text-ink"
             :title="boardFull ? 'Leave full screen (Esc)' : 'Full screen'"
@@ -1195,7 +1200,7 @@ async function startFrom(template: ObjectRecord) {
       </Teleport>
 
       <div v-for="(field, index) in richFields" :key="field.id" :class="embedded && index === 0 ? '' : 'mt-8'">
-        <h2 v-if="richFields.length > 1 || index > 0" class="mb-2 text-sm font-semibold text-ink-soft">{{ field.name }}</h2>
+        <h2 v-if="richFields.length > 1 || index > 0" class="mb-2 font-semibold text-ink-soft" :class="bodyText">{{ field.name }}</h2>
         <DocEditor
           v-if="editorsReady"
           :key="text ? 'yjs' : 'json'"

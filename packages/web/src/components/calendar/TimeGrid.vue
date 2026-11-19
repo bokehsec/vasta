@@ -7,6 +7,7 @@ import { HOUR_HEIGHT as HOUR, formatClock, formatWeekday, instantAt, isToday, la
 import { drag } from '../../lib/calendar-drag.ts'
 import { dayKey } from '../../lib/actions.ts'
 import { isPhone } from '../../lib/viewport.ts'
+import { metaText } from '../../lib/type-scale.ts'
 import AppIcon from '../AppIcon.vue'
 import CalendarEntryItem from './CalendarEntryItem.vue'
 
@@ -103,11 +104,11 @@ const pendingStyle = computed(() => (props.pending?.minutes !== undefined ? { to
         <div v-for="day in days" :key="day" class="min-w-0 overflow-hidden border-l border-line px-1 pb-1 pt-2 md:px-2">
           <div class="flex min-w-0 items-center gap-1.5">
             <button class="flex min-w-0 items-baseline gap-1.5 rounded-md px-1 hover:bg-hover" title="Open day" @click="emit('openDay', day)">
-              <span class="truncate text-xs font-medium uppercase text-ink-faint">{{ formatWeekday(day) }}</span>
+              <span class="truncate font-medium uppercase text-ink-faint" :class="metaText">{{ formatWeekday(day) }}</span>
               <span
                 class="grid h-7 min-w-7 place-items-center rounded-full text-lg tabular-nums"
                 :class="isToday(day) ? 'bg-accent px-1 font-semibold text-white' : 'text-ink'"
-                >{{ Number(day.slice(8)) }}</span
+              >{{ Number(day.slice(8)) }}</span
               >
             </button>
             <button v-if="dailyNotes.has(day)" class="rounded p-0.5 text-ink-faint hover:bg-hover hover:text-ink" title="Daily note" @click="emit('openNote', day)">
@@ -150,7 +151,7 @@ const pendingStyle = computed(() => (props.pending?.minutes !== undefined ? { to
 
     <div class="flex" :style="{ height: `${24 * HOUR}px` }">
       <div class="sticky left-0 z-[35] w-14 shrink-0 bg-surface">
-        <div v-for="h in hours.slice(1)" :key="h" class="absolute right-2 -translate-y-1/2 whitespace-nowrap text-[11px] tabular-nums text-ink-faint" :style="{ top: `${h * HOUR}px` }">
+        <div v-for="h in hours.slice(1)" :key="h" class="absolute right-2 -translate-y-1/2 whitespace-nowrap tabular-nums text-ink-faint" :class="metaText" :style="{ top: `${h * HOUR}px` }">
           {{ hourLabel(h) }}
         </div>
       </div>
@@ -180,15 +181,16 @@ const pendingStyle = computed(() => (props.pending?.minutes !== undefined ? { to
           </div>
           <div
             v-if="ghost?.day === day"
-            class="vasta-drop-ghost pointer-events-none absolute inset-x-1 z-20 rounded-md border-2 border-dashed border-accent/70 bg-accent/10 px-1.5 py-0.5 text-xs font-medium tabular-nums text-accent"
-            :class="drag.mode === 'resize' ? 'flex items-end' : ''"
+            class="vasta-drop-ghost pointer-events-none absolute inset-x-1 z-20 rounded-md border-2 border-dashed border-accent/70 bg-accent/10 px-1.5 py-0.5 font-medium tabular-nums text-accent"
+            :class="[metaText, drag.mode === 'resize' ? 'flex items-end' : '']"
             :style="{ top: `${(ghost.top / 60) * HOUR}px`, height: `${Math.max(15, ghost.height) / 60 * HOUR}px` }"
           >
             {{ ghost.label }}
           </div>
           <div
             v-if="pending?.day === day && pending.minutes !== undefined"
-            class="vasta-pending-slot absolute inset-x-1 z-20 rounded-md bg-accent/20 px-1.5 py-1 text-xs text-accent ring-1 ring-accent/50"
+            class="vasta-pending-slot absolute inset-x-1 z-20 rounded-md bg-accent/20 px-1.5 py-1 text-accent ring-1 ring-accent/50"
+            :class="metaText"
             :style="pendingStyle"
           >
             {{ formatClock(instantAt(day, pending.minutes)) }}

@@ -16,6 +16,7 @@ import { openContextMenu } from '../lib/overlays.ts'
 import { lastError, notice, primeSummaries, systemType, workspace } from '../lib/state.ts'
 import { openObject } from '../lib/open.ts'
 import { preference } from '../lib/preferences.ts'
+import { bodyText, metaText, pageTitle } from '../lib/type-scale.ts'
 
 const STEP = 14
 const MAX_DAYS = 365
@@ -98,10 +99,11 @@ async function showOlder() {
   <div class="mx-auto max-w-3xl px-4 py-8 sm:px-8 md:py-12">
     <div class="flex flex-wrap items-center gap-3">
       <AppIcon fallback="ph:tray" :size="26" class="text-ink-soft" />
-      <h1 class="text-2xl font-semibold">Inbox</h1>
+      <h1 :class="pageTitle">Inbox</h1>
       <button
         v-if="doneCount"
-        class="ml-auto flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-ink-soft hover:bg-hover max-md:py-2"
+        class="ml-auto flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-ink-soft hover:bg-hover max-md:py-2"
+        :class="bodyText"
         :aria-pressed="showDone"
         @click="toggleShowDone"
       >
@@ -109,16 +111,16 @@ async function showOlder() {
         {{ showDone ? `Hide ${reviewed.lower}` : `Show ${reviewed.lower} (${doneCount})` }}
       </button>
     </div>
-    <p class="mt-2 text-sm text-ink-soft">What came in through Telegram, Shortcuts and the other channels in the last {{ days }} days.</p>
+    <p class="mt-2 text-ink-soft" :class="bodyText">What came in through Telegram, Shortcuts and the other channels in the last {{ days }} days.</p>
 
-    <p v-if="loading" class="mt-10 text-sm text-ink-faint">Loading…</p>
-    <div v-else-if="!shown.length" class="mt-16 flex flex-col items-center gap-2 text-center text-sm text-ink-faint">
+    <p v-if="loading" class="mt-10 text-ink-faint" :class="bodyText">Loading…</p>
+    <div v-else-if="!shown.length" class="mt-16 flex flex-col items-center gap-2 text-center text-ink-faint" :class="bodyText">
       <AppIcon :fallback="items.length ? 'ph:check-circle' : 'ph:tray'" :size="36" class="opacity-50" />
       {{ items.length ? `All ${reviewed.lower}.` : `Nothing captured in the last ${days} days.` }}
     </div>
 
     <section v-for="group in groups" :key="group.day" class="mt-8">
-      <h2 class="mb-2 text-xs font-medium uppercase tracking-wide text-ink-faint">{{ group.label }}</h2>
+      <h2 class="mb-2 font-medium uppercase tracking-wide text-ink-faint" :class="metaText">{{ group.label }}</h2>
       <ul class="space-y-2">
         <li
           v-for="item in group.items"
@@ -135,7 +137,7 @@ async function showOlder() {
             <AppIcon :fallback="item.done ? 'ph:check-circle-fill' : 'ph:circle'" :size="20" :class="item.done ? 'text-green-600' : ''" />
           </button>
           <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-1.5 text-xs text-ink-faint">
+            <div class="flex items-center gap-1.5 text-ink-faint" :class="metaText">
               <AppIcon :fallback="channelIconName(item.channel)" :size="14" class="text-ink-soft" />
               <span class="tabular-nums">{{ formatCaptureTime(item.at) }}</span>
               <span>· {{ formatChannel(item.channel) }}</span>

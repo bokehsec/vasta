@@ -8,6 +8,7 @@ import type { CalendarEntry, CalendarSource, Id } from '@vasta/core'
 import { addDays, daysBetween } from '@vasta/core'
 import { formatWeekday, isToday, layoutBars, monthOf } from '../../lib/calendar.ts'
 import { drag } from '../../lib/calendar-drag.ts'
+import { metaText } from '../../lib/type-scale.ts'
 import AppIcon from '../AppIcon.vue'
 import CalendarEntryItem from './CalendarEntryItem.vue'
 
@@ -76,7 +77,7 @@ function onCellClick(event: MouseEvent, day: string) {
 <template>
   <div class="flex h-full min-h-0 flex-col">
     <div class="grid grid-cols-7 border-b border-line">
-      <div v-for="day in weeks[0]?.days" :key="day" class="truncate px-1 py-1.5 text-xs font-medium text-ink-faint md:px-2">{{ formatWeekday(day) }}</div>
+      <div v-for="day in weeks[0]?.days" :key="day" class="truncate px-1 py-1.5 font-medium text-ink-faint md:px-2" :class="metaText">{{ formatWeekday(day) }}</div>
     </div>
     <div class="grid min-h-0 flex-1" :style="{ gridTemplateRows: `repeat(${weeks.length}, minmax(6.5rem, 1fr))` }">
       <div v-for="week in weeks" :key="week.days[0]" class="relative grid min-h-0 grid-cols-7 border-b border-line last:border-b-0">
@@ -90,8 +91,8 @@ function onCellClick(event: MouseEvent, day: string) {
         >
           <div class="flex h-6 shrink-0 items-center gap-1">
             <button
-              class="grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs tabular-nums"
-              :class="isToday(cell.day) ? 'bg-accent font-semibold text-white' : monthOf(cell.day) !== monthOf(anchor) ? 'text-ink-faint hover:bg-hover' : 'text-ink-soft hover:bg-hover'"
+              class="grid h-6 min-w-6 place-items-center rounded-full px-1 tabular-nums"
+              :class="[metaText, isToday(cell.day) ? 'bg-accent font-semibold text-white' : monthOf(cell.day) !== monthOf(anchor) ? 'text-ink-faint hover:bg-hover' : 'text-ink-soft hover:bg-hover']"
               title="Open day"
               @click="emit('openDay', cell.day)"
             >
@@ -105,7 +106,7 @@ function onCellClick(event: MouseEvent, day: string) {
             >
               <AppIcon fallback="ph:calendar-check" :size="13" />
             </button>
-            <span v-if="dayKcal?.has(cell.day)" class="text-[11px] tabular-nums text-ink-faint" :title="`${formatKcal(dayKcal.get(cell.day)!)} kcal eaten`" data-day-kcal>{{ formatKcal(dayKcal.get(cell.day)!) }}</span>
+            <span v-if="dayKcal?.has(cell.day)" class="tabular-nums text-ink-faint" :class="metaText" :title="`${formatKcal(dayKcal.get(cell.day)!)} kcal eaten`" data-day-kcal>{{ formatKcal(dayKcal.get(cell.day)!) }}</span>
             <button
               class="ml-auto hidden rounded p-0.5 text-ink-faint hover:bg-hover hover:text-ink group-hover/cell:block"
               title="New on this day"
@@ -126,7 +127,8 @@ function onCellClick(event: MouseEvent, day: string) {
           />
           <button
             v-if="cell.more"
-            class="shrink-0 rounded px-1.5 text-left text-xs text-ink-faint hover:bg-hover hover:text-ink"
+            class="shrink-0 rounded px-1.5 text-left text-ink-faint hover:bg-hover hover:text-ink"
+            :class="metaText"
             @click="emit('openDay', cell.day)"
           >
             {{ cell.more }} more
