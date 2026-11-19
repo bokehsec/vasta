@@ -320,6 +320,10 @@ GitHub release page.
 
 ### Fixed
 
+- **Overdue tasks read normally on a phone.** In an agenda's Overdue list (on Home, for one), a
+  task late on both dates had its title squeezed to one letter per line beside its "Due" and
+  "Planned" labels, and lost its Today button. The title now uses the row's width, the labels
+  follow it (under it when there is no room), and the empty time column is gone on phones.
 - **Calorie-limit habits wait for the day to end.** A habit done by staying under your calories
   (SparkyFitness "Calories on target", or "kcal, at most" and "Day on target" from food) no longer
   shows as done in the middle of the day while you are still logging food. Today shows as not

@@ -39,6 +39,7 @@ const BADGE_TONES = {
   done: 'bg-hover text-ink-soft',
   field: 'bg-hover text-ink-soft',
 }
+const badgeClasses = (badge: { tone: keyof typeof BADGE_TONES }) => [tinyText, 'rounded px-1 py-0.5 font-medium', BADGE_TONES[badge.tone]]
 
 const dragging = inject(ENTRY_DRAGGING, undefined)
 const movable = computed(() => !!dragging?.movable(props.entry))
@@ -129,8 +130,10 @@ function onContextMenu(event: MouseEvent) {
     @pointerdown="onPointerDown($event, 'move')"
     @contextmenu="onContextMenu"
   >
-    <span v-if="variant === 'row'" class="w-[4.25rem] shrink-0 pt-px tabular-nums text-ink-soft" :class="metaText">{{ entry.allDay || entry.overdue ? '' : formatClock(entry.start) }}</span>
-    <!-- A row wraps its title (an agenda sits in narrow columns); chips and blocks cut it short. -->
+    <!-- A late task has no time: on a phone its row gives the empty column to the title. -->
+    <span v-if="variant === 'row'" class="w-[4.25rem] shrink-0 pt-px tabular-nums text-ink-soft" :class="[metaText, entry.overdue ? 'max-md:hidden' : '']">{{ entry.allDay || entry.overdue ? '' : formatClock(entry.start) }}</span>
+    <!-- A row wraps its title (an agenda sits in narrow columns), its badges flowing after it;
+         chips and blocks cut it short. -->
     <span class="flex min-w-0 gap-1" :class="variant === 'day-task' ? 'w-full items-start gap-2' : variant === 'row' ? 'items-start' : 'items-center'">
       <button
         v-if="checkable"
@@ -158,10 +161,11 @@ function onContextMenu(event: MouseEvent) {
       <span v-else-if="variant === 'row'" class="min-w-0 break-words"
       ><span class="font-medium" :class="done ? 'line-through' : ''">{{ title }}</span
         ><span v-if="origin" class="text-ink-faint" :class="metaText"> · {{ origin }}</span
+        ><span v-for="badge in badges" :key="badge.label" data-entry-badge class="ml-1 inline-block whitespace-nowrap align-[1px]" :class="badgeClasses(badge)">{{ badge.label }}</span
         ><span v-if="nextDue" data-completion-note class="block text-ink-soft" :class="metaText">Done this time · Next: {{ formatDateShort(nextDue) }}</span></span
       >
       <span v-else class="truncate font-medium" :class="done ? 'line-through' : ''">{{ title }}</span>
-      <span v-for="badge in badges" :key="badge.label" data-entry-badge class="shrink-0 rounded px-1 py-0.5 font-medium" :class="[tinyText, BADGE_TONES[badge.tone]]">{{ badge.label }}</span>
+      <span v-for="badge in variant === 'row' ? [] : badges" :key="badge.label" data-entry-badge class="shrink-0" :class="badgeClasses(badge)">{{ badge.label }}</span>
       <AppIcon v-if="afterDeadline && variant !== 'day-task'" fallback="ph:warning" :size="12" class="shrink-0 text-amber-700 dark:text-amber-400" title="Planned after its deadline" aria-label="Planned after its deadline" data-after-deadline />
       <AppIcon v-if="entry.recurring" fallback="ph:repeat" :size="11" class="shrink-0 opacity-60" />
     </span>

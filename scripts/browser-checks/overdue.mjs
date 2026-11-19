@@ -3,7 +3,7 @@
 // listed first on Today (the Day view of today) and on an agenda, each saying what is late ("Due Tue",
 // "Planned Mon") with a one-tap "Move to today" that plans it for today, keeps the deadline and says so
 // with Undo; another day has no Overdue; a task ticked there stays checked and struck; on a phone
-// the button is 44px and nothing scrolls sideways.
+// the button is 44px, nothing scrolls sideways and a long title keeps the row's width (SHOTS=<dir>).
 //   node overdue.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -74,6 +74,8 @@ const missed = await make('Missed', { due: value(await dayAt(-3)) })
 const unfinished = await make('Unfinished', { dodate: value(await dayAt(-1)), due: value(await dayAt(10)) })
 await make('Ahead', { due: value(tomorrow) })
 await make('Closed', { due: value(await dayAt(-5)), status: { kind: 'select', value: [doneOption] } })
+// Late on both dates, with a long title: on a phone the title keeps the row's width, the badges go under it.
+await make('Both late home insurance renewal paperwork and quotes', { dodate: value(await dayAt(-4)), due: value(await dayAt(-2)) })
 const weekly = await make('Weekly', { due: value(await dayAt(-14), { rrule: 'FREQ=WEEKLY;COUNT=6' }) })
 const query = await post('/api/objects', {
   typeId: bundle.types.find((t) => t.system === 'query').id,
@@ -181,6 +183,10 @@ try {
   await page.goto(`${base}/o/${host.id}`)
   await lists('the agenda on a phone')
   if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('the agenda scrolls sideways')
+  // The title's block (title, type and badges), not its widest wrapped line.
+  const title = await row('Both late').locator('.font-medium').first().evaluate((el) => el.parentElement.getBoundingClientRect())
+  if (process.env.SHOTS) await overdue.screenshot({ path: path.join(process.env.SHOTS, `overdue-phone-${engine}.png`) })
+  if (title.width < 200) throw new Error(`a long title is squeezed to ${Math.round(title.width)}px on a phone`)
 } finally {
   for (const id of [host.id, query.id, ...objects.map((o) => o.id)]) await page.request.delete(`${base}/api/objects/${id}`, { headers }).catch(() => {})
 }
