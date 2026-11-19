@@ -26,8 +26,10 @@ first** — no issue, PR, comment, reaction or roadmap item on `ariedotme/vasta`
 - **`setup/`** (gitignored) holds a checkout's own deploy files and scripts: compose files, deploy
   and release scripts, notes about one particular server. Nothing in the tracked tree may depend
   on it.
-- **Deploying** to our live install on dockbuntu needs Rob's go-ahead each time; the steps and
-  rollback notes are in AI Docs (`Vasta Contributions — Overview`, `handoffs/`).
+- **Deploying**: once work is done (checked, committed, pushed), deploy it to our live install on
+  dockbuntu without asking (Rob, 2026-11-19). Check what's live first, snapshot the database, keep
+  a rollback; ask first only for something beyond a normal app update. Steps and rollback notes:
+  AI Docs (`dockbuntu` › Vasta current deployment, `Vasta Contributions — Overview`).
 - **`CHANGELOG.md`**: add what a change means for the people using Vasta under `## Unreleased`
   (Added, Changed, Fixed) in the same commit.
 - Ideas, bugs and tech debt for later go to Rob, or onto the `Vasta Contributions` pages in AI
