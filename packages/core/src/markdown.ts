@@ -23,6 +23,10 @@ export function blockIdOfLink(href: string): string | undefined {
 
 export const objectLink = (id: Id, blockId?: string | null) => `vasta://o/${id}${blockId ? `#b-${blockId}` : ''}`
 
+/** A live widget (Habits today, Food today, Quick capture) as an image link, so agents' edits keep it. */
+const WIDGET_LINK = /^vasta:\/\/widget\/(habits|food|capture)$/
+const WIDGET_LABELS: Record<string, string> = { habits: 'Habits today', food: 'Food today', capture: 'Quick capture' }
+
 /** A block mention's link text: the object's title, then the block's. */
 const BLOCK_SEPARATOR = ' › '
 
@@ -137,6 +141,10 @@ function block(node: DocNode, options: ToMarkdownOptions): string {
     case 'columns':
     case 'column':
       return blocks(node.content, options)
+    case 'widget': {
+      const kind = String(node.attrs?.kind)
+      return `![${WIDGET_LABELS[kind] ?? 'Widget'}](vasta://widget/${kind})`
+    }
     case 'objectEmbed': {
       const id = String(node.attrs?.objectId)
       return `![${escapeText(options.titleOf?.(id) ?? '')}](${objectLink(id, node.attrs?.blockId as string | null | undefined)})`
@@ -231,7 +239,9 @@ function inlineNodes(tokens: Token[] | undefined, marks: DocMark[] = []): DocNod
         const image = token as Tokens.Image
         const id = objectIdOfLink(image.href)
         const blockId = blockIdOfLink(image.href)
-        if (id && blockId) out.push({ type: 'objectEmbed', attrs: { objectId: id, display: 'block', blockId, label: image.text } })
+        const widget = WIDGET_LINK.exec(image.href)?.[1]
+        if (widget) out.push({ type: 'widget', attrs: { kind: widget, label: image.text } })
+        else if (id && blockId) out.push({ type: 'objectEmbed', attrs: { objectId: id, display: 'block', blockId, label: image.text } })
         else if (id) out.push({ type: 'objectEmbed', attrs: { objectId: id, display: 'card', label: image.text } })
         else out.push({ type: 'text', text: image.text || image.href, marks: [...marks, { type: 'link', attrs: { href: image.href } }] })
         break
@@ -252,6 +262,7 @@ function inlineContent(tokens: Token[] | undefined, allowEmbeds = false): DocNod
   for (const raw of inlineNodes(tokens)) {
     const node: DocNode = raw.type === 'objectEmbed' && !allowEmbeds
       ? { type: 'mention', attrs: { objectId: raw.attrs?.objectId, label: raw.attrs?.label ?? '', ...(raw.attrs?.blockId ? { blockId: raw.attrs.blockId } : {}) } }
+      : raw.type === 'widget' && !allowEmbeds ? { type: 'text', text: String(raw.attrs?.label ?? '') }
       : raw
     const last = out.at(-1)
     if (node.type === 'text' && last?.type === 'text' && JSON.stringify(last.marks ?? []) === JSON.stringify(node.marks ?? [])) last.text += node.text ?? ''
@@ -276,7 +287,7 @@ function paragraphBlocks(tokens: Token[] | undefined): DocNode[] {
     run = []
   }
   for (const node of inlineContent(tokens, true)) {
-    if (node.type === 'objectEmbed') {
+    if (node.type === 'objectEmbed' || node.type === 'widget') {
       flush()
       const { label: _label, ...attrs } = node.attrs ?? {}
       out.push({ ...node, attrs })

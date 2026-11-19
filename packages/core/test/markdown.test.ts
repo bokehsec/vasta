@@ -155,3 +155,11 @@ it('round-trips Apple Mail message: links byte for byte', () => {
   expect(doc.content[0]?.content).toEqual([text('Open email', [{ type: 'link', attrs: { href: 'message://%3Cabc123@mail.example.com%3E' } }])])
   expect(docToMarkdown(doc).trim()).toBe(markdown)
 })
+
+
+it.each([['habits', 'Habits today'], ['food', 'Food today'], ['capture', 'Quick capture']])('round-trips the %s widget through Markdown, so an agent rewriting a page keeps it', (kind, label) => {
+  const doc: Doc = { type: 'doc', content: [{ type: 'paragraph', content: [text('Before')] }, { type: 'widget', attrs: { kind } }] }
+  const markdown = docToMarkdown(doc).trim()
+  expect(markdown).toBe(`Before\n\n![${label}](vasta://widget/${kind})`)
+  expect(markdownToDoc(markdown).content).toEqual(doc.content)
+})

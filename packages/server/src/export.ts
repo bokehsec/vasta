@@ -152,6 +152,8 @@ export function buildExport(store: NodeStore, spaceId: Id, options: { now: strin
       // An object that is gone (or in the trash) leaves its name, as plain text.
       return path ? `[${text}](${fromNote(path)})` : text
     })
+    // A live widget means nothing outside Vasta: its name, as a note.
+    .replace(/!\[([^\]]*)\]\(vasta:\/\/widget\/[a-z]+\)/g, (_whole, text: string) => `*(${text})*`)
 
   const frontMatter = (o: ObjectRecord, type: ObjectType | undefined) => {
     const lines: [string, unknown][] = [

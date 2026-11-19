@@ -11,6 +11,7 @@ vi.mock('../../web/src/editor/CodeBlockView.vue', () => ({ default: {} }))
 vi.mock('../../web/src/editor/MentionList.vue', () => ({ default: {} }))
 vi.mock('../../web/src/editor/MentionView.vue', () => ({ default: {} }))
 vi.mock('../../web/src/editor/ObjectEmbedView.vue', () => ({ default: {} }))
+vi.mock('../../web/src/editor/WidgetView.vue', () => ({ default: {} }))
 vi.mock('../../web/src/editor/SlashList.vue', () => ({ default: {} }))
 vi.mock('../../web/src/lib/api.ts', () => ({ api: {}, MAX_UPLOAD_BYTES: 0 }))
 vi.mock('../../web/src/lib/state.ts', () => ({ workspace: {}, typesById: { value: new Map() } }))
@@ -39,6 +40,7 @@ const everything = normalizeDoc({
     ),
     { type: 'callout', attrs: { icon: { kind: 'emoji', value: '💡' }, capture: { id: 'c1', channel: 'telegram', at: '2026-10-19T10:00:00.000Z' } }, content: [paragraph(text('captured'))] },
     { type: 'group', attrs: { color: 'blue', textColor: 'gray' }, content: [{ type: 'bulletList', content: [{ type: 'listItem', content: [paragraph(text('item'))] }] }] },
+    { type: 'widget', attrs: { kind: 'habits' } },
     { type: 'columns', content: [{ type: 'column', attrs: { width: 2 }, content: [paragraph(text('left'))] }, { type: 'column', content: [{ type: 'objectEmbed', attrs: { objectId: 'o2', display: 'wide-card' } }] }] },
     { type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: true }, content: [paragraph(text('done'))] }] },
     { type: 'details', attrs: { open: true, icon: { kind: 'icon', value: 'ph:star' } }, content: [{ type: 'detailsSummary', content: [text('More')] }, { type: 'detailsContent', content: [paragraph(text('hidden'))] }] },
@@ -65,7 +67,7 @@ describe('editor schema', () => {
   })
 
   it('round-trips every node and mark through Yjs unchanged', () => {
-    expect(everything.content).toHaveLength(15)
+    expect(everything.content).toHaveLength(16)
     expect(normalizeDoc(everything)).toEqual(everything)
     const ydoc = contentToYDoc({ body: everything, notes: normalizeDoc({ type: 'doc', content: [paragraph(text('second field'))] as never }) })
     const back = readContent(loadYDoc(Y.encodeStateAsUpdate(ydoc)))

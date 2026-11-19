@@ -372,6 +372,13 @@ function queryDisplays(view: EditorView, pos: number, node: PMNode): MenuItem[] 
     { label: 'Full', icon: compact ? 'ph:browser' : 'ph:check', run: () => show('embed') },
     { label: 'Compact', icon: compact ? 'ph:check' : 'ph:list-bullets', run: () => show('compact') },
   ]
+  const query = cachedSummary(String(node.attrs.objectId))?.query
+  if (query?.layout === 'agenda') {
+    items.push({ kind: 'submenu', label: 'Days ahead', icon: 'ph:calendar-dots', items: [1, 3, 7, 14].map((days) => ({
+      label: String(days), checked: days === (query.agenda?.days ?? 3),
+      run: () => void view.nodeDOM(pos)?.dispatchEvent(new CustomEvent('vasta-agenda-days', { detail: days })),
+    })) })
+  }
   if (compact) {
     const tell = (action: 'edit' | 'open') => () => void view.nodeDOM(pos)?.dispatchEvent(new CustomEvent('vasta-query', { detail: action }))
     items.push({ label: 'Edit query', icon: 'ph:sliders-horizontal', run: tell('edit') }, { label: 'Open query', icon: 'ph:arrow-square-out', run: tell('open') })

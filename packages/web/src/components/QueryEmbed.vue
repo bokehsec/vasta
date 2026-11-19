@@ -24,7 +24,7 @@ const summary = computed(() => summaryOf(props.objectId))
 const type = computed(() => typesById.value.get(summary.value?.typeId ?? ''))
 const query = computed<QueryDef>(() => draft.value ?? summary.value?.query ?? { typeIds: [] })
 // A query that selects nothing yet (just created) opens its settings.
-const editing = ref(!summary.value?.query?.typeIds.length && !summary.value?.query?.filter)
+const editing = ref(!summary.value?.query?.typeIds.length && !summary.value?.query?.filter && !summary.value?.query?.sort?.length)
 const draft = ref<QueryDef | null>(null)
 const results = ref<InstanceType<typeof QueryResults>>()
 const hidden = computed(() => props.compact && !editing.value && !!results.value?.empty)
@@ -54,12 +54,18 @@ const fromMenu = (event: Event) => {
   if ((event as CustomEvent<'edit' | 'open'>).detail === 'edit') editing.value = true
   else void openObject(props.objectId)
 }
+const daysFromMenu = (event: Event) => {
+  if (props.readonly) return
+  edit({ ...query.value, agenda: { ...query.value.agenda, days: (event as CustomEvent<number>).detail } })
+}
 onMounted(() => {
   block = root.value?.closest('[data-node-view-wrapper]')
   block?.addEventListener('vasta-query', fromMenu)
+  block?.addEventListener('vasta-agenda-days', daysFromMenu)
 })
 onBeforeUnmount(() => {
   block?.removeEventListener('vasta-query', fromMenu)
+  block?.removeEventListener('vasta-agenda-days', daysFromMenu)
   void save()
 })
 </script>

@@ -572,6 +572,7 @@ export type DocNodeType =
   | 'table' | 'tableRow' | 'tableHeader' | 'tableCell'
   | 'mention'        // inline object link; attrs: { objectId: Id, label: string }
   | 'objectEmbed'    // block-level object; attrs: { objectId: Id, display: 'inline' | 'card' | 'wide-card' | 'embed' | 'image' | 'block' | 'compact' /* queries and blocks */, blockId?: Id }
+  | 'widget'         // live tool; attrs: { kind: 'habits' | 'food' | 'capture' }
   | 'unsupported'    // block we could not convert; attrs: { source: string, raw: unknown }
   // Only in templates and snippets (templates.ts):
   | 'templatePlaceholder' // inline `{{…}}`; attrs: { value: string }

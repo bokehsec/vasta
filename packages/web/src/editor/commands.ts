@@ -9,6 +9,7 @@ import { insertSnippet, insertTemplate, loadTemplates, snippetsFor, templates } 
 import { insertCondition } from './template-nodes.ts'
 import { toggleFromLine } from './toggles.ts'
 import { pickImages } from './uploads.ts'
+import { openWidgetPicker } from './widgets.ts'
 
 export interface SlashCommand {
   id: string
@@ -37,6 +38,10 @@ function menuAtCursor(editor: Editor, items: MenuItem[]) {
 const chain = (editor: Editor, range: Range) => editor.chain().focus().deleteRange(range)
 
 export const slashCommands: SlashCommand[] = [
+  { id: 'widget', label: 'Widget…', icon: 'ph:squares-four', keywords: 'dashboard home widget', run: (e, r) => {
+    const at = e.view.coordsAtPos(e.state.selection.from)
+    void openWidgetPicker(e, r, { x: at.left, y: at.bottom + 4 })
+  } },
   { id: 'text', label: 'Text', icon: 'ph:text-t', keywords: 'paragraph', run: (e, r) => chain(e, r).setParagraph().run() },
   { id: 'h1', label: 'Heading 1', icon: 'ph:text-h-one', keywords: 'title', run: (e, r) => chain(e, r).setHeading({ level: 1 }).run() },
   { id: 'h2', label: 'Heading 2', icon: 'ph:text-h-two', keywords: 'subtitle', run: (e, r) => chain(e, r).setHeading({ level: 2 }).run() },

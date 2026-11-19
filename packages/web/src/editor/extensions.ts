@@ -17,6 +17,7 @@ import {
   Group,
   Mention,
   ObjectEmbed,
+  Widget,
   TaskItemNested,
   Unsupported,
   VastaCodeBlock,
@@ -40,6 +41,7 @@ import { filterCommands, type SlashCommand, type SlashContext } from './commands
 import MentionList, { type MentionItem } from './MentionList.vue'
 import MentionView from './MentionView.vue'
 import ObjectEmbedView from './ObjectEmbedView.vue'
+import WidgetView from './WidgetView.vue'
 import { Uploads } from './uploads.ts'
 import SlashList from './SlashList.vue'
 import { suggestionPopup } from './suggestion-popup.ts'
@@ -303,6 +305,7 @@ export function createExtensions(placeholder: string, text?: { doc: Y.Doc; field
     Columns,
     Column,
     ObjectEmbedWithView,
+    Widget.extend({ addNodeView: () => VueNodeViewRenderer(WidgetView) }),
     Unsupported,
     MentionWithSuggestion,
     PlaceholderWithView,

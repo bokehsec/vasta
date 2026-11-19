@@ -42,6 +42,7 @@ import { addSelectOption, dayKey, deleteForeverFlow, deleteObjectFlow, isInSideb
 import { api, authApi, mediaUrl, serverApi, type InsistentRule } from '../lib/api.ts'
 import { openReminderEditor } from '../lib/insistent.ts'
 import { mainButton } from '../lib/buttons.ts'
+import { myHomeId } from '../lib/home.ts'
 import { onChange } from '../lib/events.ts'
 import { offline } from '../lib/network.ts'
 import { openText, useReplica, type TextSession } from '../lib/replica.ts'
@@ -180,7 +181,7 @@ const isWhiteboard = computed(() => type.value?.system === 'whiteboard')
  */
 const isStartPage = computed(() => {
   const on = workspace.space?.opensOn
-  return on?.kind === 'object' && on.id === props.id && !embedded.value && !inFrame.value && !isWhiteboard.value && !object.value?.deletedAt && !object.value?.template
+  return (props.id === myHomeId.value || (on?.kind === 'object' && on.id === props.id)) && !embedded.value && !inFrame.value && !isWhiteboard.value && !object.value?.deletedAt && !object.value?.template
 })
 const hideTagsRow = computed(() => isStartPage.value && !object.value?.tagIds.length)
 const propertiesEmpty = computed(() => !showOwnDate.value && !isTagObject.value && !isHabit.value && !visibleFields.value.length && !hiddenCount.value && !reverseCount.value)
@@ -1207,6 +1208,7 @@ async function startFrom(template: ObjectRecord) {
           :doc="object.content[field.id]"
           :text="textFields[field.id]"
           :object-id="object.id"
+          :home="index === 0 && object.id === myHomeId && !embedded && !inFrame && !object.deletedAt"
           :reveal="block"
           :template="!!info"
           :cursor="cursorTarget"

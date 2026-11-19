@@ -9,6 +9,8 @@ GitHub release page.
 ### Added
 
 - **Home:** every person has their own Home page in each space, opened from the top of the sidebar, `G H`, or Home on the phone.
+- **Widgets:** Add widget on your Home (or `/Widget` on any page) adds Agenda, Due soon, Planned, Waiting on, Pinned, Recently changed, a saved query, a page or block, Habits today, Food today or Quick capture. Your Home can use one or two columns.
+- **Starting Home:** when a space opens on a page, its owner's Home is that page, and other members start from their own copy of it, with their own saved queries.
 - **Upgraded our installation to Vasta 0.11.** Adds agent visibility, context and required-field
   settings, agent attribution, and persistent reminders while keeping our phone navigation,
   scoped reviews, task date roles, synced preferences, weekly habits and SparkyFitness imports.

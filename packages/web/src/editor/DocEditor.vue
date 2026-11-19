@@ -20,6 +20,8 @@ import { saveAsSnippet, selectedBlocks } from '../lib/templates.ts'
 import { flashBlock } from './block-attributes.ts'
 import { createExtensions } from './extensions.ts'
 import { openObject } from '../lib/open.ts'
+import { greyButton } from '../lib/buttons.ts'
+import { openWidgetPicker } from './widgets.ts'
 
 const props = defineProps<{
   doc: Doc | undefined
@@ -30,6 +32,7 @@ const props = defineProps<{
   template?: boolean
   placeholder?: string
   autofocus?: boolean
+  home?: boolean
 }>()
 const emit = defineEmits<{ change: [doc: Doc] }>()
 const router = useRouter()
@@ -148,6 +151,17 @@ onBeforeUnmount(() => {
   editor.value?.destroy()
 })
 
+function addWidget(event: MouseEvent) {
+  const current = editor.value
+  if (!current?.isEditable) return
+  // Append into the last column when columns are in use, rather than below their container.
+  const end = current.state.doc.content.size
+  const last = current.state.doc.lastChild
+  const pos = last?.type.name === 'columns' ? end - 2 : end
+  const at = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  void openWidgetPicker(current, { from: pos, to: pos }, { x: at.left, y: at.bottom + 4 }, true)
+}
+
 async function setLink() {
   if (!editor.value) return
   const previous = editor.value.getAttributes('link').href as string | undefined
@@ -213,6 +227,7 @@ const marks: { name: string; title: string; icon: string; run: () => unknown }[]
        it borrows the page's own padding, so the text does not move. -->
   <div class="relative -ml-6 pl-6 md:-ml-10 md:pl-10" data-block-gutter>
     <EditorContent :editor="editor" />
+    <button v-if="home && editor?.isEditable" :class="greyButton" class="mt-5" @click="addWidget"><AppIcon fallback="ph:plus" /> Add widget</button>
     <BubbleMenu v-if="editor" ref="bubbleMenu" :editor="editor" class="flex gap-0.5 rounded-lg border border-line bg-surface p-0.5 shadow-lg">
       <button
         v-for="mark in marks"

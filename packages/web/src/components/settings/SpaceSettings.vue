@@ -261,15 +261,16 @@ async function remove(member: Member) {
       <div class="min-w-0 flex-1 text-sm">
         <div class="font-medium">Opens on</div>
         <div class="text-xs text-ink-faint">
-          What this space shows when you open Vasta.
-          <template v-if="opensOnGone">The page is in the trash, so the first pinned item opens instead.</template>
+          <template v-if="space.opensOn?.kind === 'object'">Your Home — new members start from a copy of {{ displayTitle(opensOnPage, opensOnPage && typesById.get(opensOnPage.typeId)) }}.</template>
+          <template v-else>What this space shows when you open Vasta.</template>
+          <template v-if="opensOnGone">The starting page is in the trash; new members get a blank Home.</template>
         </div>
       </div>
       <div ref="opensOnAnchor" class="flex items-center gap-2">
         <select :value="space.opensOn?.kind ?? 'pinned'" class="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm outline-none" aria-label="Opens on" @change="chooseOpensOn">
           <option value="pinned">Your Home</option>
           <option value="today">Today</option>
-          <option value="object">A page…</option>
+          <option value="object">Your Home · start from a page…</option>
         </select>
         <button v-if="space.opensOn?.kind === 'object'" :class="secondary" class="max-w-48 truncate" title="Change the page" @click="opensOnPicking = true">
           {{ displayTitle(opensOnPage, opensOnPage && typesById.get(opensOnPage.typeId)) }}

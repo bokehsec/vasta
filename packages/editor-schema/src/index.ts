@@ -90,6 +90,17 @@ export const ObjectEmbed = Node.create({
   renderHTML: ({ HTMLAttributes }) => ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'object-embed' })],
 })
 
+/** Live, viewer-local tools. Their saved content is only the kind, never today's data. */
+export const Widget = Node.create({
+  name: 'widget',
+  group: 'block',
+  atom: true,
+  draggable: true,
+  addAttributes: () => ({ kind: { default: 'capture', parseHTML: (el) => el.getAttribute('data-kind'), renderHTML: (a) => ({ 'data-kind': a.kind }) } }),
+  parseHTML: () => [{ tag: 'div[data-type="widget"]' }],
+  renderHTML: ({ HTMLAttributes }) => ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'widget' })],
+})
+
 export const Unsupported = Node.create({
   name: 'unsupported',
   group: 'block',
@@ -185,7 +196,7 @@ export const TemplateBranch = Node.create({
 /** Blocks that can be linked to: each gets a stable `id` (see blockIdFixes). */
 export const BLOCK_TYPES = [
   'paragraph', 'heading', 'blockquote', 'codeBlock', 'horizontalRule', 'bulletList', 'orderedList', 'taskList', 'listItem', 'taskItem',
-  'callout', 'details', 'group', 'columns', 'table', 'objectEmbed', 'unsupported',
+  'callout', 'details', 'group', 'columns', 'table', 'objectEmbed', 'widget', 'unsupported',
 ]
 /** Blocks with a text color and a background (a group's background is its own `color`). */
 export const COLOR_TYPES = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'listItem', 'taskItem', 'callout', 'details', 'group']
@@ -286,6 +297,7 @@ export function schemaExtensions(): AnyExtension[] {
     Columns,
     Column,
     ObjectEmbed,
+    Widget,
     Unsupported,
     Mention,
     TemplatePlaceholder,

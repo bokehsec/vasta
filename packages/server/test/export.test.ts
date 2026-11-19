@@ -57,6 +57,7 @@ describe('space export', () => {
             content: [
               { type: 'paragraph', content: [{ type: 'text', text: 'By ' }, { type: 'mention', attrs: { objectId: 'herbert', label: 'Frank Herbert' } }] },
               { type: 'objectEmbed', attrs: { objectId: 'img', display: 'image' } },
+              { type: 'widget', attrs: { kind: 'habits' } },
               { type: 'paragraph', content: [{ type: 'text', text: 'See ' }, { type: 'mention', attrs: { objectId: 'gone', label: 'In the trash' } }] },
             ],
           },
@@ -98,6 +99,7 @@ describe('space export', () => {
 
     const dune = strFromU8(zip['Books/Dune- a novel.md']!)
     expect(dune).toContain('id: "dune"')
+    expect(dune).toContain('*(Habits today)*')
     expect(dune).toContain('title: "Dune: a novel"')
     expect(dune).toContain('tags: ["sci-fi"]')
     expect(dune).toContain('Author: "[[Frank Herbert]]"')
