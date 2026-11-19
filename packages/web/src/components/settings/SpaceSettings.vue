@@ -41,7 +41,7 @@ const me = computed(() => session.user!.id)
 const isOwner = computed(() => members.value.some((m) => m.userId === me.value && m.role === 'owner'))
 const dirty = computed(() => name.value.trim() !== space.value.name || JSON.stringify(icon.value) !== JSON.stringify(space.value.icon))
 
-// Opens on: the page Vasta shows for this space (Space.opensOn); the first pinned item when unset.
+// Opens on: the page Vasta shows for this space (Space.opensOn); the person's Home when unset.
 const opensOnAnchor = ref<HTMLElement | null>(null)
 const opensOnPicking = ref(false)
 const opensOnPage = computed(() => (space.value.opensOn?.kind === 'object' ? summaryOf(space.value.opensOn.id) : undefined))
@@ -267,7 +267,7 @@ async function remove(member: Member) {
       </div>
       <div ref="opensOnAnchor" class="flex items-center gap-2">
         <select :value="space.opensOn?.kind ?? 'pinned'" class="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm outline-none" aria-label="Opens on" @change="chooseOpensOn">
-          <option value="pinned">First pinned item</option>
+          <option value="pinned">Your Home</option>
           <option value="today">Today</option>
           <option value="object">A page…</option>
         </select>

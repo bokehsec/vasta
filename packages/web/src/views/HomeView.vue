@@ -1,13 +1,14 @@
 <script setup lang="ts">
-// Opens what the space opens on (Settings › Space): Today or a page; else the first pinned item,
-// like a start page. Falls back to a short welcome.
+// Opens what the space opens on (Settings › Space): Today or a page; when unset, the person's Home.
+// A chosen page that is gone keeps the pinned-item/welcome fallback.
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { openToday, sidebarItemPath, todayRoute } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { greyButton } from '../lib/buttons.ts'
+import { resolveHome } from '../lib/home.ts'
 import { startPage } from '../lib/start-page.ts'
-import { typesById, ui, workspace } from '../lib/state.ts'
+import { lastError, typesById, ui, workspace } from '../lib/state.ts'
 import { bodyText, pageTitle } from '../lib/type-scale.ts'
 import AppIcon from '../components/AppIcon.vue'
 
@@ -19,6 +20,18 @@ onMounted(async () => {
   const space = workspace.space
   if (!space) return
   const on = space.opensOn
+  if (!on) {
+    looking.value = true
+    try {
+      const id = await resolveHome()
+      if (id && workspace.space?.id === space.id && router.currentRoute.value.path === '/') await router.replace(`/o/${id}`)
+    } catch (error) {
+      lastError.value = (error as Error).message
+    } finally {
+      looking.value = false
+    }
+    return
+  }
   looking.value = on?.kind === 'object'
   const opened = on?.kind === 'object' ? await api.summaries([on.id]).then((found) => found[0], () => undefined) : undefined
   looking.value = false

@@ -6,28 +6,28 @@
 // cover it. Its z-index (20) is below the sidebar drawer's (30).
 import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { isTodayRoute, sidebarItemPath } from '../lib/actions.ts'
+import { isTodayRoute } from '../lib/actions.ts'
+import { myHomeId, openHome } from '../lib/home.ts'
 import { phonePlacePath, visiblePhonePlaces, type PhonePlace } from '../lib/phone-places.ts'
 import { newPlace, startNew } from '../lib/new-item.ts'
-import { lastError, notice, typesById, ui, workspace } from '../lib/state.ts'
+import { lastError, notice, typesById, ui } from '../lib/state.ts'
 import { keyboardInset } from '../lib/viewport.ts'
 import { metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
-/** Where Home lands ("/" opens it, views/HomeView.vue): the page the space opens on, else its first sidebar item. */
-const homePath = computed(() => {
-  const space = workspace.space
-  if (space?.opensOn?.kind === 'object') return `/o/${space.opensOn.id}`
-  const first = space?.opensOn?.kind === 'today' ? undefined : space?.sidebar[0]?.items[0]
-  return first ? sidebarItemPath(first) : '/'
-})
+/** Home always belongs to this person, even when the space opens on Today or a shared page. */
+const homePath = computed(() => myHomeId.value ? `/o/${myHomeId.value}` : '/')
 function active(place: PhonePlace) {
-  if (place.id === 'home') return route.path === '/' || route.path === homePath.value || (workspace.space?.opensOn?.kind === 'today' && isTodayRoute(route))
+  if (place.id === 'home') return !!myHomeId.value && route.path === homePath.value
   if (place.id === 'today') return isTodayRoute(route)
   if (place.id === 'calendar') return (route.path === '/calendar' || route.path.startsWith('/day/')) && !(visiblePhonePlaces.value.some((item) => item.id === 'today') && isTodayRoute(route))
   return !!place.to && route.path === place.to
+}
+function goHome(event: MouseEvent) {
+  event.preventDefault()
+  void openHome()
 }
 /**
  * The place showing tapped again goes back to its start (the calendar to today) or, already there,
@@ -62,7 +62,7 @@ const hidden = computed(() => keyboardInset.value > 80 || ui.surfaceFull)
       data-tab-bar
     >
       <template v-for="tab in visiblePhonePlaces" :key="tab.id">
-        <RouterLink v-if="phonePlacePath(tab)" v-slot="{ href, navigate }" :to="phonePlacePath(tab)!" custom>
+        <RouterLink v-if="phonePlacePath(tab)" v-slot="{ href, navigate }" :to="tab.id === 'home' ? homePath : phonePlacePath(tab)!" custom>
           <a
             :href="href"
             class="flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1"
@@ -70,7 +70,7 @@ const hidden = computed(() => keyboardInset.value > 80 || ui.surfaceFull)
             :aria-current="active(tab) ? 'page' : undefined"
             :aria-label="tab.label"
             :data-tab="tab.label"
-            @click="active(tab) ? again($event, tab) : navigate($event)"
+            @click="active(tab) ? again($event, tab) : tab.id === 'home' ? goHome($event) : navigate($event)"
           >
             <AppIcon :icon="tab.icon" :fallback="tab.fallback" :size="22" /><span class="w-full truncate text-center">{{ tab.label }}</span>
           </a>

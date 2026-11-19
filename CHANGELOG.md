@@ -8,6 +8,7 @@ GitHub release page.
 
 ### Added
 
+- **Home:** every person has their own Home page in each space, opened from the top of the sidebar, `G H`, or Home on the phone.
 - **Upgraded our installation to Vasta 0.11.** Adds agent visibility, context and required-field
   settings, agent attribution, and persistent reminders while keeping our phone navigation,
   scoped reviews, task date roles, synced preferences, weekly habits and SparkyFitness imports.

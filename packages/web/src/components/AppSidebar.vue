@@ -21,6 +21,7 @@ import {
   viewItem,
 } from '../lib/actions.ts'
 import { displayTitle } from '../lib/format.ts'
+import { myHomeId, openHome } from '../lib/home.ts'
 import { startNew } from '../lib/new-item.ts'
 import { api } from '../lib/api.ts'
 import { openContextMenu, openMenuAt, promptDialog, type MenuItem } from '../lib/overlays.ts'
@@ -418,6 +419,10 @@ async function pickType(type: ObjectType) {
     </PopoverMenu>
 
     <nav class="vasta-sidebar-nav flex-1 overflow-y-auto px-2 pb-6" :class="[phoneUiText, bodyText]" @dragleave="leaveNav" @drop="dropHere">
+      <button class="w-full text-left" :class="row(!!myHomeId && route.path === `/o/${myHomeId}`)" :title="`Home (${keysOf('home')})`" @click="openHome">
+        <AppIcon fallback="ph:house" class="text-ink-soft" /> Home
+        <kbd :class="hint">{{ keysOf('home') }}</kbd>
+      </button>
       <RouterLink to="/calendar" :class="row(route.path === '/calendar')" :title="`Calendar (${keysOf('calendar')}); today: ${keysOf('today')}`">
         <AppIcon fallback="ph:calendar-dots" class="text-ink-soft" /> Calendar
         <kbd :class="hint">{{ keysOf('calendar') }}</kbd>

@@ -1,12 +1,13 @@
 // The app's keyboard shortcuts, in one place: the handler installed by App.vue, the list the
-// shortcuts dialog (⌘/) shows, and the hints in the sidebar and ⌘K. ⌘1–3 (the sidebar's top rows,
-// in order) and ⌘D (today, "day") work while typing too; "G then a letter" (as in Linear or GitHub)
+// shortcuts dialog (⌘/) shows, and the hints in the sidebar and ⌘K. ⌘1–3 (Calendar, Inbox, Tasks)
+// and ⌘D (today, "day") work while typing too; "G then a letter" (as in Linear or GitHub)
 // only outside text fields, and also in a browser tab, where ⌘1–3 switch tabs; so does Esc for the
 // side pane. ⌘K lives in CommandPalette (one pressed while the app is still loading is kept here and
 // opens it once ready), the desktop app's ⌘[ ⌘] ⌘, in platform.ts.
 import { nextTick, watch } from 'vue'
 import { router } from '../router.ts'
 import { openToday } from './actions.ts'
+import { openHome } from './home.ts'
 import { closePane, paneObjectId } from './open.ts'
 import { session } from './session.ts'
 import { systemType, ui, workspace } from './state.ts'
@@ -24,7 +25,8 @@ export interface Shortcut {
   alt?: string[]
 }
 
-export const GO: Record<'today' | 'inbox' | 'calendar' | 'tasks', { path?: string; run: () => unknown }> = {
+export const GO: Record<'home' | 'today' | 'inbox' | 'calendar' | 'tasks', { path?: string; run: () => unknown }> = {
+  home: { run: openHome },
   today: { run: () => openToday() },
   inbox: { path: '/inbox', run: () => router.push('/inbox') },
   calendar: { path: '/calendar', run: () => router.push('/calendar') },
@@ -35,6 +37,7 @@ export const SHORTCUTS: { group: string; items: Shortcut[] }[] = [
   {
     group: 'Go to',
     items: [
+      { id: 'home', label: 'Home', keys: ['G', 'H'] },
       { id: 'calendar', label: 'Calendar', keys: [`${mod}1`], alt: ['G', 'C'] },
       { id: 'inbox', label: 'Inbox', keys: [`${mod}2`], alt: ['G', 'I'] },
       { id: 'tasks', label: 'Tasks', keys: [`${mod}3`], alt: ['G', 'K'] },
@@ -110,7 +113,7 @@ function onKey(event: KeyboardEvent) {
   }
   if (Date.now() - pendingG > 1200) return
   pendingG = 0
-  const run = ({ t: GO.today.run, i: GO.inbox.run, c: GO.calendar.run, k: GO.tasks.run, s: () => router.push('/settings') } as Record<string, () => unknown>)[key]
+  const run = ({ h: GO.home.run, t: GO.today.run, i: GO.inbox.run, c: GO.calendar.run, k: GO.tasks.run, s: () => router.push('/settings') } as Record<string, () => unknown>)[key]
   if (!run) return
   event.preventDefault()
   void run()
