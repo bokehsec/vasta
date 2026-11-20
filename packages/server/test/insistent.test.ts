@@ -485,6 +485,27 @@ describe('insistent reminders', () => {
     t.insistent.create(t.user, { title: 'Digest', content: { kind: 'tasks' }, when: { kind: 'daily', at: '07:30' }, steps: [{ after: 0, channels: ['ntfy'] }], repeat: null })
     await t.runTo('2026-10-20T07:30:30')
     expect(t.ntfy[0]!.message.split('\n').slice(0, 5)).toEqual(['Due', '• Pay rent', 'Planned today', '• Late plan (planned 2026-10-18)', '• Plan today'])
+    const [nag] = t.insistent.openNags('u')
+    expect(t.insistent.view(t.user, nag!.id)).toMatchObject({
+      tasks: [{ id: 'rent', title: 'Pay rent', typeId: type.id, due: '2026-10-20T00:00:00.000Z' }],
+      planned: [
+        { id: 'late', title: 'Late plan', typeId: type.id, day: '2026-10-18' },
+        { id: 'today', title: 'Plan today', typeId: type.id, day: '2026-10-20' },
+      ],
+    })
+  })
+
+  it('keeps empty task groups in the reminder view, but not on other reminders', async () => {
+    const t = setup()
+    const rent = t.store.getObject('rent')!
+    t.store.putObject({ ...rent, props: { status: { kind: 'select', value: ['done'] } } })
+    await t.reminders.tick(t.now)
+    t.insistent.create(t.user, { title: 'Digest', content: { kind: 'tasks' }, when: { kind: 'daily', at: '07:30' }, steps: [{ after: 0, channels: ['ntfy'] }], repeat: null })
+    t.insistent.create(t.user, { title: 'Read', content: { kind: 'target' }, objectId: 'p1', when: { kind: 'daily', at: '07:30' }, steps: [{ after: 0, channels: ['ntfy'] }], repeat: null })
+    await t.runTo('2026-10-20T07:30:30')
+    const views = t.insistent.openNags('u').map((nag) => t.insistent.view(t.user, nag.id))
+    expect(views.find((view) => view.title === 'Digest')).toMatchObject({ tasks: [], planned: [] })
+    expect(views.find((view) => view.title !== 'Digest')).not.toHaveProperty('planned')
   })
 
   it('checks its rules', () => {

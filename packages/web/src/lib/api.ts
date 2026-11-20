@@ -230,7 +230,8 @@ export interface NagView {
   startedAt: string
   ack: AckMode
   items: { id: Id; title: string; text: string; typeId: Id }[]
-  tasks?: { id: Id; title: string; due: string }[]
+  tasks?: { id: Id; title: string; typeId: Id; due: string }[]
+  planned?: { id: Id; title: string; typeId: Id; day: string }[]
   /** The texts to type or say. */
   expected: string[]
   snooze: number

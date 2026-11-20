@@ -977,7 +977,10 @@ export class InsistentReminders {
       ack: rule.ack,
       ...(type?.system === 'habit' && (this.importedHabit(object!) || habitFoodRule(object!)) ? { acknowledgementOnly: true } : {}),
       items: rule.content.kind === 'target' && rule.ack !== 'type' && rule.ack !== 'say' ? items.map((i) => ({ ...i, title: '' })).filter((i) => i.text) : items,
-      ...(rule.content.kind === 'tasks' ? { tasks: this.tasks(user, rule.spaceId) } : {}),
+      ...(rule.content.kind === 'tasks' ? {
+        tasks: this.tasks(user, rule.spaceId).map((task) => ({ ...task, typeId: builtinTypeId(rule.spaceId, 'task') })),
+        planned: this.planned(user, rule.spaceId).map((task) => ({ ...task, typeId: builtinTypeId(rule.spaceId, 'task') })),
+      } : {}),
       expected: rule.ack === 'type' || rule.ack === 'say' ? this.expected(rule, nag) : [],
       snooze: rule.snooze,
       snoozes: nag.snoozes,

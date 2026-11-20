@@ -8,6 +8,7 @@ GitHub release page.
 
 ### Added
 
+- **Task reminders:** tick tasks done, move their Do date to tomorrow or another day, or open their notes without leaving the reminder. Due and planned tasks stay in place with Undo; handling every task answers the reminder for you.
 - A pin button at the top of every page puts it on your Home (and takes it off again).
 - **Home:** every person has their own Home page in each space, opened from the top of the sidebar, `G H`, or Home on the phone.
 - **Widgets:** Add widget on your Home (or `/Widget` on any page) adds Agenda, Due soon, Planned, Waiting on, Pinned, Recently changed, a saved query, a page or block, Habits today, Food today or Quick capture. Your Home can use one or two columns.

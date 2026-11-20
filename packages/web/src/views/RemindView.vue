@@ -10,15 +10,24 @@ import { useRoute } from 'vue-router'
 import { SAID_MATCH, TYPED_MATCH, textMatch } from '@vasta/core'
 import ObjectLink from '../components/ObjectLink.vue'
 import AppIcon from '../components/AppIcon.vue'
+import AppToast from '../components/AppToast.vue'
+import ContextMenuHost from '../components/ContextMenuHost.vue'
+import DialogHost from '../components/DialogHost.vue'
+import PickObjectHost from '../components/PickObjectHost.vue'
+import QuickAskHost from '../components/QuickAskHost.vue'
+import ReminderTasks from '../components/ReminderTasks.vue'
+import ReminderTaskDrawer from '../components/ReminderTaskDrawer.vue'
 import { authApi, type NagAnswer, type NagView } from '../lib/api.ts'
 import { closeTakeover, takeoverReady } from '../lib/platform.ts'
 import { listen, speechLanguage, speechUnavailable, type Listening } from '../lib/speech.ts'
+import { isPhone } from '../lib/viewport.ts'
 
 const props = defineProps<{ id: string }>()
 const route = useRoute()
 const takeover = route.query.takeover === '1'
 /** The desktop app's floating pop-up (?popup=1): a small window, so a tighter layout. */
 const popup = takeover && route.query.popup === '1'
+const taskId = ref<string | null>(null)
 
 const nag = ref<NagView | null>(null)
 const error = ref('')
@@ -225,8 +234,10 @@ watch(
 <template>
   <div
     class="flex min-h-full flex-col items-center justify-center px-5"
-    :class="[takeover ? 'h-full bg-canvas' : '', popup ? 'overflow-hidden rounded-2xl border border-line py-6' : 'py-10']"
+    :class="[takeover ? 'bg-canvas' : '', popup ? 'overflow-hidden rounded-2xl border border-line py-6' : 'py-10']"
     :data-takeover="takeover || undefined"
+    :inert="taskId && (popup || isPhone) ? true : undefined"
+    :style="taskId && !popup && !isPhone ? { paddingRight: '50%' } : undefined"
   >
     <!-- The desktop takeover has no title bar: its top edge moves the window (it is full screen anyway). -->
     <div v-if="takeover" class="fixed inset-x-0 top-0 h-8" data-tauri-drag-region />
@@ -312,12 +323,7 @@ watch(
           <ObjectLink v-if="item.title" :id="item.id" :opens="takeover ? 'page' : undefined" class="font-medium hover:underline">{{ item.title }}</ObjectLink>
           <p v-if="item.text" class="mt-1 whitespace-pre-line text-ink-soft">{{ item.text }}</p>
         </div>
-        <ul v-if="nag.tasks" class="divide-y divide-line rounded-2xl border border-line bg-surface shadow-sm">
-          <li v-for="task in nag.tasks" :key="task.id" class="px-5 py-3">
-            <ObjectLink :id="task.id" :opens="takeover ? 'page' : undefined" class="hover:underline">{{ task.title }}</ObjectLink>
-          </li>
-          <li v-if="!nag.tasks.length" class="px-5 py-3 text-ink-faint">No tasks due today.</li>
-        </ul>
+        <ReminderTasks v-if="nag.tasks" :nag="nag" :disabled="busy || !!taskId" @open="taskId = $event" @handled="(nag.ack === 'done' || nag.ack === 'ok') && answer(nag.ack)" />
       </section>
 
       <p v-if="nag.acknowledgementOnly" class="mt-4 text-center text-sm text-ink-soft" data-acknowledgement-only>This acknowledges the reminder. Progress comes from its source; change amounts on the habit page.</p>
@@ -354,4 +360,12 @@ watch(
       </div>
     </article>
   </div>
+  <ReminderTaskDrawer v-if="taskId" :id="taskId" :popup="popup" @close="taskId = null" />
+  <template v-if="takeover">
+    <ContextMenuHost />
+    <DialogHost />
+    <QuickAskHost />
+    <PickObjectHost />
+    <AppToast />
+  </template>
 </template>
