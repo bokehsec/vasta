@@ -516,6 +516,23 @@ describe('iCalendar feeds', () => {
     expect(byTitle('Cancelled')).toHaveLength(0)
   })
 
+  it('reads floating times in the feed\'s X-WR-TIMEZONE, with Alberta by its old rules', () => {
+    // The Goulbourn Sea Hawks practices feed (2026-11-23): 03:20 America/Edmonton is 05:20 Toronto
+    // in October and in November, as the club's server writes it.
+    const feed = (zone: string) => parseCalendar(['BEGIN:VCALENDAR', 'VERSION:2.0', ...(zone ? [`X-WR-TIMEZONE:${zone}`] : []),
+      'BEGIN:VEVENT', 'UID:swim', 'SUMMARY:Swim', 'DTSTART:20261005T032000', 'DTEND:20261005T051500',
+      'RRULE:FREQ=WEEKLY;BYDAY=MO', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n'))
+    const starts = (zone: string, from: string) =>
+      calendarEntries(feed(zone), 'src', { from, to: from }, 'America/Toronto').map((e) => e.start)
+    expect(feed('America/Edmonton').timeZone).toBe('America/Denver')
+    expect(starts('America/Edmonton', '2026-10-05')).toEqual(['2026-10-05T09:20:00.000Z'])
+    expect(starts('America/Edmonton', '2026-11-23')).toEqual(['2026-11-23T10:20:00.000Z'])
+    expect(starts('America/Regina', '2026-11-23')).toEqual(['2026-11-23T09:20:00.000Z'])
+    // No header, or a zone we can't read: floating stays in the viewer's zone, as before.
+    expect(starts('', '2026-11-23')).toEqual(['2026-11-23T08:20:00.000Z'])
+    expect(starts('Not/AZone', '2026-11-23')).toEqual(['2026-11-23T08:20:00.000Z'])
+  })
+
   it('rejects text that is not iCalendar', () => {
     expect(() => parseCalendar('<html>nope</html>')).toThrow()
   })

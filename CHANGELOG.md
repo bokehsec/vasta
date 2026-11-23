@@ -326,6 +326,7 @@ GitHub release page.
 
 ### Fixed
 
+- Subscribed calendars show times without a zone in the zone the feed names (X-WR-TIMEZONE) instead of yours. A swim club feed set to Mountain time showed a 5:20 am practice in Toronto as 3:20 am. Feeds naming America/Edmonton are read by Alberta's pre-2026 rules, which their servers still use.
 - **Overdue tasks read normally on a phone.** In an agenda's Overdue list (on Home, for one), a
   task late on both dates had its title squeezed to one letter per line beside its "Due" and
   "Planned" labels, and lost its Today button. The title now uses the row's width, the labels

@@ -10,10 +10,16 @@ import { spanOf } from './calendar.ts'
 export interface ParsedCalendar {
   /** X-WR-CALNAME, which Google and iCloud set to the calendar's name. */
   name?: string
+  /** X-WR-TIMEZONE: the zone of the feed's floating times (no TZID, no Z), when valid. */
+  timeZone?: string
   events: { master: ICAL.Event; exceptions: ICAL.Event[] }[]
 }
 
 const MAX_STEPS = 20_000
+// Feed servers can write floating times by older zone rules than ours. Since tzdata 2026 Alberta
+// keeps UTC-6 all year, but feeds still write America/Edmonton by the old rules (MST/MDT, which
+// America/Denver keeps): a GoMotion swim practice at 05:20 Toronto is 03:20 in October and November.
+const LEGACY_ZONES: Record<string, string> = { 'America/Edmonton': 'America/Denver' }
 const DESCRIPTION_LIMIT = 2000
 
 /** Parse iCalendar text. Throws when the text is not iCalendar. */
@@ -44,10 +50,16 @@ export function parseCalendar(text: string): ParsedCalendar {
     }
   }
   const name = calendar.getFirstPropertyValue('x-wr-calname')
-  return { ...(typeof name === 'string' && name.trim() ? { name: name.trim() } : {}), events }
+  const zoneName = String(calendar.getFirstPropertyValue('x-wr-timezone') ?? '').trim()
+  const timeZone = LEGACY_ZONES[zoneName] ?? zoneName
+  return {
+    ...(typeof name === 'string' && name.trim() ? { name: name.trim() } : {}),
+    ...(timeZone && isValidTimeZone(timeZone) ? { timeZone } : {}),
+    events,
+  }
 }
 
-/** The instant of a date-time, in its own zone when known, else in the viewer's. */
+/** The instant of a date-time, in its own zone when known, else in `timeZone` (the feed's X-WR-TIMEZONE, else the viewer's). */
 function toInstant(time: ICAL.Time, timeZone: string): number {
   const zone = time.zone
   if (zone && zone !== ICAL.Timezone.localTimezone && zone.tzid !== 'floating') return time.toUnixTime() * 1000
@@ -59,7 +71,7 @@ function toInstant(time: ICAL.Time, timeZone: string): number {
 
 const dayOf = (time: ICAL.Time) => time.toString().slice(0, 10)
 
-function entryFor(event: ICAL.Event, start: ICAL.Time, end: ICAL.Time | undefined, sourceId: Id, recurring: boolean, timeZone: string): CalendarEntry {
+function entryFor(event: ICAL.Event, start: ICAL.Time, end: ICAL.Time | undefined, sourceId: Id, recurring: boolean, timeZone: string, floatingZone: string): CalendarEntry {
   const base = {
     kind: 'external' as const,
     sourceId,
@@ -85,8 +97,8 @@ function entryFor(event: ICAL.Event, start: ICAL.Time, end: ICAL.Time | undefine
       endDay,
     }
   }
-  const startIso = new Date(toInstant(start, timeZone)).toISOString()
-  const endMs = end ? toInstant(end, timeZone) : undefined
+  const startIso = new Date(toInstant(start, floatingZone)).toISOString()
+  const endMs = end ? toInstant(end, floatingZone) : undefined
   const endIso = endMs !== undefined && endMs > Date.parse(startIso) ? new Date(endMs).toISOString() : undefined
   return {
     ...base,
@@ -106,6 +118,7 @@ export function calendarEntries(parsed: ParsedCalendar, sourceId: Id, range: Day
   // Margins of a day cover events whose own zone puts them on another day than the viewer's.
   const rangeStart = startOfDay(addDays(range.from, -1), timeZone)
   const rangeEnd = startOfDay(addDays(range.to, 2), timeZone)
+  const floatingZone = parsed.timeZone ?? timeZone
   const entries: CalendarEntry[] = []
   const keep = (entry: CalendarEntry) => {
     if (entry.startDay <= range.to && entry.endDay >= range.from) entries.push(entry)
@@ -113,19 +126,19 @@ export function calendarEntries(parsed: ParsedCalendar, sourceId: Id, range: Day
 
   for (const { master } of parsed.events) {
     if (!master.isRecurring()) {
-      if (!cancelled(master)) keep(entryFor(master, master.startDate, master.endDate, sourceId, false, timeZone))
+      if (!cancelled(master)) keep(entryFor(master, master.startDate, master.endDate, sourceId, false, timeZone, floatingZone))
       continue
     }
     const durationMs = master.duration ? master.duration.toSeconds() * 1000 : 0
     const iterator = master.iterator()
     for (let step = 0, next = iterator.next(); next && step < MAX_STEPS; step++, next = iterator.next()) {
       // Stop by the series' own times; a moved occurrence is kept or dropped by its new times below.
-      const scheduledMs = next.isDate ? Date.parse(`${dayOf(next)}T00:00:00Z`) : toInstant(next, timeZone)
+      const scheduledMs = next.isDate ? Date.parse(`${dayOf(next)}T00:00:00Z`) : toInstant(next, floatingZone)
       if (scheduledMs >= rangeEnd) break
       if (scheduledMs + durationMs < rangeStart && !(master.exceptions as unknown as Record<string, unknown>)[next.toString()]) continue
       const details = master.getOccurrenceDetails(next)
       if (cancelled(details.item)) continue
-      keep(entryFor(details.item, details.startDate, details.endDate, sourceId, true, timeZone))
+      keep(entryFor(details.item, details.startDate, details.endDate, sourceId, true, timeZone, floatingZone))
     }
   }
   return entries
