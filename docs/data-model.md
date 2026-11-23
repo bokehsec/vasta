@@ -273,8 +273,11 @@ The engine is [`packages/core/src/query.ts`](../packages/core/src/query.ts): `ru
 sorts object summaries, and is used by the server (`POST /api/spaces/:id/query`) and by type views.
 
 A query selects objects by type (`typeIds`, empty = all), filters them with nested and/or groups,
-and sorts and groups the result (a date field groups by where each date falls from today:
-earlier, today, tomorrow, this week, next week, later; `dayBucket` in `core/time.ts`). Filter values are literals or variables resolved when rendering:
+and sorts and groups the result. Date properties group by their start: Earlier, Today, Tomorrow,
+This week, Next week, Later and No date (`dayBucket` in `core/time.ts`). Day-resolution dates keep
+their stored day; timed values use the viewer's time zone, and weeks start as the locale says.
+Date groups on a board are read-only for moving and adding cards. Filter values are literals or
+variables resolved when rendering:
 `parent` is the object the query is embedded in (optionally one of its fields), `today` is the
 current date (shifted by `offsetDays`). Dates compare by day in the viewer's time zone; a daily
 note's `createdAt` resolves to its date, as Capacities dates daily notes that way. Filters without
@@ -293,6 +296,13 @@ replica) loads them from the store, the type page from the app's summary cache.
 the side pane, `'page'` on its page; unset, each object follows its type's `openIn` (unset there
 too: the page). `ObjectCollection` provides the choice to the links inside it (`VIEW_OPENS` in
 `lib/open.ts`), so every layout follows it. The type's `openIn` is the column `types.open_in`.
+
+The list layout's rows are `ListSettings` (`ViewDef.list`, `QueryDef.list`): `fields` names the
+fields after the title, in order (property ids or built-in fields, as in table columns except
+title, createdBy and updatedBy), and `wrap` lets long titles wrap. Only properties of the object's
+own type and fields with a value show, read-only. Without `fields`, rows keep their tags and
+last-edited time; an empty array shows neither. `wrap` alone leaves those default fields intact.
+The Fields menu saves the same settings for type views, query pages and queries embedded in pages.
 
 The table layout's columns are `TableSettings` (`ViewDef.table`, `QueryDef.table`): an ordered list
 of `{ field, width?, hidden?, wrap? }`, the field a property id or a built-in field (title, tags,

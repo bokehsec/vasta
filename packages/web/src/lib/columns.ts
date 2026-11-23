@@ -85,7 +85,7 @@ export function listFields(list: ListSettings | undefined, typeIds: Id[]): ListF
   const options = fieldOptions(typeIds).filter((f) => !NOT_IN_ROWS.has(f.field))
   const chosen = list?.fields ?? DEFAULT_ROW
   const byField = new Map(options.map((f) => [f.field, f]))
-  const on = chosen.flatMap((field) => byField.get(field) ?? [])
+  const on = [...new Set(chosen)].flatMap((field) => byField.get(field) ?? [])
   const ticked = new Set(on.map((f) => f.field))
   return [...on.map((f) => ({ ...f, on: true })), ...options.filter((f) => !ticked.has(f.field)).map((f) => ({ ...f, on: false }))]
 }
@@ -127,6 +127,8 @@ function hasBuiltin(object: ObjectSummary, field: string): boolean {
     case 'collections': return object.collectionIds.length > 0
     case 'date': return !!object.date
     case 'host': return !!object.media?.host
+    case 'createdVia': return !!object.createdVia
+    case 'updatedVia': return !!object.updatedVia
     default: return true
   }
 }

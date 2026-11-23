@@ -8,6 +8,7 @@ import { imageOf } from '../lib/media.ts'
 import { chip, iconTextClasses } from '../lib/colors.ts'
 import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
 import { displayTitle } from '../lib/format.ts'
+import { propName, t, typeName } from '../lib/i18n.ts'
 import { formulaValue } from '../lib/properties.ts'
 import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
@@ -58,7 +59,7 @@ const shownProps = computed(() =>
     </div>
     <div class="flex flex-1 flex-col gap-1.5 p-3" :class="bodyText">
       <span v-if="variant !== 'kanban'" class="inline-flex w-fit items-center gap-1 rounded-md px-1.5 py-0.5 font-medium" :class="[metaText, chip(type?.color)]">
-        <AppIcon :icon="type?.icon" fallback="ph:cube" :size="12" />{{ type?.name }}
+        <AppIcon :icon="type?.icon" fallback="ph:cube" :size="12" />{{ type ? typeName(type) : '' }}
       </span>
       <div class="flex items-start gap-1.5 font-semibold leading-snug">
         <TaskCompletionCheck v-if="isTask && feedback" :object="object" :type="type" class="mt-px" @moved="emit('moved', $event)" />
@@ -67,8 +68,8 @@ const shownProps = computed(() =>
           class="line-clamp-3 transition-colors duration-150 motion-reduce:transition-none"
           :class="isTask ? ['task-title', completed ? 'task-title-done text-ink-faint line-through' : ''] : ''"
         >{{ displayTitle(object, type) }}</span>
-        <span v-if="blocked" class="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-md bg-red-100 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-950 dark:text-red-300" :class="metaText" title="Blocked">
-          <AppIcon fallback="ph:flag-fill" :size="11" /> Blocked
+        <span v-if="blocked" class="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-md bg-red-100 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-950 dark:text-red-300" :class="metaText" :title="t('builtin.prop.blocked')">
+          <AppIcon fallback="ph:flag-fill" :size="11" /> {{ t('builtin.prop.blocked') }}
         </span>
       </div>
       <TaskCompletionNote v-if="isTask" :object="object" />
@@ -81,7 +82,7 @@ const shownProps = computed(() =>
       </p>
       <div v-for="def in shownProps" :key="def.id" class="flex min-w-0 gap-1 text-ink-soft" :class="metaText">
         <!-- A computed number or text says what it is. -->
-        <span v-if="def.kind === 'formula'" class="shrink-0 text-ink-faint">{{ def.name }}</span>
+        <span v-if="def.kind === 'formula'" class="shrink-0 text-ink-faint">{{ propName(def) }}</span>
         <PropertyDisplay :def="def" :value="object.props[def.id]" :object="object" />
       </div>
       <div v-if="object.tagIds.length" class="mt-auto flex flex-wrap gap-1 pt-1" @click.prevent>

@@ -1,6 +1,7 @@
 // Fields on list rows in the test env: a query of tasks shown as a list, the Fields menu (turn the
-// due date on, wrap titles), a task's checkbox marking it done without opening it, and Reset to
-// default giving back the plain row (a task's checkbox is there with or without fields).
+// due date on, reorder, wrap titles), switching to Columns, a query embedded in a narrow page,
+// a task's checkbox marking it done without opening it (it is there with or without fields), and
+// Reset to default giving back the plain row.
 //   node listrows.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -55,7 +56,7 @@ const done = taskType.properties.find((p) => p.id === 'status').options.find((o)
 
 const tag = `${engine}-${Date.now() % 100000}`
 const due = { kind: 'date', value: { start: '2027-03-14T00:00:00.000Z', resolution: 'day' } }
-const a = await post('/api/objects', { typeId: taskType.id, title: `Pay rent ${tag}`, props: { status: { kind: 'select', value: [todo] }, due } })
+const a = await post('/api/objects', { typeId: taskType.id, title: `Pay rent ${tag} — ${'a long title that can wrap on a narrow row '.repeat(5)}`, props: { status: { kind: 'select', value: [todo] }, due } })
 const b = await post('/api/objects', { typeId: taskType.id, title: `Water plants ${tag}`, props: { status: { kind: 'select', value: [todo] } } })
 const query = await post('/api/objects', {
   typeId: queryType.id,
@@ -68,8 +69,9 @@ const query = await post('/api/objects', {
 })
 await sleep(1500) // the replica pulls them
 const savedList = async () => (await get(`/api/objects/${query.id}`)).query.list
-const row = (title) => page.locator('a', { hasText: title })
+const row = (title) => page.locator('[data-list-row]').filter({ hasText: title })
 const checks = page.locator('[data-task-check]')
+let host
 
 try {
   step('the default row: a checkbox, no due date')
@@ -81,11 +83,32 @@ try {
 
   step('turn Due on in the Fields menu')
   await page.locator('button', { hasText: 'Fields' }).click()
+  if (await page.locator('button', { hasText: 'Reset to default' }).count()) throw new Error('Reset is shown without saved settings')
   await page.locator('div[data-list-field="due"] button[title="Show field"]').click()
-  await until(async () => (await savedList())?.fields?.includes('due'), 'Due saved on the query')
+  await until(async () => (await savedList())?.fields?.join() === 'tags,updatedAt,due', 'Due appended on the query')
   await until(async () => /Mar/.test(await row(`Pay rent ${tag}`).innerText()), 'the due date on the row')
   if (/Mar/.test(await row(`Water plants ${tag}`).innerText())) throw new Error('a task without a due date shows one')
-  if ((await checks.count()) !== 2) throw new Error(`checkboxes: ${await checks.count()}`)
+
+  step('reorder Due before the default fields')
+  await page.locator('[data-list-field="tags"]').scrollIntoViewIfNeeded()
+  const handle = page.locator('[data-list-field="due"] [title="Drag to reorder"]')
+  const from = await handle.boundingBox()
+  const to = await page.locator('[data-list-field="tags"]').boundingBox()
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(to.x + 10, to.y + to.height / 2, { steps: 12 })
+  await page.mouse.up()
+  await until(async () => (await savedList())?.fields?.join() === 'due,tags,updatedAt', 'Due first')
+  await until(async () => (await row(`Pay rent ${tag}`).locator('[data-row-field]').first().getAttribute('data-row-field')) === 'due', 'row field order')
+
+  step('switch layouts while the menu is open')
+  await page.locator('button[title="Table"]').focus()
+  await page.keyboard.press('Enter')
+  await page.locator('div[data-column="title"]').waitFor()
+  if (await page.locator('[data-list-field]').count()) throw new Error('Fields stayed open in the table layout')
+  await page.locator('button[title="List"]').focus()
+  await page.keyboard.press('Enter')
+  await page.locator('[data-list-field="due"]').waitFor()
 
   step('wrap titles')
   await page.locator('button', { hasText: 'Wrap titles' }).click()
@@ -94,6 +117,7 @@ try {
   await page.keyboard.press('Escape')
 
   step('the checkbox marks a task done and does not open it')
+  if ((await checks.count()) !== 2) throw new Error(`checkboxes with fields: ${await checks.count()}`)
   await row(`Pay rent ${tag}`).locator('[data-task-check]').click()
   await until(async () => (await get(`/api/objects/${a.id}`)).props.status.value[0] === done, 'the task is done')
   await until(async () => (await row(`Pay rent ${tag}`).locator('span.line-through').count()) === 1, 'the title struck through')
@@ -101,13 +125,36 @@ try {
   await row(`Pay rent ${tag}`).locator('[data-task-check]').click()
   await until(async () => (await get(`/api/objects/${a.id}`)).props.status.value[0] === todo, 'the task is to do again')
 
+  step('a click on a field does not open the row')
+  await row(`Pay rent ${tag}`).locator('[data-row-field="due"]').click()
+  if (page.url() !== url) throw new Error(`navigated to ${page.url()}`)
+
+  step('the same fields in a query embedded in a page')
+  host = await post('/api/objects', {
+    typeId: bundle.types.find((t) => t.system === 'page').id,
+    title: `List rows ${tag}`,
+    content: { body: { type: 'doc', content: [{ type: 'objectEmbed', attrs: { objectId: query.id, display: 'embed' } }, { type: 'paragraph' }] } },
+  })
+  await sleep(1000)
+  await page.goto(`${base}/o/${host.id}`)
+  await until(async () => (await row(`Pay rent ${tag}`).locator('[data-row-field="due"]').count()) === 1, 'Due in the embedded query')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await until(async () => row(`Pay rent ${tag}`).evaluate((element) => element.scrollWidth <= element.clientWidth), 'no horizontal overflow on a phone')
+  const titleBox = await row(`Pay rent ${tag}`).locator('a').first().boundingBox()
+  const fieldBox = await row(`Pay rent ${tag}`).locator('[data-row-field="due"]').boundingBox()
+  if (fieldBox.y < titleBox.y + titleBox.height) throw new Error('fields did not move below the title')
+  await page.setViewportSize(options.viewport)
+  await page.goto(url)
+
   step('reset to default')
   await page.locator('button', { hasText: 'Fields' }).click()
   await page.locator('button', { hasText: 'Reset to default' }).click()
   await until(async () => (await savedList()) === undefined, 'list settings cleared')
+  await until(async () => (await row(`Pay rent ${tag}`).locator('[data-row-field]').count()) === 0, 'the default row restored')
   if ((await checks.count()) !== 2) throw new Error(`checkboxes after the reset: ${await checks.count()}`)
   if (/Mar/.test(await row(`Pay rent ${tag}`).innerText())) throw new Error('the due date stayed after the reset')
 } finally {
+  if (host) await page.request.delete(`${base}/api/objects/${host.id}`, { headers })
   for (const id of [query.id, a.id, b.id]) await page.request.delete(`${base}/api/objects/${id}`, { headers })
 }
 

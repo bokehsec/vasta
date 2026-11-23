@@ -11,6 +11,7 @@ import { api, type InboxItem } from '../lib/api.ts'
 import { greyButton } from '../lib/buttons.ts'
 import { onChange } from '../lib/events.ts'
 import { channelIconName, formatCaptureTime, formatChannel, formatLongDay } from '../lib/format.ts'
+import { t } from '../lib/i18n.ts'
 import { reviewed } from '../lib/inbox.ts'
 import { openContextMenu } from '../lib/overlays.ts'
 import { lastError, notice, primeSummaries, systemType, workspace } from '../lib/state.ts'
@@ -62,7 +63,7 @@ const groups = computed(() => {
   for (const item of shown.value) byDay.set(item.day, [...(byDay.get(item.day) ?? []), item])
   return [...byDay].map(([day, list]) => ({
     day,
-    label: day === today ? 'Today' : day === addDays(today, -1) ? 'Yesterday' : formatLongDay(`${day}T00:00:00.000Z`),
+    label: day === today ? t('common.today') : day === addDays(today, -1) ? t('common.yesterday') : formatLongDay(`${day}T00:00:00.000Z`),
     items: list,
   }))
 })
@@ -71,7 +72,7 @@ async function setDone(item: InboxItem, done: boolean, undoable = true) {
   item.done = done
   try {
     await api.setCaptureDone(item.noteId, item.id, done)
-    if (done && undoable) notice.value = { message: reviewed.value.marked, action: { label: 'Undo', run: () => setDone(item, false, false) } }
+    if (done && undoable) notice.value = { message: reviewed.value.marked, action: { label: t('common.undo'), run: () => setDone(item, false, false) } }
   } catch (error) {
     item.done = !done
     lastError.value = (error as Error).message
@@ -82,7 +83,7 @@ const openInNote = (item: InboxItem) => openObject(item.noteId, { query: { captu
 
 function itemMenu(event: MouseEvent, item: InboxItem) {
   openContextMenu(event, [
-    { label: 'Open capture source', icon: 'ph:arrow-square-out', run: () => openInNote(item) },
+    { label: t('inbox.openSource'), icon: 'ph:arrow-square-out', run: () => openInNote(item) },
     item.done
       ? { label: reviewed.value.unmark, icon: 'ph:circle', run: () => setDone(item, false) }
       : { label: reviewed.value.mark, icon: 'ph:check-circle', run: () => setDone(item, true) },
@@ -99,7 +100,7 @@ async function showOlder() {
   <div class="mx-auto max-w-3xl px-4 py-8 sm:px-8 md:py-12">
     <div class="flex flex-wrap items-center gap-3">
       <AppIcon fallback="ph:tray" :size="26" class="text-ink-soft" />
-      <h1 :class="pageTitle">Inbox</h1>
+      <h1 :class="pageTitle">{{ t('common.inbox') }}</h1>
       <button
         v-if="doneCount"
         class="ml-auto flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-ink-soft hover:bg-hover max-md:py-2"
@@ -108,15 +109,15 @@ async function showOlder() {
         @click="toggleShowDone"
       >
         <AppIcon :fallback="showDone ? 'ph:eye-slash' : 'ph:eye'" />
-        {{ showDone ? `Hide ${reviewed.lower}` : `Show ${reviewed.lower} (${doneCount})` }}
+        {{ showDone ? t('inbox.hideReviewed', { word: reviewed.lower }) : t('inbox.showReviewed', { word: reviewed.lower, count: doneCount }) }}
       </button>
     </div>
-    <p class="mt-2 text-ink-soft" :class="bodyText">What came in through Telegram, Shortcuts and the other channels in the last {{ days }} days.</p>
+    <p class="mt-2 text-ink-soft" :class="bodyText">{{ t('inbox.description', { days }) }}</p>
 
-    <p v-if="loading" class="mt-10 text-ink-faint" :class="bodyText">Loading…</p>
+    <p v-if="loading" class="mt-10 text-ink-faint" :class="bodyText">{{ t('common.loading') }}</p>
     <div v-else-if="!shown.length" class="mt-16 flex flex-col items-center gap-2 text-center text-ink-faint" :class="bodyText">
       <AppIcon :fallback="items.length ? 'ph:check-circle' : 'ph:tray'" :size="36" class="opacity-50" />
-      {{ items.length ? `All ${reviewed.lower}.` : `Nothing captured in the last ${days} days.` }}
+      {{ items.length ? t('inbox.allReviewed', { word: reviewed.lower }) : t('inbox.empty', { days }) }}
     </div>
 
     <section v-for="group in groups" :key="group.day" class="mt-8">
@@ -141,8 +142,8 @@ async function showOlder() {
               <AppIcon :fallback="channelIconName(item.channel)" :size="14" class="text-ink-soft" />
               <span class="tabular-nums">{{ formatCaptureTime(item.at) }}</span>
               <span>· {{ formatChannel(item.channel) }}</span>
-              <button class="ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-hover hover:text-ink max-md:py-1.5" title="Open capture source" @click="openInNote(item)">
-                <span class="max-sm:hidden">Open in note</span>
+              <button class="ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-hover hover:text-ink max-md:py-1.5" :title="t('inbox.openSource')" @click="openInNote(item)">
+                <span class="max-sm:hidden">{{ t('inbox.openInNote') }}</span>
                 <AppIcon fallback="ph:arrow-up-right" :size="13" />
               </button>
             </div>
@@ -153,7 +154,7 @@ async function showOlder() {
     </section>
 
     <div v-if="!loading && days < MAX_DAYS" class="mt-8 flex justify-center">
-      <button :class="greyButton" @click="showOlder">Show older</button>
+      <button :class="greyButton" @click="showOlder">{{ t('inbox.showOlder') }}</button>
     </div>
   </div>
 </template>

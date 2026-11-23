@@ -66,4 +66,14 @@ describe('page width on this device', () => {
     pageWidth.value = 'full'
     expect(pageWidth.value).toBe('full')
   })
+  it.each([
+    ['standard', 'max-w-3xl', 'max-w-6xl'],
+    ['wide', 'max-w-6xl', 'max-w-6xl'],
+    ['full', 'max-w-none', 'max-w-none'],
+  ] as const)('uses %s for prose and columns', async (value, prose, columns) => {
+    const { pageWidth, pageWidthClass } = await load(storage())
+    pageWidth.value = value
+    expect(pageWidthClass(false)).toBe(prose)
+    expect(pageWidthClass(true)).toBe(columns)
+  })
 })

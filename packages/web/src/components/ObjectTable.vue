@@ -12,6 +12,7 @@ import { addSelectOption, setProperties, setProperty } from '../lib/actions.ts'
 import { columnWidth, MIN_COLUMN_WIDTH, QUICK_ACTIONS_COLUMN, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { useRowTypes, type Section } from '../lib/collection-rows.ts'
 import { displayTitle } from '../lib/format.ts'
+import { t } from '../lib/i18n.ts'
 import type { Group } from '../lib/query.ts'
 import { lastError } from '../lib/state.ts'
 import { bodyText, metaText } from '../lib/type-scale.ts'
@@ -160,8 +161,8 @@ async function saveQuick(object: ObjectSummary, values: Record<Id, PropertyValue
       <thead class="text-left text-ink-faint" :class="metaText">
         <tr>
           <th v-for="column in columns" scope="col" :key="column.field" class="relative px-3 py-2 font-medium" :class="bare ? 'first:pl-0' : ''" :data-column="column.field">
-            <span class="block truncate">{{ column.field === 'title' ? 'Title' : column.label }}</span>
-            <span class="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize touch-none hover:bg-accent/30" title="Drag to resize" @pointerdown.prevent="startResize($event, column)" />
+            <span class="block truncate">{{ column.field === 'title' ? t('object.titleLabel') : column.label }}</span>
+            <span class="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize touch-none hover:bg-accent/30" :title="t('views.dragToResize')" @pointerdown.prevent="startResize($event, column)" />
           </th>
           <th />
         </tr>
@@ -204,7 +205,7 @@ async function saveQuick(object: ObjectSummary, values: Record<Id, PropertyValue
                 tabindex="0"
                 class="-mx-1.5 -my-0.5 min-h-6 cursor-pointer rounded-md px-1.5 py-0.5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/50"
                 :class="column.wrap ? '' : 'overflow-hidden'"
-                :aria-label="`${column.label}: edit`"
+                :aria-label="t('views.editCellAria', { label: column.label })"
                 :data-edit="column.field"
                 :data-cell="cellKey(object, column)"
                 @mousedown.stop

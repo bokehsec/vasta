@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import type { ObjectType } from '@vasta/core'
 import AppSidebar from './components/AppSidebar.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import ContextMenuHost from './components/ContextMenuHost.vue'
 import DialogHost from './components/DialogHost.vue'
 import AppToast from './components/AppToast.vue'
+import NewTypeDialog from './components/NewTypeDialog.vue'
 import OfflineBanner from './components/OfflineBanner.vue'
 import PasswordDialog from './components/PasswordDialog.vue'
 import PhoneTabBar from './components/PhoneTabBar.vue'
@@ -19,6 +21,7 @@ import ShortcutsDialog from './components/ShortcutsDialog.vue'
 import SidePane from './components/SidePane.vue'
 import TopBar from './components/TopBar.vue'
 import { closesOnBack } from './lib/back.ts'
+import { t } from './lib/i18n.ts'
 import { closeContextMenu } from './lib/overlays.ts'
 import { newCard } from './lib/new-item.ts'
 import { closeTakeover, listenToDesktop, trafficLights } from './lib/platform.ts'
@@ -33,6 +36,12 @@ import { router } from './router.ts'
 import LoginView from './views/LoginView.vue'
 
 const route = useRoute()
+
+function onNewTypeCreated(payload: { type: ObjectType; fromTemplate: boolean }) {
+  ui.newTypeOpen = false
+  if (payload.fromTemplate) void router.push(`/t/${payload.type.id}`)
+  else void router.push({ path: `/t/${payload.type.id}`, query: { settings: '1' } })
+}
 /** The desktop app's takeover window: an insistent reminder alone, over the whole screen. */
 const bare = computed(() => route.path.startsWith('/remind/') && route.query.takeover === '1')
 // Logged out (or the server failing), the takeover could only show a login: it goes at once.
@@ -151,11 +160,12 @@ function onTouchEnd(event: TouchEvent) {
     <QuickAdd v-if="newCard" :key="newCard.id" :type="newCard.type" :initial="newCard.initial" :capture="newCard.capture" @close="newCard = null" @capture="(newCard = null), (ui.captureOpen = true)" />
     <QuickCapture v-if="ui.captureOpen" />
     <ShortcutsDialog v-if="ui.shortcutsOpen" />
+    <NewTypeDialog v-if="ui.newTypeOpen" @close="ui.newTypeOpen = false" @created="onNewTypeCreated" />
     <ReminderDialog v-if="reminderEditor.open" />
   </div>
   <LoginView v-else-if="session.checked && !session.user && !session.error" />
   <div v-else class="grid h-full place-items-center text-sm text-ink-soft">
-    <p>{{ session.error || workspace.error || 'Loading…' }}</p>
+    <p>{{ session.error || workspace.error || t('common.loading') }}</p>
   </div>
   <!-- macOS desktop app: no title bar, so the top of the login and loading screens moves the window. -->
   <div v-if="trafficLights && !(session.user && workspace.ready)" class="fixed inset-x-0 top-0 h-12" data-tauri-drag-region />

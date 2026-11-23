@@ -6,6 +6,8 @@
 // opens it once ready), the desktop app's ⌘[ ⌘] ⌘, in platform.ts.
 import { nextTick, watch } from 'vue'
 import { router } from '../router.ts'
+import type { MessageKey } from '../locales/en.ts'
+import { t } from './i18n.ts'
 import { openToday } from './actions.ts'
 import { openHome } from './home.ts'
 import { closePane, paneObjectId } from './open.ts'
@@ -18,12 +20,15 @@ export const mod = isMac ? '⌘' : 'Ctrl+'
 
 export interface Shortcut {
   id: string
-  label: string
+  /** A message key, or an English text of our own that has no key (Home). */
+  label: MessageKey | { text: string }
   /** As shown: [`${mod}1`], or ['G', 'T'] for a sequence. */
   keys: string[]
   /** Another way to press it, shown after "or". */
   alt?: string[]
 }
+
+export const shortcutLabel = (shortcut: Shortcut): string => (typeof shortcut.label === 'string' ? t(shortcut.label) : shortcut.label.text)
 
 export const GO: Record<'home' | 'today' | 'inbox' | 'calendar' | 'tasks', { path?: string; run: () => unknown }> = {
   home: { run: openHome },
@@ -33,38 +38,38 @@ export const GO: Record<'home' | 'today' | 'inbox' | 'calendar' | 'tasks', { pat
   tasks: { run: () => systemType('task') && router.push(`/t/${systemType('task')!.id}`) },
 }
 
-export const SHORTCUTS: { group: string; items: Shortcut[] }[] = [
+export const SHORTCUTS: { group: MessageKey; items: Shortcut[] }[] = [
   {
-    group: 'Go to',
+    group: 'shortcuts.group.goto',
     items: [
-      { id: 'home', label: 'Home', keys: ['G', 'H'] },
-      { id: 'calendar', label: 'Calendar', keys: [`${mod}1`], alt: ['G', 'C'] },
-      { id: 'inbox', label: 'Inbox', keys: [`${mod}2`], alt: ['G', 'I'] },
-      { id: 'tasks', label: 'Tasks', keys: [`${mod}3`], alt: ['G', 'K'] },
-      { id: 'today', label: 'Today and its daily note', keys: [`${mod}D`], alt: ['G', 'T'] },
-      { id: 'settings', label: 'Settings', keys: [`${mod},`], alt: ['G', 'S'] },
-      { id: 'back', label: 'Back', keys: [`${mod}[`] },
-      { id: 'forward', label: 'Forward', keys: [`${mod}]`] },
+      { id: 'home', label: { text: 'Home' }, keys: ['G', 'H'] },
+      { id: 'calendar', label: 'common.calendar', keys: [`${mod}1`], alt: ['G', 'C'] },
+      { id: 'inbox', label: 'common.inbox', keys: [`${mod}2`], alt: ['G', 'I'] },
+      { id: 'tasks', label: 'common.tasks', keys: [`${mod}3`], alt: ['G', 'K'] },
+      { id: 'today', label: 'shortcuts.today', keys: [`${mod}D`], alt: ['G', 'T'] },
+      { id: 'settings', label: 'common.settings', keys: [`${mod},`], alt: ['G', 'S'] },
+      { id: 'back', label: 'common.back', keys: [`${mod}[`] },
+      { id: 'forward', label: 'common.forward', keys: [`${mod}]`] },
     ],
   },
   {
-    group: 'App',
+    group: 'shortcuts.group.app',
     items: [
-      { id: 'search', label: 'Search or create', keys: [`${mod}K`] },
-      { id: 'sidebar', label: 'Show or hide the sidebar', keys: [`${mod}\\`] },
-      { id: 'pane', label: 'Close the side pane', keys: ['Esc'] },
-      { id: 'shortcuts', label: 'Keyboard shortcuts', keys: [`${mod}/`] },
+      { id: 'search', label: 'shortcuts.search', keys: [`${mod}K`] },
+      { id: 'sidebar', label: 'palette.toggleSidebar', keys: [`${mod}\\`] },
+      { id: 'pane', label: 'shortcuts.pane', keys: ['Esc'] },
+      { id: 'shortcuts', label: 'nav.keyboardShortcuts', keys: [`${mod}/`] },
     ],
   },
   {
-    group: 'In a note',
+    group: 'shortcuts.group.note',
     items: [
-      { id: 'blocks', label: 'Insert a block', keys: ['/'] },
-      { id: 'mention', label: 'Link an object', keys: ['@'] },
-      { id: 'select', label: 'Select blocks', keys: ['Esc'] },
-      { id: 'indent', label: 'Nest under the line above (in a toggle)', keys: ['Tab'] },
-      { id: 'outdent', label: 'Take out of the toggle', keys: ['⇧Tab'] },
-      { id: 'bold', label: 'Bold, italic, underline', keys: [`${mod}B`, `${mod}I`, `${mod}U`] },
+      { id: 'blocks', label: 'shortcuts.blocks', keys: ['/'] },
+      { id: 'mention', label: 'shortcuts.mention', keys: ['@'] },
+      { id: 'select', label: 'shortcuts.select', keys: ['Esc'] },
+      { id: 'indent', label: 'shortcuts.indent', keys: ['Tab'] },
+      { id: 'outdent', label: 'shortcuts.outdent', keys: ['⇧Tab'] },
+      { id: 'bold', label: 'shortcuts.bold', keys: [`${mod}B`, `${mod}I`, `${mod}U`] },
     ],
   },
 ]

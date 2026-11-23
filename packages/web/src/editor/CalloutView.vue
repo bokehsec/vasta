@@ -4,6 +4,7 @@ import type { CaptureInfo, ColorName, Icon } from '@vasta/core'
 import { computed } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import { formatCaptureTime, formatChannel } from '../lib/format.ts'
+import { locale } from '../lib/i18n.ts'
 import { reviewed } from '../lib/inbox.ts'
 import { blockBackgroundClasses, blockTextClasses } from '../lib/colors.ts'
 
@@ -34,7 +35,7 @@ function toggleDone() {
   >
     <div contenteditable="false" class="flex select-none items-center gap-1.5 text-xs text-ink-faint">
       <AppIcon :icon="icon ?? undefined" fallback="ph:tray-arrow-down" :size="15" class="text-ink-soft" />
-      <span class="tabular-nums" :title="`${formatChannel(capture.channel)} · ${new Date(capture.at).toLocaleString()}`">{{ formatCaptureTime(capture.at) }}</span>
+      <span class="tabular-nums" :title="`${formatChannel(capture.channel)} · ${new Date(capture.at).toLocaleString(locale)}`">{{ formatCaptureTime(capture.at) }}</span>
       <button
         v-if="editor.isEditable"
         class="-my-1 ml-auto flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink"

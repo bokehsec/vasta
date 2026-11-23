@@ -4,6 +4,7 @@
 import { computed, ref } from 'vue'
 import type { Id, ListSettings } from '@vasta/core'
 import { listFields, listSettings, type ListField } from '../lib/columns.ts'
+import { t } from '../lib/i18n.ts'
 import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 
@@ -15,7 +16,12 @@ const saved = computed(() => listFields(props.list, props.typeIds))
 const dragOrder = ref<ListField[] | null>(null)
 const fields = computed(() => dragOrder.value ?? saved.value)
 
-const toggle = (field: string) => emit('update', listSettings(saved.value.map((f) => (f.field === field ? { ...f, on: !f.on } : f)), props.list?.wrap))
+function toggle(field: string) {
+  const next = saved.value.map((f) => (f.field === field ? { ...f, on: !f.on } : f))
+  const index = next.findIndex((f) => f.field === field && f.on)
+  if (index >= 0) next.push(...next.splice(index, 1))
+  emit('update', listSettings(next, props.list?.wrap))
+}
 
 function toggleWrap() {
   const { wrap: _, ...rest } = props.list ?? {}
@@ -35,6 +41,8 @@ function drag(event: PointerEvent) {
   const order = dragOrder.value
   if (!dragged.value || !order) return
   const from = order.findIndex((f) => f.field === dragged.value)
+  const count = order.filter((f) => f.on).length
+  if (from < 0 || !count) return
   const elements = [...(rows.value?.querySelectorAll<HTMLElement>('[data-list-field]') ?? [])]
   const over = elements.findIndex((row) => {
     const rect = row.getBoundingClientRect()
@@ -42,7 +50,7 @@ function drag(event: PointerEvent) {
   })
   if (over < 0) return
   // Only the ticked fields, which come first, take part in the order.
-  const to = Math.min(over, order.filter((f) => f.on).length - 1)
+  const to = Math.min(over, count - 1)
   if (to === from) return
   const next = [...order]
   next.splice(to, 0, ...next.splice(from, 1))
@@ -58,7 +66,7 @@ function endDrag() {
 
 <template>
   <div ref="rows" class="flex flex-col p-1" :class="bodyText">
-    <div class="px-2 pb-1 pt-0.5 font-medium uppercase tracking-wide text-ink-faint" :class="metaText">Fields after the title</div>
+    <div class="px-2 pb-1 pt-0.5 font-medium uppercase tracking-wide text-ink-faint" :class="metaText">{{ t('views.fieldsAfterTitle') }}</div>
     <div
       v-for="field in fields"
       :key="field.field"
@@ -69,7 +77,7 @@ function endDrag() {
       <span
         v-if="field.on"
         class="cursor-grab touch-none rounded p-0.5 text-ink-faint hover:text-ink active:cursor-grabbing"
-        title="Drag to reorder"
+        :title="t('views.dragToReorder')"
         @pointerdown.prevent="startDrag($event, field.field)"
         @pointermove="drag"
         @pointerup="endDrag"
@@ -83,7 +91,7 @@ function endDrag() {
       <button
         class="rounded p-1 max-md:grid max-md:min-h-11 max-md:min-w-11 max-md:place-items-center"
         :class="field.on ? 'text-accent' : 'text-ink-faint hover:text-ink'"
-        :title="field.on ? 'Hide field' : 'Show field'"
+        :title="field.on ? t('views.hideField') : t('views.showField')"
         :aria-pressed="field.on"
         @click="toggle(field.field)"
       >
@@ -93,7 +101,7 @@ function endDrag() {
     <div class="my-1 border-t border-line" />
     <button class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-hover max-md:min-h-11" :aria-pressed="!!list?.wrap" @click="toggleWrap">
       <AppIcon :fallback="list?.wrap ? 'ph:check-square-fill' : 'ph:square'" :size="14" :class="list?.wrap ? 'text-accent' : 'text-ink-faint'" />
-      Wrap titles
+      {{ t('views.wrapTitles') }}
     </button>
     <button
       v-if="list"
@@ -101,7 +109,7 @@ function endDrag() {
       :class="metaText"
       @click="emit('update', undefined)"
     >
-      Reset to default
+      {{ t('views.resetToDefault') }}
     </button>
   </div>
 </template>

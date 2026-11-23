@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { BoardSettings, Id, ObjectRecord, ObjectSummary, QueryDef, TableSettings } from '@vasta/core'
 import { quietButton } from '../lib/buttons.ts'
 import { onChange } from '../lib/events.ts'
+import { t } from '../lib/i18n.ts'
 import { objectRowMenu } from '../lib/object-menu.ts'
 import { openContextMenu } from '../lib/overlays.ts'
 import { runServerQuery } from '../lib/query.ts'
@@ -107,9 +108,9 @@ defineExpose({ count: computed(() => display.value.length), empty })
 
 <template>
   <div>
-    <p v-if="loading" class="py-3 text-sm text-ink-faint">Loading…</p>
-    <p v-else-if="failed && !isAgenda" class="py-3 text-sm text-red-600">Could not run this query.</p>
-    <p v-else-if="!display.length && !isAgenda" class="py-3 text-sm text-ink-faint">No objects match this query.</p>
+    <p v-if="loading" class="py-3 text-sm text-ink-faint">{{ t('common.loading') }}</p>
+    <p v-else-if="failed && !isAgenda" class="py-3 text-sm text-red-600">{{ t('query.failed') }}</p>
+    <p v-else-if="!display.length && !isAgenda" class="py-3 text-sm text-ink-faint">{{ t('query.empty') }}</p>
     <template v-else>
       <ObjectCollection
         :objects="!grouped && limit && !showAll ? display.slice(0, limit) : display"
@@ -119,8 +120,8 @@ defineExpose({ count: computed(() => display.value.length), empty })
         :fold-scope="foldScope"
         :type-ids="query.typeIds"
         :table="query.table"
-        :board="query.board"
         :list="query.list"
+        :board="query.board"
         :manual="!query.sort?.length"
         :agenda="query.agenda"
         :filter="query.filter"
@@ -136,7 +137,7 @@ defineExpose({ count: computed(() => display.value.length), empty })
         @menu="objectMenu"
       />
       <button v-if="limit && display.length > limit && !showAll && !isAgenda" :class="[quietButton, 'mt-2']" @click="showAll = true">
-        Show all {{ display.length }}
+        {{ t('query.showAll', { count: display.length }) }}
       </button>
     </template>
   </div>

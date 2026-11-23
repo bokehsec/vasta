@@ -32,6 +32,7 @@ import { clone } from './clone.ts'
 import { onChange } from './events.ts'
 import { dayKey } from './actions.ts'
 import { formatLongDay } from './format.ts'
+import { t } from './i18n.ts'
 import { dailyNotesBetween, useGoals } from './nutrition.ts'
 import { amountDialog, choiceDialog, promptDialog } from './overlays.ts'
 import { lastError, notice, primeFromObject, primeSummaries, systemType } from './state.ts'
@@ -194,7 +195,7 @@ export async function askHabitAmount(habit: ObjectSummary, day: string) {
   if (answer === 'alternative') return setHabitAmount(habit.id, day, 'synced', habit)
   const amount = Number((typeof answer === 'string' ? answer : answer.text).replace(',', '.'))
   if (!Number.isFinite(amount) || amount < 0) {
-    lastError.value = 'Type a number, 0 or more.'
+    lastError.value = t('habits.invalidNumber')
     return
   }
   await setHabitAmount(habit.id, day, target ? amount : amount > 0 ? 1 : 0, habit)

@@ -11,24 +11,24 @@ import {
   moveSection,
   newSectionFlow,
   newTypeFlow,
-  parseViewItem,
   pinMenu,
   placeInSection,
   placeSection,
   removeFromSection,
   renameSectionFlow,
   setSectionIcon,
-  viewItem,
 } from '../lib/actions.ts'
 import { displayTitle } from '../lib/format.ts'
 import { myHomeId, openHome } from '../lib/home.ts'
+import { t, typeName, typePluralName, type MessageKey } from '../lib/i18n.ts'
 import { startNew } from '../lib/new-item.ts'
+import { parseViewItem, pinnedView as pinnedViewOf, viewItem } from '../lib/view-pins.ts'
 import { api } from '../lib/api.ts'
 import { openContextMenu, openMenuAt, promptDialog, type MenuItem } from '../lib/overlays.ts'
 import { logOut, session } from '../lib/session.ts'
 import { isLocalServer, trafficLights } from '../lib/platform.ts'
 import { keysOf, toggleSidebar } from '../lib/shortcuts.ts'
-import { THEME_ICONS, THEME_LABELS, cycleTheme, theme } from '../lib/theme.ts'
+import { THEME_ICONS, cycleTheme, theme, type Theme } from '../lib/theme.ts'
 import { lastError, loadWorkspace, primeSummaries, summaryOf, systemType, typesById, ui, workspace } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
@@ -76,11 +76,13 @@ watch(
 /** Tasks have their own row at the top, next to Calendar and Inbox, not one among the types. */
 const taskType = computed(() => systemType('task'))
 
+const THEME_LABEL_KEYS: Record<Theme, MessageKey> = { system: 'nav.themeSystem', light: 'nav.themeLight', dark: 'nav.themeDark' }
+
 const otherTypes = computed(() => {
   const placed = new Set((workspace.space?.sidebar ?? []).flatMap((s) => s.items))
   return workspace.types
-    .filter((t) => t.system !== 'task' && !placed.has(t.id) && (!t.system || (workspace.counts[t.id] ?? 0) > 0))
-    .sort((a, b) => a.pluralName.localeCompare(b.pluralName))
+    .filter((type) => type.system !== 'task' && !placed.has(type.id) && (!type.system || (workspace.counts[type.id] ?? 0) > 0))
+    .sort((a, b) => typePluralName(a).localeCompare(typePluralName(b)))
 })
 
 function toggle(id: string) {
@@ -96,12 +98,7 @@ function isActive(to: string) {
   return route.path === path && (route.query.view ?? undefined) === (view === undefined ? undefined : decodeURIComponent(view))
 }
 
-function pinnedView(item: string) {
-  const parsed = parseViewItem(item)
-  const type = parsed && typesById.value.get(parsed.typeId)
-  const view = type?.views.find((v) => v.id === parsed!.viewId)
-  return type && view ? { type, view } : null
-}
+const pinnedView = (item: string) => pinnedViewOf(typesById.value, item)
 
 // ---------------------------------------------------------------------------
 // Right-click menus
@@ -113,22 +110,22 @@ function sectionName(sectionId: string) {
 /** Moving and removing a row within the section it was right-clicked in. */
 function inSectionItems(id: Id, sectionId: string): MenuItem[] {
   return [
-    { label: 'Move up', icon: 'ph:arrow-up', run: () => moveInSection(id, sectionId, -1) },
-    { label: 'Move down', icon: 'ph:arrow-down', run: () => moveInSection(id, sectionId, 1) },
-    { label: `Remove from ${sectionName(sectionId)}`, icon: 'ph:push-pin-slash', run: () => removeFromSection(id, sectionId) },
+    { label: t('nav.moveUp'), icon: 'ph:arrow-up', run: () => moveInSection(id, sectionId, -1) },
+    { label: t('nav.moveDown'), icon: 'ph:arrow-down', run: () => moveInSection(id, sectionId, 1) },
+    { label: t('nav.removeFromSection', { section: sectionName(sectionId) }), icon: 'ph:push-pin-slash', run: () => removeFromSection(id, sectionId) },
   ]
 }
 
 function typeMenu(event: MouseEvent, type: ObjectType, sectionId?: string) {
   const items: MenuItem[] = [
-    { kind: 'heading', label: type.pluralName },
-    { label: 'Open', icon: 'ph:arrow-square-out', run: () => router.push(`/t/${type.id}`) },
-    { label: `New ${type.name}`, icon: 'ph:plus', run: () => startNew(type.id) },
-    { label: 'Type settings…', icon: 'ph:gear-six', run: () => router.push({ path: `/t/${type.id}`, query: { settings: '1' } }) },
+    { kind: 'heading', label: typePluralName(type) },
+    { label: t('common.open'), icon: 'ph:arrow-square-out', run: () => router.push(`/t/${type.id}`) },
+    { label: t('nav.newOfType', { type: typeName(type) }), icon: 'ph:plus', run: () => startNew(type.id) },
+    { label: t('nav.typeSettings'), icon: 'ph:gear-six', run: () => router.push({ path: `/t/${type.id}`, query: { settings: '1' } }) },
     { kind: 'separator' },
     pinMenu(type.id),
     ...(sectionId ? inSectionItems(type.id, sectionId) : []),
-    ...(!type.system ? [{ kind: 'separator' } as MenuItem, { label: 'Delete type…', icon: 'ph:trash', danger: true, run: () => deleteTypeFlow(type) }] : []),
+    ...(!type.system ? [{ kind: 'separator' } as MenuItem, { label: t('nav.deleteType'), icon: 'ph:trash', danger: true, run: () => deleteTypeFlow(type) }] : []),
   ]
   openContextMenu(event, items)
 }
@@ -136,13 +133,13 @@ function typeMenu(event: MouseEvent, type: ObjectType, sectionId?: string) {
 function objectMenu(event: MouseEvent, id: Id, sectionId: string) {
   openContextMenu(event, [
     { kind: 'heading', label: displayTitle(summaryOf(id)) },
-    { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(id) },
-    { label: 'Copy link to page', icon: 'ph:link', run: () => copyObjectLink(id) },
+    { label: t('common.open'), icon: 'ph:arrow-square-out', run: () => openObject(id) },
+    { label: t('nav.copyLink'), icon: 'ph:link', run: () => copyObjectLink(id) },
     { kind: 'separator' },
     pinMenu(id),
     ...inSectionItems(id, sectionId),
     { kind: 'separator' },
-    { label: 'Move to trash', icon: 'ph:trash', danger: true, run: () => deleteObjectFlow(id) },
+    { label: t('nav.moveToTrash'), icon: 'ph:trash', danger: true, run: () => deleteObjectFlow(id) },
   ])
 }
 
@@ -150,8 +147,8 @@ function viewMenu(event: MouseEvent, item: string, sectionId: string) {
   const pinned = pinnedView(item)
   if (!pinned) return
   openContextMenu(event, [
-    { kind: 'heading', label: `${pinned.type.pluralName} · ${pinned.view.name}` },
-    { label: 'Open', icon: 'ph:arrow-square-out', run: () => router.push(`/t/${item}`) },
+    { kind: 'heading', label: `${typePluralName(pinned.type)} · ${pinned.view.name}` },
+    { label: t('common.open'), icon: 'ph:arrow-square-out', run: () => router.push(`/t/${item}`) },
     { kind: 'separator' },
     pinMenu(item),
     ...inSectionItems(item, sectionId),
@@ -177,21 +174,22 @@ async function pickSectionIcon(icon: Icon | undefined) {
 
 function sectionMenu(event: MouseEvent, sectionId: string) {
   openContextMenu(event, [
-    { label: collapsed.value.has(sectionId) ? 'Expand' : 'Collapse', icon: 'ph:caret-up-down', run: () => toggle(sectionId) },
-    { label: 'Rename…', icon: 'ph:pencil-simple', run: () => renameSectionFlow(sectionId) },
-    { label: 'Change icon…', icon: 'ph:smiley', run: () => changeSectionIcon(sectionId) },
-    { label: 'Move up', icon: 'ph:arrow-up', run: () => moveSection(sectionId, -1) },
-    { label: 'Move down', icon: 'ph:arrow-down', run: () => moveSection(sectionId, 1) },
-    { label: 'New section…', icon: 'ph:folder-simple-plus', run: () => newSectionFlow() },
+    { label: collapsed.value.has(sectionId) ? t('common.expand') : t('common.collapse'), icon: 'ph:caret-up-down', run: () => toggle(sectionId) },
+    { label: t('common.rename'), icon: 'ph:pencil-simple', run: () => renameSectionFlow(sectionId) },
+    { label: t('nav.changeIcon'), icon: 'ph:smiley', run: () => changeSectionIcon(sectionId) },
+    { label: t('nav.moveUp'), icon: 'ph:arrow-up', run: () => moveSection(sectionId, -1) },
+    { label: t('nav.moveDown'), icon: 'ph:arrow-down', run: () => moveSection(sectionId, 1) },
+    { label: t('nav.newSection'), icon: 'ph:folder-simple-plus', run: () => newSectionFlow() },
     { kind: 'separator' },
-    { label: 'Remove section…', icon: 'ph:trash', danger: true, run: () => deleteSectionFlow(sectionId) },
+    { label: t('nav.removeSection'), icon: 'ph:trash', danger: true, run: () => deleteSectionFlow(sectionId) },
   ])
 }
 
 function typesHeaderMenu(event: MouseEvent) {
   openContextMenu(event, [
-    { label: 'New type…', icon: 'ph:plus', run: newTypeFlow },
-    { label: 'New section…', icon: 'ph:folder-simple-plus', run: () => newSectionFlow() },
+    { label: t('nav.newTypeMenu'), icon: 'ph:plus', run: newTypeFlow },
+    { label: t('nav.manageTypes'), icon: 'ph:shapes', run: () => router.push('/settings#object-types') },
+    { label: t('nav.newSection'), icon: 'ph:folder-simple-plus', run: () => newSectionFlow() },
   ])
 }
 
@@ -202,7 +200,7 @@ async function switchSpace(id: Id) {
 }
 
 async function newSpaceFlow() {
-  const name = await promptDialog({ title: 'New space', message: 'A space of its own, with the built-in types. Share it from Settings.', placeholder: 'Home', confirmLabel: 'Create space' })
+  const name = await promptDialog({ title: t('nav.newSpaceTitle'), message: t('nav.newSpaceMessage'), placeholder: t('nav.newSpacePlaceholder'), confirmLabel: t('nav.newSpaceConfirm') })
   if (!name) return
   try {
     const space = await api.createSpace({ name })
@@ -217,21 +215,21 @@ async function newSpaceFlow() {
 function spaceMenu(event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   openMenuAt(rect.left, rect.bottom + 4, [
-    { kind: 'heading', label: 'Spaces' },
+    { kind: 'heading', label: t('nav.spaces') },
     ...workspace.spaces.map(
       (space): MenuItem => ({ label: space.name, icon: space.id === workspace.space?.id ? 'ph:check' : 'ph:planet', run: () => switchSpace(space.id) })
     ),
     { kind: 'separator' },
-    { label: 'New space…', icon: 'ph:plus', run: newSpaceFlow },
+    { label: t('nav.newSpace'), icon: 'ph:plus', run: newSpaceFlow },
     { kind: 'separator' },
     { kind: 'heading', label: session.user?.name ?? '' },
-    { label: 'Settings', icon: 'ph:gear-six', run: () => router.push('/settings') },
+    { label: t('common.settings'), icon: 'ph:gear-six', run: () => router.push('/settings') },
     // The desktop app logs its own server's one account in itself: no password to know, no logging out.
     ...(isLocalServer()
       ? []
       : [
-          { label: 'Change password…', icon: 'ph:key', run: () => (ui.passwordOpen = true) },
-          { label: 'Log out', icon: 'ph:sign-out', run: logOut },
+          { label: t('nav.changePassword'), icon: 'ph:key', run: () => (ui.passwordOpen = true) },
+          { label: t('nav.logOut'), icon: 'ph:sign-out', run: logOut },
         ]),
   ])
 }
@@ -383,13 +381,13 @@ async function pickType(type: ObjectType) {
   <!-- Next to the macOS traffic lights, a little wider so the space's name still fits. -->
   <aside class="flex h-full w-60 shrink-0 flex-col bg-canvas md:border-r-0 max-md:border-r max-md:border-line" :class="trafficLights ? 'md:w-[17rem]' : ''">
     <div class="flex h-12 shrink-0 items-center gap-1 px-2" :class="trafficLights ? 'pl-[76px]' : ''" data-tauri-drag-region="deep">
-      <button class="mr-auto flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover" title="Spaces and account" @click="spaceMenu">
+      <button class="mr-auto flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover" :title="t('nav.spacesAndAccount')" @click="spaceMenu">
         <span class="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-ink font-semibold text-surface" :class="metaText" v-if="!workspace.space?.icon">{{ initial }}</span>
         <AppIcon v-else :icon="workspace.space?.icon" :size="18" class="text-ink-soft" />
         <span class="truncate font-semibold" :class="bodyText">{{ workspace.space?.name }}</span>
         <AppIcon fallback="ph:caret-up-down" :size="12" class="shrink-0 text-ink-faint" />
       </button>
-      <button class="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-hover hover:text-ink max-md:hidden" :title="`Hide sidebar (${keysOf('sidebar')})`" @click="toggleSidebar">
+      <button class="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-hover hover:text-ink max-md:hidden" :title="t('nav.hideSidebar', { keys: keysOf('sidebar') })" @click="toggleSidebar">
         <AppIcon fallback="ph:sidebar-simple" :size="17" />
       </button>
     </div>
@@ -401,11 +399,11 @@ async function pickType(type: ObjectType) {
         :class="bodyText"
         @click="newOpen = !newOpen"
       >
-        <AppIcon fallback="ph:plus" /> New
+        <AppIcon fallback="ph:plus" /> {{ t('common.new') }}
       </button>
       <button
         class="flex items-center rounded-lg bg-surface px-2.5 text-ink-soft shadow-sm ring-1 ring-line hover:bg-raised hover:text-ink"
-        :title="`Search (${keysOf('search')})`"
+        :title="t('nav.searchShortcut', { keys: keysOf('search') })"
         @click="ui.paletteOpen = true"
       >
         <AppIcon fallback="ph:magnifying-glass" />
@@ -423,16 +421,16 @@ async function pickType(type: ObjectType) {
         <AppIcon fallback="ph:house" class="text-ink-soft" /> Home
         <kbd :class="hint">{{ keysOf('home') }}</kbd>
       </button>
-      <RouterLink to="/calendar" :class="row(route.path === '/calendar')" :title="`Calendar (${keysOf('calendar')}); today: ${keysOf('today')}`">
-        <AppIcon fallback="ph:calendar-dots" class="text-ink-soft" /> Calendar
+      <RouterLink to="/calendar" :class="row(route.path === '/calendar')" :title="t('nav.calendarTooltip', { calendar: keysOf('calendar'), today: keysOf('today') })">
+        <AppIcon fallback="ph:calendar-dots" class="text-ink-soft" /> {{ t('common.calendar') }}
         <kbd :class="hint">{{ keysOf('calendar') }}</kbd>
       </RouterLink>
       <RouterLink to="/inbox" :class="row(route.path === '/inbox')">
-        <AppIcon fallback="ph:tray" class="text-ink-soft" /> Inbox
+        <AppIcon fallback="ph:tray" class="text-ink-soft" /> {{ t('common.inbox') }}
         <kbd :class="hint">{{ keysOf('inbox') }}</kbd>
       </RouterLink>
       <RouterLink v-if="taskType" :to="`/t/${taskType.id}`" :class="row(isActive(`/t/${taskType.id}`))">
-        <AppIcon fallback="ph:check-circle" class="text-ink-soft" /> Tasks
+        <AppIcon fallback="ph:check-circle" class="text-ink-soft" /> {{ typePluralName(taskType) }}
         <span v-if="workspace.counts[taskType.id]" class="ml-auto tabular-nums text-ink-faint group-hover:hidden" :class="metaText">{{ workspace.counts[taskType.id] }}</span>
         <kbd :class="hint" class="hidden group-hover:inline">{{ keysOf('tasks') }}</kbd>
       </RouterLink>
@@ -464,7 +462,7 @@ async function pickType(type: ObjectType) {
             <RouterLink
               :to="entry.to"
               :class="row(isActive(entry.to))"
-              :title="entry.kind === 'view' ? `${pinnedView(entry.id)?.type.pluralName} · ${pinnedView(entry.id)?.view.name}` : undefined"
+              :title="entry.kind === 'view' ? `${typePluralName(pinnedView(entry.id)?.type)} · ${pinnedView(entry.id)?.view.name}` : undefined"
               @contextmenu="entry.kind === 'type' ? typeMenu($event, typesById.get(entry.id)!, section.id) : entry.kind === 'view' ? viewMenu($event, entry.id, section.id) : objectMenu($event, entry.id, section.id)"
               @dragstart="startItemDrag($event, entry.id, section.id)"
               @dragend="endDrag"
@@ -472,7 +470,7 @@ async function pickType(type: ObjectType) {
             >
               <template v-if="entry.kind === 'type'">
                 <TypeIcon :icon="typesById.get(entry.id)?.icon" fallback="ph:cube" :color="typesById.get(entry.id)?.color" />
-                <span class="truncate">{{ typesById.get(entry.id)?.pluralName }}</span>
+                <span class="truncate">{{ typePluralName(typesById.get(entry.id)) }}</span>
               </template>
               <template v-else-if="entry.kind === 'view'">
                 <TypeIcon :icon="pinnedView(entry.id)?.type.icon" fallback="ph:cube" :color="pinnedView(entry.id)?.type.color" />
@@ -496,7 +494,7 @@ async function pickType(type: ObjectType) {
             :class="[metaText, itemDrop?.sectionId === section.id ? 'border-accent text-ink-soft' : 'border-line']"
             @dragover="overEmpty($event, section.id)"
           >
-            Drop here
+            {{ t('nav.dropHere') }}
           </div>
         </template>
       </template>
@@ -505,10 +503,10 @@ async function pickType(type: ObjectType) {
       <div class="group/section mt-5 flex items-center">
         <button :class="sectionHeader" @click="toggle('__types')" @contextmenu="typesHeaderMenu">
           <AppIcon fallback="ph:shapes" :size="13" />
-          <span>All types</span>
+          <span>{{ t('nav.allTypes') }}</span>
           <AppIcon :fallback="collapsed.has('__types') ? 'ph:caret-right' : 'ph:caret-down'" :size="11" class="ml-auto opacity-0 transition-opacity group-hover/section:opacity-100 [@media(hover:none)]:opacity-100" />
         </button>
-        <button class="rounded p-1 text-ink-faint opacity-0 transition-opacity hover:bg-hover hover:text-ink group-hover/section:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100" title="New type" @click="newTypeFlow">
+        <button class="rounded p-1 text-ink-faint opacity-0 transition-opacity hover:bg-hover hover:text-ink group-hover/section:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100" :title="t('nav.newType')" @click="newTypeFlow">
           <AppIcon fallback="ph:plus" :size="12" />
         </button>
       </div>
@@ -523,24 +521,24 @@ async function pickType(type: ObjectType) {
           @dragend="endDrag"
         >
           <TypeIcon :icon="type.icon" fallback="ph:cube" :color="type.color" />
-          <span class="truncate">{{ type.pluralName }}</span>
+          <span class="truncate">{{ typePluralName(type) }}</span>
           <span class="ml-auto tabular-nums text-ink-faint" :class="metaText">{{ workspace.counts[type.id] ?? '' }}</span>
         </RouterLink>
       </template>
     </nav>
 
     <div class="flex items-center gap-0.5 border-t border-line px-2 py-1.5 text-ink-faint">
-      <RouterLink to="/settings" :class="[tool, route.path === '/settings' ? 'bg-hover text-ink' : '']" title="Settings">
+      <RouterLink to="/settings" :class="[tool, route.path === '/settings' ? 'bg-hover text-ink' : '']" :title="t('common.settings')">
         <AppIcon fallback="ph:gear-six" :size="17" />
       </RouterLink>
-      <button :class="tool" :title="THEME_LABELS[theme]" @click="cycleTheme">
+      <button :class="tool" :title="t(THEME_LABEL_KEYS[theme])" @click="cycleTheme">
         <AppIcon :fallback="THEME_ICONS[theme]" :size="17" />
       </button>
-      <button :class="tool" class="max-md:hidden" :title="`Keyboard shortcuts (${keysOf('shortcuts')})`" @click="ui.shortcutsOpen = true">
+      <button :class="tool" class="max-md:hidden" :title="t('nav.keyboardShortcutsKey', { keys: keysOf('shortcuts') })" @click="ui.shortcutsOpen = true">
         <AppIcon fallback="ph:keyboard" :size="17" />
       </button>
       <NotificationBell :button-class="tool" />
-      <RouterLink to="/trash" :class="[tool, 'ml-auto gap-1 px-2', route.path === '/trash' ? 'bg-hover text-ink' : '']" title="Trash">
+      <RouterLink to="/trash" :class="[tool, 'ml-auto gap-1 px-2', route.path === '/trash' ? 'bg-hover text-ink' : '']" :title="t('common.trash')">
         <AppIcon fallback="ph:trash" :size="17" />
         <span v-if="workspace.trash" class="tabular-nums" :class="metaText">{{ workspace.trash }}</span>
       </RouterLink>

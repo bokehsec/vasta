@@ -3,6 +3,7 @@
 // trash · Undo") for a few seconds each.
 import { ref, watch } from 'vue'
 import { tintedButton } from '../lib/buttons.ts'
+import { t } from '../lib/i18n.ts'
 import { lastError, notice, ui } from '../lib/state.ts'
 import { isPhone, keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
@@ -69,12 +70,12 @@ async function runAction() {
         >
           {{ notice.action.label }}
         </button>
-        <button class="shrink-0 rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center" title="Dismiss" @click="notice = null"><AppIcon fallback="ph:x" :size="14" /></button>
+        <button class="shrink-0 rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center" :title="t('common.dismiss')" @click="notice = null"><AppIcon fallback="ph:x" :size="14" /></button>
       </div>
       <div v-if="lastError" class="pointer-events-auto flex max-w-full items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-sm shadow-lg" role="alert">
         <AppIcon fallback="ph:warning-circle" class="shrink-0 text-red-600" />
         <span class="min-w-0 flex-1">{{ lastError }}</span>
-        <button class="shrink-0 rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink max-md:-my-1.5 max-md:-mr-2 max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center" title="Dismiss" @click="lastError = ''"><AppIcon fallback="ph:x" :size="14" /></button>
+        <button class="shrink-0 rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink max-md:-my-1.5 max-md:-mr-2 max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center" :title="t('common.dismiss')" @click="lastError = ''"><AppIcon fallback="ph:x" :size="14" /></button>
       </div>
     </div>
   </Teleport>

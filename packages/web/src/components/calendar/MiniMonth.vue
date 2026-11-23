@@ -7,6 +7,7 @@ import { computed, ref, watch } from 'vue'
 import { DAY_MARKS, describeMarks, formatWeekday, isToday, monthOf, stepAnchor, viewTitle, visibleDays, type DayMarks } from '../../lib/calendar.ts'
 import { dayKey } from '../../lib/actions.ts'
 import { bodyText, metaText, phoneUiText } from '../../lib/type-scale.ts'
+import { t } from '../../lib/i18n.ts'
 import AppIcon from '../AppIcon.vue'
 
 const props = defineProps<{ selected?: string | undefined; marks?: Map<string, DayMarks> }>()
@@ -24,10 +25,10 @@ const dots = (day: string) => DAY_MARKS.filter((m) => props.marks?.get(day)?.[m.
   <div class="select-none" :class="bodyText">
     <div class="mb-2 flex items-center gap-1">
       <span class="flex-1 font-semibold first-letter:uppercase">{{ viewTitle('month', days, shown) }}</span>
-      <button class="rounded-md p-1.5 text-ink-faint hover:bg-hover hover:text-ink max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center" title="Previous month" @click="shown = stepAnchor('month', shown, -1)">
+      <button class="rounded-md p-1.5 text-ink-faint hover:bg-hover hover:text-ink max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center" :title="t('calendar.mini.prevMonth')" @click="shown = stepAnchor('month', shown, -1)">
         <AppIcon fallback="ph:caret-left" :size="14" />
       </button>
-      <button class="rounded-md p-1.5 text-ink-faint hover:bg-hover hover:text-ink max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center" title="Next month" @click="shown = stepAnchor('month', shown, 1)">
+      <button class="rounded-md p-1.5 text-ink-faint hover:bg-hover hover:text-ink max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center" :title="t('calendar.mini.nextMonth')" @click="shown = stepAnchor('month', shown, 1)">
         <AppIcon fallback="ph:caret-right" :size="14" />
       </button>
     </div>

@@ -5,6 +5,7 @@ import type { Id, ObjectRecord, ObjectSummary, ObjectType, Space, SystemTypeKey 
 import { docToPlainText } from '@vasta/core'
 import { api } from './api.ts'
 import { getPreference, preference, setPreference } from './preferences.ts'
+import { t } from './i18n.ts'
 
 export const workspace = reactive({
   space: null as Space | null,
@@ -31,7 +32,7 @@ export async function loadWorkspace(spaceId?: Id) {
     const stored = getPreference('device', LAST_SPACE)
     const id = spaceId ?? (spaces.some((s) => s.id === stored) ? (stored as Id) : spaces[0]?.id)
     if (!id) {
-      workspace.error = 'No space found. Import one with `pnpm import:capacities`.'
+      workspace.error = t('errors.noSpaceFound')
       return
     }
     const bundle = await api.space(id)
@@ -43,7 +44,7 @@ export async function loadWorkspace(spaceId?: Id) {
     workspace.ready = true
     setPreference('device', LAST_SPACE, id)
   } catch (error) {
-    workspace.error = `Could not reach the Vasta server (${(error as Error).message}).`
+    workspace.error = t('errors.cannotReachServer', { message: (error as Error).message })
   }
 }
 
@@ -176,6 +177,8 @@ export const ui = reactive({
   sidebarCollapsed: flag('sidebar-collapsed'),
   /** The keyboard shortcuts dialog (⌘/). */
   shortcutsOpen: false,
+  /** The new object type dialog (create your own or pick from the catalog). */
+  newTypeOpen: false,
   /** Quick capture asks a template's questions before it saves (Settings › Capture), on this device. */
   captureAsks: flag('capture/asks'),
   captureDaily: flag('capture/daily'),

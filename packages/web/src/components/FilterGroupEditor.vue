@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Nested and/or filter groups. Emits a new group on every change; the parent decides when to save.
 import type { Filter, FilterGroup, Id } from '@vasta/core'
+import { t } from '../lib/i18n.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import FilterRow from './FilterRow.vue'
@@ -25,12 +26,12 @@ const toggleOperator = () => emit('update', { ...props.group, operator: props.gr
 <template>
   <div :class="depth ? 'rounded-lg border border-line bg-raised/60 p-2' : ''">
     <div v-if="group.items.length > 1 || depth" class="mb-1.5 flex items-center gap-1.5 text-xs text-ink-soft">
-      Match
+      {{ t('query.matchBefore') }}
       <button class="rounded-md bg-hover px-1.5 py-0.5 font-medium text-ink max-md:min-h-11 max-md:px-3 hover:ring-1 hover:ring-line" @click="toggleOperator">
-        {{ group.operator === 'and' ? 'all' : 'any' }}
+        {{ group.operator === 'and' ? t('query.matchAll') : t('query.matchAny') }}
       </button>
-      of these
-      <button v-if="depth" class="ml-auto rounded-md p-1 text-ink-faint max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center hover:bg-hover hover:text-ink" title="Remove group" @click="emit('remove')">
+      {{ t('query.matchAfter') }}
+      <button v-if="depth" class="ml-auto rounded-md p-1 text-ink-faint max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center hover:bg-hover hover:text-ink" :title="t('query.removeGroup')" @click="emit('remove')">
         <AppIcon fallback="ph:trash-simple" :size="13" />
       </button>
     </div>
@@ -49,14 +50,14 @@ const toggleOperator = () => emit('update', { ...props.group, operator: props.gr
     </div>
     <div class="mt-1.5 flex gap-1 text-xs max-md:flex-wrap max-md:text-sm">
       <button class="flex items-center gap-1 rounded-md px-1.5 py-1 text-ink-faint hover:bg-hover hover:text-ink max-md:min-h-11 max-md:gap-1.5 max-md:px-3 max-md:text-ink-soft" @click="add({ kind: 'filter', field: 'title', operator: 'contains' })">
-        <AppIcon fallback="ph:plus" :size="isPhone ? 16 : 12" /> Add filter
+        <AppIcon fallback="ph:plus" :size="isPhone ? 16 : 12" /> {{ t('query.addFilter') }}
       </button>
       <button
         v-if="depth < 2"
         class="flex items-center gap-1 rounded-md px-1.5 py-1 text-ink-faint hover:bg-hover hover:text-ink max-md:min-h-11 max-md:gap-1.5 max-md:px-3 max-md:text-ink-soft"
         @click="add({ kind: 'group', operator: group.operator === 'and' ? 'or' : 'and', items: [{ kind: 'filter', field: 'title', operator: 'contains' }] })"
       >
-        <AppIcon fallback="ph:brackets-curly" :size="isPhone ? 16 : 12" /> Add group
+        <AppIcon fallback="ph:brackets-curly" :size="isPhone ? 16 : 12" /> {{ t('query.addGroup') }}
       </button>
     </div>
   </div>

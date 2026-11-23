@@ -13,10 +13,11 @@ import { createObject } from '../lib/actions.ts'
 import { boardDrag, closeCard, closingColumn, moveCard, pressCard, type BoardAxis, type CardTarget } from '../lib/board.ts'
 import { chip } from '../lib/colors.ts'
 import { foldKey, useGroupFolds } from '../lib/group-folds.ts'
+import { t } from '../lib/i18n.ts'
 import { openMenuAt, promptDialog } from '../lib/overlays.ts'
 import { quietButton } from '../lib/buttons.ts'
 import { newValues, useNewPlace } from '../lib/new-item.ts'
-import { groupObjects, movableField, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
+import { groupObjects, isDateField, movableField, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, typesById } from '../lib/state.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
@@ -109,11 +110,11 @@ function setBoard(patch: Partial<BoardSettings>) {
 }
 async function setWip(column: Group) {
   const answer = await promptDialog({
-    title: `Most cards in “${column.label || 'this column'}”`,
-    message: 'The count turns red when the column holds more. Empty: no limit.',
+    title: t('board.wipTitle', { column: column.label || t('board.thisColumn') }),
+    message: t('board.wipMessage'),
     value: wip(column) ? String(wip(column)) : '',
-    placeholder: 'No limit',
-    confirmLabel: 'Set limit',
+    placeholder: t('board.noLimit'),
+    confirmLabel: t('board.setLimit'),
     optional: true,
   })
   if (answer === null) return
@@ -125,8 +126,8 @@ async function setWip(column: Group) {
 }
 function columnMenu(event: MouseEvent, column: Group) {
   openMenuAt(event.clientX, event.clientY, [
-    { label: collapsed.value.has(column.key) ? 'Unfold column' : 'Fold column', icon: collapsed.value.has(column.key) ? 'ph:arrows-out-line-horizontal' : 'ph:arrows-in-line-horizontal', run: () => toggleFold(column.key) },
-    { label: wip(column) ? `WIP limit: ${wip(column)}…` : 'Set a WIP limit…', icon: 'ph:gauge', run: () => setWip(column) },
+    { label: collapsed.value.has(column.key) ? t('board.unfoldColumn') : t('board.foldColumn'), icon: collapsed.value.has(column.key) ? 'ph:arrows-out-line-horizontal' : 'ph:arrows-in-line-horizontal', run: () => toggleFold(column.key) },
+    { label: wip(column) ? t('board.wipLimitValue', { limit: wip(column)! }) : t('board.setWipLimit'), icon: 'ph:gauge', run: () => setWip(column) },
   ])
 }
 
@@ -137,7 +138,8 @@ const cardFields = computed<PropertyDef[] | undefined>(() => {
   const defs = types.value.flatMap((t) => t.properties)
   return ids.flatMap((id) => defs.find((d) => d.id === id) ?? [])
 })
-const hiddenFields = computed(() => [props.groupField, laneField.value].filter(Boolean))
+// A date's group (This week) does not say the day, so cards keep showing it.
+const hiddenFields = computed(() => [props.groupField, laneField.value].filter((field): field is string => !!field && !isDateField(field, types.value)))
 
 // Dragging -------------------------------------------------------------------
 const columnAxis = computed<BoardAxis>(() => ({ field: props.groupField, groups: columns.value }))
@@ -288,14 +290,14 @@ async function addCard(column: Group, lane: Group) {
                 <span
                   class="tabular-nums"
                   :class="[metaText, over(column) ? 'rounded-md bg-red-100 px-1.5 font-semibold text-red-700 dark:bg-red-950 dark:text-red-300' : 'text-ink-faint']"
-                  :title="wip(column) ? `WIP limit ${wip(column)}` : undefined"
+                  :title="wip(column) ? t('board.wipTooltip', { limit: wip(column)! }) : undefined"
                 >{{ column.items.length }}<template v-if="wip(column)">/{{ wip(column) }}</template></span
                 >
                 <span v-if="collapsed.has(column.key)" class="font-medium text-ink-soft [writing-mode:vertical-rl]" :class="metaText">{{ column.label || '…' }}</span>
                 <button
                   v-else
                   class="ml-auto rounded-md p-0.5 text-ink-faint opacity-0 hover:bg-hover hover:text-ink group-hover/col:opacity-100 [@media(hover:none)]:opacity-100 max-md:-my-2.5 max-md:-mr-2 max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center"
-                  title="Column options"
+                  :title="t('board.columnOptions')"
                   @click.stop="columnMenu($event, column)"
                 >
                   <AppIcon fallback="ph:dots-three" :size="16" />
@@ -329,13 +331,13 @@ async function addCard(column: Group, lane: Group) {
                     v-model="newTitle"
                     class="w-full rounded-lg border border-line-strong bg-surface px-2.5 py-2 outline-none max-md:min-h-11 max-md:text-base"
                     :class="bodyText"
-                    placeholder="Title, then Enter"
+                    :placeholder="t('board.newCardPlaceholder')"
                     @keydown.enter.prevent="addCard(column, lane)"
                     @keydown.esc="addingIn = ''"
                     @blur="addingIn = ''"
                   />
                   <button v-else :class="quietButton" @click="startAdding(column, lane)">
-                    <AppIcon fallback="ph:plus" :size="14" /> New
+                    <AppIcon fallback="ph:plus" :size="14" /> {{ t('common.new') }}
                   </button>
                 </template>
               </div>

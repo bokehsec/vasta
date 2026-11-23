@@ -1,13 +1,15 @@
 // Query helpers for the UI: field menus, operator labels, grouping, and moving an object between
 // groups (kanban drops). Filtering and sorting themselves live in @vasta/core (query.ts).
 import type { Filter, FilterGroup, FilterOperator, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, QueryDef } from '@vasta/core'
-import { DAY_BUCKETS, REVIEW_DUE_FIELD, dayBucket, dayIn, fieldKind, reviewFieldOf, type DayBucket, type FieldKind, type QueryContext } from '@vasta/core'
+import { DAY_BUCKETS, REVIEW_DUE_FIELD, dayBucket, dayIn, fieldKind, isClosedTask, reviewFieldOf, type DayBucket, type FieldKind, type QueryContext } from '@vasta/core'
 import { api } from './api.ts'
 import { dayKey } from './actions.ts'
 import { startOfWeek } from './calendar.ts'
+import { optionLabel, propName, t, typeName, typePluralName } from './i18n.ts'
 import { meId, people, personName, sharedSpace } from './people.ts'
 import { current as currentSprint } from './sprints.ts'
 import { primeFromObject, summaryOf, typesById, workspace } from './state.ts'
+import type { MessageKey } from '../locales/en.ts'
 
 export interface FieldOption {
   field: string
@@ -19,19 +21,19 @@ export interface FieldOption {
   through?: string
 }
 
-const BUILTIN_OPTIONS: FieldOption[] = [
-  { field: 'title', label: 'Title', kind: 'text', icon: 'ph:text-aa' },
-  { field: 'tags', label: 'Tags', kind: 'ids', icon: 'ph:tag' },
-  { field: 'type', label: 'Type', kind: 'ids', icon: 'ph:cube' },
-  { field: 'collections', label: 'Collections', kind: 'ids', icon: 'ph:folders' },
-  { field: 'createdAt', label: 'Created', kind: 'date', icon: 'ph:calendar-plus' },
-  { field: 'updatedAt', label: 'Last edited', kind: 'date', icon: 'ph:clock-counter-clockwise' },
-  { field: 'createdBy', label: 'Created by', kind: 'ids', icon: 'ph:user-plus' },
-  { field: 'updatedBy', label: 'Last edited by', kind: 'ids', icon: 'ph:user-gear' },
-  { field: 'createdVia', label: 'Created by agent', kind: 'text', icon: 'ph:robot' },
-  { field: 'updatedVia', label: 'Last edited by agent', kind: 'text', icon: 'ph:robot' },
-  { field: 'date', label: 'Date', kind: 'date', icon: 'ph:calendar-blank' },
-  { field: 'host', label: 'Website', kind: 'text', icon: 'ph:globe-hemisphere-west' },
+const BUILTIN_OPTION_SPECS: { field: string; labelKey: MessageKey; kind: FieldKind; icon: string }[] = [
+  { field: 'title', labelKey: 'object.titleLabel', kind: 'text', icon: 'ph:text-aa' },
+  { field: 'tags', labelKey: 'builtin.type.tag.other', kind: 'ids', icon: 'ph:tag' },
+  { field: 'type', labelKey: 'common.type', kind: 'ids', icon: 'ph:cube' },
+  { field: 'collections', labelKey: 'builtin.type.collection.other', kind: 'ids', icon: 'ph:folders' },
+  { field: 'createdAt', labelKey: 'views.created', kind: 'date', icon: 'ph:calendar-plus' },
+  { field: 'updatedAt', labelKey: 'views.lastEdited', kind: 'date', icon: 'ph:clock-counter-clockwise' },
+  { field: 'createdBy', labelKey: 'query.field.createdBy', kind: 'ids', icon: 'ph:user-plus' },
+  { field: 'updatedBy', labelKey: 'query.field.updatedBy', kind: 'ids', icon: 'ph:user-gear' },
+  { field: 'createdVia', labelKey: 'query.field.createdVia', kind: 'text', icon: 'ph:robot' },
+  { field: 'updatedVia', labelKey: 'query.field.updatedVia', kind: 'text', icon: 'ph:robot' },
+  { field: 'date', labelKey: 'dateEditor.date', kind: 'date', icon: 'ph:calendar-blank' },
+  { field: 'host', labelKey: 'query.field.host', kind: 'text', icon: 'ph:globe-hemisphere-west' },
 ]
 
 const KIND_ICONS: Record<PropertyDef['kind'], string> = {
@@ -52,13 +54,15 @@ export function fieldOptions(typeIds: Id[]): FieldOption[] {
     for (const def of type.properties) {
       if (def.kind === 'rich-text' || seen.has(def.id)) continue
       seen.add(def.id)
-      const label = typeIds.length === 1 ? def.name : `${def.name} · ${type.name}`
+      const label = typeIds.length === 1 ? propName(def) : `${propName(def)} · ${typeName(type)}`
       props.push({ field: def.id, label, kind: fieldKind(def.id, def, typesById.value.values()), icon: def.icon?.value ?? KIND_ICONS[def.kind], def })
     }
   }
   // Only weblinks have a website; who made or changed something only matters in a shared space.
   const weblinks = typesOf(typeIds).some((t) => t.system === 'weblink')
-  const builtins = BUILTIN_OPTIONS.filter((f) => (f.field !== 'host' || weblinks) && ((f.field !== 'createdBy' && f.field !== 'updatedBy') || sharedSpace.value))
+  const builtins: FieldOption[] = BUILTIN_OPTION_SPECS.filter(
+    (f) => (f.field !== 'host' || weblinks) && ((f.field !== 'createdBy' && f.field !== 'updatedBy') || sharedSpace.value)
+  ).map((f) => ({ field: f.field, label: t(f.labelKey), kind: f.kind, icon: f.icon }))
   return [...builtins, ...props]
 }
 
@@ -79,15 +83,23 @@ export function filterFieldOptions(typeIds: Id[]): FieldOption[] {
   return [...own, ...reviewDue, ...related]
 }
 
-export const OPERATOR_LABELS: Record<FilterOperator, string> = {
-  is: 'is', 'is-not': 'is not', contains: 'contains', 'not-contains': 'does not contain', 'starts-with': 'starts with',
-  'is-empty': 'is empty', 'is-not-empty': 'is not empty', 'is-checked': 'is checked', 'is-not-checked': 'is not checked',
-  gt: '>', gte: '≥', lt: '<', lte: '≤', before: 'is before', after: 'is after',
+const OPERATOR_KEYS: Partial<Record<FilterOperator, MessageKey>> = {
+  is: 'query.op.is', 'is-not': 'query.op.is-not', contains: 'query.op.contains', 'not-contains': 'query.op.not-contains',
+  'starts-with': 'query.op.starts-with', 'is-empty': 'query.op.is-empty', 'is-not-empty': 'query.op.is-not-empty',
+  'is-checked': 'query.op.is-checked', 'is-not-checked': 'query.op.is-not-checked', before: 'query.op.before', after: 'query.op.after',
 }
 
-/** Labels that read better for lists of ids (tags, selects, relations). */
-export const IDS_OPERATOR_LABELS: Partial<Record<FilterOperator, string>> = {
-  contains: 'has any of', 'not-contains': 'has none of', is: 'is exactly', 'is-not': 'is not exactly',
+const IDS_OPERATOR_KEYS: Partial<Record<FilterOperator, MessageKey>> = {
+  contains: 'query.idsOp.contains', 'not-contains': 'query.idsOp.not-contains', is: 'query.idsOp.is', 'is-not': 'query.idsOp.is-not',
+}
+
+const SYMBOL_OPERATORS: Partial<Record<FilterOperator, string>> = { gt: '>', gte: '≥', lt: '<', lte: '≤' }
+
+/** Human-readable operator label for the active locale. */
+export function operatorLabel(op: FilterOperator, kind?: FieldKind): string {
+  if (kind === 'ids' && IDS_OPERATOR_KEYS[op]) return t(IDS_OPERATOR_KEYS[op]!)
+  if (OPERATOR_KEYS[op]) return t(OPERATOR_KEYS[op]!)
+  return SYMBOL_OPERATORS[op] ?? op
 }
 
 /** A filter in words, for a line that says what a view leaves out or keeps: "Area is Work · Priority is High or Urgent". */
@@ -114,7 +126,7 @@ export function describeFilter(group: FilterGroup, typeIds: Id[]): string {
   const part = (item: Filter | FilterGroup): string => {
     if (item.kind === 'group') return `(${item.items.map(part).join(item.operator === 'and' ? ' and ' : ' or ')})`
     const option = options.find((o) => o.field === item.field)
-    const operator = (option?.kind === 'ids' ? IDS_OPERATOR_LABELS[item.operator] : undefined) ?? OPERATOR_LABELS[item.operator]
+    const operator = operatorLabel(item.operator, option?.kind)
     return [option?.label ?? item.field, operator, value(item, option)].filter(Boolean).join(' ')
   }
   return group.items.map(part).join(group.operator === 'and' ? ' · ' : ' or ')
@@ -156,7 +168,14 @@ export interface Group {
 
 export const NO_VALUE = '__none'
 
-const BUCKET_LABELS: Record<DayBucket, string> = { past: 'Earlier', today: 'Today', tomorrow: 'Tomorrow', 'this-week': 'This week', 'next-week': 'Next week', later: 'Later' }
+const BUCKET_KEYS: Record<DayBucket, MessageKey> = {
+  past: 'query.bucket.past',
+  today: 'common.today',
+  tomorrow: 'common.tomorrow',
+  'this-week': 'query.bucket.this-week',
+  'next-week': 'query.bucket.next-week',
+  later: 'query.bucket.later',
+}
 
 /** Groups of a date field: by where each date falls from today (earlier, today, tomorrow, this week…), in that order. */
 function groupByDay(objects: ObjectSummary[], field: string, types: ObjectType[], keepEmpty: boolean): Group[] {
@@ -171,19 +190,23 @@ function groupByDay(objects: ObjectSummary[], field: string, types: ObjectType[]
     const key = day ? dayBucket(day, today, weekStart) : NO_VALUE
     buckets.set(key, [...(buckets.get(key) ?? []), object])
   }
-  // A task's due date that has passed is overdue.
-  const overdue = field === 'due' && types.some((t) => t.system === 'task')
+  // A task's due date that has passed is overdue, while an open task is among them; finished ones are just Earlier.
+  const overdue = field === 'due' && (buckets.get('past') ?? []).some((object) => {
+    const type = types.find((t) => t.id === object.typeId)
+    return type?.system === 'task' && !isClosedTask(type, object)
+  })
   const result: Group[] = DAY_BUCKETS.map((key) => ({
     key,
-    label: key === 'past' && overdue ? 'Overdue' : BUCKET_LABELS[key],
+    label: key === 'past' && overdue ? 'Overdue' : t(BUCKET_KEYS[key]),
     ...(key === 'past' && overdue ? { color: 'red' } : key === 'today' ? { color: 'sky' } : {}),
     items: buckets.get(key) ?? [],
   }))
-  result.push({ key: NO_VALUE, label: 'No date', items: buckets.get(NO_VALUE) ?? [] })
+  result.push({ key: NO_VALUE, label: t('query.noDate'), items: buckets.get(NO_VALUE) ?? [] })
   return result.filter((g) => keepEmpty || g.items.length)
 }
 
-const isDateField = (field: string, types: ObjectType[]) => types.some((t) => t.properties.some((p) => p.id === field && p.kind === 'date'))
+/** Whether `field` is a date property of one of these types. */
+export const isDateField = (field: string, types: ObjectType[]) => types.some((t) => t.properties.some((p) => p.id === field && p.kind === 'date'))
 
 export function groupObjects(objects: ObjectSummary[], field: string, types: ObjectType[], keepEmpty = false): Group[] {
   if (!field) return [{ key: 'all', label: '', items: objects }]
@@ -204,20 +227,20 @@ export function groupObjects(objects: ObjectSummary[], field: string, types: Obj
   }
   const result: Group[] = []
   if (def?.kind === 'select') {
-    for (const option of def.options) result.push({ key: option.id, label: option.label, ...(option.color ? { color: option.color } : {}), items: buckets.get(option.id) ?? [] })
+    for (const option of def.options) result.push({ key: option.id, label: optionLabel(def.id, option), ...(option.color ? { color: option.color } : {}), items: buckets.get(option.id) ?? [] })
   } else if (def?.kind === 'person' || field === 'createdBy' || field === 'updatedBy') {
     for (const [key, items] of buckets) if (key !== NO_VALUE) result.push({ key, label: personName(key), personId: key, items })
     result.sort((a, b) => a.label.localeCompare(b.label))
   } else if (field === 'type') {
     for (const [key, items] of buckets) {
       const type = typesById.value.get(key)
-      result.push({ key, label: type?.pluralName ?? 'Unknown type', typeId: key, ...(type?.color ? { color: type.color } : {}), items })
+      result.push({ key, label: type ? typePluralName(type) : t('query.unknownType'), typeId: key, ...(type?.color ? { color: type.color } : {}), items })
     }
   } else {
     for (const [key, items] of buckets) if (key !== NO_VALUE) result.push({ key, label: '', objectId: key, items })
     result.sort((a, b) => b.items.length - a.items.length)
   }
-  if (field !== 'type') result.push({ key: NO_VALUE, label: 'No value', items: buckets.get(NO_VALUE) ?? [] })
+  if (field !== 'type') result.push({ key: NO_VALUE, label: t('query.noValue'), items: buckets.get(NO_VALUE) ?? [] })
   return result.filter((g) => keepEmpty || g.items.length)
 }
 

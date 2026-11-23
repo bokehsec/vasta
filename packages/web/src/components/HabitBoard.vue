@@ -11,6 +11,7 @@ import { addDays, habitDayState, habitPausedOn, habitStats, habitTarget, habitUn
 import { swatchClasses } from '../lib/colors.ts'
 import { habitColor, useFoodHabits, useToday } from '../lib/habits.ts'
 import { percentText, useHabitDisplay, useHabitProgress } from '../lib/habit-progress.ts'
+import { locale, t } from '../lib/i18n.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { bodyText, metaText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
@@ -33,8 +34,7 @@ const days = computed(() => {
   const count = beside.value ? 7 : 14
   return Array.from({ length: count }, (_, i) => addDays(today.value, i - (count - 1)))
 })
-const locale = typeof navigator !== 'undefined' ? navigator.language : 'en'
-const weekday = new Intl.DateTimeFormat(locale, { weekday: 'narrow', timeZone: 'UTC' })
+const weekday = computed(() => new Intl.DateTimeFormat(locale.value, { weekday: 'narrow', timeZone: 'UTC' }))
 const utc = (day: string) => new Date(`${day}T00:00:00.000Z`)
 
 const habits = useFoodHabits(toRef(props, 'habits'))
@@ -73,12 +73,12 @@ const progressLink = computed(() => `${route.path}?view=__progress`)
     <table class="w-full border-separate border-spacing-0" :class="bodyText">
       <thead>
         <tr class="text-ink-faint" :class="metaText">
-          <th class="sticky left-0 z-10 bg-surface pb-2 text-left font-medium">Habit</th>
+          <th class="sticky left-0 z-10 bg-surface pb-2 text-left font-medium">{{ t('builtin.type.habit.one') }}</th>
           <th v-for="day in days" :key="day" class="w-8 pb-2 text-center font-normal" :class="day === today ? 'text-accent' : ''">
             <div class="first-letter:uppercase">{{ weekday.format(utc(day)) }}</div>
             <div class="tabular-nums" :class="day === today ? 'font-semibold' : ''">{{ Number(day.slice(8)) }}</div>
           </th>
-          <th class="w-16 pb-2 pl-3 text-right font-medium">Streak</th>
+          <th class="w-16 pb-2 pl-3 text-right font-medium">{{ t('habits.streak') }}</th>
           <th class="w-16 pb-2 pl-3 text-right font-medium max-sm:hidden" title="Done of expected over the last 4 weeks, this one included">4 weeks</th>
         </tr>
       </thead>
@@ -87,8 +87,8 @@ const progressLink = computed(() => `${route.path}?view=__progress`)
           <td class="sticky left-0 z-10 max-w-[14rem] border-t border-line/70 bg-surface py-1.5 pr-3">
             <ObjectLink :id="row.habit.id" class="flex min-w-0 items-center gap-2 hover:underline">
               <span class="h-2.5 w-2.5 shrink-0 rounded-full" :class="swatchClasses[habitColor(row.habit)]" />
-              <span class="truncate font-medium">{{ row.habit.title || 'Untitled' }}</span>
-              <span v-if="row.paused" class="text-ink-faint" :class="metaText">paused</span>
+              <span class="truncate font-medium">{{ row.habit.title || t('common.untitled') }}</span>
+              <span v-if="row.paused" class="text-ink-faint" :class="metaText">{{ t('habits.paused') }}</span>
               <span v-else-if="habitTarget(row.habit)" class="shrink-0 text-ink-faint" :class="metaText">{{ habitTarget(row.habit) }} {{ habitUnit(row.habit) }}</span>
             </ObjectLink>
           </td>
@@ -103,7 +103,7 @@ const progressLink = computed(() => `${route.path}?view=__progress`)
         </tr>
       </tbody>
     </table>
-    <p v-if="!rows.length" class="py-10 text-center text-ink-faint" :class="bodyText">No habits match the filter.</p>
+    <p v-if="!rows.length" class="py-10 text-center text-ink-faint" :class="bodyText">{{ t('habits.noMatch') }}</p>
     </div>
     <HabitProgressSummary
       v-if="beside && shown.length"

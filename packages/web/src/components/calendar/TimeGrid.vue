@@ -6,6 +6,7 @@ import type { CalendarEntry, CalendarSource, Id } from '@vasta/core'
 import { HOUR_HEIGHT as HOUR, formatClock, formatWeekday, instantAt, isToday, layoutBars, layoutDay, minutesInto } from '../../lib/calendar.ts'
 import { drag } from '../../lib/calendar-drag.ts'
 import { dayKey } from '../../lib/actions.ts'
+import { locale, t } from '../../lib/i18n.ts'
 import { isPhone } from '../../lib/viewport.ts'
 import { metaText } from '../../lib/type-scale.ts'
 import AppIcon from '../AppIcon.vue'
@@ -27,8 +28,8 @@ const emit = defineEmits<{
 }>()
 
 const hours = Array.from({ length: 24 }, (_, h) => h)
-const hourFormat = new Intl.DateTimeFormat(typeof navigator !== 'undefined' ? navigator.language : 'en', { hour: 'numeric' })
-const hourLabel = (h: number) => hourFormat.format(new Date(2026, 0, 5, h))
+const hourFormat = computed(() => new Intl.DateTimeFormat(locale.value, { hour: 'numeric' }))
+const hourLabel = (h: number) => hourFormat.value.format(new Date(2026, 0, 5, h))
 
 const isAllDayRow = (entry: CalendarEntry) => entry.allDay || entry.startDay !== entry.endDay
 /** The all-day row: all-day and multi-day entries as bars over the days they cover. */
@@ -68,19 +69,26 @@ function onColumnClick(event: MouseEvent, day: string) {
   emit('create', day, snap(minutesAt(event, event.currentTarget as HTMLElement) - 15, 30))
 }
 
-/** Over the hours: the slot a moved entry would take, or the new end of a resized one. */
+/** Over the hours: the slot a moved/scheduled entry would take, or the new end of a resized one. */
 const ghost = computed(() => {
-  const entry = drag.entry
   const target = drag.target
-  if (!drag.active || !entry || target?.minutes === undefined) return null
+  if (!drag.active || !target || target.unschedule || target.minutes === undefined) return null
+  if (drag.scheduleItem) {
+    const length = Math.max(15, drag.scheduleItem.durationMinutes)
+    return { day: target.day, top: target.minutes, height: Math.min(length, 1440 - target.minutes), label: formatClock(instantAt(target.day, target.minutes)) }
+  }
+  const entry = drag.entry
+  if (!entry) return null
   if (drag.mode === 'resize') {
     const top = minutesInto(entry.startDay, entry.start)
     return { day: entry.startDay, top, height: target.minutes - top, label: formatClock(instantAt(entry.startDay, target.minutes)) }
   }
-  const length = entry.end ? Math.max(15, Math.round((Date.parse(entry.end) - Date.parse(entry.start)) / 60_000)) : 30
+  const length = entry.allDay ? 60 : entry.end ? Math.max(15, Math.round((Date.parse(entry.end) - Date.parse(entry.start)) / 60_000)) : 30
   return { day: target.day, top: target.minutes, height: Math.min(length, 1440 - target.minutes), label: formatClock(instantAt(target.day, target.minutes)) }
 })
-const dropDay = computed(() => (drag.active && drag.mode === 'move' && drag.target && drag.target.minutes === undefined ? drag.target.day : ''))
+const dropDay = computed(() =>
+  drag.active && (drag.mode === 'move' || drag.mode === 'schedule') && drag.target && !drag.target.unschedule && drag.target.minutes === undefined ? drag.target.day : ''
+)
 
 const style = (item: { top: number; height: number; column: number; columns: number }) => ({
   top: `${(item.top / 60) * HOUR}px`,
@@ -103,7 +111,7 @@ const pendingStyle = computed(() => (props.pending?.minutes !== undefined ? { to
       <div class="grid flex-1" :style="{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }">
         <div v-for="day in days" :key="day" class="min-w-0 overflow-hidden border-l border-line px-1 pb-1 pt-2 md:px-2">
           <div class="flex min-w-0 items-center gap-1.5">
-            <button class="flex min-w-0 items-baseline gap-1.5 rounded-md px-1 hover:bg-hover" title="Open day" @click="emit('openDay', day)">
+            <button class="flex min-w-0 items-baseline gap-1.5 rounded-md px-1 hover:bg-hover" :title="t('calendar.month.openDay')" @click="emit('openDay', day)">
               <span class="truncate font-medium uppercase text-ink-faint" :class="metaText">{{ formatWeekday(day) }}</span>
               <span
                 class="grid h-7 min-w-7 place-items-center rounded-full text-lg tabular-nums"
@@ -111,7 +119,7 @@ const pendingStyle = computed(() => (props.pending?.minutes !== undefined ? { to
               >{{ Number(day.slice(8)) }}</span
               >
             </button>
-            <button v-if="dailyNotes.has(day)" class="rounded p-0.5 text-ink-faint hover:bg-hover hover:text-ink" title="Daily note" @click="emit('openNote', day)">
+            <button v-if="dailyNotes.has(day)" class="rounded p-0.5 text-ink-faint hover:bg-hover hover:text-ink" :title="t('builtin.type.daily-note.one')" @click="emit('openNote', day)">
               <AppIcon fallback="ph:calendar-check" :size="14" />
             </button>
           </div>
@@ -129,6 +137,7 @@ const pendingStyle = computed(() => (props.pending?.minutes !== undefined ? { to
           :class="dropDay === day ? 'bg-accent/10' : ''"
           :style="{ gridColumn: `${i + 1}`, gridRow: '1 / -1' }"
           :data-day="day"
+          data-allday
         />
         <div
           v-for="bar in allDayBars"

@@ -135,10 +135,6 @@ GitHub release page.
   your thumb, and your object types), reorder them with arrows, or reset to the original menu.
   Changes appear immediately, belong to you on every device (you can set it from a computer too),
   and are the same in every space; a type shows in each space that has a type of that name.
-- **Choose your page width.** Settings › Appearance has Standard, Wide and Full width, remembered
-  on this device for all object pages and daily notes. Standard keeps the reading width and gives
-  pages with columns more room; daily notes with columns now get that same room. Full width uses
-  the available content area while keeping the page margins.
 - **Quick actions: buttons that change an object in one click, on any type.** Type settings ›
   Quick actions sets them up. They show on its objects' pages, as a view's row buttons, in a
   **Quick actions** column and in Review. Each sets fields to a value, a day (today, tomorrow, next week, in N days), you (people),
@@ -172,16 +168,6 @@ GitHub release page.
 - **Boards on a phone show one column at a time**: swipe sideways and it snaps to the next column,
   or tap a column's name in the strip above (with its count) to jump there.
 - **Apple Mail links work in notes.** A link to an email (`message://…`) stays a link in the editor and in previews, and opens Mail when clicked, also from the desktop app.
-- **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu, a right-click on the
-  view's tab, or the tab dragged into a sidebar section puts that one view, such as a "Today" view
-  of Tasks, in the sidebar; its row opens the type on that view.
-- **Choose the fields on a list's rows**: in a list view or query, the Fields menu picks which
-  fields follow each title (a due date, status, tags, any property), puts them in order by
-  dragging, and can wrap long titles. Reset to default brings back tags and the last change. A
-  task's checkbox, to mark it done from the list, is always there.
-- **Group by a date**: lists, tables and the other layouts can group by a date field, under
-  Earlier (Overdue for a task's due date), Today, Tomorrow, This week, Next week, Later and No
-  date. A board grouped this way shows the columns; its cards do not move between them.
 - **An embedded query can be shown compact**: just its results, without the header bar and the
   border, for a page that has its own heading above each list. Pick Show as → Compact in the
   block's menu; Edit query and Open query move there. A compact query that finds nothing
@@ -197,7 +183,7 @@ GitHub release page.
   marking now and what is over faded, and tasks keep their checkbox. Options set the date field to
   place things by, how many days (1 to 14, three by default) and whether to include the events of
   your subscribed calendars, all or some. Drag a task or an event of your own to another day (after
-  a long press on a phone) to move it there (see "Dragging a task moves its plan"); a timed one
+  a long press on a phone) to move that date there; a timed one
   keeps its time of day, and dragging near the top or bottom scrolls to days off screen. A build
   without the layout shows it as a grid.
 - **Choose what a space opens on**, in Settings › Space: its first pinned item (as before), Today,
@@ -206,7 +192,6 @@ GitHub release page.
 
 ### Changed
 
-- "Pin to sidebar" is now "Add to sidebar".
 - **Habits on a phone: earlier days are easy to fix.** Pick any of the last two weeks to use
   each row's round check for that day, or tap a habit's ticks to open all fourteen days as large
   checks. Plain habits offer **Done** and **Not done** instead of asking you to type 1 or 0.
@@ -282,11 +267,6 @@ GitHub release page.
   Day view, week, month, agendas and the small month's dots alike, and each task shows its other
   date. A date that is neither (a "Check back") shows its own name. Planned after the deadline is
   marked with a warning on every chip and row. There are no extra Reschedule buttons on the calendar.
-- **Dragging a task moves its plan.** On the calendar (month, week, three days) and in agendas,
-  dragging a task moves its Do date, never the deadline by accident: a task with only a deadline
-  gets a plan on that day. Dragging a task's deadline when it has a plan asks "Move the deadline?"
-  (Move deadline, Plan for that day instead, Cancel). The notice says what moved ("Planned for
-  Thu", "Deadline moved to Thu") with Undo; a repeating date moves only the occurrence you dragged.
 - **Overdue.** Today (the calendar's Day view for today) and every agenda start with an Overdue
   section: open tasks whose deadline or plan is before today, each saying what is late ("Due Tue",
   "Planned Mon") with a one-tap **Move to today** that plans it for today, keeps the deadline, and
@@ -401,6 +381,71 @@ GitHub release page.
 - **The ⋮⋮ handle of a block in a second or third column** sits in the gap before that column
   and holds still while the pointer goes to it. It sat at the page's left edge, so on the way the
   pointer crossed the first column and the handle jumped to a block there.
+
+## 0.13.0 (2026-11-23)
+
+### Added
+
+- **Manage object types in Settings & create types from templates.** **Settings › Object types**
+  lists every custom and built-in type in a grid so you can edit or delete types from one place.
+  Creating a new type (from Settings, the sidebar or ⌘K) opens a dialog with **Create your own**
+  front and center — with icon and color pickers — alongside a growing template catalog (starting
+  with **Books**). When a template includes relations to other template types (like *Author → Person
+  → Organization*), you can import the referenced type too in a chain, link an existing type in your
+  space, or ignore the property.
+- **Schedule tasks from the calendar sidebar.** The calendar's right panel now switches between the
+  mini month and a **Tasks** sidebar (available in Month, Week, Three-day and Day views). Drag open,
+  overdue or all-day tasks straight onto an hour slot to timeblock them as a 1-hour resizable block
+  (or onto the all-day row or a month cell for a day-only date), drag blocks back onto the sidebar
+  to clear their date, add tasks inline, filter by saved views or "Mine", and opt in custom types
+  that have a date property — shown with a colored type chip when multiple types are enabled.
+
+## 0.12.0 (2026-11-21)
+
+### Added
+
+- **Agents can make types.** Through the MCP, Claude Code or Codex can create a type (its
+  description, properties and rules) and change one: rename it, describe it, set its rules and add
+  properties. Removing or changing properties stays yours.
+- **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu, a right-click on the
+  view's tab, or the tab dragged into a sidebar section puts that one view, such as a "Today" view
+  of Tasks, in the sidebar; its row opens the type on that view.
+- **Group by a date.** Views and queries can group by a date field: Earlier, Today, Tomorrow,
+  This week, Next week, Later and No date. Boards show the date groups as columns or swimlanes,
+  without moving or adding cards between them.
+- **Choose the fields on a list's rows.** In a list view or query (also one embedded in a page),
+  the new **Fields** menu picks what follows each title, a due date, a status or any property, puts
+  them in order by dragging, and can wrap long titles. Only fields with a value show; without a
+  choice, rows keep their tags and last-edited time.
+- **Page width, on this device.** Settings › Appearance offers **Standard**, **Wide** or **Full
+  width** for object pages and daily notes. Standard keeps text at its usual width and gives
+  notes built with columns more room; side panes and whiteboards keep their own layout.
+- **Automatic reminders for tasks, events, habits and food are configured per space in Settings › Reminders**,
+  with timed tasks separated from timed events and a style picker for each (simple notification,
+  pop-up, full screen, repeating notification, escalating or relentless). Pausing a custom reminder
+  on an object also silences the automatic reminder for it.
+- **Skip empty reminders.** Reminders showing today's tasks now skip days with no due or overdue
+  tasks by default (configurable per rule, and available for tag and query reminders too).
+- **Five languages in the app.** Vasta is now available in **English**, **Português**,
+  **Español**, **简体中文** and **日本語**. It follows your browser or system language by default
+  (falling back to English), and you can pick one per device in **Settings › Appearance › Language**;
+  dates, numbers, calendar week start and built-in types/properties follow the chosen language
+  (keeping any built-ins you renamed untouched).
+
+### Changed
+
+- **Settings › Reminders is scoped to the current space.** Switching spaces now shows only that
+  space's rules, ongoing alerts ("Going on now") and automatic reminders, and new reminders save to
+  the open space. Delivery channels, quiet hours and others' work notifications stay account-wide in
+  Settings › Reminder channels.
+
+### Fixed
+
+- **A type's rules (needs a cover, needs a tag) are saved on the server.** Set in a type's
+  settings, they stayed on that device and Settings › This device said the server did not take
+  them. Set them again once: turn the rule off and on.
+- **A type opens on the view you last picked in it** only once you pick one: the view it opened
+  on by default was remembered too, so reordering views later didn't change where it opened.
 
 ## 0.11.0 (2026-11-17)
 

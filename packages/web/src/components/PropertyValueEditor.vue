@@ -5,6 +5,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ObjectSummary, PropertyDef, PropertyValue, SelectOption, SelectPropertyDef } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
 import { chip, colorNames } from '../lib/colors.ts'
+import { optionLabel, t } from '../lib/i18n.ts'
 import AppIcon from './AppIcon.vue'
 import DateValueEditor from './DateValueEditor.vue'
 import ObjectChip from './ObjectChip.vue'
@@ -136,7 +137,7 @@ function removeRelation(id: string) {
       ref="field"
       :value="text"
       class="w-full rounded-md bg-transparent px-2 py-1 outline-none hover:bg-hover focus:bg-hover"
-      :placeholder="placeholder ?? 'Empty'"
+      :placeholder="placeholder ?? t('common.empty')"
       @change="setText(($event.target as HTMLInputElement).value)"
       @keydown.enter="enter"
       @keydown.esc="cancel"
@@ -163,7 +164,7 @@ function removeRelation(id: string) {
       type="number"
       :value="value?.kind === 'number' ? value.value : ''"
       class="w-full rounded-md bg-transparent px-2 py-1 outline-none hover:bg-hover focus:bg-hover"
-      :placeholder="placeholder ?? 'Empty'"
+      :placeholder="placeholder ?? t('common.empty')"
       @change="setNumber(($event.target as HTMLInputElement).value)"
       @keydown.enter="enter"
       @keydown.esc="cancel"
@@ -194,9 +195,9 @@ function removeRelation(id: string) {
     <template v-else-if="def.kind === 'select'">
       <button ref="anchor" class="flex min-h-8 w-full flex-wrap items-center gap-1 rounded-md px-1.5 py-1 text-left hover:bg-hover" @click="open = !open">
         <span v-for="id in ids" :key="id" class="rounded-md px-2 py-0.5 text-sm" :class="chip(options.find((o) => o.id === id)?.color)">
-          {{ options.find((o) => o.id === id)?.label ?? '?' }}
+          {{ options.find((o) => o.id === id) ? optionLabel(def.id, options.find((o) => o.id === id)!) : '?' }}
         </span>
-        <span v-if="!ids.length" class="px-0.5 text-ink-faint">{{ placeholder ?? 'Empty' }}</span>
+        <span v-if="!ids.length" class="px-0.5 text-ink-faint">{{ placeholder ?? t('common.empty') }}</span>
       </button>
       <PopoverMenu v-model:open="open" :anchor="anchor">
         <button
@@ -205,13 +206,13 @@ function removeRelation(id: string) {
           class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-hover"
           @click="toggleOption(option.id)"
         >
-          <span class="rounded-md px-2 py-0.5" :class="chip(option.color)">{{ option.label }}</span>
+          <span class="rounded-md px-2 py-0.5" :class="chip(option.color)">{{ optionLabel(def.id, option) }}</span>
           <AppIcon v-if="ids.includes(option.id)" fallback="ph:check" class="ml-auto text-accent" />
         </button>
         <input
           v-model="newOption"
           class="mt-1 w-full rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint"
-          placeholder="New option…"
+          :placeholder="t('picker.newOption')"
           @keydown.enter.prevent="createOption"
         />
       </PopoverMenu>
@@ -220,7 +221,7 @@ function removeRelation(id: string) {
     <template v-else-if="def.kind === 'relation'">
       <div class="flex w-full flex-wrap items-center gap-1 px-1.5 py-1">
         <ObjectChip v-for="id in ids" :key="id" :id="id" removable @remove="removeRelation(id)" />
-        <button ref="anchor" class="flex items-center gap-1 rounded-md px-1 text-ink-faint hover:bg-hover hover:text-ink" title="Add" @click="open = !open">
+        <button ref="anchor" class="flex items-center gap-1 rounded-md px-1 text-ink-faint hover:bg-hover hover:text-ink" :title="t('common.add')" @click="open = !open">
           <AppIcon fallback="ph:plus" :size="14" /><span v-if="placeholder && !ids.length">{{ placeholder }}</span>
         </button>
       </div>
@@ -232,7 +233,7 @@ function removeRelation(id: string) {
     <template v-else-if="def.kind === 'person'">
       <button ref="anchor" class="flex min-h-8 w-full flex-wrap items-center gap-1 rounded-md px-1.5 py-1 text-left hover:bg-hover" @click="open = !open">
         <PersonChip v-for="id in ids" :key="id" :id="id" />
-        <span v-if="!ids.length" class="px-0.5 text-ink-faint">{{ placeholder ?? 'Empty' }}</span>
+        <span v-if="!ids.length" class="px-0.5 text-ink-faint">{{ placeholder ?? t('common.empty') }}</span>
       </button>
       <PopoverMenu v-model:open="open" :anchor="anchor" width="16rem">
         <PersonPicker :selected="ids" @toggle="togglePerson" />

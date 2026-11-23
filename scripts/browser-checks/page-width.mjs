@@ -32,7 +32,7 @@ const get = (url) => request('get', url)
 const post = (url, data) => request('post', url, data)
 const put = (url, data) => request('put', url, data)
 async function until(check, label) {
-  for (let n = 0; n < 100; n++) {
+  for (let attempt = 0; attempt < 100; attempt++) {
     if (await check()) return
     await page.waitForTimeout(150)
   }
@@ -68,7 +68,7 @@ try {
   const space = await post('/api/spaces', { name: `Page width ${engine} ${Date.now()}` })
   const bundle = await get(`/api/spaces/${space.id}`)
   const type = bundle.types.find((t) => t.system === 'page')
-  const prose = await post('/api/objects', { typeId: type.id, title: `Width prose ${engine}`, content: { body: proseDoc } })
+  const prose = await post('/api/objects', { typeId: type.id, title: `Width prose ${engine}`, date: { start: '2031-04-12', resolution: 'day' }, content: { body: proseDoc } })
   const columns = await post('/api/objects', { typeId: type.id, title: `Width columns ${engine}`, content: { body: columnDoc } })
   const boardType = bundle.types.find((t) => t.system === 'whiteboard')
   const board = await post('/api/objects', { typeId: boardType.id, title: `Width whiteboard ${engine}` })
@@ -79,9 +79,18 @@ try {
     await go(`${base}/settings#appearance`)
     const choices = page.getByRole('radiogroup', { name: 'Page width', exact: true })
     await choices.waitFor()
-    assert.equal(await choices.getByRole('radio', { checked: true }).textContent().then((s) => s.trim()), 'Standard')
+    assert.equal(await choices.getByRole('radio', { checked: true }).textContent().then((text) => text.trim()), 'Standard')
+    // The choice is a device preference: kept in this device's localStorage under the signed-in account.
+    const stored = () => page.evaluate(() => {
+      const key = Object.keys(localStorage).find((k) => /^vasta\.device\..+\.page-width$/.test(k))
+      return key ? JSON.parse(localStorage.getItem(key)) : null
+    })
+    await choices.getByRole('radio', { name: 'Full width', exact: true }).click()
+    await until(async () => (await stored()) === 'full', 'stored Full width')
+    await choices.getByRole('radio', { name: 'Standard', exact: true }).click()
+    await until(async () => ['standard', null].includes(await stored()), 'Standard stored or cleared')
     await choices.getByRole('radio', { name: 'Wide', exact: true }).click()
-    await until(() => page.evaluate(() => Object.entries(localStorage).some(([k, v]) => /^vasta\.device\..+\.page-width$/.test(k) && JSON.parse(v) === 'wide')), 'stored Wide')
+    await until(async () => (await stored()) === 'wide', 'stored Wide')
     await page.reload({ waitUntil: 'domcontentloaded' })
     await choices.getByRole('radio', { name: 'Wide', exact: true, checked: true }).waitFor()
   } else {
@@ -120,6 +129,7 @@ try {
   await page.locator('.vasta-doc').getByText('A saved daily note', { exact: true }).waitFor()
   for (const [choice, expected] of [['standard', 768], ['wide', 1152]]) { await choose(choice); await expectWidth(dayWidth(), expected) }
   const daily = await post(`/api/spaces/${space.id}/daily-notes/${day}`, {})
+  await choose('standard')
   await put(`/api/objects/${daily.id}`, { ...daily, content: { ...daily.content, body: columnDoc } })
   await page.locator('.vasta-doc').getByText('Left column', { exact: true }).waitFor()
   await expectWidth(dayWidth(), 1152)
@@ -128,6 +138,12 @@ try {
   await go(`${base}/calendar?view=day&date=2031-04-13`)
   await page.getByRole('textbox', { name: 'Daily note', exact: true }).waitFor()
   await choose('standard')
+  await expectWidth(dayWidth(), 768)
+  await go(`${base}/calendar?view=day&date=${day}`)
+  await page.locator('.vasta-doc').getByText('Left column', { exact: true }).waitFor()
+  await expectWidth(dayWidth(), 1152)
+  await put(`/api/objects/${daily.id}`, { ...daily, content: { ...daily.content, body: proseDoc } })
+  await page.locator('.vasta-doc').getByText('After columns', { exact: true }).waitFor({ state: 'detached' })
   await expectWidth(dayWidth(), 768)
   console.log('✓ empty and saved daily notes, live column updates, day navigation')
 

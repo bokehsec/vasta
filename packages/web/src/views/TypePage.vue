@@ -40,6 +40,7 @@ import { useTypeViews } from '../lib/use-type-views.ts'
 import { useViewToolbar, viewFields } from '../lib/view-toolbar.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { bodyText, metaText, pageTitle } from '../lib/type-scale.ts'
+import { t, typeName, typePluralName } from '../lib/i18n.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -184,24 +185,24 @@ function pinFrom(event: MouseEvent, item: string) {
 // New: the quick card for a plain object (nothing is made until it is saved), or the type's default
 // template (lib/new-item.ts); the chevron picks another, or none.
 const typeTemplates = computed(() => (type.value ? templatesOf(type.value.id) : []))
-const defaultTemplate = computed(() => typeTemplates.value.find((t) => t.template?.kind === 'template' && t.template.default))
+const defaultTemplate = computed(() => typeTemplates.value.find((tpl) => tpl.template?.kind === 'template' && tpl.template.default))
 const createNew = () => type.value && startNew(type.value.id)
 async function newMenu(event: MouseEvent) {
   if (!type.value) return
-  const t = type.value
+  const typeObj = type.value
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   await loadTemplates()
   openMenuAt(rect.right - 224, rect.bottom + 4, [
-    { label: `Blank ${t.name.toLowerCase()}`, icon: 'ph:file', run: () => startNew(t.id, { template: 'blank' }) },
+    { label: t('views.blankType', { type: typeName(typeObj).toLowerCase() }), icon: 'ph:file', run: () => startNew(typeObj.id, { template: 'blank' }) },
     ...typeTemplates.value.map((template) => ({
       label: template.template!.name,
       icon: template === defaultTemplate.value ? 'ph:star-fill' : 'ph:copy-simple',
-      ...(template === defaultTemplate.value ? { hint: 'Default' } : {}),
-      run: () => startNew(t.id, { template }),
+      ...(template === defaultTemplate.value ? { hint: t('common.default') } : {}),
+      run: () => startNew(typeObj.id, { template }),
     })),
     { kind: 'separator' as const },
-    { label: 'New template…', icon: 'ph:plus', run: () => newTemplate(t) },
-    { label: 'Manage templates…', icon: 'ph:gear-six', run: () => (settingsOpen.value = true) },
+    { label: t('views.newTemplateMenu'), icon: 'ph:plus', run: () => newTemplate(typeObj) },
+    { label: t('views.manageTemplatesMenu'), icon: 'ph:gear-six', run: () => (settingsOpen.value = true) },
   ])
 }
 </script>
@@ -209,33 +210,33 @@ async function newMenu(event: MouseEvent) {
 <template>
   <div v-if="type" class="px-4 pb-24 pt-6 md:px-10 md:pt-10">
     <header class="flex items-center gap-3">
-      <button class="grid h-10 w-10 place-items-center rounded-xl hover:ring-2 hover:ring-line max-md:h-11 max-md:w-11" :class="chip(type.color)" title="Type settings" @click="settingsOpen = true">
+      <button class="grid h-10 w-10 place-items-center rounded-xl hover:ring-2 hover:ring-line max-md:h-11 max-md:w-11" :class="chip(type.color)" :title="t('views.typeSettingsTitle')" @click="settingsOpen = true">
         <AppIcon :icon="type.icon" fallback="ph:cube" :size="22" />
       </button>
       <!-- A phone's top bar already names the page. -->
-      <h1 class="min-w-0 max-md:sr-only md:truncate" :class="pageTitle">{{ type.pluralName }}</h1>
+      <h1 class="min-w-0 max-md:sr-only md:truncate" :class="pageTitle">{{ typePluralName(type) }}</h1>
       <span class="text-ink-faint max-md:hidden" :class="bodyText" data-type-count>{{ visible.length }}</span>
       <span class="flex-1" />
       <ReviewButton v-if="!isPhone" :review="review" :loading="loading" />
-      <button ref="menuAnchor" :class="quietButton" class="max-md:px-3" title="More" aria-label="More" @click="menuOpen = !menuOpen">
+      <button ref="menuAnchor" :class="quietButton" class="max-md:px-3" :title="t('object.more')" :aria-label="t('object.more')" @click="menuOpen = !menuOpen">
         <AppIcon fallback="ph:dots-three" :size="18" />
       </button>
       <!-- A phone has one "+", the floating one (PhoneTabBar): it starts New from this view. Templates stay here. -->
-      <button v-if="isPhone && typeTemplates.length" :class="quietButton" class="max-md:px-3" title="New from a template" aria-label="New from a template" data-new-templates @click="newMenu">
+      <button v-if="isPhone && typeTemplates.length" :class="quietButton" class="max-md:px-3" :title="t('views.newFromTemplateAria')" :aria-label="t('views.newFromTemplateAria')" data-new-templates @click="newMenu">
         <AppIcon fallback="ph:copy-simple" :size="18" />
       </button>
       <div v-else-if="!isPhone" class="flex shrink-0 items-stretch" data-new-split>
-        <button :class="mainButton" class="rounded-r-none" :title="defaultTemplate ? `New ${type.name} from “${defaultTemplate.template!.name}”` : `New ${type.name}`" @click="createNew">
-          <AppIcon fallback="ph:plus" /> <span :class="review.isTask.value ? 'max-lg:hidden' : 'max-sm:hidden'">New {{ type.name }}</span>
+        <button :class="mainButton" class="rounded-r-none" :title="defaultTemplate ? t('views.newTypeFromTemplate', { type: typeName(type), template: defaultTemplate.template!.name }) : t('nav.newOfType', { type: typeName(type) })" @click="createNew">
+          <AppIcon fallback="ph:plus" /> <span :class="review.isTask.value ? 'max-lg:hidden' : 'max-sm:hidden'">{{ t('nav.newOfType', { type: typeName(type) }) }}</span>
         </button>
-        <button :class="mainButton" class="rounded-l-none border-l border-surface/25 !px-1.5" title="Templates" aria-label="New from a template" @click="newMenu">
+        <button :class="mainButton" class="rounded-l-none border-l border-surface/25 !px-1.5" :title="t('views.templates')" :aria-label="t('views.newFromTemplateAria')" @click="newMenu">
           <AppIcon fallback="ph:caret-down" :size="13" />
         </button>
       </div>
     </header>
     <PopoverMenu v-model:open="menuOpen" :anchor="menuAnchor" placement="bottom-end" width="15rem">
-      <MenuRow icon="ph:gear-six" @click="(settingsOpen = true), (menuOpen = false)">Type settings…</MenuRow>
-      <MenuRow icon="ph:sidebar-simple" caret @click="pinFrom($event, props.id)">{{ pinned ? 'In sidebar' : 'Add to sidebar' }}</MenuRow>
+      <MenuRow icon="ph:gear-six" @click="(settingsOpen = true), (menuOpen = false)">{{ t('nav.typeSettings') }}</MenuRow>
+      <MenuRow icon="ph:sidebar-simple" caret @click="pinFrom($event, props.id)">{{ pinned ? t('actions.pinnedInSidebar') : t('actions.pinToSidebar') }}</MenuRow>
       <MenuRow v-if="review.isTask.value && review.reviewable.value" icon="ph:arrows-clockwise" data-workflows data-review-view @click="choose(() => review.choose('view', menuAnchor))">
         Review this view…
         <template #hint>{{ review.chooser.value.viewScope }}</template>
@@ -249,16 +250,16 @@ async function newMenu(event: MouseEvent) {
       </MenuRow>
       <div class="my-1 border-t border-line" />
       <template v-if="!fixedActive">
-        <div class="px-2.5 pb-1 pt-0.5 font-medium uppercase tracking-wide text-ink-faint" :class="metaText">View “{{ view.name }}”</div>
+        <div class="px-2.5 pb-1 pt-0.5 font-medium uppercase tracking-wide text-ink-faint" :class="metaText">{{ t('views.viewHeading', { name: view.name }) }}</div>
         <MenuRow v-if="review.reviewable.value && !review.isTask.value" icon="ph:play" data-review-view @click="choose(() => review.choose('view', menuAnchor))">Review this view…</MenuRow>
-        <MenuRow icon="ph:pencil-simple" @click="choose(views.renameView)">Rename view</MenuRow>
-        <MenuRow icon="ph:copy" @click="choose(views.duplicateView)">Duplicate view</MenuRow>
+        <MenuRow icon="ph:pencil-simple" @click="choose(views.renameView)">{{ t('views.renameView') }}</MenuRow>
+        <MenuRow icon="ph:copy" @click="choose(views.duplicateView)">{{ t('views.duplicateView') }}</MenuRow>
         <MenuRow icon="ph:sidebar-simple" caret @click="pinFrom($event, viewItem(props.id, view.id))">{{ viewPinned ? 'View in sidebar' : 'Add view to sidebar' }}</MenuRow>
-        <MenuRow icon="ph:trash-simple" :disabled="type.views.length <= 1" @click="choose(views.deleteView)">Delete view</MenuRow>
+        <MenuRow icon="ph:trash-simple" :disabled="type.views.length <= 1" @click="choose(views.deleteView)">{{ t('views.deleteView') }}</MenuRow>
       </template>
       <template v-if="!type.system">
         <div class="my-1 border-t border-line" />
-        <MenuRow icon="ph:trash" danger @click="choose(() => deleteTypeFlow(type!))">Delete type…</MenuRow>
+        <MenuRow icon="ph:trash" danger @click="choose(() => deleteTypeFlow(type!))">{{ t('nav.deleteType') }}</MenuRow>
       </template>
     </PopoverMenu>
     <TypeSettings v-if="settingsOpen" :type="type" @close="closeSettings" />
@@ -280,10 +281,10 @@ async function newMenu(event: MouseEvent) {
     </div>
     <WorkflowChooser v-model:open="review.chooserOpen.value" :type="type" v-bind="review.chooser.value" @start="review.start" @resume="review.resume" @end="review.discard" />
 
-    <p v-if="loading" class="py-10 text-ink-faint" :class="bodyText">Loading…</p>
+    <p v-if="loading" class="py-10 text-ink-faint" :class="bodyText">{{ t('common.loading') }}</p>
     <div v-else-if="!objects.length" class="py-16 text-center text-ink-faint" :class="bodyText">
-      No {{ type.pluralName.toLowerCase() }} yet.<template v-if="type.system === 'habit'"> Make one with New {{ type.name }}, then check it off each day from Today.</template
-      ><template v-else> Make one with New {{ type.name }}, or press {{ keysOf('search') }} and type “/{{ type.name }}” and a title.</template>
+      {{ t('views.noItemsYet', { plural: typePluralName(type).toLowerCase() }) }}<template v-if="type.system === 'habit'"> {{ t('views.noHabitsHint', { type: typeName(type) }) }}</template
+      ><template v-else> {{ t('views.noItemsHint', { type: typeName(type), keys: keysOf('search'), rawType: type.name }) }}</template>
       <TipsCard class="mx-auto mt-10 max-w-xl text-left" />
     </div>
 
@@ -291,7 +292,7 @@ async function newMenu(event: MouseEvent) {
     <HabitProgress v-else-if="views.progressActive.value" :type="type" :habits="objects" :filter="filterText" @menu="objectMenu" />
     <TagTree v-else-if="fixedActive && type.system === 'tag'" :tags="objects" :filter="filterText" @menu="objectMenu" />
     <HabitBoard v-else-if="fixedActive && type.system === 'habit'" :type="type" :habits="objects" :filter="filterText" @menu="objectMenu" />
-    <p v-else-if="!visible.length && !toolbar.agendaActive.value" class="py-16 text-center text-ink-faint" :class="bodyText">No {{ type.pluralName.toLowerCase() }} match the filter.</p>
+    <p v-else-if="!visible.length && !toolbar.agendaActive.value" class="py-16 text-center text-ink-faint" :class="bodyText">{{ t('views.noItemsMatch', { plural: typePluralName(type).toLowerCase() }) }}</p>
     <ObjectCollection
       v-else
       class="mt-6 max-md:mt-3"
@@ -301,8 +302,8 @@ async function newMenu(event: MouseEvent) {
       :fold-scope="`type/${id}/view/${view.id}`"
       :type-ids="[id]"
       :table="view.table"
-      :board="view.board"
       :list="view.list"
+      :board="view.board"
       :manual="toolbar.manual.value"
       :agenda="view.agenda"
       :filter="toolbar.viewFilter.value"
@@ -331,6 +332,6 @@ async function newMenu(event: MouseEvent) {
       @open="review.openFrom"
     />
   </div>
-  <p v-else-if="loading" class="py-10 text-center text-ink-faint" :class="bodyText">Loading…</p>
-  <div v-else class="grid h-full place-items-center text-ink-soft" :class="bodyText">Type not found.</div>
+  <p v-else-if="loading" class="py-10 text-center text-ink-faint" :class="bodyText">{{ t('common.loading') }}</p>
+  <div v-else class="grid h-full place-items-center text-ink-soft" :class="bodyText">{{ t('views.typeNotFound') }}</div>
 </template>

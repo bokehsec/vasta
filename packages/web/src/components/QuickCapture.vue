@@ -16,6 +16,7 @@ import { foodCommand, type FilterGroup, type ObjectSummary, type ObjectType, typ
 import { captureAsks, captureSpace, captureText, completionSource, dayKey, openCapture, typesOf } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { greyButton, mainButton } from '../lib/buttons.ts'
+import { t, typeName } from '../lib/i18n.ts'
 import { foodSourcesOf, previewFoodLine } from '../lib/nutrition.ts'
 import { clearDraft, readDraft, usedTypes, withType, writeDraft, writtenText } from '../lib/capture-draft.ts'
 import { isDesktop } from '../lib/platform.ts'
@@ -197,9 +198,13 @@ async function save(open = false) {
       done()
       return
     }
-    const unread = answer.unreadable?.length ? ` Could not read ${answer.unreadable.join('; ')}.` : ''
-    const destination = answer.dailyNoteId ? `today’s note in ${saved.name}` : saved.name
-    notice.value = { message: `${answer.summary || 'Capture saved'} in ${destination}.${unread}` }
+    const destination = answer.dailyNoteId ? t('capture.todayNoteIn', { space: saved.name }) : saved.name
+    const summary = answer.summary || t('capture.savedDefault')
+    notice.value = {
+      message: answer.unreadable?.length
+        ? t('capture.savedInUnread', { summary, destination, errors: answer.unreadable.join('; ') })
+        : t('capture.savedIn', { summary, destination }),
+    }
     done()
   } catch (failure) {
     error.value = failure instanceof Error ? failure.message : String(failure)
@@ -259,7 +264,7 @@ function onKey(event: KeyboardEvent) {
 </script>
 
 <template>
-  <ModalDialog title="Quick capture" width="34rem" @close="close">
+  <ModalDialog :title="t('capture.title')" width="34rem" @close="close">
     <template #icon><AppIcon fallback="ph:lightning" class="text-ink-soft" /></template>
     <template v-if="isPhone && !asks">
       <p class="text-sm text-ink-soft" data-testid="capture-destination">{{ destination }}</p>
@@ -312,7 +317,7 @@ function onKey(event: KeyboardEvent) {
         </div>
         <input v-else v-model="answers[item.label]" class="w-full rounded-xl border border-line bg-raised px-3 py-2 text-sm outline-none focus:border-line-strong" />
       </div>
-      <p v-if="!isTouch" class="text-xs text-ink-faint">Enter saves, Ctrl+Enter saves and opens it, Esc goes back to the text.</p>
+      <p v-if="!isTouch" class="text-xs text-ink-faint">{{ t('capture.questionsHint') }}</p>
     </div>
     <textarea
       v-else
@@ -320,12 +325,12 @@ function onKey(event: KeyboardEvent) {
       v-model="text"
       :rows="isPhone ? 6 : 4"
       class="w-full resize-none rounded-xl border border-line bg-raised px-3 py-2.5 outline-none focus:border-line-strong"
-      placeholder="A thought, a link, a task… or / for an object of a type"
+      :placeholder="t('capture.placeholder')"
       @keydown="onKey"
       @keyup="readCursor"
       @click="readCursor"
     />
-    <div v-if="!asks && shown.length" class="mt-1 max-h-64 overflow-y-auto rounded-xl border border-line bg-surface p-1" role="listbox" aria-label="Suggestions">
+    <div v-if="!asks && shown.length" class="mt-1 max-h-64 overflow-y-auto rounded-xl border border-line bg-surface p-1" role="listbox" :aria-label="t('capture.suggestions')">
       <button
         v-for="(item, i) in shown"
         :key="`${i}-${item.label}`"
@@ -349,33 +354,33 @@ function onKey(event: KeyboardEvent) {
     </div>
     <div v-else-if="typed && preview" class="mt-2 space-y-0.5 text-xs text-ink-faint" data-testid="capture-preview">
       <p>
-        <span class="text-ink-soft">New {{ typed.type.name }}</span>
+        <span class="text-ink-soft">{{ t('nav.newOfType', { type: typeName(typed.type) }) }}</span>
         <template v-if="preview.title"> “{{ preview.title }}”</template>
-        <template v-if="preview.template"> · from {{ preview.template }}</template>
+        <template v-if="preview.template"> · {{ t('palette.fromTemplate', { template: preview.template }) }}</template>
         <template v-if="preview.parts.length"> · {{ preview.parts.join(', ') }}</template>
         <span>, in {{ where }}.</span>
         <span v-if="!isPhone && !isTouch"> Ctrl+Enter saves and opens it.</span>
       </p>
-      <p v-if="preview.errors.length" class="text-amber-700 dark:text-amber-400">Cannot read {{ preview.errors.join('; ') }}; it stays in the title.</p>
-      <p v-else-if="!preview.parts.length && preview.properties.length">name:value sets {{ preview.properties.join(', ') }}.</p>
+      <p v-if="preview.errors.length" class="text-amber-700 dark:text-amber-400">{{ t('capture.cannotReadTitle', { errors: preview.errors.join('; ') }) }}</p>
+      <p v-else-if="!preview.parts.length && preview.properties.length">{{ t('palette.nameValueSets', { properties: preview.properties.join(', ') }) }}.</p>
     </div>
     <p v-else-if="!isPhone" class="mt-2 text-xs text-ink-faint">{{ toDaily ? `Goes to today’s note in ${space?.name}` : ui.captureInbox ? `Goes to the inbox of ${space?.name}` : `Saved as a page in ${space?.name}` }}.<template v-if="!isTouch"> Enter saves, Ctrl+Enter saves and opens it, Shift+Enter adds a line.</template></p>
     <template v-if="isPhone" #footer>
       <div class="flex w-full flex-col gap-1">
         <p v-if="error" class="text-sm text-red-600 dark:text-red-400" role="alert">{{ error }}</p>
         <button class="w-full" :class="mainButton" :disabled="!hasText || saving" @click="save()">
-          {{ saving ? 'Saving…' : 'Save capture' }}
+          {{ saving ? t('object.saving') : 'Save capture' }}
         </button>
         <div class="flex gap-2">
-          <button v-if="asks" class="flex-1" :class="greyButton" @click="backToText">Back</button>
-          <button class="flex-1" :class="greyButton" @click="close">Cancel</button>
+          <button v-if="asks" class="flex-1" :class="greyButton" @click="backToText">{{ t('common.back') }}</button>
+          <button class="flex-1" :class="greyButton" @click="close">{{ t('common.cancel') }}</button>
         </div>
       </div>
     </template>
     <template v-else #footer>
-      <button v-if="asks" :class="greyButton" @click="backToText">Back</button>
-      <button class="ml-auto" :class="greyButton" @click="close">Cancel</button>
-      <button :class="mainButton" :disabled="!text.trim() || saving" @click="save()">Capture</button>
+      <button v-if="asks" :class="greyButton" @click="backToText">{{ t('common.back') }}</button>
+      <button class="ml-auto" :class="greyButton" @click="close">{{ t('common.cancel') }}</button>
+      <button :class="mainButton" :disabled="!text.trim() || saving" @click="save()">{{ t('capture.button') }}</button>
     </template>
   </ModalDialog>
 </template>

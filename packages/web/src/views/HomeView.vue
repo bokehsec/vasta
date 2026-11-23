@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { openToday, todayRoute } from '../lib/actions.ts'
 import { greyButton } from '../lib/buttons.ts'
 import { resolveHome } from '../lib/home.ts'
+import { t } from '../lib/i18n.ts'
 import { lastError, ui, workspace } from '../lib/state.ts'
 import { bodyText, pageTitle } from '../lib/type-scale.ts'
 import AppIcon from '../components/AppIcon.vue'
@@ -38,10 +39,10 @@ onMounted(async () => {
     <h1 :class="pageTitle">{{ workspace.space?.name }}</h1>
     <div class="mt-6 flex justify-center gap-2" :class="bodyText">
       <button :class="greyButton" @click="openToday">
-        <AppIcon fallback="ph:calendar-check" /> Today
+        <AppIcon fallback="ph:calendar-check" /> {{ t('common.today') }}
       </button>
       <button :class="greyButton" @click="ui.paletteOpen = true">
-        <AppIcon fallback="ph:magnifying-glass" /> Search
+        <AppIcon fallback="ph:magnifying-glass" /> {{ t('common.search') }}
       </button>
     </div>
   </div>

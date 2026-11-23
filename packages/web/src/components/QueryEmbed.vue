@@ -9,6 +9,7 @@ import type { Id, QueryDef } from '@vasta/core'
 import { api } from '../lib/api.ts'
 import { displayTitle } from '../lib/format.ts'
 import { greyButton } from '../lib/buttons.ts'
+import { t } from '../lib/i18n.ts'
 import { openObject } from '../lib/open.ts'
 import { primeFromObject, summaryOf, typesById } from '../lib/state.ts'
 import { bodyText, metaText } from '../lib/type-scale.ts'
@@ -82,7 +83,7 @@ onBeforeUnmount(() => {
         :class="[metaText, editing ? 'bg-hover text-ink' : 'text-ink-faint opacity-0 hover:bg-hover hover:text-ink focus-visible:opacity-100 group-hover/query:opacity-100 [@media(hover:none)]:opacity-100']"
         @click="editing = !editing"
       >
-        <AppIcon fallback="ph:sliders-horizontal" :size="13" /> {{ editing ? 'Done' : 'Edit query' }}
+        <AppIcon fallback="ph:sliders-horizontal" :size="13" /> {{ editing ? t('query.done') : t('query.editQuery') }}
       </button>
     </header>
     <div v-if="editing && !(compact && readonly)" class="mb-2 rounded-xl border border-line bg-surface px-3 py-3">

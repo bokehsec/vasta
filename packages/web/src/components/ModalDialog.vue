@@ -4,6 +4,7 @@
 // are always in sight.
 import { onBeforeUnmount, onMounted } from 'vue'
 import { closesOnBack } from '../lib/back.ts'
+import { t } from '../lib/i18n.ts'
 import { isPhone, keyboardInset } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 
@@ -37,7 +38,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <header class="flex items-center gap-2 border-b border-line px-4 py-3.5 md:px-5">
           <slot name="icon" />
           <h2 class="font-semibold">{{ title }}</h2>
-          <button class="ml-auto rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink max-md:p-3" title="Close" aria-label="Close" @click="emit('close')">
+          <button class="ml-auto rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink max-md:p-3" :title="t('common.close')" :aria-label="t('common.close')" @click="emit('close')">
             <AppIcon fallback="ph:x" />
           </button>
         </header>

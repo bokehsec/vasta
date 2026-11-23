@@ -5,6 +5,7 @@
 // takes seconds; sorting, grouping and filters still see them all.
 import type { Directive } from 'vue'
 import { quietButton } from '../lib/buttons.ts'
+import { locale, t } from '../lib/i18n.ts'
 
 defineProps<{ shown: number; total: number; auto?: boolean }>()
 const emit = defineEmits<{ more: [] }>()
@@ -22,6 +23,6 @@ const vNear: Directive<HTMLElement & { near?: IntersectionObserver }, () => void
 
 <template>
   <button type="button" v-near="() => { if (auto) emit('more') }" :class="[quietButton, 'mt-2 w-full']" @click="emit('more')">
-    {{ shown.toLocaleString() }} of {{ total.toLocaleString() }} · Show more
+    {{ t('views.showMoreCount', { shown: shown.toLocaleString(locale), total: total.toLocaleString(locale) }) }}
   </button>
 </template>

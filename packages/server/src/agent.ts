@@ -44,6 +44,8 @@ import {
   habitWeeklyTarget,
   isHabitDone,
   newObject,
+  newType,
+  normalizeTypeRules,
   parseProperties,
   querySpace,
   AmountError,
@@ -242,6 +244,33 @@ export interface AgentOptions {
   insistent?: InsistentReminders
 }
 
+export const AGENT_PROPERTY_KINDS = ['text', 'rich-text', 'number', 'checkbox', 'url', 'date', 'select', 'person', 'relation'] as const
+
+/** A property described in words (create_type, update_type). */
+export interface AgentPropertyInput {
+  name: string
+  kind: (typeof AGENT_PROPERTY_KINDS)[number]
+  description?: string
+  required?: boolean
+  /** A select's options, by label. */
+  options?: string[]
+  multiple?: boolean
+  /** A relation's target types, by name (any type when empty). */
+  to?: string[]
+  /** A date with a time of day. */
+  withTime?: boolean
+}
+
+export interface AgentTypeInput {
+  plural?: string
+  description?: string | null
+  icon?: string | null
+  color?: string | null
+  rules?: { cover?: boolean; tags?: boolean }
+  /** Properties to add. */
+  properties?: AgentPropertyInput[]
+}
+
 /** What an agent sends for a reminder's content: a tag by title or path, a saved query by title or id. */
 export type AgentReminderContent =
   | { kind: 'target' }
@@ -267,6 +296,8 @@ export interface AgentReminderInput {
   climbAfter?: number | null
   escapeAfter?: number
   paused?: boolean
+  /** For `tasks`, `tag` and `query`: skip when nothing matches at start time (defaults to true for `tasks`). */
+  skipIfEmpty?: boolean
   /** An object to open once it is answered; null: none (the default, the app stays out of the way). */
   openAfter?: Id | null
 }
@@ -431,6 +462,100 @@ export class AgentTools {
         objects: counts[t.id] ?? 0,
         properties: t.properties.map((p) => describeProperty(p, typeNames, t, all)),
       }))
+  }
+
+  // Types --------------------------------------------------------------------------------
+
+  /** A property an agent describes in words, as the type keeps it. */
+  private propertyDef(spaceId: Id, input: AgentPropertyInput): PropertyDef {
+    const name = input.name?.trim()
+    if (!name) throw new AgentError('a property needs a name')
+    const base = { id: randomUUID(), name, ...(input.description?.trim() ? { description: input.description.trim() } : {}), ...(input.required ? { required: true } : {}) }
+    switch (input.kind) {
+      case 'text':
+      case 'rich-text':
+      case 'checkbox':
+      case 'url':
+        return { ...base, kind: input.kind }
+      case 'number':
+        return { ...base, kind: 'number' }
+      case 'date':
+        return { ...base, kind: 'date', ...(input.withTime ? { withTime: true } : {}) }
+      case 'select': {
+        const labels = [...new Set((input.options ?? []).map((o) => o.trim()).filter(Boolean))]
+        return { ...base, kind: 'select', multiple: !!input.multiple, options: labels.map((label) => ({ id: randomUUID(), label })) }
+      }
+      case 'person':
+        return { ...base, kind: 'person', multiple: !!input.multiple }
+      case 'relation': {
+        const targetTypeIds = (input.to ?? []).map((t) => this.type(spaceId, t).id)
+        return { ...base, kind: 'relation', multiple: !!input.multiple, targetTypeIds }
+      }
+      default:
+        throw new AgentError(`property kinds: ${AGENT_PROPERTY_KINDS.join(', ')}`)
+    }
+  }
+
+  private typeView(type: ObjectType) {
+    return this.types(type.spaceId).find((t) => t.id === type.id)!
+  }
+
+  /** A new type in a space: its name, a description of how its objects are written, properties and rules. */
+  createType(input: AgentTypeInput & { name: string; space?: string }) {
+    const space = this.space(input.space, true)
+    const name = input.name?.trim()
+    if (!name) throw new AgentError('a type needs a name')
+    if (this.store.listTypes(space.id).some((t) => !t.deletedAt && fold(t.name) === fold(name))) throw new AgentError(`the space already has a type "${name}"`)
+    const at = this.options.now()
+    const type: ObjectType = newType(space.id, { name, ...(input.plural ? { pluralName: input.plural } : {}) }, randomUUID(), at)
+    this.applyType(type, input)
+    this.store.putType(type)
+    this.options.feed.emit({ kind: 'type', id: type.id, spaceId: type.spaceId })
+    return this.typeView(type)
+  }
+
+  /** Change a type: its name, description, icon, color and rules, and new properties (none are removed here). */
+  updateType(input: AgentTypeInput & { type: string; space?: string; name?: string }) {
+    const space = this.space(input.space, true)
+    const current = this.type(space.id, input.type)
+    const type: ObjectType = structuredClone(current)
+    if (input.name !== undefined) {
+      const name = input.name.trim()
+      if (!name) throw new AgentError('a type needs a name')
+      if (this.store.listTypes(space.id).some((t) => t.id !== type.id && !t.deletedAt && fold(t.name) === fold(name))) throw new AgentError(`the space already has a type "${name}"`)
+      type.name = name
+    }
+    this.applyType(type, input)
+    type.updatedAt = this.options.now()
+    this.store.putType(type)
+    this.options.feed.emit({ kind: 'type', id: type.id, spaceId: type.spaceId })
+    return this.typeView(type)
+  }
+
+  private applyType(type: ObjectType, input: AgentTypeInput) {
+    if (input.plural !== undefined) type.pluralName = input.plural.trim() || type.name
+    if (input.description !== undefined) {
+      const text = input.description?.trim()
+      if (text) type.description = text
+      else delete type.description
+    }
+    if (input.icon !== undefined) {
+      if (input.icon === null) delete type.icon
+      else type.icon = this.icon(input.icon)
+    }
+    if (input.color !== undefined) {
+      if (input.color === null) delete type.color
+      else type.color = this.color(input.color)
+    }
+    if (input.rules !== undefined) {
+      const rules = normalizeTypeRules({ ...type.rules, ...input.rules })
+      if (rules) type.rules = rules
+      else delete type.rules
+    }
+    for (const property of input.properties ?? []) {
+      if (type.properties.some((p) => fold(p.name) === fold(property.name ?? ''))) throw new AgentError(`${type.name} already has a property "${property.name}"`)
+      type.properties.push(this.propertyDef(type.spaceId, property))
+    }
   }
 
   /** What every object of a type must have besides its required properties (marked on them), if anything. */
@@ -1502,6 +1627,7 @@ export class AgentTools {
       climbAfter: rule.climbAfter,
       escapeAfter: rule.escapeAfter,
       ...(rule.openAfter && this.visibleId(rule.openAfter) ? { openAfter: { id: rule.openAfter, title: this.titleOf(rule.openAfter) ?? '' } } : {}),
+      ...(rule.skipIfEmpty !== undefined ? { skipIfEmpty: rule.skipIfEmpty } : {}),
       ...(rule.paused ? { paused: true } : {}),
       stats: this.insistent.stats(this.options.user, rule.id),
     }
@@ -1565,6 +1691,7 @@ export class AgentTools {
     if (input.climbAfter !== undefined) changes.climbAfter = input.climbAfter
     if (input.escapeAfter !== undefined) changes.escapeAfter = input.escapeAfter
     if (input.paused !== undefined) changes.paused = input.paused
+    if (input.skipIfEmpty !== undefined) changes.skipIfEmpty = input.skipIfEmpty
     if (input.openAfter !== undefined) changes.openAfter = input.openAfter === null ? null : this.object(input.openAfter).id
     try {
       const rule = current ? this.insistent.update(user, current.id, changes) : this.insistent.create(user, { ...changes, spaceId, ...(object ? { objectId: object.id } : {}) })

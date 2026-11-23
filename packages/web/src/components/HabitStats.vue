@@ -9,6 +9,7 @@ import { dayKey } from '../lib/actions.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { askHabitAmount, formatAmount, habitAmountLabel, habitColor, habitStateWord, setHabitAmount, stepHabit, useFoodHabits } from '../lib/habits.ts'
 import { percentText } from '../lib/habit-progress.ts'
+import { locale, t } from '../lib/i18n.ts'
 import { bodyText, metaText, tinyText } from '../lib/type-scale.ts'
 import AppIcon from './AppIcon.vue'
 import HabitCheck from './HabitCheck.vue'
@@ -28,9 +29,8 @@ const color = computed(() => habitColor(habit.value))
 const target = computed(() => habitTarget(habit.value))
 const unit = computed(() => habitUnit(habit.value))
 
-const locale = typeof navigator !== 'undefined' ? navigator.language : 'en'
-const monthName = new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' })
-const longDay = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+const monthName = computed(() => new Intl.DateTimeFormat(locale.value, { month: 'short', timeZone: 'UTC' }))
+const longDay = computed(() => new Intl.DateTimeFormat(locale.value, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }))
 const utc = (day: string) => new Date(`${day}T00:00:00.000Z`)
 
 // As many weeks as the width allows: 11px squares, 3px apart, a year at most.
@@ -60,7 +60,7 @@ const monthLabels = computed(() => {
     const first = week.find((d) => d.endsWith('-01'))
     if (!first) return
     if (labels.length && column - labels.at(-1)!.column < 3) return
-    labels.push({ column, text: monthName.format(utc(first)) })
+    labels.push({ column, text: monthName.value.format(utc(first)) })
   })
   return labels
 })
@@ -90,21 +90,21 @@ const details = computed(() => {
   const day = hovered.value?.day
   if (!day) return null
   const state = stateOf(day)
-  const status = state === 'later' ? (day === today ? 'Not done yet' : 'Not needed yet') : habitStateWord(state, habitProgress(habit.value, day))
-  return { date: longDay.format(utc(day)), status, amount: target.value ? habitAmountLabel(habit.value, day) : '', done: isHabitDone(habit.value, day) }
+  const status = state === 'later' ? (day === today ? t('habits.status.notDoneYet') : 'Not needed yet') : habitStateWord(state, habitProgress(habit.value, day))
+  return { date: longDay.value.format(utc(day)), status, amount: target.value ? habitAmountLabel(habit.value, day) : '', done: isHabitDone(habit.value, day) }
 })
 
 /** A streak, in weeks for a habit counted by the week. */
 const streak = (count: number) => (stats.value.streakUnit === 'week' ? `${count} wk` : count)
 
 const cards = computed(() => [
-  { label: 'Current streak', value: streak(stats.value.current), icon: 'ph:fire', tint: 'text-orange-500' },
-  { label: 'Best streak', value: streak(stats.value.best), icon: 'ph:trophy', tint: 'text-amber-500' },
+  { label: t('habits.card.currentStreak'), value: streak(stats.value.current), icon: 'ph:fire', tint: 'text-orange-500' },
+  { label: t('habits.card.bestStreak'), value: streak(stats.value.best), icon: 'ph:trophy', tint: 'text-amber-500' },
   { label: 'This week so far', value: `${stats.value.thisWeek.done} of ${stats.value.thisWeek.of}`, icon: 'ph:calendar-check', tint: 'text-sky-500' },
   { label: 'Last 4 weeks', value: percentText(stats.value.last4Weeks), icon: 'ph:chart-line-up', tint: 'text-emerald-500' },
   target.value
-    ? { label: 'Average a day', value: `${formatAmount(stats.value.average30)}${unit.value ? ` ${unit.value}` : ''}`, icon: 'ph:gauge', tint: 'text-violet-500' }
-    : { label: 'Times done', value: stats.value.total, icon: 'ph:check-circle', tint: 'text-violet-500' },
+    ? { label: t('habits.card.averageDay'), value: `${formatAmount(stats.value.average30)}${unit.value ? ` ${unit.value}` : ''}`, icon: 'ph:gauge', tint: 'text-violet-500' }
+    : { label: t('habits.card.timesDone'), value: stats.value.total, icon: 'ph:check-circle', tint: 'text-violet-500' },
 ])
 const doneToday = computed(() => isHabitDone(habit.value, today))
 </script>
@@ -116,24 +116,24 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
       <div class="flex items-center gap-2.5 rounded-xl border border-line py-1.5 pl-2 pr-3">
         <HabitCheck :habit="habit" :day="today" :size="26" />
         <div :class="bodyText">
-          <div class="font-medium">{{ doneToday ? 'Done today' : 'Today' }}</div>
+          <div class="font-medium">{{ doneToday ? t('habits.doneToday') : t('common.today') }}</div>
           <div v-if="target" class="tabular-nums text-ink-faint" :class="metaText">{{ habitAmountLabel(habit, today) }}</div>
         </div>
         <div v-if="target && !fromFood && !fromSparky" class="ml-2 flex items-center gap-1">
-          <button class="grid h-7 w-7 place-items-center rounded-md ring-1 ring-line hover:bg-hover" title="Take 1 away" @click="setHabitAmount(habit.id, today, Math.max(0, habitValue(habit, today) - 1), habit)">
+          <button class="grid h-7 w-7 place-items-center rounded-md ring-1 ring-line hover:bg-hover" :title="t('habits.takeOneAway')" @click="setHabitAmount(habit.id, today, Math.max(0, habitValue(habit, today) - 1), habit)">
             <AppIcon fallback="ph:minus" :size="13" />
           </button>
-          <button class="grid h-7 w-7 place-items-center rounded-md ring-1 ring-line hover:bg-hover" title="Add 1" @click="setHabitAmount(habit.id, today, habitValue(habit, today) + 1, habit)">
+          <button class="grid h-7 w-7 place-items-center rounded-md ring-1 ring-line hover:bg-hover" :title="t('habits.addOne')" @click="setHabitAmount(habit.id, today, habitValue(habit, today) + 1, habit)">
             <AppIcon fallback="ph:plus" :size="13" />
           </button>
         </div>
       </div>
       <span v-if="todayState === 'paused'" class="text-ink-faint" :class="metaText">Paused today.</span>
       <span v-else-if="todayState === 'off' && stats.weekly" class="text-ink-faint" :class="metaText">This week’s goal is met.</span>
-      <span v-else-if="todayState === 'off'" class="text-ink-faint" :class="metaText">Today is a day off for this habit.</span>
+      <span v-else-if="todayState === 'off'" class="text-ink-faint" :class="metaText">{{ t('habits.todayDayOff') }}</span>
       <span v-else-if="stats.weekly" class="text-ink-faint" :class="metaText">{{ stats.weekly }} a week, on any days.</span>
       <span v-if="fromSparky" class="text-ink-faint" :class="metaText" data-habit-from-sparkyfitness>From SparkyFitness · a hand entry takes priority</span>
-      <span v-if="fromFood" class="flex items-center gap-1 text-ink-faint" :class="metaText" data-habit-from-food><AppIcon fallback="ph:bowl-food" :size="13" /> Done from what you log in Food</span>
+      <span v-if="fromFood" class="flex items-center gap-1 text-ink-faint" :class="metaText" data-habit-from-food><AppIcon fallback="ph:bowl-food" :size="13" /> {{ t('habits.doneFromFood') }}</span>
     </div>
 
     <HabitPauses :habit="props.habit" />
