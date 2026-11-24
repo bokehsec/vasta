@@ -6,6 +6,14 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Boards grouped by a date: drag cards between columns.** Dropping a card in Today or Tomorrow
+  gives it that day; This week gives it the day after tomorrow, Next week and Later the first
+  working day of that week (Monday, where weeks start on Sunday); No date clears it. A time of
+  day, a range's end and a repeat are kept. Earlier takes no drops, and a This week with no day
+  left takes none either. **+ New** in a date column or swimlane starts the card on that day.
+
 ## 0.14.0 (2026-11-24)
 
 ### Added

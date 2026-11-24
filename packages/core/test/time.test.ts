@@ -1,5 +1,47 @@
 import { describe, expect, it } from 'vitest'
-import { dayBucket } from '../src/index.ts'
+import { bucketDay, dayBucket } from '../src/index.ts'
+
+describe('the day of a bucket', () => {
+  // Wednesday 11 Nov 2026; weeks start on Sunday the 8th or Monday the 9th.
+  const day = (bucket: Parameters<typeof bucketDay>[0], weekStart: string, today = '2026-11-11', weekend?: number[]) => bucketDay(bucket, today, weekStart, weekend)
+
+  it('is today, tomorrow, the first day left in the week, then the first working day of the next weeks', () => {
+    expect(day('today', '2026-11-08')).toBe('2026-11-11')
+    expect(day('tomorrow', '2026-11-08')).toBe('2026-11-12')
+    expect(day('this-week', '2026-11-08')).toBe('2026-11-13')
+    expect(day('next-week', '2026-11-08')).toBe('2026-11-16')
+    expect(day('later', '2026-11-08')).toBe('2026-11-23')
+  })
+
+  it('follows the week start', () => {
+    expect(day('next-week', '2026-11-09')).toBe('2026-11-16')
+    expect(day('later', '2026-11-09')).toBe('2026-11-23')
+    expect(day('this-week', '2026-11-09')).toBe('2026-11-13')
+  })
+
+  it('skips the locale\'s weekend, whichever days it is', () => {
+    // Friday and Saturday off, Sunday-start weeks: Sunday is a working day.
+    expect(day('next-week', '2026-11-08', '2026-11-11', [5, 6])).toBe('2026-11-15')
+    // Friday and Saturday off, Monday-start weeks.
+    expect(day('later', '2026-11-09', '2026-11-11', [5, 6])).toBe('2026-11-23')
+    // Everything off: the start of the week.
+    expect(day('next-week', '2026-11-08', '2026-11-11', [0, 1, 2, 3, 4, 5, 6])).toBe('2026-11-15')
+  })
+
+  it('has no this-week day when the week runs out', () => {
+    // Saturday 14th: Sunday-start weeks end today; Monday-start weeks end on Sunday 15th.
+    expect(day('this-week', '2026-11-08', '2026-11-14')).toBeUndefined()
+    expect(day('this-week', '2026-11-09', '2026-11-14')).toBeUndefined()
+    // Friday 13th, Sunday-start: the day after tomorrow is already next week.
+    expect(day('this-week', '2026-11-08', '2026-11-13')).toBeUndefined()
+    // Thursday 12th, Sunday-start: Saturday is the one day left.
+    expect(day('this-week', '2026-11-08', '2026-11-12')).toBe('2026-11-14')
+  })
+
+  it('has none for Earlier', () => {
+    expect(day('past', '2026-11-08')).toBeUndefined()
+  })
+})
 
 describe('day buckets', () => {
   it('places dates in a Sunday-start week', () => {

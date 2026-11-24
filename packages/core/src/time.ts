@@ -44,6 +44,28 @@ export function dayBucket(day: string, today: string, weekStart: string): DayBuc
   return week === 0 ? 'this-week' : week === 1 ? 'next-week' : 'later'
 }
 
+/**
+ * The day a card dropped in a bucket's group gets: today, tomorrow, the first day after tomorrow
+ * still in this week (none when the week has run out), or the first working day of next week or
+ * the week after (a weekend at the start of a week is skipped). Earlier is not a day to choose.
+ * `weekend`: weekdays off, 0 = Sunday.
+ */
+export function bucketDay(bucket: DayBucket, today: string, weekStart: string, weekend: number[] = [0, 6]): string | undefined {
+  if (bucket === 'today') return today
+  if (bucket === 'tomorrow') return addDays(today, 1)
+  if (bucket === 'this-week') {
+    const day = addDays(today, 2)
+    return daysBetween(weekStart, day) < 7 ? day : undefined
+  }
+  if (bucket !== 'next-week' && bucket !== 'later') return undefined
+  const start = addDays(weekStart, bucket === 'next-week' ? 7 : 14)
+  for (let offset = 0; offset < 7; offset++) {
+    const day = addDays(start, offset)
+    if (!weekend.includes(new Date(`${day}T00:00:00.000Z`).getUTCDay())) return day
+  }
+  return start
+}
+
 export function isValidDay(day: string): boolean {
   if (!DAY_PATTERN.test(day)) return false
   const date = new Date(`${day}T00:00:00.000Z`)

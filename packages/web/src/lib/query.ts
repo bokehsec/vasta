@@ -1,10 +1,10 @@
 // Query helpers for the UI: field menus, operator labels, grouping, and moving an object between
 // groups (kanban drops). Filtering and sorting themselves live in @vasta/core (query.ts).
 import type { FilterOperator, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, QueryDef } from '@vasta/core'
-import { DAY_BUCKETS, dayBucket, dayIn, fieldKind, type DayBucket, type FieldKind, type QueryContext } from '@vasta/core'
+import { DAY_BUCKETS, bucketDay, dayBucket, dayIn, fieldKind, type DayBucket, type FieldKind, type QueryContext } from '@vasta/core'
 import { api } from './api.ts'
 import { dayKey } from './actions.ts'
-import { startOfWeek } from './calendar.ts'
+import { moveDate, startOfWeek, weekendFor } from './calendar.ts'
 import { optionLabel, propName, t, typeName, typePluralName } from './i18n.ts'
 import { meId, personName, sharedSpace } from './people.ts'
 import { current as currentSprint } from './sprints.ts'
@@ -211,13 +211,21 @@ export function groupOptions(typeIds: Id[]): FieldOption[] {
   return fieldOptions(typeIds).filter((f) => ['tags', 'type', 'createdBy', 'updatedBy'].includes(f.field) || f.def?.kind === 'select' || f.def?.kind === 'relation' || f.def?.kind === 'person' || f.def?.kind === 'date')
 }
 
-/** Whether objects can be moved between the groups of `field` (not a recorded value or a date's place in time). */
-export const movableField = (field: string, types: ObjectType[] = []) =>
-  !!field && field !== 'type' && field !== 'createdBy' && field !== 'updatedBy' && !isDateField(field, types)
+/** Whether objects can be moved between the groups of `field` (not a recorded value). */
+export const movableField = (field: string) => !!field && field !== 'type' && field !== 'createdBy' && field !== 'updatedBy'
+
+/** The day a group of a date field stands for: null for No date, undefined when no day does (Earlier, a week with no day left). */
+export function dropDay(key: string, today = dayKey()): string | null | undefined {
+  if (key === NO_VALUE) return null
+  return DAY_BUCKETS.includes(key as DayBucket) ? bucketDay(key as DayBucket, today, startOfWeek(today), weekendFor()) : undefined
+}
+
+/** Whether a card can be dropped in (or a new one added to) this group of `field`. */
+export const acceptsGroup = (field: string, group: Group, types: ObjectType[]) => movableField(field) && (!isDateField(field, types) || dropDay(group.key) !== undefined)
 
 /**
  * Give `object` the value of a group of `field` (a board column or lane): a tag among the groups'
- * tags, or the select, relation or person value. Whether it could.
+ * tags, or the select, relation or person value, or the day a date group stands for. Whether it could.
  */
 export function placeInGroup(object: Pick<ObjectRecord, 'typeId' | 'props' | 'tagIds'>, field: string, group: Group, groups: Group[]): boolean {
   if (!movableField(field)) return false
@@ -227,6 +235,14 @@ export function placeInGroup(object: Pick<ObjectRecord, 'typeId' | 'props' | 'ta
     return true
   }
   const def = typesById.value.get(object.typeId)?.properties.find((p) => p.id === field)
+  if (def?.kind === 'date') {
+    const day = dropDay(group.key)
+    if (day === undefined) return false
+    const value = object.props[field]
+    if (day === null) delete object.props[field]
+    else object.props[field] = { kind: 'date', value: value?.kind === 'date' ? moveDate(value.value, { day }) : { start: `${day}T00:00:00.000Z`, resolution: 'day' } }
+    return true
+  }
   if (!def || (def.kind !== 'select' && def.kind !== 'relation' && def.kind !== 'person')) return false
   if (group.key === NO_VALUE) delete object.props[field]
   else object.props[field] = { kind: def.kind, value: [group.key] }
