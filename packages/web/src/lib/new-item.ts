@@ -8,7 +8,7 @@
 import { inject, onScopeDispose, provide, shallowRef, type InjectionKey } from 'vue'
 import { newItemValues, type Filter, type FilterGroup, type Id, type NewItemValues, type ObjectRecord, type ObjectType } from '@vasta/core'
 import { dayKey, isTodayRoute } from './actions.ts'
-import { NO_VALUE, queryContext, type Group } from './query.ts'
+import { dropDay, isDateField, NO_VALUE, queryContext, type Group } from './query.ts'
 import { typesById } from './state.ts'
 import { createFromTemplate, currentTemplates, templatesOf } from './templates.ts'
 import { router } from '../router.ts'
@@ -54,7 +54,7 @@ export function newValues(type: ObjectType, groups: NewGroup[] = [], place?: New
     query: queryContext(),
     ...(place ? { filter: place.filter(), mine: place.mine() } : {}),
     ...(isTodayRoute(router.currentRoute.value) ? { day: dayKey() } : {}),
-    groups: groups.map(({ field, group }) => ({ field, value: group.key === NO_VALUE ? null : group.key })),
+    groups: groups.map(({ field, group }) => ({ field, value: isDateField(field, [type]) ? (dropDay(group.key) ?? null) : group.key === NO_VALUE ? null : group.key })),
   })
 }
 

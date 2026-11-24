@@ -8,6 +8,11 @@ GitHub release page.
 
 ### Added
 
+- **Boards grouped by a date: drag cards between columns.** Dropping a card in Today or Tomorrow
+  gives it that day; This week gives it the first day after tomorrow, Next week and Later the
+  first day of that week; No date clears it. A time of day, a range's end and a repeat are kept.
+  Earlier (Overdue) takes no drops. **+ New** in a date column, swimlane or list/table group
+  starts the item on that group's day.
 - **Review tasks: Today in one press.** Every task in a review has a **Today** button (key `T`)
   beside Defer…, Done and Drop: it sets the Do date to today and goes on to the next task. A new
   task also moves to your first open status (Next); a task that already has a status keeps it.

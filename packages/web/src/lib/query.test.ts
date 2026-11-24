@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createBuiltinTypes, type DateValue, type ObjectSummary, type ObjectType } from '@vasta/core'
 import { api } from './api.ts'
-import { groupObjects, groupOptions, movableField, moveToGroup, NO_VALUE, placeInGroup } from './query.ts'
+import { addDays } from '@vasta/core'
+import { startOfWeek } from './calendar.ts'
+import { acceptsGroup, dropDay, groupObjects, groupOptions, movableField, moveToGroup, NO_VALUE, placeInGroup } from './query.ts'
 import { typesById, workspace } from './state.ts'
 
 vi.mock('./api.ts', () => ({ api: { object: vi.fn(), saveObject: vi.fn() } }))
@@ -73,7 +75,7 @@ describe('group by a date', () => {
   it('finds a date field even when another type defines the same id first', () => {
     const other: ObjectType = { ...task, id: 'other', properties: [{ id: 'due', name: 'Due', kind: 'text' }] }
     expect(groupObjects([obj('today', day('2026-11-11'))], 'due', [other, task])[0]?.key).toBe('today')
-    expect(movableField('due', [other, task])).toBe(false)
+    expect(acceptsGroup('due', groupObjects([], 'due', [other, task], true)[1]!, [other, task])).toBe(true)
   })
 
   it('offers date properties, but not recorded dates or formulas', () => {
@@ -86,29 +88,72 @@ describe('group by a date', () => {
 })
 
 describe('moving between groups', () => {
-  it('allows selects, but not dates in either axis of a board', () => {
-    expect(movableField('due', types)).toBe(false)
-    expect(movableField('status', types)).toBe(true)
+  const dateGroups = () => groupObjects([], 'due', types, true)
+  const groupOf = (key: string) => dateGroups().find((g) => g.key === key)!
+  const week = startOfWeek('2026-11-11')
+
+  it('allows selects and dates, but not what is recorded', () => {
+    expect(movableField('due')).toBe(true)
+    expect(movableField('status')).toBe(true)
+    for (const field of ['type', 'createdBy', 'updatedBy', '']) expect(movableField(field)).toBe(false)
   })
 
-  it('never puts a bucket key into a date, even without types in the workspace', () => {
-    const object = obj('today', day('2026-11-11'))
-    const before = structuredClone(object)
-    const groups = groupObjects([object], 'due', types, true)
-    workspace.types = []
-    expect(placeInGroup(object, 'due', groups[2]!, groups)).toBe(false)
-    expect(placeInGroup(object, 'due', groups[6]!, groups)).toBe(false)
-    expect(object).toEqual(before)
+  it('finds the day of a date group, none for Earlier and clearing for No date', () => {
+    expect(dropDay('today')).toBe('2026-11-11')
+    expect(dropDay('tomorrow')).toBe('2026-11-12')
+    expect(dropDay('next-week')).toBe(addDays(week, 7))
+    expect(dropDay('later')).toBe(addDays(week, 14))
+    expect(dropDay('past')).toBeUndefined()
+    expect(dropDay(NO_VALUE)).toBeNull()
+    expect(dropDay('some-select-option')).toBeUndefined()
   })
 
-  it('refuses to save a date move', async () => {
+  it('has no day in This week once the week has run out (a Saturday, whichever day the week starts; Sunday-start weeks are in core)', () => {
+    expect(dropDay('this-week', '2026-11-14')).toBeUndefined()
+    expect(dropDay('this-week', '2026-11-11')).toBe('2026-11-13')
+  })
+
+  it('accepts a date group only when it has a day, a select group always', () => {
+    expect(acceptsGroup('due', groupOf('today'), types)).toBe(true)
+    expect(acceptsGroup('due', groupOf(NO_VALUE), types)).toBe(true)
+    expect(acceptsGroup('due', groupOf('past'), types)).toBe(false)
+    expect(acceptsGroup('status', groupObjects([], 'status', types, true)[0]!, types)).toBe(true)
+    expect(acceptsGroup('type', groupOf('today'), types)).toBe(false)
+  })
+
+  it('gives a card without a date the group’s day, at day resolution', () => {
+    const object = obj('none')
+    expect(placeInGroup(object, 'due', groupOf('tomorrow'), dateGroups())).toBe(true)
+    expect(object.props.due).toEqual({ kind: 'date', value: day('2026-11-12') })
+  })
+
+  it('moves a day date, shifting a range’s end along and keeping a repeat', () => {
+    const object = obj('range', { ...day('2026-11-09'), end: '2026-11-10T00:00:00.000Z', rrule: 'FREQ=WEEKLY' })
+    expect(placeInGroup(object, 'due', groupOf('today'), dateGroups())).toBe(true)
+    expect(object.props.due).toEqual({ kind: 'date', value: { ...day('2026-11-11'), end: '2026-11-12T00:00:00.000Z', rrule: 'FREQ=WEEKLY' } })
+  })
+
+  it('keeps the local time of a timed date and its length', () => {
+    // 9:00 to 10:30 in Toronto on Nov 9.
+    const object = obj('timed', { start: '2026-11-09T14:00:00.000Z', end: '2026-11-09T15:30:00.000Z', resolution: 'time' })
+    expect(placeInGroup(object, 'due', groupOf('tomorrow'), dateGroups())).toBe(true)
+    expect(object.props.due).toEqual({ kind: 'date', value: { start: '2026-11-12T14:00:00.000Z', end: '2026-11-12T15:30:00.000Z', resolution: 'time' } })
+  })
+
+  it('clears the date for No date', () => {
+    const object = obj('dated', day('2026-11-11'))
+    expect(placeInGroup(object, 'due', groupOf(NO_VALUE), dateGroups())).toBe(true)
+    expect(object.props.due).toBeUndefined()
+  })
+
+  it('refuses Earlier and changes nothing', async () => {
     const object = { ...obj('today', day('2026-11-11')), content: {} }
     const before = structuredClone(object)
-    vi.mocked(api.object).mockResolvedValue(object)
-    const groups = groupObjects([], 'due', types, true)
-    expect(await moveToGroup('today', 'due', groups[1]!, groups)).toBeUndefined()
-    expect(api.saveObject).not.toHaveBeenCalled()
+    expect(placeInGroup(object, 'due', groupOf('past'), dateGroups())).toBe(false)
     expect(object).toEqual(before)
+    vi.mocked(api.object).mockResolvedValue(object)
+    expect(await moveToGroup('today', 'due', groupOf('past'), dateGroups())).toBeUndefined()
+    expect(api.saveObject).not.toHaveBeenCalled()
   })
 
   it('still places an object in a select group', () => {
@@ -119,12 +164,10 @@ describe('moving between groups', () => {
     expect(object.props.status).toEqual({ kind: 'select', value: ['done'] })
   })
 
-  it('does not block a select because an unrelated type uses the same id for a date', () => {
+  it('does not take a select for a date because an unrelated type uses the same id for one', () => {
     const other: ObjectType = { ...task, id: 'other', properties: [{ id: 'status', name: 'Status', kind: 'date' }] }
     workspace.types = [other, task]
     typesById.value.set(other.id, other)
-    expect(movableField('status', [task])).toBe(true)
-    expect(movableField('status', [other, task])).toBe(false)
     const object = obj('task')
     const groups = groupObjects([], 'status', [task], true)
     expect(placeInGroup(object, 'status', groups.find((g) => g.key === 'done')!, groups)).toBe(true)

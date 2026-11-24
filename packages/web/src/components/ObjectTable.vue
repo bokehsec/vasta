@@ -31,7 +31,7 @@ const props = defineProps<{
   sections: Section[]
   /** The field the groups are by; '' for no grouping. */
   groupField: string
-  addable: boolean
+  addable: (group: Group) => boolean
   /** The columns drawn (a phone's Quick actions column is left out: its buttons are under the title). */
   columns: Column[]
   actionsUnderTitle: boolean
@@ -170,7 +170,7 @@ async function saveQuick(object: ObjectSummary, values: Record<Id, PropertyValue
       <tbody v-for="(section, index) in sections" :key="section.group.key">
         <tr v-if="groupField" :class="bare ? '' : 'border-t border-line bg-hover/40'">
           <th :colspan="columns.length + 1" scope="rowgroup" class="text-left font-normal" :class="bare ? ['pb-3', index ? 'pt-6' : 'pt-3'] : 'px-1.5 py-1.5'">
-            <GroupHeading :group="section.group" :field="groupField" :collapsed="section.collapsed" :addable="addable" @toggle="emit('toggle', section.group)" @add="emit('add', section.group)" />
+            <GroupHeading :group="section.group" :field="groupField" :collapsed="section.collapsed" :addable="addable(section.group)" @toggle="emit('toggle', section.group)" @add="emit('add', section.group)" />
           </th>
         </tr>
         <template v-if="!section.collapsed">

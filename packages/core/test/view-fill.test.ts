@@ -124,9 +124,14 @@ describe('newItemValues', () => {
     expect(make({ groups: [{ field: 'status', value: 'next' }, { field: 'list', value: 'home' }] }).props).toEqual({ status: { kind: 'select', value: ['next'] }, list: { kind: 'select', value: ['home'] } })
   })
 
-  it('a tag group adds the tag; a date or unknown field adds nothing', () => {
+  it('a date group sets its day, or clears the date for "no value"', () => {
+    expect(make({ groups: [{ field: 'due', value: '2026-11-17' }] }).props).toEqual({ due: day('2026-11-17') })
+    expect(make({ filter: f('due', 'is', { kind: 'variable', name: 'today' }), groups: [{ field: 'due', value: null }] }).props).toEqual({})
+  })
+
+  it('a tag group adds the tag; an unknown field or a type adds nothing', () => {
     expect(make({ groups: [{ field: 'tags', value: 't1' }] }).tagIds).toEqual(['t1'])
     expect(make({ groups: [{ field: 'tags', value: null }] }).tagIds).toEqual([])
-    expect(make({ groups: [{ field: 'due', value: 'today' }, { field: 'nothing', value: 'x' }, { field: 'type', value: 'task' }] })).toEqual({ props: {}, tagIds: [] })
+    expect(make({ groups: [{ field: 'nothing', value: 'x' }, { field: 'type', value: 'task' }] })).toEqual({ props: {}, tagIds: [] })
   })
 })

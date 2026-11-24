@@ -11,7 +11,7 @@ import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
 import type { Section } from '../lib/collection-rows.ts'
 import { listFields, QUICK_ACTIONS_COLUMN, rowFieldsFromTable, tableColumns } from '../lib/columns.ts'
 import { startNew, useNewPlace } from '../lib/new-item.ts'
-import { groupObjects, movableField, typesOf, type Group } from '../lib/query.ts'
+import { acceptsGroup, groupObjects, typesOf, type Group } from '../lib/query.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
 import { foldKey, useGroupFolds } from '../lib/group-folds.ts'
 import { quietButton } from '../lib/buttons.ts'
@@ -85,7 +85,7 @@ const groups = computed<Group[]>(() => {
 const { folded: foldedGroups, toggle: toggleGroup, collapseAll, expandAll } = useGroupFolds(() => foldKey('folds', props.foldScope, props.groupField))
 // A "+" on a group's header adds an item into that group, on a type page (lib/new-item.ts).
 const newPlace = useNewPlace()
-const addable = computed(() => !!newPlace && !props.readonly && props.typeIds.length === 1 && props.typeIds[0] === newPlace.typeId && movableField(props.groupField, types.value))
+const addable = (group: Group) => !!newPlace && !props.readonly && props.typeIds.length === 1 && props.typeIds[0] === newPlace.typeId && acceptsGroup(props.groupField, group, types.value)
 const addIn = (group: Group) => newPlace && startNew(newPlace.typeId, { groups: [{ field: props.groupField, group }] })
 const groupCollapsed = (group: Group) => !!props.groupField && foldedGroups.value.has(group.key)
 const hasExpanded = computed(() => groups.value.some((group) => !groupCollapsed(group)))
@@ -171,7 +171,7 @@ const cards = (group: Group) => group.items.slice(0, drawLimit(group))
     />
     <template v-else>
       <section v-for="(section, index) in sections" :key="section.group.key" class="mt-4 first:mt-0">
-        <GroupHeading v-if="groupField" class="mb-3" :group="section.group" :field="groupField" :collapsed="section.collapsed" :addable="addable" @toggle="toggleGroup(section.group.key)" @add="addIn(section.group)" />
+        <GroupHeading v-if="groupField" class="mb-3" :group="section.group" :field="groupField" :collapsed="section.collapsed" :addable="addable(section.group)" @toggle="toggleGroup(section.group.key)" @add="addIn(section.group)" />
         <template v-if="!section.collapsed">
           <ObjectRows
             v-if="asRows"

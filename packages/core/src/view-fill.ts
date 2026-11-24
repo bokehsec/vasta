@@ -98,7 +98,7 @@ function valueFor(def: PropertyDef, filter: Filter, context: QueryContext): Prop
   return undefined
 }
 
-/** A group a new item is added into: its field and the group's value (an id), null for "no value". */
+/** A group a new item is added into: its field and the group's value (an id; a date's day), null for "no value". */
 export interface GroupPlacement {
   field: string
   value: Id | null
@@ -141,8 +141,13 @@ export function newItemValues(context: NewItemContext): NewItemValues {
       continue
     }
     const def = type.properties.find((p) => p.id === group.field)
-    // A date's groups are places in time, not values; a type or an author is not chosen here.
-    if (def?.kind !== 'select' && def?.kind !== 'relation' && def?.kind !== 'person') continue
+    // A type or an author is not chosen here; a date group's value is its day.
+    if (def?.kind !== 'select' && def?.kind !== 'relation' && def?.kind !== 'person' && def?.kind !== 'date') continue
+    if (def.kind === 'date') {
+      if (group.value) props[def.id] = { kind: 'date', value: dayValue(group.value) }
+      else delete props[def.id]
+      continue
+    }
     if (group.value) props[def.id] = { kind: def.kind, value: [group.value] }
     else delete props[def.id]
   }

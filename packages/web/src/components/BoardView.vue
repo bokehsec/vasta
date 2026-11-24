@@ -17,7 +17,7 @@ import { t } from '../lib/i18n.ts'
 import { openMenuAt, promptDialog } from '../lib/overlays.ts'
 import { quietButton } from '../lib/buttons.ts'
 import { newValues, useNewPlace } from '../lib/new-item.ts'
-import { groupObjects, isDateField, movableField, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
+import { acceptsGroup, groupObjects, isDateField, movableField, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, typesById } from '../lib/state.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
@@ -144,13 +144,16 @@ const hiddenFields = computed(() => [props.groupField, laneField.value].filter((
 // Dragging -------------------------------------------------------------------
 const columnAxis = computed<BoardAxis>(() => ({ field: props.groupField, groups: columns.value }))
 const laneAxis = computed<BoardAxis | undefined>(() => (laneField.value ? { field: laneField.value, groups: lanes.value } : undefined))
-const draggable = computed(() => movableField(props.groupField, types.value) && (!laneField.value || movableField(laneField.value, types.value)))
+const draggable = computed(() => movableField(props.groupField) && (!laneField.value || movableField(laneField.value)))
+// A date's group may not stand for a day (Earlier): a card cannot be dropped there, unless it is already in it.
+const takes = (axis: BoardAxis, group: Group, cardId: Id) => group.items.some((o) => o.id === cardId) || acceptsGroup(axis.field, group, types.value)
+const accepting = (column: Group, lane: Group, cardId: Id) => takes(columnAxis.value, column, cardId) && (!laneAxis.value || takes(laneAxis.value, lane, cardId))
 
 async function drop(cardId: Id, target: CardTarget) {
   const card = props.objects.find((o) => o.id === cardId)
   const column = columns.value.find((g) => g.key === target.column)
   const lane = lanes.value.find((g) => g.key === target.lane)
-  if (!card || !column || !lane) return
+  if (!card || !column || !lane || !accepting(column, lane, cardId)) return
   const cells = cell(column, lane)
   const sameCell = cells.some((o) => o.id === cardId)
   // Dropped back where it was: nothing to do.
@@ -192,7 +195,7 @@ function placed(column: Group, lane: Group) {
 }
 
 /** Where the dragged card would land, to draw a bar there. */
-const landing = (column: Group, lane: Group) => (boardDrag.active && boardDrag.target?.column === column.key && boardDrag.target.lane === lane.key ? boardDrag.target.index : -1)
+const landing = (column: Group, lane: Group) => (boardDrag.active && boardDrag.target?.column === column.key && boardDrag.target.lane === lane.key && accepting(column, lane, boardDrag.cardId) ? boardDrag.target.index : -1)
 const cellKey = (column: Group, lane: Group) => `${column.key}|${lane.key}`
 
 // "+": a new card in a column (and lane), at its end -------------------------------
@@ -200,7 +203,7 @@ const place = useNewPlace()
 const addingIn = ref('')
 const newTitle = ref('')
 const newInput = ref<HTMLInputElement[]>([])
-const canAdd = computed(() => props.typeIds.length === 1 && draggable.value)
+const canAdd = (column: Group, lane: Group) => props.typeIds.length === 1 && draggable.value && acceptsGroup(props.groupField, column, types.value) && (!laneField.value || acceptsGroup(laneField.value, lane, types.value))
 async function startAdding(column: Group, lane: Group) {
   addingIn.value = cellKey(column, lane)
   newTitle.value = ''
@@ -324,7 +327,7 @@ async function addCard(column: Group, lane: Group) {
                   </div>
                 </template>
                 <div v-if="landing(column, lane) >= 0 && landing(column, lane) >= placed(column, lane).filter((p) => p.place >= 0).length" class="h-1 rounded-full bg-accent" />
-                <template v-if="canAdd">
+                <template v-if="canAdd(column, lane)">
                   <input
                     v-if="addingIn === cellKey(column, lane)"
                     ref="newInput"
