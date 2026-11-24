@@ -8,14 +8,21 @@ GitHub release page.
 
 ### Added
 
+- **Review tasks: a comment box, and the latest comment on top.** Every task in a review has an
+  **Add a comment…** box (key `C`). What you type is saved as a comment on the task together with
+  whatever you choose next (Keep, Schedule…, Waiting…, Done, Drop, Snooze), and one Undo takes back
+  both. **Enter** on a check-in saves the comment and keeps the task as planned; on a new task it
+  saves the comment and stays. Leaving the task without deciding (Decide later, Back, Pause) still
+  saves what you typed. The task's newest comment shows under its fields, with its date (and who
+  wrote it, when it wasn't you), so a check-in starts where you left off. Next step shows in a
+  review only when it has a value.
 - **Review tasks: Waiting….** When you've done your part and are waiting on someone, press
   **Waiting…** (key `W`, after Schedule…). It asks when to check back (Tomorrow, In 3 days,
-  **In a week**, In 2 weeks or any day) and takes an optional note. **Wait** moves the task to
+  **In a week**, In 2 weeks or any day) and takes an optional comment (it starts as whatever you typed in the comment box). **Wait** moves the task to
   Waiting, sets its Check back date (if your task type has one), moves an earlier Do date to that
-  day (never Due), and adds the note to the end of the task's Notes with today's date
-  ("Nov 24 — emailed the broker"). The task stays out of Review until that day, then comes back
+  day (never Due), and saves the comment on the task. The task stays out of Review until that day, then comes back
   even if its weekly check-in isn't due yet. It's offered on a task that is already waiting
-  too, for another round. Undo puts everything back, note included. The plain Waiting link is gone.
+  too, for another round. Undo puts everything back, comment included. The plain Waiting link is gone.
 - **Boards grouped by a date: drag cards between columns.** Dropping a card in Today or Tomorrow
   gives it that day; This week gives it the first day after tomorrow, Next week and Later the
   first working day of that week (Monday, where weeks start on Sunday); No date clears it. A time of day, a range's end and a repeat are kept.
@@ -26,18 +33,20 @@ GitHub release page.
   **+ Due**, **+ Priority** you press to set. On a big screen the review is one narrower panel
   that is as tall as the task needs, with the buttons right under it, instead of a wide panel
   with a column of mostly empty fields beside it. On a phone the room goes to the notes and steps.
-- **Review tasks: fewer choices, and Snooze.** A task in a review now has **Today**,
-  **Schedule…**, **Done**, **Drop** and **Snooze** (keys `T`, `S`, `D`, `X`, `N`); a check-in
-  also has **Keep as planned**. Schedule… asks for the day and also offers **No date** (ready
+- **Review tasks: fewer choices, and Snooze.** A task in a review now has
+  **Schedule…**, **Waiting…**, **Done**, **Drop** and **Snooze** (keys `S`, `W`, `D`, `X`, `N`); a check-in
+  also has **Keep as planned**. Schedule… asks for the day (**Today**, Tomorrow and Next week are one
+  tap; `T` picks Today) and also offers **No date** (ready
   whenever, your first open status) and **Someday** (parks it in On Hold). The buttons for
-  individual statuses are gone; only the ones left over (such as Waiting) stay as links.
+  individual statuses are gone; only the ones left over stay as links.
   **Snooze** hides a task from Review for a day and changes nothing else: it comes back as it
   was, new or a check-in. Set the number of days in Type settings › Review. Snooze replaces
   Later / Decide later for tasks; on a phone a swipe left snoozes. Tasks get a "Snoozed until"
   date, cleared by any other decision in a review.
-- **Review tasks: Today in one press.** Every task in a review has a **Today** button (key `T`)
-  beside Defer…, Done and Drop: it sets the Do date to today and goes on to the next task. A new
-  task also moves to your first open status (Next); a task that already has a status keeps it.
+- **Review tasks: Today in Schedule….** Schedule…'s first choice is **Today** (`T`): it sets the
+  Do date to today and goes on to the next task. A new task also moves to your first open status
+  (Next), not Scheduled; a task that already has a status keeps it. Today is also the first
+  one-tap choice wherever a task's Do date is asked for.
 - **Task reminders:** tick tasks done, move their Do date to tomorrow or another day, or open their notes without leaving the reminder. Due and planned tasks stay in place with Undo; handling every task answers the reminder for you.
 - A pin button at the top of every page puts it on your Home (and takes it off again).
 - **Home:** every person has their own Home page in each space, opened from the top of the sidebar, `G H`, or Home on the phone.

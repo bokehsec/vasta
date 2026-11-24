@@ -3,18 +3,26 @@
 // of one view. Everything about the task is on screen (its text in full, steps, the plan's fields,
 // editable in place) and so are its choices (ReviewDecisionBar: what is offered is
 // lib/review-choices.ts): few and never the status it already has; a task already placed has Keep
-// in that status (reviewed today, back in `review.every` days). A task has Today, Schedule… (its question
-// also offers No date and Someday), Waiting… (a question of its own: the day to check back and a note,
-// which goes to the end of the task's Notes; Undo takes it out again), Done, Drop and Snooze (hides it for `review.snooze` days, nothing
+// in that status (reviewed today, back in `review.every` days). A task has Schedule… (its question
+// offers Today first, then Tomorrow, Next week, any day, No date and Someday; Today is what the old
+// Today button did, key T inside the question; a new task lands in the first open status, not
+// Scheduled), Waiting… (a question of its own: the day to check back and a comment, which starts as
+// what is in the comment box), Done, Drop and Snooze (hides it for `review.snooze` days, nothing
 // else changes); where Snooze is offered it replaces Decide later, which then is only the way on
 // past a task already decided here. Neither records a review. The plan is a line of chips under the
-// title: a field with a value shows it, an empty one is a dashed "+ Name" that opens its editor. On
-// a big screen the panel is one column as tall as the task needs, the choices right under it; on a
+// title: a field with a value shows it, an empty one is a dashed "+ Name" that opens its editor
+// (the next step only when it has one: it stays editable on the task's page). A task's newest comment
+// shows under the chips (date, and who wrote it when not you); under its text is a one-line comment
+// box (key C, Escape leaves it). What is typed there is added as a comment in the same save as
+// whatever decision is pressed (one Undo takes both back; Enter on a check-in is Keep as planned with
+// it, on a new task it saves the comment alone and stays), and leaving the card without deciding
+// (Decide later, Back, Pause) saves it alone, so typed text is never lost. On a
+// big screen the panel is one column as tall as the task needs, the choices right under it; on a
 // phone they are a tray at the bottom.
 // The queue is stable, with Undo, explicit save, and the reading position kept across interruptions.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Doc, ObjectSummary, ObjectType, PropertyDef, PropertyValue, QuickActionDef, SelectOption } from '@vasta/core'
-import { STATUS_PROPERTY_ID, askOf, daysBetween, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, reviewEveryOf, settlesTriage, snoozeDaysOf, SNOOZE_ACTION_ID, taskDatesOf, waitingAction, withReviewed, withSnoozeCleared, type ReviewAlternative } from '@vasta/core'
+import { STATUS_PROPERTY_ID, askOf, commentProp, commentsOf, daysBetween, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, reviewEveryOf, settlesTriage, snoozeDaysOf, SNOOZE_ACTION_ID, taskDatesOf, waitingAction, withReviewed, withSnoozeCleared, type ReviewAlternative } from '@vasta/core'
 import { addSelectOption, dayKey } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { greyButton, mainButton, quietButton } from '../lib/buttons.ts'
@@ -23,9 +31,10 @@ import { onChange } from '../lib/events.ts'
 import { displayTitle, formatDateShort, formatDayShort } from '../lib/format.ts'
 import { contextMenu } from '../lib/overlays.ts'
 import { viewerTimeZone } from '../lib/calendar.ts'
-import { appendNote, notesFieldOf } from '../lib/task-notes.ts'
+import { meId, personName } from '../lib/people.ts'
 import { quickAsk, runQuickAction, type QuickSave } from '../lib/quick-actions.ts'
 import { reviewDecisions } from '../lib/review-choices.ts'
+import { savingWithComment } from '../lib/review-comment.ts'
 import { currentId, isFinished, moveBy, recordOutcome, skipCurrent, skippedSession, summarize, undoOutcome, workflowTitle, type ReviewSession } from '../lib/review-session.ts'
 import { lastError, ui } from '../lib/state.ts'
 import { addSubtask, subtasksOf } from '../lib/subtasks.ts'
@@ -130,11 +139,11 @@ const plan = computed<PropertyDef[]>(() => {
 })
 const editable = (def: PropertyDef) => def.kind !== 'formula' && !(def.id === STATUS_PROPERTY_ID && choices.value.hasButtons)
 const filled = (def: PropertyDef) => !!current.value?.props[def.id]
-/** The chips: every field with a value, and the empty ones that can be set here. Today and Schedule… set the plan date, so empty it has no chip of its own. */
+/** The chips: every field with a value, and the empty ones that can be set here, but the next step, which shows only when it has one. Schedule… sets the plan date, so empty it has no chip of its own. */
 const chips = computed(() => {
   const planDate = taskDatesOf(props.type).plan?.id
-  const dated = choices.value.main.some((b) => b.role === 'today' || b.role === 'defer')
-  return plan.value.filter((def) => filled(def) || (editable(def) && !(dated && def.id === planDate)))
+  const dated = choices.value.main.some((b) => b.role === 'defer')
+  return plan.value.filter((def) => filled(def) || (editable(def) && !(dated && def.id === planDate) && def.id !== nextStepField.value?.id))
 })
 const chipHint = (def: PropertyDef) => (def.kind === 'relation' ? def.name : `+ ${def.name}`)
 async function setField(def: PropertyDef, value: PropertyValue | undefined) {
@@ -174,22 +183,73 @@ const shownTexts = computed(() => texts.value.filter((t) => t.id === currentObje
 /** An action that asks for a line of text (the next step) adds to the object rather than settling it: the review stays on it. */
 const stays = (action: QuickActionDef) => askOf(props.type, action)?.def.kind === 'text' || (isNew.value && !settlesTriage(props.type, action))
 
+// The comment box (a task's review): typed text goes with the decision pressed (act), or is saved
+// alone when the card is left without one (leave) or by Enter on a new task.
+const draft = ref('')
+const commentInput = ref<HTMLInputElement | null>(null)
+const commentable = computed(() => props.type.system === 'task' && !!current.value && !!meId())
+watch(currentObjectId, () => (draft.value = ''))
+/** The newest comment on the task, as the card shows it: its day here, and who wrote it unless it is you. */
+const latestComment = computed(() => {
+  const comment = current.value ? commentsOf(current.value).at(-1) : undefined
+  if (!comment) return undefined
+  const who = comment.author === meId() ? '' : ` · ${personName(comment.author)}`
+  return { text: comment.text, label: `Latest comment · ${formatDayShort(dayKey(new Date(comment.at)))}${who}` }
+})
+/** Saves what is in the box as a comment on its own (not a decision); false when it could not be saved. */
+async function saveDraft(): Promise<boolean> {
+  const object = current.value
+  const text = draft.value.trim()
+  const me = meId()
+  if (!text || !object || !me || !commentable.value) return true
+  try {
+    const { key, value } = commentProp(me, text, new Date().toISOString())
+    await props.save(object.id, { [key]: value })
+    draft.value = ''
+    return true
+  } catch (error) {
+    lastError.value = (error as Error).message
+    return false
+  }
+}
+/** Leaves the card (Decide later, Back, Pause, Open page) once what was typed is saved as a comment; with nothing typed it goes at once. */
+async function leave(go: () => void) {
+  if (busy.value || addingStep.value) return
+  if (!draft.value.trim()) return go()
+  busy.value = true
+  const saved = await saveDraft()
+  busy.value = false
+  if (saved && alive) go()
+}
+/** Enter in the box: a check-in is kept with the comment; a new task has no Keep, so the comment is saved and the review stays. */
+async function submitComment() {
+  if (!draft.value.trim() || blocked.value || done.value) return
+  if (choices.value.reviewed) return void act(choices.value.reviewed, keepButton())
+  busy.value = true
+  await saveDraft()
+  busy.value = false
+}
+// Typed text is not lost when the review goes away under it (the view changed).
+onBeforeUnmount(() => {
+  if (!busy.value) void saveDraft()
+})
+
 const busy = ref(false)
 const saving = computed(() => busy.value && (!quickAsk.value || quickAsk.value.state.saving))
 /** Waiting…'s question, open: the button's action and where it was pressed. */
 const waitingFor = ref<{ action: QuickActionDef; anchor: HTMLElement | null } | null>(null)
-function answerWaiting(day: string, note: string) {
+function answerWaiting(day: string, comment: string) {
   const ask = waitingFor.value
   const object = current.value
   waitingFor.value = null
   if (!ask || !object) return
-  void act(waitingAction(props.type, ask.action, object, day, dayKey(), viewerTimeZone()), ask.anchor, note)
+  void act(waitingAction(props.type, ask.action, object, day, dayKey(), viewerTimeZone()), ask.anchor, comment)
 }
-/** `note`: a line for the end of the task's Notes, with today's date, written once the decision is saved and taken out again by its Undo. */
-async function act(action: QuickActionDef, anchor: HTMLElement | null, note?: string) {
+/** `comment`: the comment that goes with it instead of the box's (Waiting…'s own, which started as the box's). */
+async function act(action: QuickActionDef, anchor: HTMLElement | null, comment?: string) {
   const object = current.value
   if (!object || busy.value || addingStep.value) return
-  if (note === undefined && choices.value.main.some((b) => b.role === 'wait' && b.action === action)) {
+  if (comment === undefined && choices.value.main.some((b) => b.role === 'wait' && b.action === action)) {
     waitingFor.value = { action, anchor }
     return
   }
@@ -204,48 +264,57 @@ async function act(action: QuickActionDef, anchor: HTMLElement | null, note?: st
   // Schedule's question offers No date and Someday: one picked ends the question and is then run as a decision of its own.
   let picked: ReviewAlternative | undefined
   const alternatives = choices.value.main.find((b) => b.role === 'defer' && b.action === action)?.alternatives?.map((a) => ({ id: a.id, label: a.label, hint: a.hint, icon: a.icon, run: () => { picked = a } }))
-  const field = note ? notesFieldOf(props.type) : undefined
-  let noteAdded: Promise<(() => Promise<void>) | undefined> | undefined
+  // Today in Schedule's question: the old Today button's action, run once the question has closed.
+  let pickedToday: QuickActionDef | undefined
+  const todayAction = choices.value.main.find((b) => b.role === 'defer' && b.action === action)?.today
+  // The comment goes in the decision's own save, so one Undo takes both back.
+  const text = (comment ?? draft.value).trim()
+  const me = meId()
+  const carried = text && me && commentable.value ? commentProp(me, text, new Date().toISOString()) : undefined
   busy.value = true
   try {
     const saved = await runQuickAction(props.type, object, recordsDecision ? withSnoozeCleared(props.type, withReviewed(props.type, action, object), object) : action, {
       anchor: isPhone.value ? null : anchor,
-      save: props.save,
+      save: carried ? savingWithComment(props.save, carried.key, carried.value) : props.save,
       submitLabel: stay ? 'Save' : `Save & next ${noun.value}`,
       ...(alternatives ? { alternatives } : {}),
-      onSaved: () => {
-        if (note && field) noteAdded = appendNote(object.id, field, `${formatDayShort(dayKey())} — ${note}`).catch((error: Error) => { lastError.value = error.message; return undefined })
-      },
-      onUndo: async () => {
-        await (await noteAdded)?.().catch((error: Error) => { lastError.value = error.message })
+      ...(todayAction ? { today: () => { pickedToday = todayAction } } : {}),
+      onUndo: () => {
         if (recordsDecision) alive ? update((s) => undoOutcome(s, object.id, action.name)) : props.undone(object.id, action.name)
       },
     })
     if (saved && alive) {
       breakingDown.value = false
+      if (carried) draft.value = ''
       if (recordsDecision) update((s) => recordOutcome(s, object.id, action.name, at, !stay))
     }
   } finally {
     busy.value = false
   }
   if (picked && alive) await act(picked.action, anchor)
+  else if (pickedToday && alive) await act(pickedToday, anchor)
 }
 function move(delta: number) {
-  if (busy.value || addingStep.value) return
-  rememberCard()
-  breakingDown.value = false
-  update((s) => moveBy(s, delta))
+  void leave(() => {
+    rememberCard()
+    breakingDown.value = false
+    update((s) => moveBy(s, delta))
+  })
 }
 function skip() {
-  if (done.value || busy.value || addingStep.value) return
-  rememberCard()
-  breakingDown.value = false
-  update(skipCurrent)
+  if (done.value) return
+  void leave(() => {
+    rememberCard()
+    breakingDown.value = false
+    update(skipCurrent)
+  })
 }
 function open(id = current.value?.id) {
-  if (!id || busy.value || addingStep.value) return
-  rememberCard()
-  emit('open', id)
+  if (!id) return
+  void leave(() => {
+    rememberCard()
+    emit('open', id)
+  })
 }
 function reviewSkipped() {
   update(skippedSession)
@@ -297,8 +366,10 @@ function rememberCard() {
 }
 function pause() {
   if (blocked.value) return
-  rememberCard()
-  emit('close')
+  void leave(() => {
+    rememberCard()
+    emit('close')
+  })
 }
 // Back on a phone pauses the review here instead of leaving the list under it.
 closesOnBack(() => true, pause)
@@ -339,8 +410,8 @@ onBeforeUnmount(() => {
   })
 })
 
-// Keys, while no question or text box has them: K (or R) keeps, letters and 1–9 choose (keys), →
-// later, ← back, Enter opens the page, Escape pauses.
+// Keys, while no question or text box has them: K (or R) keeps, C writes a comment, letters and 1–9 choose (keys), →
+// later, ← back, Enter opens the page, Escape leaves a text box, else pauses.
 function onKey(event: KeyboardEvent) {
   if (event.defaultPrevented || quickAsk.value || waitingFor.value || contextMenu.open || event.metaKey || event.ctrlKey || event.altKey) return
   if ((event.target as Element | null)?.closest('[data-overlay]')) return
@@ -356,6 +427,11 @@ function onKey(event: KeyboardEvent) {
   if (typing) return
   // Enter/Space on a button belongs to that button, not to the session shortcuts.
   if ((event.target as Element | null)?.closest('button, a') && (event.key === 'Enter' || event.key === ' ')) return
+  if (/^[cC]$/.test(event.key) && commentable.value && !done.value) {
+    event.preventDefault()
+    commentInput.value?.focus()
+    return
+  }
   if (/^[kKrR]$/.test(event.key) && choices.value.reviewed && !done.value) {
     event.preventDefault()
     void act(choices.value.reviewed, keepButton())
@@ -535,6 +611,12 @@ const sectionName = `font-semibold text-ink-faint ${metaText}`
                 </div>
               </div>
 
+              <!-- The newest comment, so the task's latest word is in front of the decision. -->
+              <div v-if="latestComment" class="mt-4 max-w-[70ch] rounded-r-lg border-l-2 border-accent bg-accent/8 px-3 py-2" data-process-latest-comment>
+                <p class="font-semibold text-ink-soft" :class="metaText" data-process-latest-label>{{ latestComment.label }}</p>
+                <p class="mt-0.5 line-clamp-3 whitespace-pre-line break-words" :class="bodyText" data-process-latest-text>{{ latestComment.text }}</p>
+              </div>
+
               <div v-if="shownTexts.length" class="mt-5 space-y-5" data-process-text>
                 <section v-for="text in shownTexts" :key="text.field" class="max-w-[70ch]">
                   <h3 :class="sectionName">{{ text.name }}</h3>
@@ -542,6 +624,9 @@ const sectionName = `font-semibold text-ink-faint ${metaText}`
                 </section>
               </div>
               <p v-else-if="notes" class="mt-5 max-w-[70ch] whitespace-pre-line text-base leading-relaxed">{{ notes }}</p>
+
+              <!-- One line; text typed here goes with the decision (or is kept when the card is left). -->
+              <input v-if="commentable" ref="commentInput" v-model="draft" type="text" enterkeyhint="done" class="mt-5 w-full max-w-[70ch] rounded-lg border border-line bg-surface px-2.5 py-2 outline-none placeholder:text-ink-faint focus:border-line-strong max-md:text-base" :class="bodyText" placeholder="Add a comment…" aria-label="Add a comment" :disabled="blocked" data-process-comment @keydown.enter.prevent="submitComment" />
 
               <section v-if="steps.length || breakingDown" class="mt-6 max-w-[70ch]" data-process-steps>
                 <h3 :class="sectionName">Steps · {{ steps.length }}</h3>
@@ -577,6 +662,6 @@ const sectionName = `font-semibold text-ink-faint ${metaText}`
         </div>
       </section>
     </div>
-    <WaitingAsk v-if="waitingFor" :anchor="waitingFor.anchor" :scope="current ? displayTitle(current, type) : undefined" @submit="answerWaiting" @close="waitingFor = null" />
+    <WaitingAsk v-if="waitingFor" :anchor="waitingFor.anchor" :scope="current ? displayTitle(current, type) : undefined" :comment="draft" @submit="answerWaiting" @close="waitingFor = null" />
   </Teleport>
 </template>

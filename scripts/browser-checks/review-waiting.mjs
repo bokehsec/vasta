@@ -1,9 +1,10 @@
 // Review tasks, Waiting…: "I did my part, now I'm waiting on someone". One press (the button, or W) opens a
-// question: Tomorrow, In 3 days, In a week (chosen at first), In 2 weeks or any day, and a note. Wait
-// sets Status to Waiting, Check back and Snoozed until to the day, moves an earlier Do date there (never
-// Due) and adds "<Mon D> — note" as a new last paragraph of Notes; the task is out of Review until that
+// question: Tomorrow, In 3 days, In a week (chosen at first), In 2 weeks or any day, and a comment (which
+// starts as what is typed in the review's comment box). Wait sets Status to Waiting, Check back and
+// Snoozed until to the day, moves an earlier Do date there (never Due) and adds the comment, in the same
+// save; Notes are left alone; the task is out of Review until that
 // day and back on it even though its week has not passed. Cancel/Escape change nothing; Undo puts the
-// fields and the notes back. A task already waiting is offered it too. The phone's tray fits at 320–430.
+// fields back and takes the comment away. A task already waiting is offered it too. The phone's tray fits at 320–430.
 // node review-waiting.mjs [chromium|webkit] [base]   MODE=json: HTTP; default: replica; SHOTS=<dir>
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync } from 'node:fs'
@@ -43,6 +44,7 @@ const position = page.locator('[data-process-position]')
 const currentTitle = () => page.locator('[data-process-title]').innerText()
 const propsOf = async (id) => (await get(`/api/objects/${id}`)).props
 const notesOf = async (id) => ((await get(`/api/objects/${id}`)).content.body?.content ?? []).map((n) => (n.content ?? []).map((t) => t.text ?? '').join(''))
+const commentsOf = async (id) => Object.entries(await propsOf(id)).filter(([key]) => key.startsWith('comment:')).map(([, value]) => value.value.text)
 const roles = () => page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole))
 const shot = async (name) => {
   if (!process.env.SHOTS) return
@@ -71,7 +73,6 @@ try {
   })
   const today = await page.evaluate(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto' }).format(new Date()))
   const plus = (days) => new Date(Date.parse(`${today}T12:00:00Z`) + days * 86400000).toISOString().slice(0, 10)
-  const short = (value) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(new Date(`${value}T12:00:00Z`))
   const date = (value) => ({ kind: 'date', value: { start: `${value}T00:00:00.000Z`, resolution: 'day' } })
   const day = (value) => value?.value.start.slice(0, 10)
   const paragraph = (text) => ({ type: 'paragraph', content: [{ type: 'text', text }] })
@@ -93,21 +94,21 @@ try {
   await until(async () => /^Review\s+3$/.test((await reviewButton.innerText()).trim()), 'Review 3')
   await reviewButton.click()
   await until(async () => (await currentTitle()) === a.title, 'the review starts with A')
-  assert.deepEqual(await roles(), ['today', 'defer', 'wait', 'done', 'drop', 'snooze'])
+  assert.deepEqual(await roles(), ['defer', 'wait', 'done', 'drop', 'snooze'])
   assert.equal(await page.locator('[data-process-links]').count(), 0, 'Waiting is no link')
   assert.match(await page.locator('[data-process-role="wait"]').innerText(), /^Waiting…/)
   for (const width of [320, 390, 430]) {
     await page.setViewportSize({ width, height: width === 320 ? 568 : 844 })
     const boxes = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => ({ top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width), height: r.height, right: r.right })))
     assert(boxes.every((box) => box.height >= 44 && box.right <= width), `a button under 44px or outside the screen at ${width}: ${JSON.stringify(boxes)}`)
-    assert(boxes[5].width > boxes[0].width * 1.8 && boxes[5].top > boxes[4].top, `Snooze is not a row of its own at ${width}: ${JSON.stringify(boxes)}`)
+    assert(boxes[4].width > boxes[0].width * 1.8 && boxes[4].top > boxes[3].top, `Snooze is not a row of its own at ${width}: ${JSON.stringify(boxes)}`)
     assert.equal(await page.locator('[data-process-mode]').evaluate((el) => el.scrollWidth > innerWidth), false, `overflow at ${width}`)
     assert.equal(await page.locator('[data-process-choices]').evaluate((el) => el.scrollWidth > el.clientWidth), false, `tray overflow at ${width}`)
   }
   await page.setViewportSize({ width: 390, height: 844 })
   await shot('phone-tray')
 
-  step('the question: a week chosen at first, the title and note box; Escape and Cancel change nothing')
+  step('the question: a week chosen at first, the title and comment box; Escape and Cancel change nothing')
   await click('[data-process-role="wait"]')
   await page.locator('[data-waiting-ask]').waitFor()
   assert.match(await page.locator('[data-waiting-title]').innerText(), /^Waiting — check back on$/)
@@ -128,8 +129,9 @@ try {
   assert.equal(props.checkback, undefined)
   assert.equal(props.snoozed, undefined)
   assert.deepEqual(await notesOf(a.id), ['Asked the broker last week'])
+  assert.deepEqual(await commentsOf(a.id), [])
 
-  step('Wait with a note (Enter): Waiting, Check back and Snoozed until +7 days, the Do date moved, Due left, the note added; on to the next')
+  step('Wait with a comment (Enter): Waiting, Check back and Snoozed until +7 days, the Do date moved, Due left, the comment added, Notes untouched; on to the next')
   await click('[data-process-role="wait"]')
   await page.locator('[data-waiting-note]').fill('emailed broker for the insurance documents')
   await page.keyboard.press('Enter')
@@ -139,24 +141,25 @@ try {
   assert.equal(day(props.snoozed), plus(7))
   assert.equal(day(props.dodate), plus(7), 'the Do date moved to the day')
   assert.equal(day(props.due), plus(3), 'Due is not touched')
-  await until(async () => (await notesOf(a.id)).length === 2, 'the note is in Notes')
-  assert.deepEqual(await notesOf(a.id), ['Asked the broker last week', `${short(plus(0))} — emailed broker for the insurance documents`])
+  await until(async () => (await commentsOf(a.id)).length === 1, 'the comment is saved')
+  assert.deepEqual(await commentsOf(a.id), ['emailed broker for the insurance documents'])
+  assert.deepEqual(await notesOf(a.id), ['Asked the broker last week'])
   await until(async () => (await currentTitle()) === b.title, 'on to B')
   assert.match(await page.locator('[role=status]').innerText(), /^Moved to Waiting until /)
 
-  step('Undo puts the fields back and takes the note out again, leaving the rest of Notes')
+  step('Undo puts the fields back and takes the comment away again')
   await undo()
   await until(async () => (await propsOf(a.id)).status.value[0] === 'next', 'Undo restores the status')
   props = await propsOf(a.id)
   assert.equal(props.checkback, undefined)
   assert.equal(props.snoozed, undefined)
   assert.equal(day(props.dodate), today)
-  await until(async () => (await notesOf(a.id)).length === 1, 'Undo removes the note')
+  await until(async () => (await commentsOf(a.id)).length === 0, 'Undo removes the comment')
   assert.deepEqual(await notesOf(a.id), ['Asked the broker last week'])
   assert.equal(await currentTitle(), b.title, 'Undo does not move the review')
 
   step('a task already waiting is offered Waiting… too: another 2 weeks, no note, the Do date later than that stays')
-  assert.deepEqual(await roles(), ['today', 'defer', 'wait', 'done', 'drop', 'snooze'])
+  assert.deepEqual(await roles(), ['defer', 'wait', 'done', 'drop', 'snooze'])
   await click('[data-process-role="wait"]')
   await click('[data-waiting-preset="14"]')
   assert.equal(await page.locator('[data-waiting-preset="14"]').getAttribute('aria-pressed'), 'true')
@@ -166,18 +169,23 @@ try {
   assert.equal(day(props.snoozed), plus(14))
   assert.equal(props.status.value[0], 'waiting')
   assert.equal(day(props.dodate), plus(30))
-  assert.deepEqual(await notesOf(b.id), [], 'no note typed, none written')
+  assert.deepEqual(await commentsOf(b.id), [], 'no comment typed, none written')
   await until(async () => (await currentTitle()) === c.title, 'on to C')
 
-  step('a task with no Do date and no notes: W opens it, Tomorrow and another day from the calendar; the note starts its Notes')
+  step('a task with no Do date and no notes: what is typed in the review\'s box starts the question\'s comment; Tomorrow and another day from the calendar')
+  await click('[data-process-comment]')
+  await page.locator('[data-process-comment]').fill('Sam has the forms')
+  await page.keyboard.press('Escape')
+  assert.equal(await page.locator('[data-process-mode]').count(), 1, 'Escape in the box does not pause the review')
   await page.keyboard.press('w')
   await page.locator('[data-waiting-ask]').waitFor()
+  assert.equal(await page.locator('[data-waiting-note]').inputValue(), 'Sam has the forms', 'the comment starts as the box\'s text')
+  assert.match(await page.locator('[data-waiting-ask] label span').innerText(), /^Comment \(optional\)$/)
   await click('[data-waiting-preset="1"]')
   await click('[data-waiting-calendar]')
   const target = `${plus(1).slice(0, 7)}-28` // the calendar opens on the month of the day chosen
   await page.locator('[data-waiting-ask] button:not([class*="ink-faint/70"])', { hasText: new RegExp(`^${Number(target.slice(8))}$`) }).first().click()
   assert.equal(await page.locator('[data-waiting-preset][aria-pressed="true"]').count(), 0, 'no preset is on for another day')
-  await page.locator('[data-waiting-note]').fill('Sam has the forms')
   await click('[data-waiting-save]')
   await page.locator('[data-process-end]').waitFor()
   await until(async () => (await propsOf(c.id)).status.value[0] === 'waiting', 'C is waiting')
@@ -185,8 +193,9 @@ try {
   assert.equal(day(props.checkback), target)
   assert.equal(day(props.snoozed), target)
   assert.equal(props.dodate, undefined, 'no Do date stays none')
-  await until(async () => (await notesOf(c.id)).length === 1, 'the note starts Notes')
-  assert.deepEqual(await notesOf(c.id), [`${short(plus(0))} — Sam has the forms`])
+  await until(async () => (await commentsOf(c.id)).length === 1, 'the comment is saved')
+  assert.deepEqual(await commentsOf(c.id), ['Sam has the forms'])
+  assert.deepEqual(await notesOf(c.id), [], 'Notes are left alone')
   const summary = await page.locator('[data-process-summary]').innerText()
   assert.match(summary, /Moved to Waiting 2/)
   await click('[data-process-finish]')
@@ -207,7 +216,7 @@ try {
   await page.setViewportSize({ width: 1280, height: 800 })
   await reviewButton.click()
   await page.locator('[data-process-mode]').waitFor()
-  assert.deepEqual(await roles(), ['today', 'defer', 'wait', 'done', 'drop', 'snooze'])
+  assert.deepEqual(await roles(), ['defer', 'wait', 'done', 'drop', 'snooze'])
   assert.equal(await page.locator('[data-process-role="wait"]').getAttribute('data-key'), 'W')
   await page.keyboard.press('w')
   await page.locator('[data-waiting-ask]').waitFor()

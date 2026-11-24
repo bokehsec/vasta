@@ -103,12 +103,14 @@ export interface ReviewAlternative {
 
 /** A button of a review: where the task goes, as a main button or as a link under them. */
 export interface ReviewButton {
-  role: 'today' | 'defer' | 'wait' | 'done' | 'drop' | 'snooze' | 'move'
+  role: 'defer' | 'wait' | 'done' | 'drop' | 'snooze' | 'move'
   label: string
   action: QuickActionDef
   option?: SelectOption
   /** Schedule only: the choices its question offers under the calendar (No date, Someday). */
   alternatives?: ReviewAlternative[]
+  /** Schedule only: what its question's Today does, in one tap (the plan date today; a new task also gets the first open status, not Schedule's own). */
+  today?: QuickActionDef
 }
 
 /** A status for work waiting on someone else: "Waiting", "Delegated". */
@@ -147,10 +149,11 @@ const PARKED_LABEL = /hold|someday|paus/i
 
 /**
  * A review's buttons for a task with status `current` (`planned`: it has a plan date): few, and
- * never the status it already has (a task already placed has Keep for that). Main: Today (the plan
- * date set to today, in one press; a new task also gets the first open status that is not the
- * scheduled one, "Next"), Schedule… (the type's own Defer, asking its day and setting what it sets,
- * such as a "Scheduled" status: the same Defer as a row's or a task page's), Done, Drop and Snooze.
+ * never the status it already has (a task already placed has Keep for that). Main: Schedule… (the
+ * type's own Defer, asking its day and setting what it sets, such as a "Scheduled" status: the same
+ * Defer as a row's or a task page's; its question's first preset is Today, which is `today` on the
+ * button: the plan date set to today, and a new task also gets the first open status that is not
+ * the scheduled one, "Next", not "Scheduled"), Done, Drop and Snooze.
  * A new task given a day has its place: a Schedule that leaves the status alone puts it in the
  * status named for it ("Scheduled"; else the first open one), so it settles it and the review goes
  * on. Schedule's question also offers No date (that first open status, "Ready whenever") and
@@ -199,7 +202,7 @@ export function reviewButtons(type: ObjectType | undefined, current: string | un
   }
   const alternatives = [...without(first, 'no-date', 'No date', 'Ready whenever', 'ph:calendar-x'), ...without(parked, 'someday', 'Someday', 'Park it', 'ph:pause-circle')]
 
-  // Today: the plan date, today; a new task also gets the first open status.
+  // Schedule's Today: the plan date, today; a new task also gets the first open status.
   const placesNew = isNew ? first : undefined
   const today: QuickActionDef | undefined = plan && { id: 'today', name: 'Today', icon: { kind: 'icon', value: 'ph:calendar-check' }, changes: [{ field: plan.id, value: { kind: 'day', days: 0 } }, ...(placesNew ? [places(placesNew.option)] : [])] }
   const snooze = snoozeAction(type)
@@ -207,8 +210,7 @@ export function reviewButtons(type: ObjectType | undefined, current: string | un
   const waiting = open.find((c) => WAITING_LABEL.test(c.option.label))
   const [done, drop, ...otherClosing] = closing
   const main: ReviewButton[] = [
-    ...(today ? [{ role: 'today' as const, label: 'Today', action: today }] : []),
-    ...(defer ? [{ role: 'defer' as const, label: 'Schedule', ...(placed ? { option: placed.option } : {}), ...(alternatives.length ? { alternatives } : {}), action: defer }] : []),
+    ...(defer ? [{ role: 'defer' as const, label: 'Schedule', ...(placed ? { option: placed.option } : {}), ...(alternatives.length ? { alternatives } : {}), ...(today ? { today } : {}), action: defer }] : []),
     ...(waiting ? [button('wait', waiting)] : []),
     ...(done ? [button('done', done)] : []),
     ...(drop ? [button('drop', drop, actions.find((a) => a.id === 'drop' && a.id === drop.action.id)?.name ?? drop.option.label)] : []),

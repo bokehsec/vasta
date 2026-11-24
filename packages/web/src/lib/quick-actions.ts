@@ -4,7 +4,9 @@
 // element pressed, or centred without one or on a phone); then the object is saved and one notice
 // with one Undo puts its previous values back. A day asked for another date than the deadline
 // (Defer's Do date) offers to move the deadline too when the day is after it, so the task is not
-// left overdue. A day question can offer other choices under its calendar (alternatives: Review's
+// left overdue. A question for the plan date (Do date) has Today as its first one-tap preset; where a caller gives
+// its own Today (Review's: a new task also gets its first open status) that is run instead and the
+// question closes with nothing saved. A day question can offer other choices under its calendar (alternatives: Review's
 // No date and Someday); one pressed closes it with nothing saved and the caller carries on. The question stays open, with what was typed or picked, until the values are saved:
 // when nothing could be saved it shows why and offers Retry or Cancel; while saving it takes no
 // second answer. Without a question a failed save says so (lastError) and shows no notice.
@@ -80,6 +82,10 @@ export interface QuickAsk {
   dueMoves: (day: string) => string | undefined
   /** Choices under a day's calendar that skip the day (RunOptions.alternatives). */
   alternatives?: QuickAskAlternative[]
+  /** The day asked for is the plan date: the question offers Today beside Tomorrow and Next week. */
+  plan: boolean
+  /** The caller's own Today (RunOptions.today); the question closes unanswered once it is called. */
+  today?: () => void
   /** Whether the answer is being saved (no second one is taken), and why nothing was saved after the last try. */
   state: { saving: boolean; error: string }
   /** Saves an answer: a value, 'clear' (an empty line) or null (cancel, ignored while saving). Resolves once the question is over. */
@@ -122,6 +128,8 @@ export interface RunOptions {
   scope?: string
   /** Choices a day question offers under its calendar; one pressed closes the question, which then resolves with nothing. */
   alternatives?: QuickAskAlternative[]
+  /** What Today does in a plan-date question, instead of answering it with today (Review: a new task also gets its first open status); the question then closes with nothing saved. */
+  today?: () => void
   /** Called with the edit saved, once, after the notice is up. */
   onSaved?: (edit: QuickActionEdit) => void
   /** Called after Undo has put the values back. */
@@ -228,6 +236,8 @@ export async function runQuickAction(type: ObjectType, target: Target, action: Q
       dueMovable: asked.def.kind === 'date' && asked.def.id !== deadlineId && !!dueMoves('9999-12-31'),
       dueMoves,
       ...(options.alternatives?.length && asked.def.kind === 'date' ? { alternatives: options.alternatives } : {}),
+      plan: dates.plan?.id === asked.def.id,
+      ...(options.today && dates.plan?.id === asked.def.id ? { today: options.today } : {}),
       state,
       answer: async (answer, moveDue) => {
         if (state.saving) return

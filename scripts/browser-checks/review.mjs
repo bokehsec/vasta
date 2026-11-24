@@ -273,10 +273,10 @@ try {
   await until(async () => dayOf((await propsOf(swiped.id)).snoozed) === days.tomorrow, 'the swipe set Snoozed until tomorrow')
   if ((await statusOf(swiped.id)) !== todo) throw new Error('Snooze changed the status')
   if ((await propsOf(swiped.id)).reviewed) throw new Error('Snooze marked the task reviewed')
-  // Keep (as planned), Today, Schedule… and Done and a quiet Snooze as buttons in the tray, In progress a link; no menu.
+  // Keep (as planned), Schedule… and Done and a quiet Snooze as buttons in the tray, In progress a link; no menu.
   const choices = await page.locator('[data-process-choice]').all()
   const roles = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole).join())
-  if (roles !== 'today,defer,done,snooze' || choices.length !== 5) throw new Error(`review choices: ${roles}, ${choices.length}`)
+  if (roles !== 'defer,done,snooze' || choices.length !== 4) throw new Error(`review choices: ${roles}, ${choices.length}`)
   if ((await page.locator('[data-process-links]').innerText()).replace(/\s+/g, ' ').trim() !== 'Move to In progress') throw new Error(`links: ${await page.locator('[data-process-links]').innerText()}`)
   for (const choice of choices) if ((await choice.boundingBox()).height < 44) throw new Error('a choice under 44px')
   if (await page.locator('[data-process-more]').count()) throw new Error('the review still has a menu')
@@ -290,8 +290,12 @@ try {
   await until(async () => (await statusOf(phoneDone.id)) === todo, 'Done undone')
   if (!(await pos.innerText()).startsWith('Check-in 3 of')) throw new Error('Undo moved the review')
 
-  step('phone: the next step is a plan field: saved in place, the review stays on the task; → goes on without deciding')
+  step('phone: the next step shows only when it has one (no empty chip); then it is a plan field: saved in place, the review stays on the task; → goes on without deciding')
   const stepTitle = (await page.locator('[data-process-title]').innerText()).trim()
+  if (await nextStepInput().count()) throw new Error('an empty next step has a chip')
+  const seeded = tasks.find((t) => t.title === stepTitle)
+  await put(`/api/objects/${seeded.id}`, { ...(await get(`/api/objects/${seeded.id}`)), props: { ...(await propsOf(seeded.id)), reviewnext: { kind: 'text', value: 'Call someone' } } })
+  await until(async () => (await nextStepInput().count()) === 1, 'the filled next step shows')
   await nextStepInput().fill('Call the plumber')
   await nextStepInput().press('Enter')
   const stepTask = tasks.find((t) => t.title === stepTitle)

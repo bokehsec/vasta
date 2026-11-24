@@ -61,6 +61,22 @@ describe('runQuickAction', () => {
     expect((await running)!.values.dodate).toEqual({ kind: 'date', value: { start: '2026-11-20T15:30:00.000Z', resolution: 'time' } })
   })
 
+  it('a question for the plan date offers Today, and gives the caller\'s own Today when there is one; other days do not', async () => {
+    const today = vi.fn()
+    const running = runQuickAction(task, open('a'), defer, { save: vi.fn(), today })
+    expect(quickAsk.value).toMatchObject({ plan: true, today })
+    quickAsk.value!.answer(null)
+    await running
+    const due = quickActionsOf(task).find((a) => a.changes.some((c) => c.field === 'due' && c.value.kind === 'ask'))
+    if (due) {
+      const asking = runQuickAction(task, open('a'), due, { save: vi.fn(), today })
+      expect(quickAsk.value).toMatchObject({ plan: false })
+      expect(quickAsk.value?.today).toBeUndefined()
+      quickAsk.value!.answer(null)
+      await asking
+    }
+  })
+
   it('does nothing when the question is dismissed', async () => {
     const save = vi.fn()
     const running = runQuickAction(task, open('a'), defer, { save })

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// The decision under the task in a review: Keep (highlighted), the main buttons (Today, Schedule…,
-// Waiting…, Done, Drop) with a quiet Snooze last, then the other statuses as links; Back at one end and, at the other, Decide later (Next once
-// decided), which a task with Snooze does not have. A phone has them as a tray at the bottom, Snooze a
-// row of its own, Back in the header. What is offered is lib/review-choices.ts; the choosing and the
+// The decision under the task in a review: Keep (highlighted), the main buttons (Schedule…, Waiting…,
+// Done, Drop; no Today button, that is Schedule…'s first preset) with a quiet Snooze last, then the other statuses as links; Back at one end and, at the other, Decide later (Next once
+// decided), which a task with Snooze does not have. A phone has them as a tray at the bottom (Keep
+// a full row, then two by two, Snooze a row of its own), Back in the header. Whatever is typed in the
+// comment box above goes with the decision pressed (ProcessMode). What is offered is lib/review-choices.ts; the choosing and the
 // keys are ProcessMode's.
 import { computed } from 'vue'
 import type { ObjectType, QuickActionDef, ReviewButton } from '@vasta/core'
@@ -32,7 +33,7 @@ const props = defineProps<{
 const emit = defineEmits<{ act: [action: QuickActionDef, anchor: HTMLElement | null]; skip: []; back: [] }>()
 
 const label = (button: ReviewButton) => (button.role === 'wait' || askOf(props.type, button.action) ? `${button.label}…` : button.label)
-const icon = (button: ReviewButton) => (button.role === 'today' ? 'ph:calendar-check' : button.role === 'defer' ? 'ph:calendar-blank' : button.role === 'wait' ? 'ph:hourglass-medium' : button.role === 'done' ? 'ph:check-circle' : button.role === 'drop' ? 'ph:x-circle' : (button.action.icon?.value ?? 'ph:arrow-right'))
+const icon = (button: ReviewButton) => (button.role === 'defer' ? 'ph:calendar-blank' : button.role === 'wait' ? 'ph:hourglass-medium' : button.role === 'done' ? 'ph:check-circle' : button.role === 'drop' ? 'ph:x-circle' : (button.action.icon?.value ?? 'ph:arrow-right'))
 const tone = (button: ReviewButton) => (button.role === 'done' ? 'text-[var(--color-flow-done)]' : button.role === 'drop' ? 'text-red-600 dark:text-red-400' : '')
 const keepLabel = computed(() => (props.outcome ? `Next ${props.noun}` : 'Keep as planned'))
 const keepHint = computed(() => (props.outcome ? 'Decided. Go on to the next one.' : props.every ? `Marks it reviewed today. It comes back in ${props.every} ${props.every === 1 ? 'day' : 'days'}.` : 'Marks it reviewed today.'))

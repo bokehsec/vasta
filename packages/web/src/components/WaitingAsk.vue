@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // Review's Waiting… question: the task waits on someone, so when to check back (a week unless
-// changed: Tomorrow, In 3 days, In a week, In 2 weeks, or any day on the calendar) and a line to
-// remember it by (a div, not a form: the calendar's day buttons would submit one). Wait (or Enter in the note) hands the day and the note to the review; Cancel, Escape or a tap
+// changed: Tomorrow, In 3 days, In a week, In 2 weeks, or any day on the calendar) and a comment to
+// remember it by (a div, not a form: the calendar's day buttons would submit one), which starts as
+// what was already typed in the review's comment box, so nothing is typed twice. Wait (or Enter in the
+// comment) hands the day and the comment to the review, which saves it with the decision; Cancel, Escape or a tap
 // outside close it with nothing changed. Under the button pressed; on a phone a sheet from the bottom.
 import { computed, nextTick, onMounted, ref, type Component } from 'vue'
 import { addDays } from '@vasta/core'
@@ -14,14 +16,14 @@ import BottomSheet from './BottomSheet.vue'
 import PopoverMenu from './PopoverMenu.vue'
 import MiniMonth from './calendar/MiniMonth.vue'
 
-const props = defineProps<{ anchor: HTMLElement | null; scope?: string }>()
-const emit = defineEmits<{ submit: [day: string, note: string]; close: [] }>()
+const props = defineProps<{ anchor: HTMLElement | null; scope?: string; comment?: string }>()
+const emit = defineEmits<{ submit: [day: string, comment: string]; close: [] }>()
 
 const PRESETS = [{ label: 'Tomorrow', days: 1 }, { label: 'In 3 days', days: 3 }, { label: 'In a week', days: 7 }, { label: 'In 2 weeks', days: 14 }]
 const today = dayKey()
 const picked = ref(addDays(today, 7))
 const calendar = ref(false)
-const note = ref('')
+const note = ref(props.comment ?? '')
 const noteInput = ref<HTMLInputElement | null>(null)
 onMounted(async () => {
   await nextTick()
@@ -55,7 +57,7 @@ const presetClass = (days: number) => ['min-w-0 flex-1 rounded-lg px-2 py-1.5 ma
       <div class="sticky bottom-0 -mx-2 space-y-3 bg-surface px-2 pt-2">
         <p class="font-medium" data-waiting-day>Check back: {{ longDay(picked) }}</p>
         <label class="block space-y-1">
-          <span class="text-xs text-ink-faint max-md:text-sm">Note (optional)</span>
+          <span class="text-xs text-ink-faint max-md:text-sm">Comment (optional)</span>
           <input ref="noteInput" v-model="note" type="text" enterkeyhint="done" class="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-line-strong max-md:py-2.5 max-md:text-base" placeholder="What you're waiting for — e.g. emailed Sam for the documents" data-waiting-note @keydown.enter.prevent="submit" />
         </label>
         <div class="flex gap-2">

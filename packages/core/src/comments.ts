@@ -4,7 +4,7 @@
 // one. Only a comment's author changes or deletes it: the server's store refuses other writes
 // (Store.checkAuthorship). Members are mentioned as @username.
 import { newId } from './ids.ts'
-import type { Comment, Id, IsoDateTime, ObjectRecord, ObjectSummary, Person } from './model.ts'
+import type { Comment, Id, IsoDateTime, ObjectRecord, ObjectSummary, Person, PropertyValue } from './model.ts'
 
 export const COMMENT_PREFIX = 'comment:'
 
@@ -35,9 +35,15 @@ function checkText(text: string): string {
   return trimmed
 }
 
+/** A new comment as the prop it is saved as (`comment:<id>`), for a save that carries it with other changes (Review's decision). */
+export function commentProp(author: Id, text: string, at: IsoDateTime, id: Id = newId()): { key: string; value: PropertyValue } {
+  return { key: `${COMMENT_PREFIX}${id}`, value: { kind: 'comment', value: { author, at, text: checkText(text) } } }
+}
+
 /** Add a comment by `author` to `object` (changed in place). Returns its id. */
 export function addComment(object: Pick<ObjectRecord, 'props'>, author: Id, text: string, at: IsoDateTime, id: Id = newId()): Id {
-  object.props[`${COMMENT_PREFIX}${id}`] = { kind: 'comment', value: { author, at, text: checkText(text) } }
+  const { key, value } = commentProp(author, text, at, id)
+  object.props[key] = value
   return id
 }
 

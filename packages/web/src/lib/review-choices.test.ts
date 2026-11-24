@@ -13,15 +13,16 @@ const set = (id: string): QuickActionDef['changes'][number] => ({ field: 'status
 const task = (status?: string) => ({ id: 'a', props: status ? { status: { kind: 'select', value: [status] } } : {} }) as unknown as ObjectSummary
 
 describe('review keys', () => {
-  it('Today, Schedule, Done, Drop and Snooze keep T, S, D, X and N, whatever the first status is called', () => {
+  it('Schedule, Waiting, Done, Drop and Snooze keep S, W, D, X and N (no Today button, and C and T are no button\'s), whatever the first status is called', () => {
     const type = withStatuses(
       [{ id: 'dele', label: 'Delegated', status: 'todo' }, { id: 'next', label: 'Next', status: 'todo' }, { id: 'done', label: 'Done', status: 'done' }, { id: 'drop', label: 'Dropped', status: 'done' }],
       { actions: [{ id: 'defer', name: 'Defer', changes: [{ field: 'dodate', value: { kind: 'ask' } }] }, { id: 'done', name: 'Done', changes: [set('done')] }, { id: 'drop', name: 'Drop', changes: [set('drop')] }] }
     )
     const { keys, main } = reviewDecisions(type, task('dele'), { isNew: true, planFieldIds: [] })
-    expect(main.map((b) => b.role)).toEqual(['today', 'defer', 'wait', 'done', 'drop', 'snooze'])
+    expect(main.map((b) => b.role)).toEqual(['defer', 'wait', 'done', 'drop', 'snooze'])
     expect(keys.get('w')?.role).toBe('wait')
-    expect(keys.get('t')?.role).toBe('today')
+    expect(keys.get('t')).toBeUndefined()
+    expect(keys.get('c')).toBeUndefined()
     expect(keys.get('d')?.role).toBe('done')
     expect(keys.get('s')?.role).toBe('defer')
     expect(keys.get('x')?.role).toBe('drop')

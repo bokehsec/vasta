@@ -126,7 +126,8 @@ try {
   }
   await new Promise((resolve) => setTimeout(resolve, 1200))
   assert.equal(await page.locator('[data-process-mode]').count(), 1, 'deleting an unrelated space keeps the review open')
-  await click('[data-process-role="today"]')
+  await click('[data-process-role="defer"]')
+  await click('[data-ask-today]')
   await until(async () => await title() === other.title, 'placing incoming advances within the frozen queue')
   assert.deepEqual((await saved()).ids, [incoming.id, other.id, outside.id, commitment.id])
   await page.locator('[role=status]').getByRole('button', { name: 'Undo', exact: true }).click()

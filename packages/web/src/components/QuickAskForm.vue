@@ -1,13 +1,13 @@
 <script setup lang="ts">
-// The inside of a quick action's question (QuickAskHost): a day (tomorrow and next week save at
-// once, with Undo, unless that is after the deadline: then the warning shows and Save waits; one
+// The inside of a quick action's question (QuickAskHost): a day (today for the plan date, tomorrow and next week save at
+// once, today also by the key T while no text box has the keys, with Undo, unless that is after the deadline: then the warning shows and Save waits; one
 // picked on a calendar only selects it: the day, and where the deadline ends up, show before Save
 // writes it, keeping deadlines unless explicitly moved; any other choices the caller gave sit under
 // the calendar and close the question when pressed) or a line of text
 // (a number, a link); an empty line clears the field. Cancel and Save are always on screen. It stays
 // open with what was typed or picked while saving, and when nothing could be saved says why and
 // offers Retry.
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { addDays } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
 import { greyButton, mainButton } from '../lib/buttons.ts'
@@ -25,6 +25,7 @@ onMounted(async () => {
   textInput.value?.select()
 })
 
+const today = computed(() => dayKey())
 const tomorrow = computed(() => addDays(dayKey(), 1))
 const nextWeek = computed(() => nextWeekStart())
 
@@ -60,6 +61,21 @@ const afterDue = computed(() => {
 const problem = computed(() => (props.ask.def.kind === 'date' ? undefined : textProblem(props.ask.def, text.value)))
 const stays = computed(() => (props.ask.closes === undefined ? undefined : props.ask.closes ? 'Saving also closes it.' : 'Saving does not mark it done.'))
 
+// Today (the plan date's first preset): the caller's own (Review's) or the day answered at once.
+function chooseToday() {
+  if (saving.value) return
+  if (!props.ask.today) return preset(today.value)
+  props.ask.today()
+  void props.ask.answer(null)
+}
+function onKey(event: KeyboardEvent) {
+  if (!props.ask.plan || props.ask.def.kind !== 'date' || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.key.toLowerCase() !== 't') return
+  if ((event.target as Element | null)?.closest('input, textarea, select, [contenteditable="true"]')) return
+  event.preventDefault()
+  chooseToday()
+}
+onMounted(() => window.addEventListener('keydown', onKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 function pick(day: string) {
   if (!saving.value) picked.value = day
 }
@@ -84,7 +100,7 @@ function choose(alternative: NonNullable<QuickAsk['alternatives']>[number]) {
 }
 
 const presetClass = (day: string) => [
-  'flex-1 rounded-lg px-2.5 py-1.5 max-md:py-3 max-md:text-base',
+  'min-w-0 flex-1 rounded-lg px-2 py-1.5 max-md:py-3 max-md:text-base',
   picked.value === day ? 'bg-ink text-surface' : 'bg-hover hover:bg-line',
 ]
 const cancelClass = [greyButton, 'flex-1']
@@ -95,6 +111,7 @@ const saveClass = [mainButton, 'flex-1']
   <div v-if="ask.def.kind === 'date'" class="space-y-3 p-2 text-sm" data-defer-menu :aria-busy="saving || undefined">
     <p v-if="ask.scope" class="line-clamp-2 text-xs text-ink-soft max-md:text-sm" data-ask-scope>{{ ask.scope }}</p>
     <div class="flex gap-2">
+      <button v-if="ask.plan" :class="presetClass(today)" :aria-pressed="picked === today" :disabled="saving" title="Key T" data-ask-today @click="chooseToday">Today</button>
       <button :class="presetClass(tomorrow)" :aria-pressed="picked === tomorrow" :disabled="saving" @click="preset(tomorrow)">Tomorrow</button>
       <button :class="presetClass(nextWeek)" :aria-pressed="picked === nextWeek" :disabled="saving" @click="preset(nextWeek)">Next week</button>
     </div>

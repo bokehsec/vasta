@@ -1,7 +1,8 @@
-// Review tasks, a day in one press: Today (the Do date set to today; a new task also goes to Next)
-// and Schedule… (the type's Defer that only sets the day, the default) placing a new task in Scheduled;
-// both settle the task and go on, with Undo. A task that has its place keeps it. Keys T and S. Phone
-// (Snooze a full-width row of its own) and desktop.
+// Review tasks, a day in one press: Schedule…'s question has Today first (the Do date set to today; a
+// new task also goes to Next, not Scheduled: what the Today button did before it was dropped) and
+// Tomorrow, which place a new task (the type's Defer only sets the day, the default; Tomorrow puts it in
+// Scheduled); both settle the task and go on, with Undo. A task that has its place keeps it. Keys S, then
+// T inside the question. There is no Today button. Phone (Snooze a full-width row of its own) and desktop.
 // node review-today.mjs [chromium|webkit] [base]   MODE=json: HTTP; default: replica; SHOTS=<dir>
 import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
@@ -84,24 +85,27 @@ try {
     return page.locator('[data-review-tasks]').waitFor({ timeout: 2000 }).then(() => true, () => false)
   }, 'the replica has the test space')
 
-  step('phone, a new task: Today (a row of its own, five buttons), Schedule…, Waiting…, Done, Drop in two columns, Snooze a row of its own')
+  step('phone, a new task: no Today button; Schedule…, Waiting…, Done, Drop in two columns, Snooze a row of its own')
   await click('[data-review-tasks]')
   await until(async () => (await currentTitle()) === a.title, 'the review starts with the oldest new task')
-  assert.deepEqual(await roles(), ['today', 'defer', 'wait', 'done', 'drop', 'snooze'])
+  assert.deepEqual(await roles(), ['defer', 'wait', 'done', 'drop', 'snooze'])
   assert.deepEqual(await page.locator('[data-process-links] [data-process-choice]').evaluateAll((els) => els.map((el) => el.dataset.processChoice)), [], 'Scheduled is Schedule’s, Next is No date’s and Waiting is Waiting…’s: no links')
   for (const width of [320, 390, 430]) {
     await page.setViewportSize({ width, height: width === 320 ? 568 : 844 })
     const boxes = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => ({ top: Math.round(r.top), width: Math.round(r.width), height: r.height })))
     assert(boxes.every((box) => box.height >= 44), `a button under 44px at ${width}`)
-    assert(boxes[5].width > boxes[1].width * 1.8, `Snooze is not a row of its own at ${width}`)
-    assert(boxes[1].top === boxes[2].top && boxes[3].top === boxes[4].top && boxes[0].top < boxes[1].top && boxes[1].top < boxes[3].top && boxes[3].top < boxes[5].top, `not two to a row at ${width}: ${JSON.stringify(boxes)}`)
+    assert(boxes[4].width > boxes[0].width * 1.8, `Snooze is not a row of its own at ${width}`)
+    assert(boxes[0].top === boxes[1].top && boxes[2].top === boxes[3].top && boxes[0].top < boxes[2].top && boxes[2].top < boxes[4].top, `not two to a row at ${width}: ${JSON.stringify(boxes)}`)
     assert.equal(await page.locator('[data-process-mode]').evaluate((el) => el.scrollWidth > innerWidth), false, `overflow at ${width}`)
   }
   await page.setViewportSize({ width: 390, height: 844 })
   await shot('phone-new')
 
-  step('Today on a new task: Do date today, moved to Next, on to the next task; Undo puts both back')
-  await click('[data-process-role="today"]')
+  step('Schedule… → Today on a new task: Do date today, moved to Next (not Scheduled), on to the next task; Undo puts both back')
+  await click('[data-process-role="defer"]')
+  assert.deepEqual(await page.locator('[data-defer-menu] button[aria-pressed]').evaluateAll((els) => els.map((el) => el.textContent.trim())), ['Today', 'Tomorrow', 'Next week'], 'Today first')
+  await shot('phone-question')
+  await click('[data-ask-today]')
   await until(async () => (await currentTitle()) === b.title, 'Today settles the new task')
   await until(async () => (await propsOf(a.id)).status?.value[0] === 'next', 'Today placed it in Next')
   assert.equal(day((await propsOf(a.id)).dodate), today)
@@ -118,19 +122,26 @@ try {
   await until(async () => (await propsOf(b.id)).status?.value[0] === 'scheduled', 'Defer placed it in Scheduled')
   assert.equal(day((await propsOf(b.id)).dodate), tomorrow)
 
-  step('desktop: the key T is Today; a check-in keeps its status with Today and with Schedule… (key S)')
+  step('desktop: S then T is Today (no button, no key T on the card); a check-in keeps its status with Today and with Tomorrow')
   await page.setViewportSize({ width: 1280, height: 800 })
-  await until(async () => (await page.locator('[data-process-role="today"]').getAttribute('data-key')) === 'T', 'Today has the key T')
+  assert.equal(await page.locator('[data-key="T"]').count(), 0, 'no button has the key T')
+  assert.equal(await page.locator('[data-process-role="defer"]').getAttribute('data-key'), 'S')
   await shot('desktop-new')
   await page.keyboard.press('t')
-  await until(async () => (await currentTitle()) === d.title, 'T settles the new task; on to the check-ins')
+  assert.equal(await page.locator('[data-defer-menu]').count(), 0, 'T alone does nothing')
+  assert.equal(await currentTitle(), c.title)
+  await page.keyboard.press('s')
+  await page.locator('[data-defer-menu]').waitFor()
+  await page.keyboard.press('t')
+  await until(async () => (await currentTitle()) === d.title, 'T in the question settles the new task; on to the check-ins')
   await until(async () => (await propsOf(c.id)).status?.value[0] === 'next', 'T placed it in Next')
   assert.equal(day((await propsOf(c.id)).dodate), today)
   assert.equal((await position.innerText()).trim(), 'Check-in 1 of 2')
-  assert.deepEqual(await roles(), ['today', 'defer', 'wait', 'done', 'drop', 'snooze'])
+  assert.deepEqual(await roles(), ['defer', 'wait', 'done', 'drop', 'snooze'])
   assert.equal((await page.locator('[data-process-reviewed]').innerText()).replace(/\s*K$/, ''), 'Keep as planned')
   await shot('desktop-checkin')
-  await click('[data-process-role="today"]')
+  await click('[data-process-role="defer"]')
+  await click('[data-ask-today]')
   await until(async () => (await currentTitle()) === e.title, 'Today goes on from a check-in')
   await until(async () => day((await propsOf(d.id)).dodate) === today, 'Today saved the day')
   assert.equal((await propsOf(d.id)).status.value[0], 'waiting', 'a placed task keeps its status')

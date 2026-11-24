@@ -141,8 +141,8 @@ describe('sister task workflows', () => {
     ] } }
     const shape = (r: ReturnType<typeof reviewButtons>) => ({ main: r.main.map((b) => `${b.role}:${b.label}`), more: r.more.map((b) => b.label) })
 
-    it('a new task: Today, Schedule, Done, Drop, Snooze; only the statuses left over as links', () => {
-      expect(shape(reviewButtons(typed, 'in', true))).toEqual({ main: ['today:Today', 'defer:Schedule', 'wait:Waiting', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
+    it('a new task: Schedule, Waiting, Done, Drop, Snooze (no Today button); only the statuses left over as links', () => {
+      expect(shape(reviewButtons(typed, 'in', true))).toEqual({ main: ['defer:Schedule', 'wait:Waiting', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
     })
 
     it('Schedule offers No date (the first open status that is not the scheduled one) and Someday, each clearing the plan date', () => {
@@ -172,8 +172,10 @@ describe('sister task workflows', () => {
       expect(reviewButtons(typed, 'in', true).covered).toContain('snooze')
     })
 
-    it('Today sets the plan date to today; a new task also goes to the first open status, a placed one keeps its own', () => {
-      const today = (isNew: boolean) => reviewButtons(typed, isNew ? 'in' : 'wait', isNew).main.find((b) => b.role === 'today')!.action
+    it('Schedule\'s Today sets the plan date to today; a new task also goes to the first open status (not Scheduled), a placed one keeps its own', () => {
+      const today = (isNew: boolean) => reviewButtons(typed, isNew ? 'in' : 'wait', isNew).main.find((b) => b.role === 'defer')!.today!
+      expect(reviewButtons(typed, 'in', true).main.map((b) => b.role)).not.toContain('today')
+      expect(reviewButtons(typed, 'in', true).main.find((b) => b.role === 'defer')!.action.changes).toContainEqual(set('sched'))
       expect(today(false).changes).toEqual([{ field: 'dodate', value: { kind: 'day', days: 0 } }])
       expect(today(true).changes).toEqual([{ field: 'dodate', value: { kind: 'day', days: 0 } }, set('next')])
       expect(settlesTriage(typed, today(true))).toBe(true)
@@ -188,7 +190,7 @@ describe('sister task workflows', () => {
       expect(defer.action.id).toBe('defer')
       expect(defer.option?.id).toBe('sched')
       expect(settlesTriage(dayOnly(typed), defer.action)).toBe(true)
-      expect(shape(fresh)).toEqual({ main: ['today:Today', 'defer:Schedule', 'wait:Waiting', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
+      expect(shape(fresh)).toEqual({ main: ['defer:Schedule', 'wait:Waiting', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
       // A task that has its place keeps it: the type's Defer as it is, and Scheduled stays a link.
       const placed = reviewButtons(dayOnly(typed), 'next', false)
       expect(placed.main.find((b) => b.role === 'defer')!.action.changes).toEqual([{ field: 'dodate', value: { kind: 'ask' } }])
@@ -197,20 +199,20 @@ describe('sister task workflows', () => {
       const bare = dayOnly({ ...typed, properties: typed.properties.map((p) => p.id === 'status' && p.kind === 'select' ? { ...p, options: p.options.filter((o) => o.id !== 'sched') } : p) })
       const plain = reviewButtons(bare, 'in', true)
       expect(plain.main.find((b) => b.role === 'defer')!.action.changes.at(-1)).toEqual(set('next'))
-      expect(shape(plain).main.slice(0, 2)).toEqual(['today:Today', 'defer:Schedule'])
+      expect(shape(plain).main[0]).toBe('defer:Schedule')
     })
 
     it('a check-in never offers the status it has as a link', () => {
-      expect(shape(reviewButtons(typed, 'next', false))).toEqual({ main: ['today:Today', 'defer:Schedule', 'wait:Waiting', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
-      expect(shape(reviewButtons(typed, 'wait', false))).toEqual({ main: ['today:Today', 'defer:Schedule', 'wait:Waiting', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
-      expect(shape(reviewButtons(typed, 'sched', false)).main[1]).toBe('defer:Schedule')
+      expect(shape(reviewButtons(typed, 'next', false))).toEqual({ main: ['defer:Schedule', 'wait:Waiting', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
+      expect(shape(reviewButtons(typed, 'wait', false))).toEqual({ main: ['defer:Schedule', 'wait:Waiting', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
+      expect(shape(reviewButtons(typed, 'sched', false)).main[0]).toBe('defer:Schedule')
     })
 
     it('Waiting… follows Schedule for a new, a placed and an already waiting task, and is no link; none without a waiting status', () => {
       const wait = (current: string | undefined, isNew: boolean) => reviewButtons(typed, current, isNew).main.find((b) => b.role === 'wait')
       for (const [current, isNew] of [['in', true], ['next', false], ['wait', false]] as const) {
         const r = reviewButtons(typed, current, isNew)
-        expect(r.main.map((b) => b.role).slice(1, 3)).toEqual(['defer', 'wait'])
+        expect(r.main.map((b) => b.role).slice(0, 2)).toEqual(['defer', 'wait'])
         expect(r.more.map((b) => b.label)).not.toContain('Waiting')
       }
       expect(wait('in', true)!.action).toMatchObject({ name: 'Moved to Waiting', changes: [set('wait')] })
@@ -218,7 +220,7 @@ describe('sister task workflows', () => {
       const delegated = { ...typed, properties: typed.properties.map((p) => p.id === 'status' && p.kind === 'select' ? { ...p, options: p.options.map((o) => (o.id === 'wait' ? { ...o, label: 'Delegated' } : o)) } : p) }
       expect(reviewButtons(delegated, 'next', false).main.find((b) => b.role === 'wait')?.label).toBe('Delegated')
       const none = { ...typed, properties: typed.properties.map((p) => p.id === 'status' && p.kind === 'select' ? { ...p, options: p.options.filter((o) => o.id !== 'wait') } : p) }
-      expect(reviewButtons(none, 'next', false).main.map((b) => b.role)).toEqual(['today', 'defer', 'done', 'drop', 'snooze'])
+      expect(reviewButtons(none, 'next', false).main.map((b) => b.role)).toEqual(['defer', 'done', 'drop', 'snooze'])
     })
 
     it('Schedule is the type\'s own Defer action, as rows and the task page run it, named Schedule here', () => {
