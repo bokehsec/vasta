@@ -28,6 +28,7 @@ import { closeTakeover, listenToDesktop, trafficLights } from './lib/platform.ts
 import { quickAsk } from './lib/quick-actions.ts'
 import { keepsScroll } from './lib/scroll-memory.ts'
 import { closeReminderEditor, reminderEditor } from './lib/insistent.ts'
+import { keepsCaretAboveKeyboard } from './lib/keyboard.ts'
 import { installShortcuts } from './lib/shortcuts.ts'
 import { checkSession, session } from './lib/session.ts'
 import { lastError, notice, ui, workspace } from './lib/state.ts'
@@ -87,6 +88,7 @@ function onKey(event: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 onBeforeUnmount(installShortcuts())
+onBeforeUnmount(keepsCaretAboveKeyboard())
 const main = ref<HTMLElement | null>(null)
 onBeforeUnmount(keepsScroll(router, () => main.value))
 

@@ -314,6 +314,8 @@ GitHub release page.
 
 ### Fixed
 
+- **iPhone: the line you are typing in a note stays above the keyboard.** Writing low in a note, or at the end of a long one, went on behind the keyboard and its toolbar (also in a note opened in a window).
+
 - **Back on a phone with Type settings open** closes them and leaves no `?settings=1` behind, so a reload no longer reopens them. Menus kept by their button close on Back too, and going back to a list no longer fights a scrollbar drag or a key press while it finds its place.
 
 - Subscribed calendars show times without a zone in the zone the feed names (X-WR-TIMEZONE) instead of yours. A swim club feed set to Mountain time showed a 5:20 am practice in Toronto as 3:20 am. Feeds naming America/Edmonton are read by Alberta's pre-2026 rules, which their servers still use.
