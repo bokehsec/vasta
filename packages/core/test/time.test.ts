@@ -5,12 +5,20 @@ describe('the day of a bucket', () => {
   // Wednesday 11 Nov 2026.
   const day = (bucket: Parameters<typeof bucketDay>[0], weekStart: string, today = '2026-11-11') => bucketDay(bucket, today, weekStart)
 
-  it('is today, tomorrow, the first day left in the week, then the start of the next weeks', () => {
+  it('is today, tomorrow, the first day left in the week, then the first working day of the next weeks', () => {
     expect(day('today', '2026-11-08')).toBe('2026-11-11')
     expect(day('tomorrow', '2026-11-08')).toBe('2026-11-12')
     expect(day('this-week', '2026-11-08')).toBe('2026-11-13')
-    expect(day('next-week', '2026-11-08')).toBe('2026-11-15')
-    expect(day('later', '2026-11-08')).toBe('2026-11-22')
+    // A Sunday-start week: Monday, not the weekend's Sunday.
+    expect(day('next-week', '2026-11-08')).toBe('2026-11-16')
+    expect(day('later', '2026-11-08')).toBe('2026-11-23')
+  })
+
+  it('skips the locale\'s own weekend', () => {
+    // A Saturday-start week with a Friday-Saturday weekend: Sunday.
+    expect(bucketDay('next-week', '2026-11-11', '2026-11-07', [5, 6])).toBe('2026-11-15')
+    // No weekend: the week's first day.
+    expect(bucketDay('next-week', '2026-11-11', '2026-11-08', [])).toBe('2026-11-15')
   })
 
   it('follows the week start', () => {

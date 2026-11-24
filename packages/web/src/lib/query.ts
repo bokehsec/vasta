@@ -4,7 +4,7 @@ import type { Filter, FilterGroup, FilterOperator, Id, ObjectRecord, ObjectSumma
 import { DAY_BUCKETS, REVIEW_DUE_FIELD, bucketDay, dayBucket, dayIn, fieldKind, isClosedTask, moveDateToDay, reviewFieldOf, type DayBucket, type FieldKind, type QueryContext } from '@vasta/core'
 import { api } from './api.ts'
 import { dayKey } from './actions.ts'
-import { startOfWeek } from './calendar.ts'
+import { startOfWeek, weekendFor } from './calendar.ts'
 import { optionLabel, propName, t, typeName, typePluralName } from './i18n.ts'
 import { meId, people, personName, sharedSpace } from './people.ts'
 import { current as currentSprint } from './sprints.ts'
@@ -255,7 +255,7 @@ export const movableField = (field: string) => !!field && field !== 'type' && fi
 /** The day a group of a date field stands for: null for No date, undefined when no day does (Earlier, a week with no day left). */
 export function dropDay(key: string, today = dayKey()): string | null | undefined {
   if (key === NO_VALUE) return null
-  return DAY_BUCKETS.includes(key as DayBucket) ? bucketDay(key as DayBucket, today, startOfWeek(today)) : undefined
+  return DAY_BUCKETS.includes(key as DayBucket) ? bucketDay(key as DayBucket, today, startOfWeek(today), weekendFor()) : undefined
 }
 
 /** Whether a card can be dropped in (or a new item added to) this group of `field`. */

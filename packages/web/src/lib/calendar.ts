@@ -33,6 +33,16 @@ function firstWeekdayFor(loc: string): number {
   return 0
 }
 
+/** The locale's weekend (0 = Sunday … 6 = Saturday); Saturday and Sunday when the browser does not know it. */
+export function weekendFor(loc = locale.value): number[] {
+  try {
+    const info = new Intl.Locale(loc) as Intl.Locale & { getWeekInfo?: () => { weekend: number[] }; weekInfo?: { weekend: number[] } }
+    const weekend = info.getWeekInfo?.().weekend ?? info.weekInfo?.weekend
+    if (weekend?.length) return weekend.map((day) => day % 7)
+  } catch {}
+  return [0, 6]
+}
+
 /** 0 = Sunday … 6 = Saturday, from the locale when the browser knows it. */
 export const firstWeekday: number = firstWeekdayFor(typeof navigator !== 'undefined' ? navigator.language : 'en')
 

@@ -101,8 +101,10 @@ describe('moving between groups', () => {
   it('finds the day of a date group, none for Earlier and clearing for No date', () => {
     expect(dropDay('today')).toBe('2026-11-11')
     expect(dropDay('tomorrow')).toBe('2026-11-12')
-    expect(dropDay('next-week')).toBe(addDays(week, 7))
-    expect(dropDay('later')).toBe(addDays(week, 14))
+    // The first working day of that week (the test locale's weekend is Saturday and Sunday).
+    const working = (from: string) => [0, 1, 2].map((n) => addDays(from, n)).find((d) => ![0, 6].includes(new Date(`${d}T00:00:00.000Z`).getUTCDay()))
+    expect(dropDay('next-week')).toBe(working(addDays(week, 7)))
+    expect(dropDay('later')).toBe(working(addDays(week, 14)))
     expect(dropDay('past')).toBeUndefined()
     expect(dropDay(NO_VALUE)).toBeNull()
     expect(dropDay('some-select-option')).toBeUndefined()

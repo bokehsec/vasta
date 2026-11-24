@@ -10,7 +10,7 @@ GitHub release page.
 
 - **Boards grouped by a date: drag cards between columns.** Dropping a card in Today or Tomorrow
   gives it that day; This week gives it the first day after tomorrow, Next week and Later the
-  first day of that week; No date clears it. A time of day, a range's end and a repeat are kept.
+  first working day of that week (Monday, where weeks start on Sunday); No date clears it. A time of day, a range's end and a repeat are kept.
   Earlier (Overdue) takes no drops. **+ New** in a date column, swimlane or list/table group
   starts the item on that group's day.
 - **Review tasks: fewer choices, and Snooze.** A task in a review now has **Today**,
