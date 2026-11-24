@@ -7,12 +7,15 @@ import { autoUpdate, computePosition, flip, offset, shift, type Placement } from
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { isPhone } from '../lib/viewport.ts'
 import BottomSheet from './BottomSheet.vue'
+import { closesOnBack } from '../lib/back.ts'
 
 const props = defineProps<{ anchor: HTMLElement | null | undefined; placement?: Placement; width?: string; anchored?: boolean; label?: string }>()
 const open = defineModel<boolean>('open', { required: true })
 const panel = ref<HTMLElement | null>(null)
 let stop: (() => void) | undefined
 const sheet = computed(() => isPhone.value && !props.anchored)
+// A sheet says so itself (BottomSheet); a panel kept by its button closes on Back too.
+closesOnBack(() => open.value && !sheet.value, () => (open.value = false))
 
 async function position() {
   if (!props.anchor || !panel.value) return

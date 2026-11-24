@@ -36,11 +36,13 @@ export function keepsScroll(router: Router, main: () => HTMLElement | null | und
     if (!element) return
     element.scrollTop = target
     if (!target) return
-    // A finger or wheel on the page takes over; so does another page.
+    // A finger, the wheel, the scrollbar or a key on the page takes over; so does another page.
     let touched = false
     const take = () => (touched = true)
     element.addEventListener('touchstart', take, { once: true, passive: true })
     element.addEventListener('wheel', take, { once: true, passive: true })
+    element.addEventListener('pointerdown', take, { once: true, passive: true })
+    window.addEventListener('keydown', take, { once: true })
     const start = performance.now()
     const step = () => {
       if (touched || run !== restoring) return done()
@@ -51,6 +53,8 @@ export function keepsScroll(router: Router, main: () => HTMLElement | null | und
     const done = () => {
       element.removeEventListener('touchstart', take)
       element.removeEventListener('wheel', take)
+      element.removeEventListener('pointerdown', take)
+      window.removeEventListener('keydown', take)
     }
     requestAnimationFrame(step)
   }

@@ -50,8 +50,22 @@ export const router = createRouter({
 // router puts the history entry back.
 router.beforeEach((to) => {
   if (router.options.history.state.current !== to.fullPath || !isPhone.value) return
-  if (closeTopLayer()) return false
+  if (closeTopLayer(afterEntryBack)) return false
 })
+
+// The router puts the entry back by going the other way; the close waits for that, so a dialog whose
+// close changes the address (Type settings, ?settings=1) changes the entry it was opened on.
+function afterEntryBack(close: () => void) {
+  let done = false
+  const run = () => {
+    if (done) return
+    done = true
+    window.removeEventListener('popstate', run)
+    close()
+  }
+  window.addEventListener('popstate', run)
+  setTimeout(run, 500) // no entry to go back to (a history state without a position)
+}
 
 // The side pane and the popup (lib/open.ts) live in the query, as ?pane=<id>&paneBlock=<id> and
 // ?popup=<id>&popupBlock=<id>. A page that changes only its own query (the calendar's view and

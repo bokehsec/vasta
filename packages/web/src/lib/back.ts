@@ -37,11 +37,12 @@ export function closesOnBack(open: WatchSource<boolean>, close: () => void) {
 
 /**
  * Close the top layer for a Back. True when one was open: the navigation is then cancelled. A layer
- * that cannot close yet (an answer being saved) stays, and keeps the page too.
+ * that cannot close yet (an answer being saved) stays, and keeps the page too. `later` decides when
+ * the close runs (router.ts: once the history entry is back).
  */
-export function closeTopLayer(): boolean {
+export function closeTopLayer(later: (close: () => void) => void = (close) => close()): boolean {
   const layer = layers.at(-1)
   if (!layer) return false
-  layer()
+  later(layer)
   return true
 }

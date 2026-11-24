@@ -314,6 +314,8 @@ GitHub release page.
 
 ### Fixed
 
+- **Back on a phone with Type settings open** closes them and leaves no `?settings=1` behind, so a reload no longer reopens them. Menus kept by their button close on Back too, and going back to a list no longer fights a scrollbar drag or a key press while it finds its place.
+
 - Subscribed calendars show times without a zone in the zone the feed names (X-WR-TIMEZONE) instead of yours. A swim club feed set to Mountain time showed a 5:20 am practice in Toronto as 3:20 am. Feeds naming America/Edmonton are read by Alberta's pre-2026 rules, which their servers still use.
 - **Overdue tasks read normally on a phone.** In an agenda's Overdue list (on Home, for one), a
   task late on both dates had its title squeezed to one letter per line beside its "Due" and
