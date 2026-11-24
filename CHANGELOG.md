@@ -13,6 +13,11 @@ GitHub release page.
   first working day of that week (Monday, where weeks start on Sunday); No date clears it. A time of day, a range's end and a repeat are kept.
   Earlier (Overdue) takes no drops. **+ New** in a date column, swimlane or list/table group
   starts the item on that group's day.
+- **Review: a tighter screen.** A task's fields (status, due, priority, project, next step) are
+  now one line of chips under its title: a field with a value shows it, an empty one is a small
+  **+ Due**, **+ Priority** you press to set. On a big screen the review is one narrower panel
+  that is as tall as the task needs, with the buttons right under it, instead of a wide panel
+  with a column of mostly empty fields beside it. On a phone the room goes to the notes and steps.
 - **Review tasks: fewer choices, and Snooze.** A task in a review now has **Today**,
   **Schedule…**, **Done**, **Drop** and **Snooze** (keys `T`, `S`, `D`, `X`, `N`); a check-in
   also has **Keep as planned**. Schedule… asks for the day and also offers **No date** (ready

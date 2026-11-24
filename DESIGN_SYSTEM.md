@@ -58,7 +58,7 @@ review, its header names the scope; a paused review keeps its original scope. On
 "Review all tasks in Main" (using the space’s name) for a whole-space sweep. Metrics and Agenda explicitly say Review all.
 Inside a review, few buttons and no status names: Keep as planned is Main (the one highlighted; a new task has none), Today, Schedule…, Done and
 Drop are Grey (`ReviewDecisionBar`), Snooze is Quiet and last, leftover statuses are underlined links; Decide later (Quiet) is only for types without Snooze. On a big screen they are
-centred under the task, the plan in a column beside it; on a phone a tray at the bottom, two to a row, Keep and Snooze each a row of their own. Navigation (sidebar, tab bar, calendar grids), segmented controls,
+centred right under the task; on a phone a tray at the bottom, two to a row, Keep and Snooze each a row of their own. Navigation (sidebar, tab bar, calendar grids), segmented controls,
 chips, menu rows (`MenuRow`: icon, label, then a value, tick or caret; one look for every menu and
 sheet) and the whiteboard keep their own looks; they are not buttons of these kinds.
 
@@ -197,9 +197,12 @@ header fill of its own (`bare`) and its first column lines up with the text arou
 one framed surface in another.
 
 **Review** (`ProcessMode`, with `ReviewDecisionBar`): the tasks of a review one at a time, in a
-centred panel (full screen on a phone) over the dimmed page: which review and where in it (the new
-tasks, then the check-ins) with Pause, the task in full (notes, steps) and the plan beside it
-(status, dates, priority, project, next step, each edited in place), then the decision under it:
+centred panel (full screen on a phone) over the dimmed page, one column as tall as the task needs
+(it scrolls when the notes are long): which review and where in it (the new tasks, then the
+check-ins) with Pause, the title, the plan as a line of chips under it (status, dates, priority,
+project, next step: a field with a value shows it and is edited in place, an empty one is a dashed
+"+ Name" that opens its editor; an empty Do date has none, Today and Schedule… set it), the notes
+and steps in full, then the decision right under it:
 Keep, Today, Schedule…, Done, Drop, Snooze, the leftover statuses as links, and Back (buttons and keys:
 Buttons above). A day settles a new task: Today also puts it in the first open status, a Schedule
 that only sets the day in the status named for scheduled work; Schedule's question also offers No date

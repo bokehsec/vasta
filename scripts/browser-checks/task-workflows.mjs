@@ -129,9 +129,12 @@ try {
     assert.equal(await page.locator('[data-process-mode]').evaluate((el) => el.scrollWidth > innerWidth), false, `overflow at ${width}`)
     assert.equal(await page.locator('[data-process-card]').evaluate((el) => el.scrollWidth > el.clientWidth), false, `card overflow at ${width}`)
     for (const selector of ['[data-process-choice]', '[data-process-skip]']) for (const button of await page.locator(selector).all()) assert((await button.boundingBox()).height >= 44, `${selector} under 44px at ${width}`)
-    // The plan: two fields to a row, in the scroll area.
-    const fields = await page.locator('[data-process-plan] > div').evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)))
-    assert(fields.length >= 4 && fields[0] === fields[1], `plan is not two to a row at ${width}: ${fields}`)
+    // The plan: a line of chips in the scroll area, the empty fields as "+ Name"; no chip for an empty Do date (Today and Schedule… set it).
+    const plan = await page.locator('[data-process-plan]').boundingBox()
+    const fields = await page.locator('[data-process-plan] > div').evaluateAll((els) => els.map((el) => el.innerText.trim().replace(/\s+/g, ' ')))
+    assert(fields.length >= 3 && plan.height <= 160, `plan is not a few chips at ${width}: ${plan.height} ${fields}`)
+    assert(fields.some((f) => /\+ /.test(f)), `no empty field offered at ${width}: ${fields}`)
+    assert.equal(await page.locator('[data-process-field="dodate"]').count(), 0, 'an empty Do date has no chip')
   }
   await page.setViewportSize({ width: 390, height: 844 })
   await page.screenshot({ path: path.join(tmpdir(), `vasta-workflow-${engine}-new.png`) })
@@ -289,14 +292,18 @@ try {
   await page.locator('[data-process-mode]').waitFor()
   assert.equal((await position.innerText()).trim(), 'New 1 of 1')
   assert.equal(await currentTitle(), g.title)
-  // The choices sit under the task, centred; the plan beside it.
+  // One column as tall as the task needs: the choices right under the task, centred, the plan as chips above the text.
   const choices = await page.locator('[data-process-choices]').boundingBox()
-  const side = await page.locator('[data-process-side]').boundingBox()
-  assert(choices.x + choices.width <= side.x + 1 && choices.y > 500, `choices under the task: ${JSON.stringify(choices)}`)
+  const card = await page.locator('[data-process-card]').boundingBox()
+  assert.equal(await page.locator('[data-process-side]').count(), 0)
+  assert(Math.abs(choices.y - (card.y + card.height)) < 2 && choices.width <= 740, `choices under the task: ${JSON.stringify({ choices, card })}`)
   const row = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => [r.left, r.right]))
   assert(Math.abs((row[0][0] - choices.x) - (choices.x + choices.width - row.at(-1)[1])) < 4, 'the row is centred')
   assert.equal(await page.locator('[data-process-role]').count(), 5)
-  assert.match(await page.locator('[data-process-plan]').innerText(), /Status/)
+  // No status yet: said above the title, so no empty Status chip.
+  assert.match(await page.locator('[data-process-plan]').innerText(), /\+ Due/)
+  assert.equal(await page.locator('[data-process-field="status"]').count(), 0)
+  assert.match(await page.locator('[data-process-meta]').innerText(), /no status yet/)
   assert.equal(await page.locator('[data-process-reviewed]').count(), 0)
   assert.equal(await page.locator('[data-process-skip]').count(), 0, 'Snooze replaces Decide later')
   assert.equal(await page.locator('[data-process-mode]').evaluate((el) => el.scrollWidth > innerWidth), false)
