@@ -13,13 +13,14 @@ const set = (id: string): QuickActionDef['changes'][number] => ({ field: 'status
 const task = (status?: string) => ({ id: 'a', props: status ? { status: { kind: 'select', value: [status] } } : {} }) as unknown as ObjectSummary
 
 describe('review keys', () => {
-  it('Done, Defer and Drop keep D, F and X, whatever the first status is called', () => {
+  it('Today, Done, Defer and Drop keep T, D, F and X, whatever the first status is called', () => {
     const type = withStatuses(
       [{ id: 'dele', label: 'Delegated', status: 'todo' }, { id: 'next', label: 'Next', status: 'todo' }, { id: 'done', label: 'Done', status: 'done' }, { id: 'drop', label: 'Dropped', status: 'done' }],
       { actions: [{ id: 'defer', name: 'Defer', changes: [{ field: 'dodate', value: { kind: 'ask' } }] }, { id: 'done', name: 'Done', changes: [set('done')] }, { id: 'drop', name: 'Drop', changes: [set('drop')] }] }
     )
     const { keys, main, keyOf } = reviewDecisions(type, task('dele'), { isNew: true, planFieldIds: [] })
-    expect(main.map((b) => b.role)).toEqual(['next', 'defer', 'done', 'drop'])
+    expect(main.map((b) => b.role)).toEqual(['next', 'today', 'defer', 'done', 'drop'])
+    expect(keys.get('t')?.role).toBe('today')
     expect(keys.get('d')?.role).toBe('done')
     expect(keys.get('f')?.role).toBe('defer')
     expect(keys.get('x')?.role).toBe('drop')

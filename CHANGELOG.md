@@ -8,6 +8,9 @@ GitHub release page.
 
 ### Added
 
+- **Review tasks: Today in one press.** Every task in a review has a **Today** button (key `T`)
+  beside Defer…, Done and Drop: it sets the Do date to today and goes on to the next task. A new
+  task also moves to your first open status (Next); a task that already has a status keeps it.
 - **Task reminders:** tick tasks done, move their Do date to tomorrow or another day, or open their notes without leaving the reminder. Due and planned tasks stay in place with Undo; handling every task answers the reminder for you.
 - A pin button at the top of every page puts it on your Home (and takes it off again).
 - **Home:** every person has their own Home page in each space, opened from the top of the sidebar, `G H`, or Home on the phone.
@@ -314,6 +317,10 @@ GitHub release page.
 
 ### Fixed
 
+- **Review tasks: scheduling a new task settles it.** Defer… on a new (Inbox) task used to save the
+  day and leave the task in Inbox, still waiting in the review. It now moves to Scheduled (or your
+  first open status when there is none) and the review goes on to the next task. Tasks that already
+  have a status keep it.
 - **iPhone: the line you are typing in a note stays above the keyboard.** Writing low in a note, or at the end of a long one, went on behind the keyboard and its toolbar (also in a note opened in a window).
 
 - **Back on a phone with Type settings open** closes them and leaves no `?settings=1` behind, so a reload no longer reopens them. Menus kept by their button close on Back too, and going back to a list no longer fights a scrollbar drag or a key press while it finds its place.

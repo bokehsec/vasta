@@ -56,10 +56,10 @@ and Mine; the paused one (one per type, `lib/use-review-session.ts`) says "Resum
 it covers another scope than this view, which, with Review this view instead beside it. Inside a
 review, its header names the scope; a paused review keeps its original scope. On a phone it sits beside the view picker, with a removable Mine chip below. More offers
 "Review all tasks in Main" (using the space’s name) for a whole-space sweep. Metrics and Agenda explicitly say Review all.
-Inside a review, at most four buttons and never the status the task already
-has: Keep in that status is Main (the one highlighted; a new task has none), Defer…, Done and
+Inside a review, at most five buttons and never the status the task already
+has: Keep in that status is Main (the one highlighted; a new task has its first open status, Grey, instead), Today, Defer…, Done and
 Drop are Grey (`ReviewDecisionBar`), other statuses are underlined links, Decide later quiet. On a big screen they are
-centred under the task, the plan in a column beside it; on a phone a 2×2 tray at the bottom. Navigation (sidebar, tab bar, calendar grids), segmented controls,
+centred under the task, the plan in a column beside it; on a phone a tray at the bottom, two to a row, the first button a row of its own. Navigation (sidebar, tab bar, calendar grids), segmented controls,
 chips, menu rows (`MenuRow`: icon, label, then a value, tick or caret; one look for every menu and
 sheet) and the whiteboard keep their own looks; they are not buttons of these kinds.
 
@@ -201,8 +201,9 @@ one framed surface in another.
 centred panel (full screen on a phone) over the dimmed page: which review and where in it (the new
 tasks, then the check-ins) with Pause, the task in full (notes, steps) and the plan beside it
 (status, dates, priority, project, next step, each edited in place), then the decision under it:
-Keep, Defer…, Done, Drop, the other statuses as links, Back and Decide later (buttons and keys:
-Buttons above). Another type's view review has its quick actions as the buttons. It ends with what
+Keep, Today, Defer…, Done, Drop, the other statuses as links, Back and Decide later (buttons and keys:
+Buttons above). A day settles a new task: Today also puts it in the first open status, a Defer
+that only sets the day in the status named for scheduled work (core `reviewButtons`). Another type's view review has its quick actions as the buttons. It ends with what
 was done and "Review N left for later".
 
 **Swipes** (`SwipeRow`, touch screens): on a row of a type with quick actions, a swipe right past 35%,

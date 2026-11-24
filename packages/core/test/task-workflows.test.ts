@@ -123,14 +123,42 @@ describe('sister task workflows', () => {
     ] } }
     const shape = (r: ReturnType<typeof reviewButtons>) => ({ main: r.main.map((b) => `${b.role}:${b.label}`), more: r.more.map((b) => b.label) })
 
-    it('a new task: Next, Defer, Done, Drop; the other open statuses as links', () => {
-      expect(shape(reviewButtons(typed, 'in', true))).toEqual({ main: ['next:Next', 'defer:Defer', 'done:Done', 'drop:Drop'], more: ['Waiting', 'On Hold'] })
+    it('a new task: Next, Today, Defer, Done, Drop; the other open statuses as links', () => {
+      expect(shape(reviewButtons(typed, 'in', true))).toEqual({ main: ['next:Next', 'today:Today', 'defer:Defer', 'done:Done', 'drop:Drop'], more: ['Waiting', 'On Hold'] })
+    })
+
+    it('Today sets the plan date to today; a new task also goes to the first open status, a placed one keeps its own', () => {
+      const today = (isNew: boolean) => reviewButtons(typed, isNew ? 'in' : 'wait', isNew).main.find((b) => b.role === 'today')!.action
+      expect(today(false).changes).toEqual([{ field: 'dodate', value: { kind: 'day', days: 0 } }])
+      expect(today(true).changes).toEqual([{ field: 'dodate', value: { kind: 'day', days: 0 } }, set('next')])
+      expect(settlesTriage(typed, today(true))).toBe(true)
+      expect(today(true).name).toBe('Today')
+    })
+
+    it('a Defer that only sets the day also places a new task: in the status named for it, else the first open one', () => {
+      const dayOnly = (t: ObjectType): ObjectType => ({ ...t, quickActions: { actions: t.quickActions!.actions!.map((a) => (a.id === 'defer' ? { ...a, changes: [a.changes[0]!] } : a)) } })
+      const fresh = reviewButtons(dayOnly(typed), 'in', true)
+      const defer = fresh.main.find((b) => b.role === 'defer')!
+      expect(defer.action.changes).toEqual([{ field: 'dodate', value: { kind: 'ask' } }, set('sched')])
+      expect(defer.action.id).toBe('defer')
+      expect(defer.option?.id).toBe('sched')
+      expect(settlesTriage(dayOnly(typed), defer.action)).toBe(true)
+      expect(shape(fresh)).toEqual({ main: ['next:Next', 'today:Today', 'defer:Defer', 'done:Done', 'drop:Drop'], more: ['Waiting', 'On Hold'] })
+      // A task that has its place keeps it: the type's Defer as it is, and Scheduled stays a link.
+      const placed = reviewButtons(dayOnly(typed), 'next', false)
+      expect(placed.main.find((b) => b.role === 'defer')!.action.changes).toEqual([{ field: 'dodate', value: { kind: 'ask' } }])
+      expect(shape(placed).more).toEqual(['Scheduled', 'Waiting', 'On Hold'])
+      // No status for scheduled work: the first open one, which stays the Next button too.
+      const bare = dayOnly({ ...typed, properties: typed.properties.map((p) => p.id === 'status' && p.kind === 'select' ? { ...p, options: p.options.filter((o) => o.id !== 'sched') } : p) })
+      const plain = reviewButtons(bare, 'in', true)
+      expect(plain.main.find((b) => b.role === 'defer')!.action.changes.at(-1)).toEqual(set('next'))
+      expect(shape(plain).main.slice(0, 3)).toEqual(['next:Next', 'today:Today', 'defer:Defer'])
     })
 
     it('a check-in never offers the status it has; Next becomes a link', () => {
-      expect(shape(reviewButtons(typed, 'next', false))).toEqual({ main: ['defer:Defer', 'done:Done', 'drop:Drop'], more: ['Waiting', 'On Hold'] })
-      expect(shape(reviewButtons(typed, 'wait', false))).toEqual({ main: ['defer:Defer', 'done:Done', 'drop:Drop'], more: ['Next', 'On Hold'] })
-      expect(shape(reviewButtons(typed, 'sched', false)).main[0]).toBe('defer:Defer')
+      expect(shape(reviewButtons(typed, 'next', false))).toEqual({ main: ['today:Today', 'defer:Defer', 'done:Done', 'drop:Drop'], more: ['Waiting', 'On Hold'] })
+      expect(shape(reviewButtons(typed, 'wait', false))).toEqual({ main: ['today:Today', 'defer:Defer', 'done:Done', 'drop:Drop'], more: ['Next', 'On Hold'] })
+      expect(shape(reviewButtons(typed, 'sched', false)).main[1]).toBe('defer:Defer')
     })
 
     it('Defer is the type\'s own Defer action, as rows and the task page run it', () => {

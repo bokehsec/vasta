@@ -1,14 +1,14 @@
 // What a review offers for the object at hand (ProcessMode, ReviewDecisionBar): a task type's
 // review buttons and links (core reviewButtons), then any other quick actions of its own as links;
 // another type's view review has its quick actions as the buttons. Keep (Reviewed) is for one that
-// already has a place. Keys: K (or R) keeps; Defer, Done and Drop are F, D and X whatever the
-// statuses are called; any other main button takes its initial when that is still free; links 1-9.
+// already has a place. Keys: K (or R) keeps; Today, Defer, Done and Drop are T, F, D and X whatever
+// the statuses are called; any other main button takes its initial when that is still free; links 1-9.
 import { askOf, deferActionOf, nextStepFieldOf, quickActionsOf, reviewButtons, reviewedAction, statusProperty, type ReviewButton } from '@vasta/core'
 import type { ObjectSummary, ObjectType, QuickActionDef, SelectOption } from '@vasta/core'
 
-const ROLE_KEYS: Partial<Record<ReviewButton['role'], string>> = { defer: 'f', done: 'd', drop: 'x' }
-/** Taken by Keep and by the three roles. */
-const RESERVED = 'krfdx'
+const ROLE_KEYS: Partial<Record<ReviewButton['role'], string>> = { today: 't', defer: 'f', done: 'd', drop: 'x' }
+/** Taken by Keep and by the four roles. */
+const RESERVED = 'krtfdx'
 
 export function reviewDecisions(type: ObjectType, object: ObjectSummary | undefined, o: { isNew: boolean; planFieldIds: readonly string[] }) {
   const status = statusProperty(type)
@@ -41,8 +41,8 @@ export function reviewDecisions(type: ObjectType, object: ObjectSummary | undefi
     links,
     /** Keep: Reviewed today; none for a new task or a type without the date. */
     reviewed: o.isNew ? undefined : reviewedAction(type),
-    /** What a swipe right does. */
-    defer: deferActionOf(type),
+    /** What a swipe right does: the review's Defer (a new task's also places it), else the type's. */
+    defer: main.find((b) => b.role === 'defer')?.action ?? deferActionOf(type),
     keys,
     keyOf: (button: ReviewButton) => [...keys].find(([, b]) => b === button)?.[0]?.toUpperCase() ?? '',
   }

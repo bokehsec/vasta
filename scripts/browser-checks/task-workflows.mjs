@@ -115,8 +115,8 @@ try {
   assert.equal((await position.innerText()).trim(), 'New 1 of 2')
   assert.equal(await page.locator('[data-process-reviewed]').count(), 0, 'a new task has no Keep')
   assert.equal(await page.locator('[data-process-more], [data-process-notes-toggle]').count(), 0)
-  // Four buttons, none highlighted (a new task has no status of its own to keep); the rest are links.
-  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => `${el.dataset.processRole}:${el.dataset.processChoice}`)), ['next:next', 'defer:scheduled', 'done:done', 'drop:drop'])
+  // Five buttons, none highlighted (a new task has no status of its own to keep); the rest are links.
+  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => `${el.dataset.processRole}:${el.dataset.processChoice}`)), ['next:next', 'today:today', 'defer:scheduled', 'done:done', 'drop:drop'])
   assert.deepEqual(await page.locator('[data-process-links] [data-process-choice]').evaluateAll((els) => els.map((el) => el.dataset.processChoice)), ['hold'])
   assert.equal(new Set(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor))).size, 1, 'no button highlighted on a new task')
   assert.match(await page.locator('[data-process-skip]').innerText(), /Later/)
@@ -171,7 +171,7 @@ try {
   step('a check-in: its status is pressed, Keep names it, Keep records Reviewed and leaves the plan')
   // The status it has is Keep (highlighted), never a button of its own; Next is not a link either.
   assert.equal(await page.locator('[data-process-choice="next"]').count(), 0)
-  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole)), ['defer', 'done', 'drop'])
+  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole)), ['today', 'defer', 'done', 'drop'])
   assert.notEqual(await page.locator('[data-process-reviewed]').evaluate((el) => getComputedStyle(el).backgroundColor), await page.locator('[data-process-role="done"]').evaluate((el) => getComputedStyle(el).backgroundColor))
   assert.match(await page.locator('[data-process-links]').innerText(), /Move to\s+On hold/)
   assert.match(await page.locator('[data-process-reviewed]').innerText(), /Keep in Next/)
@@ -293,7 +293,7 @@ try {
   assert(choices.x + choices.width <= side.x + 1 && choices.y > 500, `choices under the task: ${JSON.stringify(choices)}`)
   const row = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => [r.left, r.right]))
   assert(Math.abs((row[0][0] - choices.x) - (choices.x + choices.width - row.at(-1)[1])) < 4, 'the row is centred')
-  assert.equal(await page.locator('[data-process-role]').count(), 4)
+  assert.equal(await page.locator('[data-process-role]').count(), 5)
   assert.match(await page.locator('[data-process-plan]').innerText(), /Status/)
   assert.equal(await page.locator('[data-process-reviewed]').count(), 0)
   assert.match(await page.locator('[data-process-skip]').innerText(), /Decide later/)

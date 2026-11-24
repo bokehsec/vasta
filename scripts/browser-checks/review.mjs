@@ -268,10 +268,10 @@ try {
   const card = await page.locator('[data-process-card]').boundingBox()
   await touchAt(card.x + card.width - 40, card.y + 80, -260, 0, 8)
   await until(async () => (await pos.innerText()).startsWith('Check-in 2 of'), 'a swipe left skipped')
-  // Keep (the status it has, To do), Defer… and Done as buttons in the tray, In progress a link; no menu.
+  // Keep (the status it has, To do), Today, Defer… and Done as buttons in the tray, In progress a link; no menu.
   const choices = await page.locator('[data-process-choice]').all()
   const roles = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole).join())
-  if (roles !== 'defer,done' || choices.length !== 3) throw new Error(`review choices: ${roles}, ${choices.length}`)
+  if (roles !== 'today,defer,done' || choices.length !== 4) throw new Error(`review choices: ${roles}, ${choices.length}`)
   if ((await page.locator('[data-process-links]').innerText()).replace(/\s+/g, ' ').trim() !== 'Move to In progress') throw new Error(`links: ${await page.locator('[data-process-links]').innerText()}`)
   for (const choice of choices) if ((await choice.boundingBox()).height < 44) throw new Error('a choice under 44px')
   if (await page.locator('[data-process-more]').count()) throw new Error('the review still has a menu')

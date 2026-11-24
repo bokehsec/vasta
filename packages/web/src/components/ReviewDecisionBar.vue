@@ -29,11 +29,13 @@ const props = defineProps<{
 const emit = defineEmits<{ act: [action: QuickActionDef, anchor: HTMLElement | null]; skip: []; back: [] }>()
 
 const label = (button: ReviewButton) => (askOf(props.type, button.action) ? `${button.label}…` : button.label)
-const icon = (button: ReviewButton) => (button.role === 'defer' ? 'ph:calendar-blank' : button.role === 'done' ? 'ph:check-circle' : button.role === 'drop' ? 'ph:x-circle' : (button.action.icon?.value ?? 'ph:arrow-right'))
+const icon = (button: ReviewButton) => (button.role === 'today' ? 'ph:calendar-check' : button.role === 'defer' ? 'ph:calendar-blank' : button.role === 'done' ? 'ph:check-circle' : button.role === 'drop' ? 'ph:x-circle' : (button.action.icon?.value ?? 'ph:arrow-right'))
 const tone = (button: ReviewButton) => (button.role === 'done' ? 'text-[var(--color-flow-done)]' : button.role === 'drop' ? 'text-red-600 dark:text-red-400' : '')
 const keepLabel = computed(() => (props.outcome ? `Next ${props.noun}` : props.choices.currentStatus ? `Keep in ${props.choices.currentStatus.label}` : 'Keep as it is'))
 const keepHint = computed(() => (props.outcome ? 'Decided. Go on to the next one.' : props.every ? `Marks it reviewed today. It comes back in ${props.every} ${props.every === 1 ? 'day' : 'days'}.` : 'Marks it reviewed today.'))
 const laterHint = 'Not reviewed; it stays in the queue.'
+/** A phone's tray is two columns: with an odd number of buttons the first (Keep, or a new task's Next) takes a row. */
+const firstWide = computed(() => !props.wide && (props.choices.main.length + (props.choices.reviewed ? 1 : 0)) % 2 === 1)
 const choose = (action: QuickActionDef, event: Event) => emit('act', action, event.currentTarget as HTMLElement)
 const link = `min-h-11 rounded-md px-1.5 text-ink underline decoration-line-strong underline-offset-[3px] hover:bg-hover hover:decoration-ink-soft disabled:opacity-40 ${bodyText}`
 const kbd = `rounded border border-line-strong px-1.5 py-0.5 leading-none text-ink-faint ${metaText}`
@@ -43,10 +45,10 @@ const kbd = `rounded border border-line-strong px-1.5 py-0.5 leading-none text-i
   <div class="shrink-0 border-t border-line bg-surface px-3.5 pt-2.5 md:px-6 md:pt-3.5" :class="wide ? 'pb-2' : 'pb-1'" data-process-choices>
     <template v-if="active">
       <div :class="wide ? 'flex flex-wrap justify-center gap-2' : 'grid grid-cols-2 gap-2'">
-        <button v-if="choices.reviewed" :class="[mainButton, 'min-w-0', wide ? '' : 'min-h-12']" :disabled="blocked" :title="keepHint" data-process-reviewed @click="choose(choices.reviewed, $event)">
+        <button v-if="choices.reviewed" :class="[mainButton, 'min-w-0', wide ? '' : 'min-h-12', firstWide ? 'col-span-2' : '']" :disabled="blocked" :title="keepHint" data-process-reviewed @click="choose(choices.reviewed, $event)">
           <AppIcon fallback="ph:check" :size="18" class="shrink-0" /><span class="truncate">{{ keepLabel }}</span><kbd v-if="wide && !outcome" class="ml-1 rounded border border-surface/35 px-1.5 py-0.5 leading-none text-surface/75" :class="metaText">K</kbd>
         </button>
-        <button v-for="button in choices.main" :key="button.action.id" :class="[greyButton, 'min-w-0', wide ? '' : 'min-h-12']" :disabled="blocked" :data-key="choices.keyOf(button)" :data-process-choice="button.option?.id ?? button.role" :data-process-role="button.role" :data-process-action="button.option ? undefined : button.action.id" @click="choose(button.action, $event)">
+        <button v-for="(button, i) in choices.main" :key="button.action.id" :class="[greyButton, 'min-w-0', wide ? '' : 'min-h-12', firstWide && !choices.reviewed && !i ? 'col-span-2' : '']" :disabled="blocked" :data-key="choices.keyOf(button)" :data-process-choice="button.option?.id ?? button.role" :data-process-role="button.role" :data-process-action="button.option ? undefined : button.action.id" @click="choose(button.action, $event)">
           <AppIcon :icon="button.option ? undefined : button.action.icon" :fallback="icon(button)" :size="18" class="shrink-0" :class="tone(button)" /><span class="truncate">{{ label(button) }}</span><kbd v-if="wide && choices.keyOf(button)" :class="[kbd, 'ml-1']">{{ choices.keyOf(button) }}</kbd>
         </button>
       </div>

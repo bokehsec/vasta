@@ -3,7 +3,7 @@
 // of one view. Everything about the task is on screen (its text in full, steps, the plan's fields,
 // editable in place) and so are its choices (ReviewDecisionBar: what is offered is
 // lib/review-choices.ts): few and never the status it already has; a task already placed has Keep
-// in that status (reviewed today, back in `review.every` days); a new task has Next, Defer…, Done
+// in that status (reviewed today, back in `review.every` days); a new task has Next, Today, Defer…, Done
 // and Drop. Decide later records nothing and keeps it in the queue. On a big screen the choices sit
 // under the task, the plan beside it; on a phone they are a tray at the bottom.
 // The queue is stable, with Undo, explicit save, and the reading position kept across interruptions.
