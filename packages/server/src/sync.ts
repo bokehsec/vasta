@@ -109,6 +109,7 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   })),
   review: optional((v) => isObject(v) && Object.entries(v as object).every(([key, x]) => {
     if (key === 'incoming') return Array.isArray(x) && x.every(isNonEmpty)
+    if (key === 'snooze') return typeof x === 'number' && Number.isInteger(x) && x >= 1
     return key === 'every' && typeof x === 'number' && Number.isInteger(x) && x >= 0
   })),
   aliases: isStringArray,

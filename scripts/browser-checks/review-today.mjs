@@ -1,6 +1,7 @@
 // Review tasks, a day in one press: Today (the Do date set to today; a new task also goes to Next)
-// and a Defer that only sets the day (the default) placing a new task in Scheduled; both settle the
-// task and go on, with Undo. A task that has its place keeps it. Keys T and F. Phone and desktop.
+// and Schedule… (the type's Defer that only sets the day, the default) placing a new task in Scheduled;
+// both settle the task and go on, with Undo. A task that has its place keeps it. Keys T and S. Phone
+// (Snooze a full-width row of its own) and desktop.
 // node review-today.mjs [chromium|webkit] [base]   MODE=json: HTTP; default: replica; SHOTS=<dir>
 import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
@@ -83,17 +84,17 @@ try {
     return page.locator('[data-review-tasks]').waitFor({ timeout: 2000 }).then(() => true, () => false)
   }, 'the replica has the test space')
 
-  step('phone, a new task: Next, Today, Defer…, Done, Drop; five buttons in two columns, the first a row of its own')
+  step('phone, a new task: Today, Schedule…, Done, Drop in two columns, Snooze a row of its own')
   await click('[data-review-tasks]')
   await until(async () => (await currentTitle()) === a.title, 'the review starts with the oldest new task')
-  assert.deepEqual(await roles(), ['next', 'today', 'defer', 'done', 'drop'])
-  assert.deepEqual(await page.locator('[data-process-links] [data-process-choice]').evaluateAll((els) => els.map((el) => el.dataset.processChoice)), ['waiting'], 'Scheduled is Defer’s, not a link')
+  assert.deepEqual(await roles(), ['today', 'defer', 'done', 'drop', 'snooze'])
+  assert.deepEqual(await page.locator('[data-process-links] [data-process-choice]').evaluateAll((els) => els.map((el) => el.dataset.processChoice)), ['waiting'], 'Scheduled is Schedule’s and Next is No date’s, not links')
   for (const width of [320, 390, 430]) {
     await page.setViewportSize({ width, height: width === 320 ? 568 : 844 })
     const boxes = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => ({ top: Math.round(r.top), width: Math.round(r.width), height: r.height })))
     assert(boxes.every((box) => box.height >= 44), `a button under 44px at ${width}`)
-    assert(boxes[0].width > boxes[1].width * 1.8, `the first button is not a row of its own at ${width}`)
-    assert(boxes[1].top === boxes[2].top && boxes[3].top === boxes[4].top && boxes[1].top < boxes[3].top, `not two to a row at ${width}: ${JSON.stringify(boxes)}`)
+    assert(boxes[4].width > boxes[0].width * 1.8, `Snooze is not a row of its own at ${width}`)
+    assert(boxes[0].top === boxes[1].top && boxes[2].top === boxes[3].top && boxes[0].top < boxes[2].top && boxes[2].top < boxes[4].top, `not two to a row at ${width}: ${JSON.stringify(boxes)}`)
     assert.equal(await page.locator('[data-process-mode]').evaluate((el) => el.scrollWidth > innerWidth), false, `overflow at ${width}`)
   }
   await page.setViewportSize({ width: 390, height: 844 })
@@ -110,14 +111,14 @@ try {
   assert.equal((await propsOf(a.id)).dodate, undefined, 'Undo takes the day back')
   assert.equal(await currentTitle(), b.title, 'Undo does not move the review')
 
-  step('Defer… on a new task: the day asked, placed in Scheduled, on to the next task')
+  step('Schedule… on a new task: the day asked, placed in Scheduled, on to the next task')
   await click('[data-process-role="defer"]')
   await page.locator('[data-defer-menu] button').filter({ hasText: /^Tomorrow$/ }).click()
   await until(async () => (await currentTitle()) === c.title, 'Defer settles the new task')
   await until(async () => (await propsOf(b.id)).status?.value[0] === 'scheduled', 'Defer placed it in Scheduled')
   assert.equal(day((await propsOf(b.id)).dodate), tomorrow)
 
-  step('desktop: the key T is Today; a check-in keeps its status with Today and with Defer…')
+  step('desktop: the key T is Today; a check-in keeps its status with Today and with Schedule… (key S)')
   await page.setViewportSize({ width: 1280, height: 800 })
   await until(async () => (await page.locator('[data-process-role="today"]').getAttribute('data-key')) === 'T', 'Today has the key T')
   await shot('desktop-new')
@@ -126,23 +127,23 @@ try {
   await until(async () => (await propsOf(c.id)).status?.value[0] === 'next', 'T placed it in Next')
   assert.equal(day((await propsOf(c.id)).dodate), today)
   assert.equal((await position.innerText()).trim(), 'Check-in 1 of 2')
-  assert.deepEqual(await roles(), ['today', 'defer', 'done', 'drop'])
-  assert.match(await page.locator('[data-process-reviewed]').innerText(), /Keep in Waiting/)
+  assert.deepEqual(await roles(), ['today', 'defer', 'done', 'drop', 'snooze'])
+  assert.equal((await page.locator('[data-process-reviewed]').innerText()).replace(/\s*K$/, ''), 'Keep as planned')
   await shot('desktop-checkin')
   await click('[data-process-role="today"]')
   await until(async () => (await currentTitle()) === e.title, 'Today goes on from a check-in')
   await until(async () => day((await propsOf(d.id)).dodate) === today, 'Today saved the day')
   assert.equal((await propsOf(d.id)).status.value[0], 'waiting', 'a placed task keeps its status')
   assert.equal(day((await propsOf(d.id)).reviewed), today, 'and counts as reviewed')
-  assert.deepEqual(await page.locator('[data-process-links] [data-process-choice]').evaluateAll((els) => els.map((el) => el.dataset.processChoice)), ['scheduled', 'waiting'])
-  await page.keyboard.press('f')
+  assert.deepEqual(await page.locator('[data-process-links] [data-process-choice]').evaluateAll((els) => els.map((el) => el.dataset.processChoice)), ['waiting'])
+  await page.keyboard.press('s')
   await page.locator('[data-defer-menu] button').filter({ hasText: /^Tomorrow$/ }).click()
   await page.locator('[data-process-end]').waitFor()
   await until(async () => day((await propsOf(e.id)).dodate) === tomorrow, 'Defer saved the day')
   assert.equal((await propsOf(e.id)).status.value[0], 'next', 'Defer leaves a placed task’s status')
   const summary = await page.locator('[data-process-summary]').innerText()
   assert.match(summary, /Today 2/)
-  assert.match(summary, /Defer 2/)
+  assert.match(summary, /Schedule 2/)
   assert.deepEqual(errors, [])
   console.log(`Review today checks passed: ${engine}, ${process.env.MODE === 'json' ? 'HTTP' : 'replica'}.`)
 } catch (error) {

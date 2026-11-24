@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // A task type's Review settings (Type settings › Review; @vasta/core task-review.ts, task-status.ts):
-// how often a placed task comes back for a check-in, and which statuses count as new. Tasks with
+// how often a placed task comes back for a check-in, how long Snooze hides a task, and which statuses count as new. Tasks with
 // no status are always new. Unset means the defaults (a week; the status called Inbox).
 import { computed } from 'vue'
 import type { Id, ObjectType, ReviewSettings } from '@vasta/core'
-import { DEFAULT_REVIEW_EVERY, STATUS_PROPERTY_ID, reviewEveryOf, reviewFieldOf, triageOptionsOf } from '@vasta/core'
+import { DEFAULT_REVIEW_EVERY, DEFAULT_SNOOZE_DAYS, STATUS_PROPERTY_ID, reviewEveryOf, reviewFieldOf, snoozeDaysOf, snoozeFieldOf, triageOptionsOf } from '@vasta/core'
 import { quietButton } from '../lib/buttons.ts'
 
 const props = defineProps<{ type: ObjectType }>()
@@ -24,6 +24,11 @@ function setEvery(text: string) {
   const days = Number(text)
   emitSettings({ every: text.trim() === '' || !Number.isInteger(days) || days < 0 || days === DEFAULT_REVIEW_EVERY ? undefined : days })
 }
+/** Days Snooze hides a task: a whole number from 1; empty or invalid goes back to a day. */
+function setSnooze(text: string) {
+  const days = Number(text)
+  emitSettings({ snooze: text.trim() === '' || !Number.isInteger(days) || days < 1 || days === DEFAULT_SNOOZE_DAYS ? undefined : days })
+}
 function toggleIncoming(id: Id) {
   const selected = triageOptionsOf(props.type).map((o) => o.id)
   emitSettings({ incoming: selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id] })
@@ -40,6 +45,12 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none max-md:min
       <input :value="reviewEveryOf(type)" type="number" min="0" step="1" inputmode="numeric" :class="[control, 'w-16']" data-review-every @change="setEvery(($event.target as HTMLInputElement).value)" />
       <span class="text-ink-soft">days</span>
       <span class="w-full text-xs text-ink-faint">A placed, open task comes back once it has not been reviewed for this many days (0: every time). Keep marks it reviewed.</span>
+    </label>
+    <label v-if="snoozeFieldOf(type)" class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+      <span class="text-ink-soft">Snooze hides a {{ type.name.toLowerCase() }} from Review for</span>
+      <input :value="snoozeDaysOf(type)" type="number" min="1" step="1" inputmode="numeric" :class="[control, 'w-16']" data-review-snooze @change="setSnooze(($event.target as HTMLInputElement).value)" />
+      <span class="text-ink-soft">days</span>
+      <span class="w-full text-xs text-ink-faint">It comes back as it was, new or a check-in. Nothing else changes and it is not marked reviewed.</span>
     </label>
     <fieldset class="mt-3 space-y-1 text-sm" data-triage-settings>
       <legend class="text-ink-soft">Statuses that count as new</legend>

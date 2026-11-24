@@ -68,7 +68,7 @@ describe('MCP endpoint', () => {
     expect(types.find((t: { name: string }) => t.name === 'Task').properties.find((p: { name: string }) => p.name === 'Assignee')).toEqual({ id: 'assignee', name: 'Assignee', kind: 'person', multiple: false })
     // Dates say what they mean: the plan is the day it will be worked on, the deadline the day it is due by.
     const dates = types.find((t: { name: string }) => t.name === 'Task').properties.filter((p: { kind: string }) => p.kind === 'date')
-    expect(dates.map((d: { id: string; role?: string }) => [d.id, d.role])).toEqual([['due', 'deadline'], ['dodate', 'plan'], ['reviewed', undefined]])
+    expect(dates.map((d: { id: string; role?: string }) => [d.id, d.role])).toEqual([['due', 'deadline'], ['dodate', 'plan'], ['reviewed', undefined], ['snoozed', undefined]])
     const forAna = await call('create_object', { type: 'Task', title: 'Water the plants', properties: { Assignee: 'ana', Status: 'To do' } })
     await call('create_object', { type: 'Task', title: 'Pay the bills', properties: { Assignee: 'me', Status: 'To do' } })
     // A task with no status is new: Review's first queue, not a check-in.

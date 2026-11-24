@@ -31,6 +31,24 @@ describe('sister task workflows', () => {
     expect(new Set([...queues.triage, ...queues.review]).size).toBe(4)
   })
 
+  it('leaves a snoozed task out of both queues until its day', () => {
+    const day = (d: string): Record<string, PropertyValue> => ({ snoozed: { kind: 'date', value: { start: `${d}T00:00:00.000Z`, resolution: 'day' } } })
+    const objects = [
+      { ...object('new'), props: { ...object('new').props, ...day('2026-11-15') } },
+      { ...object('check', 'next'), props: { ...object('check', 'next').props, ...day('2026-11-15') } },
+      { ...object('back', 'next'), props: { ...object('back', 'next').props, ...day('2026-11-14') } },
+      object('plain', 'next'),
+    ]
+    const queues = taskWorkflowQueues(task, objects, '2026-11-14')
+    expect(queues.triage).toEqual([])
+    expect(queues.review.map((o) => o.id)).toEqual(['back', 'plain'])
+    const next = taskWorkflowQueues(task, objects, '2026-11-15')
+    expect(next.triage.map((o) => o.id)).toEqual(['new'])
+    expect(next.review.map((o) => o.id)).toEqual(['check', 'back', 'plain'])
+    // What it means to be new is untouched.
+    expect(needsTriage(task, objects[0]!)).toBe(true)
+  })
+
   it('uses configured status ids across renames, ignores closed/deleted choices, and supports no incoming statuses', () => {
     const configured = { ...task, review: { incoming: ['wait', 'gone', 'done'] } }
     expect(triageOptionsOf(configured).map((o) => o.id)).toEqual(['wait'])
@@ -123,8 +141,35 @@ describe('sister task workflows', () => {
     ] } }
     const shape = (r: ReturnType<typeof reviewButtons>) => ({ main: r.main.map((b) => `${b.role}:${b.label}`), more: r.more.map((b) => b.label) })
 
-    it('a new task: Next, Today, Defer, Done, Drop; the other open statuses as links', () => {
-      expect(shape(reviewButtons(typed, 'in', true))).toEqual({ main: ['next:Next', 'today:Today', 'defer:Defer', 'done:Done', 'drop:Drop'], more: ['Waiting', 'On Hold'] })
+    it('a new task: Today, Schedule, Done, Drop, Snooze; only the statuses left over as links', () => {
+      expect(shape(reviewButtons(typed, 'in', true))).toEqual({ main: ['today:Today', 'defer:Schedule', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: ['Waiting'] })
+    })
+
+    it('Schedule offers No date (the first open status that is not the scheduled one) and Someday, each clearing the plan date', () => {
+      const alternatives = (current: string | undefined, isNew: boolean, planned = false) => reviewButtons(typed, current, isNew, planned).main.find((b) => b.role === 'defer')!.alternatives
+      const fresh = alternatives('in', true)!
+      expect(fresh.map((a) => [a.id, a.label, a.hint])).toEqual([['no-date', 'No date', 'Ready whenever'], ['someday', 'Someday', 'Park it']])
+      expect(fresh[0]!.action.changes).toEqual([set('next'), { field: 'dodate', value: { kind: 'clear' } }])
+      expect(fresh[1]!.action.changes).toEqual([set('hold'), { field: 'dodate', value: { kind: 'clear' } }])
+      expect(settlesTriage(typed, fresh[0]!.action)).toBe(true)
+      expect(settlesTriage(typed, fresh[1]!.action)).toBe(true)
+      // Check-ins have them too; one already there with no plan date leaves its own out, with a plan date it stays.
+      expect(alternatives('wait', false)!.map((a) => a.id)).toEqual(['no-date', 'someday'])
+      expect(alternatives('next', false)!.map((a) => a.id)).toEqual(['someday'])
+      expect(alternatives('hold', false)!.map((a) => a.id)).toEqual(['no-date'])
+      expect(alternatives('next', false, true)!.map((a) => a.id)).toEqual(['no-date', 'someday'])
+      // A type with no such status has no Someday, and the statuses behind the two are no links.
+      const bare = { ...typed, properties: typed.properties.map((p) => p.id === 'status' && p.kind === 'select' ? { ...p, options: p.options.filter((o) => o.id !== 'hold') } : p) }
+      expect(reviewButtons(bare, 'in', true).main.find((b) => b.role === 'defer')!.alternatives!.map((a) => a.id)).toEqual(['no-date'])
+      expect(shape(reviewButtons(typed, 'wait', false)).more).toEqual([])
+    })
+
+    it('Snooze sets Snoozed until for the type\'s number of days, and changes nothing else', () => {
+      const snooze = (t: ObjectType) => reviewButtons(t, 'in', true).main.find((b) => b.role === 'snooze')!.action
+      expect(snooze(typed)).toMatchObject({ id: 'snooze', name: 'Snoozed', changes: [{ field: 'snoozed', value: { kind: 'day', days: 1 } }] })
+      expect(snooze({ ...typed, review: { snooze: 3 } }).changes).toEqual([{ field: 'snoozed', value: { kind: 'day', days: 3 } }])
+      expect(settlesTriage(typed, snooze(typed))).toBe(false)
+      expect(reviewButtons(typed, 'in', true).covered).toContain('snooze')
     })
 
     it('Today sets the plan date to today; a new task also goes to the first open status, a placed one keeps its own', () => {
@@ -143,36 +188,36 @@ describe('sister task workflows', () => {
       expect(defer.action.id).toBe('defer')
       expect(defer.option?.id).toBe('sched')
       expect(settlesTriage(dayOnly(typed), defer.action)).toBe(true)
-      expect(shape(fresh)).toEqual({ main: ['next:Next', 'today:Today', 'defer:Defer', 'done:Done', 'drop:Drop'], more: ['Waiting', 'On Hold'] })
+      expect(shape(fresh)).toEqual({ main: ['today:Today', 'defer:Schedule', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: ['Waiting'] })
       // A task that has its place keeps it: the type's Defer as it is, and Scheduled stays a link.
       const placed = reviewButtons(dayOnly(typed), 'next', false)
       expect(placed.main.find((b) => b.role === 'defer')!.action.changes).toEqual([{ field: 'dodate', value: { kind: 'ask' } }])
-      expect(shape(placed).more).toEqual(['Scheduled', 'Waiting', 'On Hold'])
-      // No status for scheduled work: the first open one, which stays the Next button too.
+      expect(shape(placed).more).toEqual(['Waiting'])
+      // No status for scheduled work: the first open one, which is No date's too.
       const bare = dayOnly({ ...typed, properties: typed.properties.map((p) => p.id === 'status' && p.kind === 'select' ? { ...p, options: p.options.filter((o) => o.id !== 'sched') } : p) })
       const plain = reviewButtons(bare, 'in', true)
       expect(plain.main.find((b) => b.role === 'defer')!.action.changes.at(-1)).toEqual(set('next'))
-      expect(shape(plain).main.slice(0, 3)).toEqual(['next:Next', 'today:Today', 'defer:Defer'])
+      expect(shape(plain).main.slice(0, 2)).toEqual(['today:Today', 'defer:Schedule'])
     })
 
-    it('a check-in never offers the status it has; Next becomes a link', () => {
-      expect(shape(reviewButtons(typed, 'next', false))).toEqual({ main: ['today:Today', 'defer:Defer', 'done:Done', 'drop:Drop'], more: ['Waiting', 'On Hold'] })
-      expect(shape(reviewButtons(typed, 'wait', false))).toEqual({ main: ['today:Today', 'defer:Defer', 'done:Done', 'drop:Drop'], more: ['Next', 'On Hold'] })
-      expect(shape(reviewButtons(typed, 'sched', false)).main[1]).toBe('defer:Defer')
+    it('a check-in never offers the status it has as a link', () => {
+      expect(shape(reviewButtons(typed, 'next', false))).toEqual({ main: ['today:Today', 'defer:Schedule', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: ['Waiting'] })
+      expect(shape(reviewButtons(typed, 'wait', false))).toEqual({ main: ['today:Today', 'defer:Schedule', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
+      expect(shape(reviewButtons(typed, 'sched', false)).main[1]).toBe('defer:Schedule')
     })
 
-    it('Defer is the type\'s own Defer action, as rows and the task page run it', () => {
+    it('Schedule is the type\'s own Defer action, as rows and the task page run it, named Schedule here', () => {
       const { main, covered } = reviewButtons(typed, 'next', false)
       const defer = main.find((b) => b.role === 'defer')!
-      expect(defer.action).toEqual(typed.quickActions!.actions![1])
+      expect(defer.action).toEqual({ ...typed.quickActions!.actions![1], name: 'Schedule' })
       expect(defer.option?.id).toBe('sched')
       expect(covered).toContain('defer')
       expect(main.find((b) => b.role === 'done')!.action.name).toBe('Done')
     })
 
-    it('has no Defer for a type without one, and its Scheduled status is a link', () => {
+    it('has no Schedule for a type without one, and its Scheduled status is a link', () => {
       const plain = { ...typed, quickActions: {}, properties: typed.properties.filter((p) => p.id !== 'dodate') }
-      expect(shape(reviewButtons(plain, 'next', false)).main).toEqual(['done:Done', 'drop:Drop'])
+      expect(shape(reviewButtons(plain, 'next', false)).main).toEqual(['done:Done', 'drop:Drop', 'snooze:Snooze'])
       expect(shape(reviewButtons(plain, 'next', false)).more).toContain('Scheduled')
     })
 

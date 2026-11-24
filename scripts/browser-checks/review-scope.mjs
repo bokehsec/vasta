@@ -126,7 +126,7 @@ try {
   }
   await new Promise((resolve) => setTimeout(resolve, 1200))
   assert.equal(await page.locator('[data-process-mode]').count(), 1, 'deleting an unrelated space keeps the review open')
-  await click('[data-process-choice="next"]')
+  await click('[data-process-role="today"]')
   await until(async () => await title() === other.title, 'placing incoming advances within the frozen queue')
   assert.deepEqual((await saved()).ids, [incoming.id, other.id, outside.id, commitment.id])
   await page.locator('[role=status]').getByRole('button', { name: 'Undo', exact: true }).click()
@@ -149,7 +149,7 @@ try {
   await until(async () => await title() === incoming.title, 'a new review of Personal starts with the space\'s new tasks')
   assert.deepEqual((await saved()).ids, [incoming.id, other.id, outside.id])
   assert.equal((await saved()).scopeLabel, 'Personal · Mine')
-  for (let i = 0; i < 3; i++) await click('[data-process-skip]')
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight')
   await click('[data-process-finish]')
   assert.equal(await page.locator('[data-review-this-instead]').count(), 0)
   await pickView('Work')
@@ -163,7 +163,7 @@ try {
   assert.match(await scopeTitle(), /Search: “onboarding”/)
   await reviewButton.click()
   assert.deepEqual((await saved()).ids, [incoming.id, other.id, outside.id, commitment.id])
-  for (let i = 0; i < 4; i++) await click('[data-process-skip]')
+  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight')
   await click('[data-process-finish]')
   await search.fill('no matching task')
   // No check-in matches: the space's new tasks are still there to review.
@@ -177,7 +177,7 @@ try {
   assert.equal(full.scopeLabel, `All tasks in ${space.name}`)
   assert.deepEqual(new Set(full.ids), new Set([incoming.id, commitment.id, other.id, outside.id, theirs.id]))
   assert(!full.ids.includes(recent.id) && !full.ids.includes(closed.id))
-  for (let i = 0; i < 5; i++) await click('[data-process-skip]')
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight')
   await click('[data-process-finish]')
   await search.fill('')
   await count(4)
@@ -205,7 +205,7 @@ try {
   await count(4)
   await reviewButton.click()
   assert.equal(await page.locator('[data-process-scope]').innerText(), 'Work · Mine')
-  for (let i = 0; i < 4; i++) await click('[data-process-skip]')
+  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight')
   await click('[data-process-finish]')
   if (process.env.SHOTS) {
     await page.screenshot({ path: path.join(process.env.SHOTS, `review-scope-${engine}-phone.png`) })
@@ -220,7 +220,7 @@ try {
     await count(4)
     await reviewButton.click()
     assert.deepEqual(new Set((await saved()).ids), new Set([incoming.id, other.id, outside.id, commitment.id]))
-    for (let i = 0; i < 4; i++) await click('[data-process-skip]')
+    for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight')
     await click('[data-process-finish]')
   }
   for (const name of ['Metrics', 'Agenda']) {

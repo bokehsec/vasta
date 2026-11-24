@@ -4,7 +4,8 @@
 // element pressed, or centred without one or on a phone); then the object is saved and one notice
 // with one Undo puts its previous values back. A day asked for another date than the deadline
 // (Defer's Do date) offers to move the deadline too when the day is after it, so the task is not
-// left overdue. The question stays open, with what was typed or picked, until the values are saved:
+// left overdue. A day question can offer other choices under its calendar (alternatives: Review's
+// No date and Someday); one pressed closes it with nothing saved and the caller carries on. The question stays open, with what was typed or picked, until the values are saved:
 // when nothing could be saved it shows why and offers Retry or Cancel; while saving it takes no
 // second answer. Without a question a failed save says so (lastError) and shows no notice.
 // An action that closes a task with open subtasks asks once whether to close them too (with Done, or
@@ -42,6 +43,15 @@ const hasRepeatingDate = (object: Target) => Object.values(object.props).some((v
 
 const textOf = (value: PropertyValue | undefined) => (value?.kind === 'text' || value?.kind === 'url' ? value.value : value?.kind === 'number' ? String(value.value) : '')
 
+/** A choice a day question offers beside the days (Review's No date, Someday): `run` is called, then the question closes unanswered. */
+export interface QuickAskAlternative {
+  id: string
+  label: string
+  hint?: string
+  icon?: string
+  run: () => void
+}
+
 /** The question on screen: a day or a line of text for one property. */
 export interface QuickAsk {
   /** A new one for each question, so the box starts afresh. */
@@ -68,6 +78,8 @@ export interface QuickAsk {
   dueMovable: boolean
   /** The day the deadline would move to when the day picked is after it; undefined when it stays. */
   dueMoves: (day: string) => string | undefined
+  /** Choices under a day's calendar that skip the day (RunOptions.alternatives). */
+  alternatives?: QuickAskAlternative[]
   /** Whether the answer is being saved (no second one is taken), and why nothing was saved after the last try. */
   state: { saving: boolean; error: string }
   /** Saves an answer: a value, 'clear' (an empty line) or null (cancel, ignored while saving). Resolves once the question is over. */
@@ -108,6 +120,8 @@ export interface RunOptions {
   submitLabel?: string
   /** What the question says it applies to (default the object's title, if given; '' for nothing). */
   scope?: string
+  /** Choices a day question offers under its calendar; one pressed closes the question, which then resolves with nothing. */
+  alternatives?: QuickAskAlternative[]
   /** Called with the edit saved, once, after the notice is up. */
   onSaved?: (edit: QuickActionEdit) => void
   /** Called after Undo has put the values back. */
@@ -213,6 +227,7 @@ export async function runQuickAction(type: ObjectType, target: Target, action: Q
       // Any later day would move it: a deadline there is, that does not repeat.
       dueMovable: asked.def.kind === 'date' && asked.def.id !== deadlineId && !!dueMoves('9999-12-31'),
       dueMoves,
+      ...(options.alternatives?.length && asked.def.kind === 'date' ? { alternatives: options.alternatives } : {}),
       state,
       answer: async (answer, moveDue) => {
         if (state.saving) return

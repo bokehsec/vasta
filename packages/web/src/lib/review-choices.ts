@@ -1,21 +1,22 @@
 // What a review offers for the object at hand (ProcessMode, ReviewDecisionBar): a task type's
 // review buttons and links (core reviewButtons), then any other quick actions of its own as links;
 // another type's view review has its quick actions as the buttons. Keep (Reviewed) is for one that
-// already has a place. Keys: K (or R) keeps; Today, Defer, Done and Drop are T, F, D and X whatever
-// the statuses are called; any other main button takes its initial when that is still free; links 1-9.
+// already has a place. Keys: K (or R) keeps; Today, Schedule, Done, Drop and Snooze are T, S, D, X
+// and N whatever the statuses are called; any other main button takes its initial when that is still
+// free; links 1-9.
 import { askOf, deferActionOf, nextStepFieldOf, quickActionsOf, reviewButtons, reviewedAction, statusProperty, type ReviewButton } from '@vasta/core'
 import type { ObjectSummary, ObjectType, QuickActionDef, SelectOption } from '@vasta/core'
 
-const ROLE_KEYS: Partial<Record<ReviewButton['role'], string>> = { today: 't', defer: 'f', done: 'd', drop: 'x' }
-/** Taken by Keep and by the four roles. */
-const RESERVED = 'krtfdx'
+const ROLE_KEYS: Partial<Record<ReviewButton['role'], string>> = { today: 't', defer: 's', done: 'd', drop: 'x', snooze: 'n' }
+/** Taken by Keep and by the five roles. */
+const RESERVED = 'krtsdxn'
 
-export function reviewDecisions(type: ObjectType, object: ObjectSummary | undefined, o: { isNew: boolean; planFieldIds: readonly string[] }) {
+export function reviewDecisions(type: ObjectType, object: ObjectSummary | undefined, o: { isNew: boolean; planFieldIds: readonly string[]; planned?: boolean }) {
   const status = statusProperty(type)
   const value = status && object ? object.props[status.id] : undefined
   const statusId = value?.kind === 'select' ? value.value[0] : undefined
   const currentStatus: SelectOption | undefined = statusId ? status?.options.find((x) => x.id === statusId) : undefined
-  const buttons = reviewButtons(type, currentStatus?.id, o.isNew)
+  const buttons = reviewButtons(type, currentStatus?.id, o.isNew, o.planned)
   const covered = new Set(buttons.covered)
   const nextStepId = nextStepFieldOf(type)?.id
   // Other quick actions of the type, unless the plan beside the task already edits what one asks for (the next step).
@@ -41,8 +42,10 @@ export function reviewDecisions(type: ObjectType, object: ObjectSummary | undefi
     links,
     /** Keep: Reviewed today; none for a new task or a type without the date. */
     reviewed: o.isNew ? undefined : reviewedAction(type),
-    /** What a swipe right does: the review's Defer (a new task's also places it), else the type's. */
+    /** What a swipe right does: the review's Schedule (a new task's also places it), else the type's. */
     defer: main.find((b) => b.role === 'defer')?.action ?? deferActionOf(type),
+    /** What a swipe left does: Snooze, where it is offered (else it skips). */
+    snooze: main.find((b) => b.role === 'snooze')?.action,
     keys,
     keyOf: (button: ReviewButton) => [...keys].find(([, b]) => b === button)?.[0]?.toUpperCase() ?? '',
   }

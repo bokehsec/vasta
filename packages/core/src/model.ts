@@ -78,6 +78,8 @@ export interface QuickActions {
 export interface ReviewSettings {
   /** How many days after its Last reviewed date a task comes up in Review again; default 7, 0 every time. */
   every?: number
+  /** How many days Snooze hides a task from Review; whole days from 1, default 1. */
+  snooze?: number
   /** The statuses of new tasks, which Review settles first; unset: those called Inbox, else none. No status always counts as new. */
   incoming?: Id[]
 }

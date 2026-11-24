@@ -7,7 +7,7 @@
 // deadline alone), Drop (another option meaning done, a "Dropped", which ends a task without doing
 // it, as in completeRepeat) and Next step (asks for the text of the type's next step field). Changes
 // naming a property the type no longer has, or a value that does not fit it, are left out.
-import { REVIEWED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
+import { REVIEWED_PROPERTY_ID, SNOOZED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
 import type { DateValue, Id, ObjectRecord, ObjectType, PropertyDef, PropertyValue, QuickActionChange, QuickActionDef, QuickActionValue, SelectOption, TextPropertyDef } from './model.ts'
 import { statusProperty } from './metrics.ts'
 import { reviewFieldOf } from './task-review.ts'
@@ -315,8 +315,8 @@ export function quickActionDoneName(name: string): string {
 }
 
 /**
- * The notice after an action: its name and the days it set ("Defer · Do date Fri Nov 20"), a day
- * set past the object's due date, and a due date taken along.
+ * The notice after an action: its name and the days it set ("Defer · Do date Fri Nov 20"; a Snooze
+ * reads "Snoozed until Wed, Nov 25"), a day set past the object's due date, and a due date taken along.
  */
 export function quickActionMessage(
   type: ObjectType,
@@ -335,9 +335,11 @@ export function quickActionMessage(
     const def = type.properties.find((p) => p.id === field)
     return day && def ? [{ field, day, name: def.name }] : []
   })
-  let message = [quickActionDoneName(action.name), ...days.map((d) => `${d.name} ${options.longDay(d.day)}`)].join(' · ')
+  const snoozed = days.find((d) => d.field === SNOOZED_PROPERTY_ID)
+  const named = quickActionDoneName(action.name)
+  let message = [snoozed ? `${named} until ${options.longDay(snoozed.day)}` : named, ...days.filter((d) => d !== snoozed).map((d) => `${d.name} ${options.longDay(d.day)}`)].join(' · ')
   const due = movedDue ? undefined : dayOfValue(options.due, options.timeZone)
-  const late = due && days.find((d) => d.field !== deadline && d.day > due)
+  const late = due && days.find((d) => d.field !== deadline && d !== snoozed && d.day > due)
   if (late && due) message += ` (after its due date, ${options.longDay(due)})`
   if (movedDue) message += ' · due date moved too'
   return message

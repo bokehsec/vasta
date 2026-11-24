@@ -2,7 +2,8 @@
 // The inside of a quick action's question (QuickAskHost): a day (tomorrow and next week save at
 // once, with Undo, unless that is after the deadline: then the warning shows and Save waits; one
 // picked on a calendar only selects it: the day, and where the deadline ends up, show before Save
-// writes it, keeping deadlines unless explicitly moved) or a line of text
+// writes it, keeping deadlines unless explicitly moved; any other choices the caller gave sit under
+// the calendar and close the question when pressed) or a line of text
 // (a number, a link); an empty line clears the field. Cancel and Save are always on screen. It stays
 // open with what was typed or picked while saving, and when nothing could be saved says why and
 // offers Retry.
@@ -76,6 +77,11 @@ function save() {
   else void props.ask.answer(textAnswer(props.ask.def, text.value, props.ask.text, props.ask.action.changes.length === 1))
 }
 const cancel = () => props.ask.answer(null)
+function choose(alternative: NonNullable<QuickAsk['alternatives']>[number]) {
+  if (saving.value) return
+  alternative.run()
+  void props.ask.answer(null)
+}
 
 const presetClass = (day: string) => [
   'flex-1 rounded-lg px-2.5 py-1.5 max-md:py-3 max-md:text-base',
@@ -93,6 +99,12 @@ const saveClass = [mainButton, 'flex-1']
       <button :class="presetClass(nextWeek)" :aria-pressed="picked === nextWeek" :disabled="saving" @click="preset(nextWeek)">Next week</button>
     </div>
     <MiniMonth :selected="picked" @pick="pick" />
+    <div v-if="ask.alternatives?.length" class="flex gap-2" data-ask-alternatives>
+      <button v-for="alternative in ask.alternatives" :key="alternative.id" :class="[greyButton, 'min-w-0 flex-1 flex-col !gap-0 !py-1.5 max-md:!py-2']" :disabled="saving" :data-ask-alternative="alternative.id" @click="choose(alternative)">
+        <span class="flex items-center gap-1.5"><AppIcon :fallback="alternative.icon" :size="16" />{{ alternative.label }}</span>
+        <span v-if="alternative.hint" class="text-xs font-normal text-ink-soft">{{ alternative.hint }}</span>
+      </button>
+    </div>
     <p class="font-medium" :class="picked ? 'text-ink' : 'text-ink-faint'" data-picked-day>{{ ask.def.name }}: {{ picked ? longDay(picked) : 'choose a day' }}</p>
     <p v-if="dueLine" class="flex items-center gap-1.5 text-xs" :class="afterDue ? 'font-medium text-amber-700 dark:text-amber-400' : 'text-ink-faint'" data-due-line>
       <AppIcon :fallback="afterDue ? 'ph:warning-circle' : 'ph:flag'" :size="12" /> {{ dueLine }}

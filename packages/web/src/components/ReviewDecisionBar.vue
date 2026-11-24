@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// The decision under the task in a review: Keep (highlighted: the status it has), the main buttons,
-// then the other statuses as links; Back and Decide later at the ends. A phone has them as a tray
-// at the bottom, Back in the header. What is offered is lib/review-choices.ts; the choosing and the
+// The decision under the task in a review: Keep (highlighted), the main buttons with a quiet Snooze
+// last, then the other statuses as links; Back at one end and, at the other, Decide later (Next once
+// decided), which a task with Snooze does not have. A phone has them as a tray at the bottom, Snooze a
+// row of its own, Back in the header. What is offered is lib/review-choices.ts; the choosing and the
 // keys are ProcessMode's.
 import { computed } from 'vue'
 import type { ObjectType, QuickActionDef, ReviewButton } from '@vasta/core'
@@ -23,6 +24,8 @@ const props = defineProps<{
   noun: string
   /** Days until a kept object comes back; 0: every time. */
   every: number
+  /** Days Snooze hides a task for. */
+  snoozeDays: number
   atFirst: boolean
   wide: boolean
 }>()
@@ -31,11 +34,17 @@ const emit = defineEmits<{ act: [action: QuickActionDef, anchor: HTMLElement | n
 const label = (button: ReviewButton) => (askOf(props.type, button.action) ? `${button.label}…` : button.label)
 const icon = (button: ReviewButton) => (button.role === 'today' ? 'ph:calendar-check' : button.role === 'defer' ? 'ph:calendar-blank' : button.role === 'done' ? 'ph:check-circle' : button.role === 'drop' ? 'ph:x-circle' : (button.action.icon?.value ?? 'ph:arrow-right'))
 const tone = (button: ReviewButton) => (button.role === 'done' ? 'text-[var(--color-flow-done)]' : button.role === 'drop' ? 'text-red-600 dark:text-red-400' : '')
-const keepLabel = computed(() => (props.outcome ? `Next ${props.noun}` : props.choices.currentStatus ? `Keep in ${props.choices.currentStatus.label}` : 'Keep as it is'))
+const keepLabel = computed(() => (props.outcome ? `Next ${props.noun}` : 'Keep as planned'))
 const keepHint = computed(() => (props.outcome ? 'Decided. Go on to the next one.' : props.every ? `Marks it reviewed today. It comes back in ${props.every} ${props.every === 1 ? 'day' : 'days'}.` : 'Marks it reviewed today.'))
 const laterHint = 'Not reviewed; it stays in the queue.'
-/** A phone's tray is two columns: with an odd number of buttons the first (Keep, or a new task's Next) takes a row. */
-const firstWide = computed(() => !props.wide && (props.choices.main.length + (props.choices.reviewed ? 1 : 0)) % 2 === 1)
+const snoozeHint = computed(() => `Hidden from Review for ${props.snoozeDays} ${props.snoozeDays === 1 ? 'day' : 'days'}. Nothing else changes.`)
+/** Snooze sits last, quieter than the rest; the others are the grid. */
+const grid = computed(() => props.choices.main.filter((b) => b.role !== 'snooze'))
+const snooze = computed(() => props.choices.main.find((b) => b.role === 'snooze'))
+/** Decide later stays where there is no Snooze (another type's review), after a decision (Next) and for a task that is gone. */
+const skipShown = computed(() => !snooze.value || !!props.outcome || !props.active)
+/** A phone's tray is two columns: with an odd number of buttons before Snooze the first (Keep) takes a row. */
+const firstWide = computed(() => !props.wide && (grid.value.length + (props.choices.reviewed ? 1 : 0)) % 2 === 1)
 const choose = (action: QuickActionDef, event: Event) => emit('act', action, event.currentTarget as HTMLElement)
 const link = `min-h-11 rounded-md px-1.5 text-ink underline decoration-line-strong underline-offset-[3px] hover:bg-hover hover:decoration-ink-soft disabled:opacity-40 ${bodyText}`
 const kbd = `rounded border border-line-strong px-1.5 py-0.5 leading-none text-ink-faint ${metaText}`
@@ -48,8 +57,11 @@ const kbd = `rounded border border-line-strong px-1.5 py-0.5 leading-none text-i
         <button v-if="choices.reviewed" :class="[mainButton, 'min-w-0', wide ? '' : 'min-h-12', firstWide ? 'col-span-2' : '']" :disabled="blocked" :title="keepHint" data-process-reviewed @click="choose(choices.reviewed, $event)">
           <AppIcon fallback="ph:check" :size="18" class="shrink-0" /><span class="truncate">{{ keepLabel }}</span><kbd v-if="wide && !outcome" class="ml-1 rounded border border-surface/35 px-1.5 py-0.5 leading-none text-surface/75" :class="metaText">K</kbd>
         </button>
-        <button v-for="(button, i) in choices.main" :key="button.action.id" :class="[greyButton, 'min-w-0', wide ? '' : 'min-h-12', firstWide && !choices.reviewed && !i ? 'col-span-2' : '']" :disabled="blocked" :data-key="choices.keyOf(button)" :data-process-choice="button.option?.id ?? button.role" :data-process-role="button.role" :data-process-action="button.option ? undefined : button.action.id" @click="choose(button.action, $event)">
+        <button v-for="(button, i) in grid" :key="button.action.id" :class="[greyButton, 'min-w-0', wide ? '' : 'min-h-12', firstWide && !choices.reviewed && !i ? 'col-span-2' : '']" :disabled="blocked" :data-key="choices.keyOf(button)" :data-process-choice="button.option?.id ?? button.role" :data-process-role="button.role" :data-process-action="button.option ? undefined : button.action.id" @click="choose(button.action, $event)">
           <AppIcon :icon="button.option ? undefined : button.action.icon" :fallback="icon(button)" :size="18" class="shrink-0" :class="tone(button)" /><span class="truncate">{{ label(button) }}</span><kbd v-if="wide && choices.keyOf(button)" :class="[kbd, 'ml-1']">{{ choices.keyOf(button) }}</kbd>
+        </button>
+        <button v-if="snooze" :class="[quietButton, 'min-w-0', wide ? '' : 'col-span-2']" :disabled="blocked" :title="snoozeHint" :data-key="choices.keyOf(snooze)" data-process-choice="snooze" data-process-role="snooze" @click="choose(snooze.action, $event)">
+          <AppIcon fallback="ph:moon" :size="18" class="shrink-0" /><span class="truncate">{{ snooze.label }}</span><kbd v-if="wide && choices.keyOf(snooze)" :class="[kbd, 'ml-1']">{{ choices.keyOf(snooze) }}</kbd>
         </button>
       </div>
     </template>
@@ -63,7 +75,8 @@ const kbd = `rounded border border-line-strong px-1.5 py-0.5 leading-none text-i
         </template>
       </p>
       <span v-else />
-      <button :class="[quietButton, 'justify-self-end font-medium text-ink']" :disabled="blocked" :title="outcome ? undefined : laterHint" data-process-skip @click="emit('skip')">{{ outcome ? 'Next' : wide ? 'Decide later' : 'Later' }}<AppIcon fallback="ph:caret-right" :size="14" /></button>
+      <button v-if="skipShown" :class="[quietButton, 'justify-self-end font-medium text-ink']" :disabled="blocked" :title="outcome || !active ? undefined : laterHint" data-process-skip @click="emit('skip')">{{ outcome || !active ? 'Next' : wide ? 'Decide later' : 'Later' }}<AppIcon fallback="ph:caret-right" :size="14" /></button>
+      <span v-else />
     </div>
   </div>
 </template>

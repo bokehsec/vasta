@@ -1,5 +1,5 @@
 // Isolated Review tasks: the one button, the combined queue (new, then check-ins), the status choices,
-// Keep, Later, Undo, questions, the end, interruption, view-scoped reviews, phone sizes.
+// Keep, Snooze, Undo, questions, the end, interruption, view-scoped reviews, phone sizes.
 // node task-workflows.mjs [chromium|webkit] [base]   MODE=json: HTTP; default: replica
 import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
@@ -115,11 +115,12 @@ try {
   assert.equal((await position.innerText()).trim(), 'New 1 of 2')
   assert.equal(await page.locator('[data-process-reviewed]').count(), 0, 'a new task has no Keep')
   assert.equal(await page.locator('[data-process-more], [data-process-notes-toggle]').count(), 0)
-  // Five buttons, none highlighted (a new task has no status of its own to keep); the rest are links.
-  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => `${el.dataset.processRole}:${el.dataset.processChoice}`)), ['next:next', 'today:today', 'defer:scheduled', 'done:done', 'drop:drop'])
-  assert.deepEqual(await page.locator('[data-process-links] [data-process-choice]').evaluateAll((els) => els.map((el) => el.dataset.processChoice)), ['hold'])
-  assert.equal(new Set(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor))).size, 1, 'no button highlighted on a new task')
-  assert.match(await page.locator('[data-process-skip]').innerText(), /Later/)
+  // Five buttons (Snooze quiet, last), none highlighted (a new task has no status of its own to keep); no links: Next is No date's, On hold Someday's, Scheduled Schedule's.
+  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => `${el.dataset.processRole}:${el.dataset.processChoice}`)), ['today:today', 'defer:scheduled', 'done:done', 'drop:drop', 'snooze:snooze'])
+  assert.deepEqual(await page.locator('[data-process-links] [data-process-choice]').evaluateAll((els) => els.map((el) => el.dataset.processChoice)), [])
+  assert.equal(new Set(await page.locator('[data-process-role]:not([data-process-role="snooze"])').evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor))).size, 1, 'no button highlighted on a new task')
+  assert.equal(await page.locator('[data-process-skip]').count(), 0, 'Snooze replaces Decide later')
+  assert.match(await page.locator('[data-process-role="snooze"]').getAttribute('title'), /Hidden from Review for 1 day\. Nothing else changes\./)
   assert.match(await page.locator('[data-process-text]').innerText(), /Context 18:/, 'the notes are shown in full')
   for (const width of [320, 375, 390, 430]) {
     await page.setViewportSize({ width, height: width === 320 ? 568 : 844 })
@@ -144,8 +145,9 @@ try {
   assert.equal((await propsOf(a.id)).reviewed.value.start.slice(0, 10), yesterday)
   assert.equal(await page.locator('[data-process-outcome]').count(), 0)
 
-  step('a status choice settles a new task and moves on; Undo restores it; the notice names the move')
-  await click('[data-process-choice="next"]')
+  step('No date (in Schedule…’s question) settles a new task in Next and moves on; Undo restores it; the notice names the move')
+  await click('[data-process-role="defer"]')
+  await click('[data-ask-alternative="no-date"]')
   await until(async () => /^New 2 of 2/.test(await position.innerText()), 'a status settles the new task')
   await until(async () => (await propsOf(a.id)).status?.value[0] === 'next', 'status saved')
   assert.match(await page.locator('[role=status]').innerText(), /Moved to Next/)
@@ -153,7 +155,7 @@ try {
   await until(async () => !(await propsOf(a.id)).status, 'undo restores the incoming status')
   assert.equal(await currentTitle(), b.title, 'Undo does not move the review')
 
-  step('Defer… (the type\'s own Defer, setting Scheduled) asks a date; Tomorrow saves at once; failure/Retry in HTTP mode; then on to the check-ins')
+  step('Schedule… (the type\'s own Defer, setting Scheduled) asks a date; Tomorrow saves at once; failure/Retry in HTTP mode; then on to the check-ins')
   await click('[data-process-choice="scheduled"]')
   if (process.env.MODE === 'json') {
     await page.route(`**/api/objects/${b.id}`, (route) => route.request().method() === 'PUT' ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Test save failure' }) }) : route.continue())
@@ -171,10 +173,10 @@ try {
   step('a check-in: its status is pressed, Keep names it, Keep records Reviewed and leaves the plan')
   // The status it has is Keep (highlighted), never a button of its own; Next is not a link either.
   assert.equal(await page.locator('[data-process-choice="next"]').count(), 0)
-  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole)), ['today', 'defer', 'done', 'drop'])
+  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole)), ['today', 'defer', 'done', 'drop', 'snooze'])
   assert.notEqual(await page.locator('[data-process-reviewed]').evaluate((el) => getComputedStyle(el).backgroundColor), await page.locator('[data-process-role="done"]').evaluate((el) => getComputedStyle(el).backgroundColor))
-  assert.match(await page.locator('[data-process-links]').innerText(), /Move to\s+On hold/)
-  assert.match(await page.locator('[data-process-reviewed]').innerText(), /Keep in Next/)
+  assert.equal(await page.locator('[data-process-links]').count(), 0, 'On hold is Someday, not a link')
+  assert.match(await page.locator('[data-process-reviewed]').innerText(), /^\s*Keep as planned/)
   await page.screenshot({ path: path.join(tmpdir(), `vasta-workflow-${engine}-checkin.png`) })
   await click('[data-process-reviewed]')
   await until(async () => (await currentTitle()) === d.title, 'next check-in')
@@ -182,11 +184,11 @@ try {
   assert.equal((await propsOf(c.id)).status.value[0], 'next')
   assert.equal((await position.innerText()).trim(), 'Check-in 2 of 2')
 
-  step('Later records nothing; the end counts moves, Reviewed and what was left; Review skipped starts again with the right counts')
-  await click('[data-process-skip]')
+  step('→ records nothing; the end counts moves, Reviewed and what was left; Review skipped starts again with the right counts')
+  await page.keyboard.press('ArrowRight')
   await page.locator('[data-process-end]').waitFor()
   const summary = await page.locator('[data-process-summary]').innerText()
-  assert.match(summary, /Defer 1/)
+  assert.match(summary, /Schedule 1/)
   assert.match(summary, /Reviewed 1/)
   assert.match(summary, /2 left for later/, 'the undone task and the one left for later')
   assert.equal((await propsOf(d.id)).status.value[0], 'hold')
@@ -226,7 +228,7 @@ try {
   await page.locator('[data-workflow-chooser]').waitFor({ state: 'detached' })
   await until(async () => /^Review\s+2$/.test((await page.locator('[data-review-tasks]').innerText()).trim()), 'the button counts the new task and the check-in left')
 
-  step('a closing status ends the task: Dropped is named as it is; a decided task offers Next; Later is counted')
+  step('a closing status ends the task: Dropped is named as it is; a decided task offers Next; → is counted')
   await click('[data-review-tasks]')
   assert.equal((await position.innerText()).trim(), 'New 1 of 1')
   await click('[data-process-choice="drop"]')
@@ -238,7 +240,7 @@ try {
   assert.match(await page.locator('[data-process-outcome]').innerText(), /Dropped/)
   assert.match(await page.locator('[data-process-skip]').innerText(), /Next/)
   await click('[data-process-skip]')
-  await click('[data-process-skip]')
+  await page.keyboard.press('ArrowRight')
   await page.locator('[data-process-end]').waitFor()
   assert.match(await page.locator('[data-process-summary]').innerText(), /^Dropped 1 · 1 left for later$/)
   await click('[data-process-finish]')
@@ -296,19 +298,22 @@ try {
   assert.equal(await page.locator('[data-process-role]').count(), 5)
   assert.match(await page.locator('[data-process-plan]').innerText(), /Status/)
   assert.equal(await page.locator('[data-process-reviewed]').count(), 0)
-  assert.match(await page.locator('[data-process-skip]').innerText(), /Decide later/)
+  assert.equal(await page.locator('[data-process-skip]').count(), 0, 'Snooze replaces Decide later')
   assert.equal(await page.locator('[data-process-mode]').evaluate((el) => el.scrollWidth > innerWidth), false)
 
-  step('desktop keys: N for Next, ← goes back, → is later, Esc pauses, Resume on the button, K keeps; the notice clears the buttons')
+  step('desktop keys: N snoozes, ← goes back, → goes on, Esc pauses, Resume on the button, K keeps; the notice clears the buttons')
   await page.keyboard.press('n')
-  await until(async () => (await propsOf(g.id)).status?.value[0] === 'next', 'key 1 placed it in Next')
+  await until(async () => (await propsOf(g.id)).snoozed?.value.start.slice(0, 10) === tomorrow, 'key N snoozed it until tomorrow')
+  assert.equal((await propsOf(g.id)).status, undefined, 'Snooze leaves the status')
+  assert.equal((await propsOf(g.id)).reviewed, undefined, 'and does not mark it reviewed')
+  assert.match(await page.locator('[role=status]').innerText(), /Snoozed until/)
   assert.equal((await position.innerText()).trim(), 'Check-in 1 of 1')
   assert.equal(await currentTitle(), h.title)
-  assert.match(await page.locator('[data-process-reviewed]').innerText(), /Keep in Next/)
+  assert.match(await page.locator('[data-process-reviewed]').innerText(), /Keep as planned/)
   const notice = await page.locator('[role=status]').boundingBox()
   assert(notice.y + notice.height <= (await page.locator('[data-process-choices]').boundingBox()).y + 1, 'Undo sits above the buttons')
   await page.keyboard.press('ArrowLeft')
-  assert.match(await page.locator('[data-process-outcome]').innerText(), /Moved to Next/)
+  assert.match(await page.locator('[data-process-outcome]').innerText(), /Snoozed/)
   await page.keyboard.press('ArrowRight')
   await page.keyboard.press('Escape')
   await page.locator('[data-process-mode]').waitFor({ state: 'detached' })
@@ -318,11 +323,11 @@ try {
   await page.keyboard.press('k')
   await until(async () => (await propsOf(h.id)).reviewed?.value.start.slice(0, 10) === today, 'K kept it')
   await page.locator('[data-process-end]').waitFor()
-  assert.match(await page.locator('[data-process-summary]').innerText(), /Moved to Next 1 · Reviewed 1/)
+  assert.match(await page.locator('[data-process-summary]').innerText(), /Snoozed 1 · Reviewed 1/)
   await page.keyboard.press('Escape')
   await page.locator('[data-process-mode]').waitFor({ state: 'detached' })
-  // A finished review is not offered to resume.
-  await until(async () => (await reviewButton.innerText()).trim() === 'Review', 'no Resume after a finished review')
+  // A finished review is not offered to resume; the snoozed task is not counted until its day.
+  await until(async () => (await reviewButton.innerText()).trim() === 'Review', 'no Resume after a finished review, the snoozed task left out')
   // Any status change counts as reviewed, wherever it is made: Done on the task's page (saved at once, awaited), and
   // a rename leaves the date alone. (The replica uses this device's day, the server the user's: allow either side of midnight.)
   step('a status changed on the task page marks it reviewed; a rename does not')

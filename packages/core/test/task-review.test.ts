@@ -5,7 +5,7 @@ import type { ObjectSummary } from '../src/model.ts'
 import { fieldKind, matchesFilter } from '../src/query.ts'
 import { quickActionEdit, quickActionMessage } from '../src/task-actions.ts'
 import { taskWorkflowQueues } from '../src/task-workflows.ts'
-import { dueForReview, reviewEveryOf, reviewFieldOf, reviewedAction, reviewedByStatusChange, withReviewed } from '../src/task-review.ts'
+import { DEFAULT_SNOOZE_DAYS, dueForReview, isCheckInDue, isSnoozed, reviewEveryOf, reviewFieldOf, reviewedAction, reviewedByStatusChange, snoozeAction, snoozeDaysOf, snoozeFieldOf, withReviewed, withSnoozeCleared } from '../src/task-review.ts'
 
 const AT = '2026-11-14T12:00:00.000Z'
 const types = createBuiltinTypes('s', AT)
@@ -71,6 +71,52 @@ describe('review dates', () => {
     expect(reviewedByStatusChange(cleared, stored, task, today)).toBe(cleared)
     // Setting a status on a task without one counts as a change.
     expect(reviewedByStatusChange(obj({ status: todo }), obj({}), task, today).props.reviewed).toEqual(day(today))
+  })
+})
+
+describe('snooze', () => {
+  const snoozedOn = (value: string, status = 'todo'): { props: Record<string, PropertyValue> } => ({ props: { status: { kind: 'select', value: [status] }, snoozed: day(value) } })
+
+  it('a task has Snoozed until; other types and a task without it have none', () => {
+    expect(snoozeFieldOf(task)?.name).toBe('Snoozed until')
+    expect(snoozeFieldOf(page)).toBeUndefined()
+    expect(snoozeAction({ ...task, properties: task.properties.filter((p) => p.id !== 'snoozed') })).toBeUndefined()
+  })
+
+  it('hides a task for a day unless the type says otherwise; a bad number means the default', () => {
+    expect(DEFAULT_SNOOZE_DAYS).toBe(1)
+    expect(snoozeDaysOf(task)).toBe(1)
+    expect(snoozeDaysOf({ ...task, review: { snooze: 3 } })).toBe(3)
+    for (const bad of [0, -2, 1.5]) expect(snoozeDaysOf({ ...task, review: { snooze: bad } })).toBe(1)
+    const edit = quickActionEdit(task, { id: 'a', props: {} }, snoozeAction({ ...task, review: { snooze: 3 } })!, context)!
+    expect(edit.values).toEqual({ snoozed: day('2026-11-17') })
+    expect(edit.before).toEqual({ snoozed: undefined })
+  })
+
+  it('is hidden until its day, then back; in the check-ins and the Due for review filter alike', () => {
+    expect(isSnoozed(task, snoozedOn('2026-11-15'), '2026-11-14')).toBe(true)
+    expect(isSnoozed(task, snoozedOn('2026-11-14'), '2026-11-14')).toBe(false)
+    expect(isSnoozed(task, { props: {} }, '2026-11-14')).toBe(false)
+    expect(isCheckInDue(task, snoozedOn('2026-11-15'), '2026-11-14')).toBe(false)
+    expect(isCheckInDue(task, snoozedOn('2026-11-15'), '2026-11-15')).toBe(true)
+  })
+
+  it('changes nothing else and is not a review; any other decision clears it, and Undo has it back', () => {
+    const snooze = snoozeAction(task)!
+    expect(withReviewed(task, snooze, { props: {} })).toBe(snooze)
+    expect(withSnoozeCleared(task, snooze, snoozedOn('2026-11-10'))).toBe(snooze)
+    const keep = reviewedAction(task)!
+    expect(withSnoozeCleared(task, keep, { props: {} })).toBe(keep)
+    const cleared = withSnoozeCleared(task, keep, snoozedOn('2026-11-10'))
+    const edit = quickActionEdit(task, { id: 'a', ...snoozedOn('2026-11-10') }, cleared, context)!
+    expect(edit.values).toEqual({ reviewed: day('2026-11-14'), snoozed: undefined })
+    expect(edit.before.snoozed).toEqual(day('2026-11-10'))
+    expect(withSnoozeCleared(page, keep, snoozedOn('2026-11-10'))).toBe(keep)
+  })
+
+  it('reads "Snoozed until Wed" in the notice', () => {
+    const edit = quickActionEdit(task, { id: 'a', props: {} }, snoozeAction(task)!, context)!
+    expect(quickActionMessage(task, snoozeAction(task)!, edit, { longDay: (d) => `day ${d}`, timeZone: 'UTC' })).toBe('Snoozed until day 2026-11-15')
   })
 })
 

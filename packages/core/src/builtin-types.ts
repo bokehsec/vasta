@@ -25,6 +25,8 @@ export const ASSIGNEE_PROPERTY_ID = 'assignee'
 export const BLOCKED_PROPERTY_ID = 'blocked'
 /** The day a task was last looked at in Review (task-review.ts). */
 export const REVIEWED_PROPERTY_ID = 'reviewed'
+/** The day a task is hidden from Review until (task-review.ts). */
+export const SNOOZED_PROPERTY_ID = 'snoozed'
 
 /** A sprint's first and last day (a date range) and what it is for. */
 export const SPRINT_DATES_PROPERTY_ID = 'dates'
@@ -150,6 +152,7 @@ const specs: Record<SystemTypeKey, BuiltinSpec> = {
       },
       { id: BLOCKED_PROPERTY_ID, kind: 'checkbox', name: 'Blocked', hideWhenEmpty: true },
       { id: REVIEWED_PROPERTY_ID, kind: 'date', name: 'Last reviewed', hideWhenEmpty: true },
+      { id: SNOOZED_PROPERTY_ID, kind: 'date', name: 'Snoozed until', hideWhenEmpty: true },
     ],
   },
   weblink: { name: 'Weblink', pluralName: 'Weblinks', icon: 'ph:globe-hemisphere-west', properties: [body, articleProperty] },
@@ -283,6 +286,7 @@ export const ADDED_BUILTIN_PROPERTIES: { key: string; system: SystemTypeKey; ids
   { key: 'task-assignee-2026-10-21', system: 'task', ids: [ASSIGNEE_PROPERTY_ID], after: 'due' },
   { key: 'task-blocked-2026-10-21', system: 'task', ids: [BLOCKED_PROPERTY_ID], after: 'priority' },
   { key: 'task-reviewed-2026-11-14', system: 'task', ids: [REVIEWED_PROPERTY_ID], after: BLOCKED_PROPERTY_ID },
+  { key: 'task-snoozed-2026-11-24', system: 'task', ids: [SNOOZED_PROPERTY_ID], after: REVIEWED_PROPERTY_ID },
   { key: 'habit-per-week-2026-11-15', system: 'habit', ids: [HABIT_PER_WEEK_PROPERTY_ID], after: HABIT_DAYS_PROPERTY_ID },
 ]
 

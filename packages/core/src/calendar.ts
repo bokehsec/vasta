@@ -5,7 +5,7 @@ import { newId } from './ids.ts'
 import ICAL from 'ical.js'
 import type { CalendarEntry, DateException, DateValue, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType } from './model.ts'
 import { copyObject } from './operations.ts'
-import { reviewFieldOf, reviewedByStatusChange } from './task-review.ts'
+import { reviewFieldOf, reviewedByStatusChange, snoozeFieldOf } from './task-review.ts'
 import { doneOptionOf, isClosedTask, reopenOptionOf } from './task-status.ts'
 import type { Store } from './store.ts'
 import { taskDatesOf } from './task-dates.ts'
@@ -506,11 +506,11 @@ export function objectEntries(objects: ObjectSummary[], types: Map<Id, ObjectTyp
       if (type.system === 'daily-note') add(object, 'daily-note', 'date', { start: object.date.start, resolution: 'day' })
       else if (showsOwnDate(object, type)) add(object, 'object', 'date', object.date)
     }
-    // A task's Last reviewed day is bookkeeping (every status change sets it), not something planned.
-    const reviewed = reviewFieldOf(type)?.id
+    // A task's Last reviewed and Snoozed until days are bookkeeping (every status change sets the first), not something planned.
+    const bookkeeping = [reviewFieldOf(type)?.id, snoozeFieldOf(type)?.id]
     for (const def of type.properties) {
       const value = object.props[def.id]
-      if (def.kind === 'date' && value?.kind === 'date' && def.id !== reviewed) add(object, 'property', def.id, value.value)
+      if (def.kind === 'date' && value?.kind === 'date' && !bookkeeping.includes(def.id)) add(object, 'property', def.id, value.value)
     }
   }
   return entries

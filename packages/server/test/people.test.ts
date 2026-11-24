@@ -123,10 +123,24 @@ describe('people', () => {
     ensureBuiltinTypes(store, start)
     const task = () => store.getType(builtinTypeId('old', 'task'))!
     expect(task().properties.find((p) => p.id === 'reviewed')).toEqual({ id: 'reviewed', kind: 'date', name: 'Last reviewed', hideWhenEmpty: true })
-    expect(task().properties.map((p) => p.id).slice(-2)).toEqual(['blocked', 'reviewed'])
+    expect(task().properties.map((p) => p.id).slice(-3)).toEqual(['blocked', 'reviewed', 'snoozed'])
     store.putType({ ...task(), properties: task().properties.filter((p) => p.id !== 'reviewed') })
     ensureBuiltinTypes(store, start)
     expect(task().properties.some((p) => p.id === 'reviewed')).toBe(false)
+  })
+
+  it('gives older spaces Snoozed until once, after Last reviewed', () => {
+    const store = new NodeStore(':memory:')
+    store.putSpace({ id: 'old', name: 'Old', sidebar: [], createdAt: start })
+    const types = createBuiltinTypes('old', start).map((t) => (t.system === 'task' ? { ...t, properties: t.properties.filter((p) => p.id !== 'snoozed') } : t))
+    for (const type of types) store.putType(type)
+    ensureBuiltinTypes(store, start)
+    const task = () => store.getType(builtinTypeId('old', 'task'))!
+    expect(task().properties.find((p) => p.id === 'snoozed')).toEqual({ id: 'snoozed', kind: 'date', name: 'Snoozed until', hideWhenEmpty: true })
+    expect(task().properties.map((p) => p.id).slice(-2)).toEqual(['reviewed', 'snoozed'])
+    store.putType({ ...task(), properties: task().properties.filter((p) => p.id !== 'snoozed') })
+    ensureBuiltinTypes(store, start)
+    expect(task().properties.some((p) => p.id === 'snoozed')).toBe(false)
   })
 
   it('gives older spaces the Assignee property once, after Due', () => {
@@ -136,7 +150,7 @@ describe('people', () => {
     for (const type of types) store.putType(type)
     ensureBuiltinTypes(store, start)
     const task = () => store.getType(builtinTypeId('old', 'task'))!
-    expect(task().properties.map((p) => p.id)).toEqual(['body', 'status', 'due', 'assignee', 'dodate', 'priority', 'blocked', 'reviewed'])
+    expect(task().properties.map((p) => p.id)).toEqual(['body', 'status', 'due', 'assignee', 'dodate', 'priority', 'blocked', 'reviewed', 'snoozed'])
     // Deleted by the user: it stays deleted.
     store.putType({ ...task(), properties: task().properties.filter((p) => p.id !== 'assignee') })
     ensureBuiltinTypes(store, start)

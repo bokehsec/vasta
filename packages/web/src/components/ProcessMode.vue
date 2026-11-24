@@ -3,13 +3,15 @@
 // of one view. Everything about the task is on screen (its text in full, steps, the plan's fields,
 // editable in place) and so are its choices (ReviewDecisionBar: what is offered is
 // lib/review-choices.ts): few and never the status it already has; a task already placed has Keep
-// in that status (reviewed today, back in `review.every` days); a new task has Next, Today, Defer…, Done
-// and Drop. Decide later records nothing and keeps it in the queue. On a big screen the choices sit
+// in that status (reviewed today, back in `review.every` days). A task has Today, Schedule… (its question
+// also offers No date and Someday), Done, Drop and Snooze (hides it for `review.snooze` days, nothing
+// else changes); where Snooze is offered it replaces Decide later, which then is only the way on
+// past a task already decided here. Neither records a review. On a big screen the choices sit
 // under the task, the plan beside it; on a phone they are a tray at the bottom.
 // The queue is stable, with Undo, explicit save, and the reading position kept across interruptions.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Doc, ObjectSummary, ObjectType, PropertyDef, PropertyValue, QuickActionDef, SelectOption } from '@vasta/core'
-import { STATUS_PROPERTY_ID, askOf, daysBetween, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, reviewEveryOf, settlesTriage, taskDatesOf, withReviewed } from '@vasta/core'
+import { STATUS_PROPERTY_ID, askOf, daysBetween, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, reviewEveryOf, settlesTriage, snoozeDaysOf, SNOOZE_ACTION_ID, taskDatesOf, withReviewed, withSnoozeCleared, type ReviewAlternative } from '@vasta/core'
 import { addSelectOption, dayKey } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { greyButton, mainButton, quietButton } from '../lib/buttons.ts'
@@ -88,8 +90,13 @@ const position = computed(() => {
 
 // The choices (lib/review-choices.ts), which the plan beside the task shapes: it edits the next step itself.
 const nextStepField = computed(() => nextStepFieldOf(props.type))
-const choices = computed(() => reviewDecisions(props.type, current.value, { isNew: isNew.value, planFieldIds: plan.value.map((d) => d.id) }))
+const planned = computed(() => {
+  const field = taskDatesOf(props.type).plan
+  return !!field && current.value?.props[field.id]?.kind === 'date'
+})
+const choices = computed(() => reviewDecisions(props.type, current.value, { isNew: isNew.value, planFieldIds: plan.value.map((d) => d.id), planned: planned.value }))
 const every = computed(() => reviewEveryOf(props.type))
+const snoozeDays = computed(() => snoozeDaysOf(props.type))
 const currentStatus = computed(() => choices.value.currentStatus)
 
 // What it is: new or a check-in, when it was last reviewed, when it was added.
@@ -162,22 +169,30 @@ async function act(action: QuickActionDef, anchor: HTMLElement | null) {
   if (action.id === 'reviewed' && outcome.value) return move(1)
   rememberCard()
   const at = index.value
-  const recordsDecision = !isNew.value || settlesTriage(props.type, action)
-  const stay = stays(action)
+  // Snooze is a decision on a new task too, though it places nothing.
+  const snoozing = action.id === SNOOZE_ACTION_ID
+  const recordsDecision = snoozing || !isNew.value || settlesTriage(props.type, action)
+  const stay = !snoozing && stays(action)
+  // Schedule's question offers No date and Someday: one picked ends the question and is then run as a decision of its own.
+  let picked: ReviewAlternative | undefined
+  const alternatives = choices.value.main.find((b) => b.role === 'defer' && b.action === action)?.alternatives?.map((a) => ({ id: a.id, label: a.label, hint: a.hint, icon: a.icon, run: () => { picked = a } }))
   busy.value = true
   try {
-    const saved = await runQuickAction(props.type, object, recordsDecision ? withReviewed(props.type, action, object) : action, {
+    const saved = await runQuickAction(props.type, object, recordsDecision ? withSnoozeCleared(props.type, withReviewed(props.type, action, object), object) : action, {
       anchor: isPhone.value ? null : anchor,
       save: props.save,
       submitLabel: stay ? 'Save' : `Save & next ${noun.value}`,
+      ...(alternatives ? { alternatives } : {}),
       onUndo: () => { if (recordsDecision) alive ? update((s) => undoOutcome(s, object.id, action.name)) : props.undone(object.id, action.name) },
     })
-    if (!saved || !alive) return
-    breakingDown.value = false
-    if (recordsDecision) update((s) => recordOutcome(s, object.id, action.name, at, !stay))
+    if (saved && alive) {
+      breakingDown.value = false
+      if (recordsDecision) update((s) => recordOutcome(s, object.id, action.name, at, !stay))
+    }
   } finally {
     busy.value = false
   }
+  if (picked && alive) await act(picked.action, anchor)
 }
 function move(delta: number) {
   if (busy.value || addingStep.value) return
@@ -328,7 +343,7 @@ function onKey(event: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
-// A phone: swipe the card (right: Defer, left: later), dragged a quarter of the screen or flicked
+// A phone: swipe the card (right: Schedule, left: Snooze, else later), dragged a quarter of the screen or flicked
 // (lib/swipe.ts). As in SwipeRow the direction is decided after 10px and kept: a mostly vertical
 // move scrolls, and a scroll that drifts sideways does not swipe.
 let touch: { x: number; y: number; direction?: 'x' | 'y' } | undefined
@@ -373,7 +388,7 @@ function onTouchEnd() {
   shift.value = 0
   touch = undefined
   if (end > 0 && choices.value.defer) void act(choices.value.defer, null)
-  else if (end < 0) skip()
+  else if (end < 0) { if (choices.value.snooze) void act(choices.value.snooze, null); else skip() }
 }
 
 // The buttons are at the bottom, where notices show: the notice (Undo) sits just above them instead.
@@ -459,7 +474,7 @@ const sectionName = `font-semibold text-ink-faint ${metaText}`
               @touchend="onTouchEnd"
               @touchcancel="onTouchCancel"
             >
-              <p v-if="missing" class="text-ink-soft" :class="bodyText" data-process-missing>This {{ noun }} is no longer here (deleted or moved since the review started). Choose Decide later to go on.</p>
+              <p v-if="missing" class="text-ink-soft" :class="bodyText" data-process-missing>This {{ noun }} is no longer here (deleted or moved since the review started). Choose Next to go on.</p>
               <template v-else-if="current">
                 <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-ink-soft md:text-sm" :class="metaText" data-process-meta>
                   <span v-if="meta.kind" class="rounded-md px-1.5 py-0.5 font-semibold" :class="isNew ? 'bg-accent/12 text-accent' : 'bg-hover text-ink'">{{ meta.kind }}</span>
@@ -517,7 +532,7 @@ const sectionName = `font-semibold text-ink-faint ${metaText}`
               </template>
             </div>
 
-            <ReviewDecisionBar ref="bar" :type="type" :choices="choices" :active="!!current" :blocked="blocked" :outcome="outcome" :noun="noun" :every="every" :at-first="index === 0" :wide="wide" @act="act" @skip="skip" @back="move(-1)" />
+            <ReviewDecisionBar ref="bar" :type="type" :choices="choices" :active="!!current" :blocked="blocked" :outcome="outcome" :noun="noun" :every="every" :snooze-days="snoozeDays" :at-first="index === 0" :wide="wide" @act="act" @skip="skip" @back="move(-1)" />
           </div>
 
           <!-- A wide screen: the plan beside the task. -->

@@ -13,6 +13,15 @@ GitHub release page.
   first day of that week; No date clears it. A time of day, a range's end and a repeat are kept.
   Earlier (Overdue) takes no drops. **+ New** in a date column, swimlane or list/table group
   starts the item on that group's day.
+- **Review tasks: fewer choices, and Snooze.** A task in a review now has **Today**,
+  **Schedule…**, **Done**, **Drop** and **Snooze** (keys `T`, `S`, `D`, `X`, `N`); a check-in
+  also has **Keep as planned**. Schedule… asks for the day and also offers **No date** (ready
+  whenever, your first open status) and **Someday** (parks it in On Hold). The buttons for
+  individual statuses are gone; only the ones left over (such as Waiting) stay as links.
+  **Snooze** hides a task from Review for a day and changes nothing else: it comes back as it
+  was, new or a check-in. Set the number of days in Type settings › Review. Snooze replaces
+  Later / Decide later for tasks; on a phone a swipe left snoozes. Tasks get a "Snoozed until"
+  date, cleared by any other decision in a review.
 - **Review tasks: Today in one press.** Every task in a review has a **Today** button (key `T`)
   beside Defer…, Done and Drop: it sets the Do date to today and goes on to the next task. A new
   task also moves to your first open status (Next); a task that already has a status keeps it.
