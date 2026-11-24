@@ -572,6 +572,35 @@ describe('insistent reminders', () => {
   })
 })
 
+describe('today’s tasks and timed tasks after 0.13', () => {
+  it('does not skip Today’s tasks while a task is planned for today, though nothing is due', async () => {
+    const t = setup()
+    const rent = t.store.getObject('rent')!
+    t.store.putObject({ ...rent, props: { ...rent.props, status: { kind: 'select', value: ['done'] } } })
+    const type = t.store.getType(builtinTypeId('s', 'task'))!
+    t.store.putObject(newObject(type, { title: 'Plan today', props: { status: { kind: 'select', value: ['todo'] }, dodate: { kind: 'date', value: { start: '2026-10-20T00:00:00.000Z', resolution: 'day' } } } }, 'today', AT))
+    t.reminders.save('u', { habits: false, eventsBefore: null })
+    await t.reminders.tick(t.now)
+    t.insistent.create(t.user, { spaceId: 's', title: 'Today', content: { kind: 'tasks' }, when: { kind: 'daily', at: '08:00' }, steps: [{ after: 0, channels: ['ntfy'] }], repeat: 10 })
+    await t.runTo('2026-10-20T08:00:30')
+    expect(t.ntfy.map((n) => n.title)).toEqual(['Today'])
+    await t.runTo('2026-10-20T08:15:00')
+    expect(t.insistent.openNags('u', 's')).toHaveLength(1)
+  })
+
+  it('keeps an automatic reminder at a task’s Due time when the task also has a timed Do date', async () => {
+    const t = setup()
+    const rent = t.store.getObject('rent')!
+    t.store.putObject({ ...rent, props: { ...rent.props, dodate: { kind: 'date', value: { start: '2026-10-20T18:00:00.000Z', resolution: 'time' } } } })
+    t.reminders.save('u', { spaceId: 's', habits: false, eventsBefore: null, tasksBefore: 10, tasksStyle: 'popup' })
+    await t.runTo('2026-10-20T13:50:30')
+    const open = t.insistent.openNags('u').filter((n) => n.occurrence.includes(':due:'))
+    expect(open).toHaveLength(1)
+    await t.runTo('2026-10-20T13:52:00')
+    expect(t.insistent.nag(open[0]!.id)).not.toMatchObject({ outcome: 'skipped' })
+  })
+})
+
 describe('matching typed and heard text', () => {
   it('forgives case, accents, punctuation and a slip in a long word', () => {
     expect(textMatch('Você é o amor da sua vida.', 'voce e o amor da sua vida')).toBe(1)

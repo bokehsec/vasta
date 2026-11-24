@@ -1,8 +1,8 @@
 // The Agenda layout in the test env: a query shown as an agenda in a page (day sections from today,
 // all-day rows, timed rows with their time, the line for now, a task's checkbox, a day with nothing)
 // and its settings (days), then a type view as an agenda with its date field. Dragging an entry to
-// another day moves its date (an event's own field; a task's plan, never its deadline unless
-// asked: "Move the deadline?"), keeping the time of day, and the notice's Undo puts it back. Tasks
+// another day moves that entry's own date (an event's field, a task's plan or deadline, whichever
+// the chip stands for), keeping the time of day, and the notice's Undo puts it back. Tasks
 // that are late are listed first as Overdue (overdue.mjs).
 // Subscribed calendars need a feed URL the test env does not have, so they are not covered here
 // (lib/agenda.test.ts is).
@@ -48,8 +48,6 @@ const post = async (url, data) => (await page.request.post(`${base}${url}`, { he
 const put = async (url, data) => (await page.request.put(`${base}${url}`, { headers, data })).json()
 
 // The browser runs in UTC (above), so its days are the UTC ones.
-/** A button of the "Move the deadline?" question. */
-const answer = (label) => page.locator('form', { hasText: 'Move the deadline?' }).locator('button', { hasText: label })
 const dayAt = (offset) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10)
 const today = dayAt(0)
 const tomorrow = dayAt(1)
@@ -150,34 +148,23 @@ try {
   await until(async () => (await entry(tomorrow, `Tomorrow ${tag}`).locator('button[title="Mark as to do"]').count()) === 1, 'the checkbox shows it done')
   if (!(await entry(tomorrow, `Tomorrow ${tag}`).locator('.line-through').count())) throw new Error('the title is not struck through')
 
-  step('drag a task with only a deadline to another day: its plan is set, the deadline stays, and Undo clears the plan')
+  step('drag a task with only a deadline to another day: its deadline moves (no plan is made), and Undo puts it back')
   await dragTo(entry(today, `All day ${tag}`), day(tomorrow))
-  await until(async () => (await get(`/api/objects/${allDay.id}`)).props.dodate?.value?.start === `${tomorrow}T00:00:00.000Z`, 'the plan set to tomorrow, all-day')
-  if ((await get(`/api/objects/${allDay.id}`)).props.due?.value?.start !== `${today}T00:00:00.000Z`) throw new Error('the deadline moved with the drag')
-  await until(async () => (await entry(tomorrow, `All day ${tag}`).count()) === 1 && (await entry(today, `All day ${tag}`).count()) === 1, 'the plan under tomorrow, the deadline under today')
-  if (!/Planned/.test(await entry(tomorrow, `All day ${tag}`).innerText())) throw new Error('the plan is not marked Planned')
-  const planned = page.locator('[role=status]', { hasText: /Planned for / })
-  await planned.waitFor()
-
-  step('grab the deadline of a planned task: it asks "Move the deadline?"; Cancel moves nothing, Plan for that day instead moves the plan, Move deadline moves it')
-  await dragTo(entry(today, `All day ${tag}`).filter({ hasText: 'Due' }), day(dayAt(2)))
-  await page.getByText('Move the deadline?').waitFor()
-  await answer(/^\s*Cancel\s*$/).click()
-  await sleep(500)
-  const unchanged = (await get(`/api/objects/${allDay.id}`)).props
-  if (unchanged.due.value.start !== `${today}T00:00:00.000Z` || unchanged.dodate.value.start !== `${tomorrow}T00:00:00.000Z`) throw new Error('Cancel changed something')
-  await dragTo(entry(today, `All day ${tag}`).filter({ hasText: 'Due' }), day(dayAt(2)))
-  await answer(/^\s*Plan for that day instead\s*$/).click()
-  await until(async () => (await get(`/api/objects/${allDay.id}`)).props.dodate?.value?.start === `${dayAt(2)}T00:00:00.000Z`, 'the plan moved to the day after tomorrow')
-  if ((await get(`/api/objects/${allDay.id}`)).props.due?.value?.start !== `${today}T00:00:00.000Z`) throw new Error('the deadline moved')
-  await page.locator('[role=status]', { hasText: /Planned for / }).locator('button', { hasText: 'Undo' }).click()
-  await until(async () => (await get(`/api/objects/${allDay.id}`)).props.dodate?.value?.start === `${tomorrow}T00:00:00.000Z`, 'Undo put the plan back')
-  await until(async () => (await entry(today, `All day ${tag}`).filter({ hasText: 'Due' }).count()) === 1, 'the deadline is under today again')
-  await dragTo(entry(today, `All day ${tag}`).filter({ hasText: 'Due' }), day(dayAt(2)))
-  await answer(/^\s*Move deadline\s*$/).click()
-  await until(async () => (await get(`/api/objects/${allDay.id}`)).props.due?.value?.start === `${dayAt(2)}T00:00:00.000Z`, 'the deadline moved to the day after tomorrow')
-  await page.locator('[role=status]', { hasText: /Deadline moved to / }).locator('button', { hasText: 'Undo' }).click()
+  await until(async () => (await get(`/api/objects/${allDay.id}`)).props.due?.value?.start === `${tomorrow}T00:00:00.000Z`, 'the deadline moved to tomorrow, all-day')
+  if ((await get(`/api/objects/${allDay.id}`)).props.dodate?.value) throw new Error('the drag set a plan')
+  await until(async () => (await entry(tomorrow, `All day ${tag}`).count()) === 1 && (await entry(today, `All day ${tag}`).count()) === 0, 'the deadline under tomorrow')
+  if (await page.getByText('Move the deadline?').count()) throw new Error('a drag asked about the deadline')
+  const movedNotice = page.locator('[role=status]', { hasText: /Moved to / })
+  await movedNotice.waitFor()
+  await movedNotice.locator('button', { hasText: 'Undo' }).click()
   await until(async () => (await get(`/api/objects/${allDay.id}`)).props.due?.value?.start === `${today}T00:00:00.000Z`, 'Undo put the deadline back')
+  await until(async () => (await entry(today, `All day ${tag}`).count()) === 1, 'the deadline is under today again')
+
+  step('drag it again, two days on: the deadline moves with no question, Undo puts it back')
+  await dragTo(entry(today, `All day ${tag}`), day(dayAt(2)))
+  await until(async () => (await get(`/api/objects/${allDay.id}`)).props.due?.value?.start === `${dayAt(2)}T00:00:00.000Z`, 'the deadline moved to the day after tomorrow')
+  await page.locator('[role=status]', { hasText: /Moved to / }).locator('button', { hasText: 'Undo' }).click()
+  await until(async () => (await get(`/api/objects/${allDay.id}`)).props.due?.value?.start === `${today}T00:00:00.000Z`, 'Undo put the deadline back again')
 
   step('the query’s settings: Agenda is a layout; sort and group are gone; Days set to one')
   await page.locator('button', { hasText: 'Edit query' }).click()

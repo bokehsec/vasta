@@ -140,7 +140,7 @@ try {
   await until(async () => (await row(`Pay rent ${tag}`).locator('[data-row-field="due"]').count()) === 1, 'Due in the embedded query')
   await page.setViewportSize({ width: 390, height: 844 })
   await until(async () => row(`Pay rent ${tag}`).evaluate((element) => element.scrollWidth <= element.clientWidth), 'no horizontal overflow on a phone')
-  const titleBox = await row(`Pay rent ${tag}`).locator('a').first().boundingBox()
+  const titleBox = await row(`Pay rent ${tag}`).locator('span.font-medium').first().boundingBox()
   const fieldBox = await row(`Pay rent ${tag}`).locator('[data-row-field="due"]').boundingBox()
   if (fieldBox.y < titleBox.y + titleBox.height) throw new Error('fields did not move below the title')
   await page.setViewportSize(options.viewport)

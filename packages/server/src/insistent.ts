@@ -618,7 +618,10 @@ export class InsistentReminders {
     const object = rule.objectId && rule.when.kind === 'object' ? this.store.getObject(rule.objectId) : undefined
     const type = object && this.store.getType(object.typeId)
     if (!object || type?.system !== 'task' || nag.occurrence.startsWith('now:')) return false
-    const field = taskReminderField(type, object)
+    // An automatic reminder names the date it is about (`<id>:<field>:<start>`): a task's timed Do date
+    // and its timed Due each have one. A reminder set on the task is about the field taskReminderField picks.
+    const named = rule.id.startsWith('auto:task:') && nag.occurrence.startsWith(`${object.id}:`) ? nag.occurrence.slice(object.id.length + 1).split(':')[0] : undefined
+    const field = named && object.props[named]?.kind === 'date' ? named : taskReminderField(type, object)
     const value = field ? object.props[field] : undefined
     const prefix = field ? `${object.id}:${field}:` : ''
     if (value?.kind !== 'date' || !nag.occurrence.startsWith(prefix)) return true
@@ -722,7 +725,7 @@ export class InsistentReminders {
     if ((!manual && this.skipsDay(user, rule, occurrence.day)) || this.isDone(user, rule, occurrence)) return undefined
     const contentIds = this.pickContent(user, rule)
     if (!manual && skipsEmpty(rule)) {
-      if (rule.content.kind === 'tasks' && !this.tasks(user, rule.spaceId).length) return undefined
+      if (rule.content.kind === 'tasks' && !this.hasTasks(user, rule.spaceId)) return undefined
       if ((rule.content.kind === 'tag' || rule.content.kind === 'query') && !contentIds.length) return undefined
     }
     const now = Math.max(occurrence.at, atNow)
@@ -798,7 +801,7 @@ export class InsistentReminders {
   /** Close it, send it, or wait: what an open nag does now. */
   private async advance(user: User, rule: InsistentRule, nag: Nag, now: number) {
     if (this.isDone(user, rule, nag)) return this.close(nag, 'done', now)
-    if (!nag.manual && skipsEmpty(rule) && rule.content.kind === 'tasks' && !this.tasks(user, rule.spaceId).length) return this.close(nag, 'done', now)
+    if (!nag.manual && skipsEmpty(rule) && rule.content.kind === 'tasks' && !this.hasTasks(user, rule.spaceId)) return this.close(nag, 'done', now)
     if (this.timeMoved(rule, nag)) {
       nag.reason = 'The task was moved to another time'
       return this.close(nag, 'skipped', now)
@@ -1080,6 +1083,11 @@ export class InsistentReminders {
   /** Tasks due today or overdue, not done (up to 8, earliest first). */
   tasks(user: User, spaceId: Id): { id: Id; title: string; due: string }[] {
     return this.datedTasks(user, spaceId, 'deadline').slice(0, 8).map((t) => ({ id: t.id, title: t.title, due: t.at }))
+  }
+
+  /** Whether today's tasks digest has anything to list: tasks due or overdue, or planned for today. */
+  private hasTasks(user: User, spaceId: Id): boolean {
+    return this.tasks(user, spaceId).length > 0 || this.planned(user, spaceId).length > 0
   }
 
   /** Open tasks planned (Do date) for today or earlier that are not on the due list (up to 8, earliest first). */

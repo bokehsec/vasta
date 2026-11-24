@@ -143,7 +143,7 @@ await until(async () => (await lunch.locator('[data-food-entry]').count()) === 1
 
 step('do not count the day')
 await block.locator('button[title="More"]').click()
-await page.locator("text=Don't count this day").click()
+await page.getByText(/Don.t count this day/).click()
 await until(async () => (await block.textContent()).includes('not counted'), 'the day marked not counted')
 await block.locator('button[title="More"]').click()
 await page.locator('text=Count this day again').click()
@@ -270,10 +270,10 @@ const dayLeftInput = foodReminders.locator('input[aria-label="Time for what is l
 if ((await dayLeftInput.count()) === 0) await foodReminders.locator('input[type=checkbox]').first().check()
 await dayLeftInput.fill(dayLeftAt)
 await foodReminders.locator('select').last().selectOption({ label: '1 hour after its time' })
-await page.locator('section#reminders button:has-text("Save")').click()
+// Per-space reminder settings save by themselves when a field changes (no Save button).
 await until(async () => {
-  const saved = await get('/api/auth/reminders')
-  return saved.food?.dayLeft === dayLeftAt && saved.food.mealsAfter === 60
+  const saved = (await get(`/api/auth/reminders?space=${space.id}`)).space
+  return saved?.food?.dayLeft === dayLeftAt && saved.food.mealsAfter === 60
 }, 'the food reminders saved')
 await shot('reminders', page.locator('section#reminders'))
 

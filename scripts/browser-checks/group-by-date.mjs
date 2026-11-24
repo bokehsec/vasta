@@ -67,15 +67,15 @@ try {
   step('Due is offered in Group, and the list headers follow time rather than object order')
   await page.getByRole('button', { name: 'Group', exact: true }).click()
   await page.locator('[data-overlay]').getByRole('button', { name: 'Due', exact: true }).click()
-  const listHeaders = page.locator('main section > header > span:first-child')
-  await until(async () => JSON.stringify(await listHeaders.allTextContents()) === JSON.stringify(['Earlier', 'Today', 'Tomorrow', 'No date']), 'ordered list groups')
+  const listHeaders = page.locator('main section [data-group-heading] button > span.truncate')
+  await until(async () => JSON.stringify(await listHeaders.allTextContents()) === JSON.stringify(['Overdue', 'Today', 'Tomorrow', 'No date']), 'ordered list groups')
   await until(async () => (await get(`/api/types/${task.id}`)).views[0].groupBy?.[0]?.field === 'due', 'Due grouping saved')
 
   step('a board keeps the empty date columns, without an add button')
   await page.getByRole('button', { name: 'List', exact: true }).click()
   await page.locator('[data-overlay]').getByRole('button', { name: 'Board', exact: true }).click()
   const keys = ['past', 'today', 'tomorrow', 'this-week', 'next-week', 'later', '__none']
-  const labels = ['Earlier', 'Today', 'Tomorrow', 'This week', 'Next week', 'Later', 'No date']
+  const labels = ['Overdue', 'Today', 'Tomorrow', 'This week', 'Next week', 'Later', 'No date']
   await until(async () => (await page.locator('[data-board-cell]').count()) === 7, 'seven date columns')
   const columnHeaders = page.locator('[data-drag-scroll] section > header > span:first-child')
   if (JSON.stringify(await columnHeaders.allTextContents()) !== JSON.stringify(labels)) throw new Error('wrong board headers')

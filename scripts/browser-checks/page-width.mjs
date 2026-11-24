@@ -77,7 +77,7 @@ try {
   problems.length = 0
   if (process.env.SETTINGS !== '0') {
     await go(`${base}/settings#appearance`)
-    const choices = page.getByRole('radiogroup', { name: 'Page width', exact: true })
+    const choices = page.getByRole('radiogroup', { name: 'Page width, on this device', exact: true })
     await choices.waitFor()
     assert.equal(await choices.getByRole('radio', { checked: true }).textContent().then((text) => text.trim()), 'Standard')
     // The choice is a device preference: kept in this device's localStorage under the signed-in account.
@@ -183,7 +183,7 @@ try {
   for (const choice of ['standard', 'wide', 'full']) { await choose(choice); await contained() }
   if (process.env.SETTINGS !== '0') {
     await go(`${base}/settings#appearance`)
-    await page.getByRole('radiogroup', { name: 'Page width', exact: true }).waitFor()
+    await page.getByRole('radiogroup', { name: 'Page width, on this device', exact: true }).waitFor()
     await contained()
   }
   console.log('✓ all widths fit a phone viewport')

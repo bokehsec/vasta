@@ -139,6 +139,7 @@ const titleWrap = computed(() => props.list?.wrap || isPhone.value)
         :class="[listColumns ? 'flex-wrap gap-y-1 @2xl:flex-nowrap' : quickType(object) ? 'flex-wrap gap-y-1 @md:flex-nowrap' : absentParent(object) ? 'flex-wrap gap-y-0.5' : '']"
         :style="depth ? { paddingLeft: `${0.5 + Math.min(depth, 4) * 1.5}rem` } : undefined"
         :data-depth="nests ? depth : undefined"
+        data-list-row
         @contextmenu="emit('menu', $event, object)"
       >
         <!-- A parent's caret folds its steps; rows of an outline keep its place free (a phone keeps the width for the title). -->
@@ -166,7 +167,7 @@ const titleWrap = computed(() => props.list?.wrap || isPhone.value)
         <StepProgress v-if="progressOf(object)" :progress="progressOf(object)!" />
         <span v-if="absentParent(object)" class="order-last w-full truncate pl-[30px] text-ink-faint" :class="metaText" data-absent-parent>in {{ absentParent(object) }}</span>
         <span v-if="listColumns" class="flex min-w-0 shrink-0 items-center gap-2 @max-2xl:order-last @max-2xl:w-full @max-2xl:flex-wrap @max-2xl:pl-[30px]" :class="metaText" data-row-fields @click.prevent>
-          <FieldValue v-for="field in fieldsOf(object)" :key="field.field" :object="object" :field="field.field" :def="field.def" row />
+          <FieldValue v-for="field in fieldsOf(object)" :key="field.field" :data-row-field="field.field" :object="object" :field="field.field" :def="field.def" row />
         </span>
         <template v-else>
           <span class="hidden gap-1 md:flex" @click.prevent>

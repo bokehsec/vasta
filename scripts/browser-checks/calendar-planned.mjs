@@ -1,5 +1,5 @@
 // Calendar task plans/deadlines, completion feedback, safe repeats and explicit linked dates; a plan and
-// deadline of one day are one chip with both badges, the after-deadline mark, dragging moves the plan.
+// deadline of one day are one chip with both badges, the after-deadline mark, dragging a chip moves its own date.
 // Isolated seeded apps only: node calendar-planned.mjs [chromium|webkit] [base]; MODE=json.
 import { chromium, webkit } from 'playwright'
 import { mkdtempSync, mkdirSync } from 'node:fs'
@@ -114,7 +114,7 @@ try {
   await go(22)
   assert.equal(await entry('SameDay').count(), 0)
   assert.equal(await entry('Repeat').locator('button[title="Mark as done"]').count(), 0)
-  console.log('• month: one chip per task per day with both badges, the after-deadline mark, a drag moves the plan and a deadline asks first')
+  console.log('• month: one chip per task per day with both badges, the after-deadline mark, a drag moves that chip’s own date (plan or deadline) with Undo')
   const monthSame = await make('MonthSame', { work: dateValue(16), due: dateValue(16) })
   await make('MonthLate', { work: dateValue(20), due: dateValue(17) })
   const monthDrag = await make('MonthDrag', { work: dateValue(18), due: dateValue(25) })
@@ -137,13 +137,11 @@ try {
   await drag(plannedChip(), 19)
   await until(async () => (await stored(monthDrag)).work.value.start.startsWith(day(19)), 'the plan moved')
   assert.ok((await stored(monthDrag)).due.value.start.startsWith(day(25)))
-  await page.locator('[role=status]', { hasText: /Planned for / }).waitFor()
+  await page.locator('[role=status]', { hasText: /Moved to / }).waitFor()
   await drag(dueChip(), 26)
-  await page.getByText('Move the deadline?').waitFor()
-  await page.locator('form', { hasText: 'Move the deadline?' }).locator('button', { hasText: /^\s*Move deadline\s*$/ }).click()
-  await until(async () => (await stored(monthDrag)).due.value.start.startsWith(day(26)), 'the deadline moved after asking')
+  await until(async () => (await stored(monthDrag)).due.value.start.startsWith(day(26)), 'the deadline moved by its own chip')
   assert.ok((await stored(monthDrag)).work.value.start.startsWith(day(19)))
-  await page.locator('[role=status]', { hasText: /Deadline moved to / }).locator('button', { hasText: 'Undo' }).click()
+  await page.locator('[role=status]', { hasText: /Moved to / }).locator('button', { hasText: 'Undo' }).click()
   await until(async () => (await stored(monthDrag)).due.value.start.startsWith(day(25)), 'Undo put the deadline back')
   assert.equal(monthSame.id.length > 0, true)
   console.log('• phone layout, no row action clutter, completion and Undo')
