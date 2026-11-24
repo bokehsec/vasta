@@ -19,7 +19,8 @@ describe('review keys', () => {
       { actions: [{ id: 'defer', name: 'Defer', changes: [{ field: 'dodate', value: { kind: 'ask' } }] }, { id: 'done', name: 'Done', changes: [set('done')] }, { id: 'drop', name: 'Drop', changes: [set('drop')] }] }
     )
     const { keys, main } = reviewDecisions(type, task('dele'), { isNew: true, planFieldIds: [] })
-    expect(main.map((b) => b.role)).toEqual(['today', 'defer', 'done', 'drop', 'snooze'])
+    expect(main.map((b) => b.role)).toEqual(['today', 'defer', 'wait', 'done', 'drop', 'snooze'])
+    expect(keys.get('w')?.role).toBe('wait')
     expect(keys.get('t')?.role).toBe('today')
     expect(keys.get('d')?.role).toBe('done')
     expect(keys.get('s')?.role).toBe('defer')
@@ -34,6 +35,8 @@ describe('review keys', () => {
     const placed = reviewDecisions(type, task('next'), { isNew: false, planFieldIds: [] })
     expect(placed.reviewed?.id).toBe('reviewed')
     expect(placed.currentStatus?.label).toBe('Next')
-    expect(placed.keys.get('1')?.label).toBe('Waiting')
+    // Waiting… is a main button (W), so Waiting is no numbered link.
+    expect(placed.keys.get('w')?.label).toBe('Waiting')
+    expect(placed.links.map((b) => b.label)).toEqual([])
   })
 })

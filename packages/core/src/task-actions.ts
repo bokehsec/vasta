@@ -337,7 +337,8 @@ export function quickActionMessage(
   })
   const snoozed = days.find((d) => d.field === SNOOZED_PROPERTY_ID)
   const named = quickActionDoneName(action.name)
-  let message = [snoozed ? `${named} until ${options.longDay(snoozed.day)}` : named, ...days.filter((d) => d !== snoozed).map((d) => `${d.name} ${options.longDay(d.day)}`)].join(' · ')
+  // Days that are the snoozed day too (Waiting…: Check back, the Do date moved with it) are said by "until".
+  let message = [snoozed ? `${named} until ${options.longDay(snoozed.day)}` : named, ...days.filter((d) => d !== snoozed && d.day !== snoozed?.day).map((d) => `${d.name} ${options.longDay(d.day)}`)].join(' · ')
   const due = movedDue ? undefined : dayOfValue(options.due, options.timeZone)
   const late = due && days.find((d) => d.field !== deadline && d !== snoozed && d.day > due)
   if (late && due) message += ` (after its due date, ${options.longDay(due)})`

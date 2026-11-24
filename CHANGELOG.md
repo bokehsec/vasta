@@ -8,6 +8,14 @@ GitHub release page.
 
 ### Added
 
+- **Review tasks: Waiting….** When you've done your part and are waiting on someone, press
+  **Waiting…** (key `W`, after Schedule…). It asks when to check back (Tomorrow, In 3 days,
+  **In a week**, In 2 weeks or any day) and takes an optional note. **Wait** moves the task to
+  Waiting, sets its Check back date (if your task type has one), moves an earlier Do date to that
+  day (never Due), and adds the note to the end of the task's Notes with today's date
+  ("Nov 24 — emailed the broker"). The task stays out of Review until that day, then comes back
+  even if its weekly check-in isn't due yet. It's offered on a task that is already waiting
+  too, for another round. Undo puts everything back, note included. The plain Waiting link is gone.
 - **Boards grouped by a date: drag cards between columns.** Dropping a card in Today or Tomorrow
   gives it that day; This week gives it the first day after tomorrow, Next week and Later the
   first working day of that week (Monday, where weeks start on Sunday); No date clears it. A time of day, a range's end and a repeat are kept.

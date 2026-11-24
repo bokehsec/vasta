@@ -2,13 +2,14 @@
 // a next-step edit never hide an unresolved incoming task. Saved views are independent of this.
 // A Review of tasks always starts with every new task in the space, then the check-ins of the
 // place it was started from (a view, or the whole space). A snoozed task is in neither until its day.
-import { STATUS_PROPERTY_ID } from './builtin-types.ts'
-import type { ObjectRecord, ObjectType, QuickActionDef, SelectOption } from './model.ts'
+import { REVIEWED_PROPERTY_ID, SNOOZED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
+import type { DatePropertyDef, ObjectRecord, ObjectType, QuickActionDef, SelectOption } from './model.ts'
 import { deferActionOf, quickActionsOf } from './task-actions.ts'
 import { taskDatesOf } from './task-dates.ts'
 import { needsTriage, triageOptionsOf } from './task-status.ts'
-import { isCheckInDue, isSnoozed, snoozeAction } from './task-review.ts'
+import { isCheckInDue, isSnoozed, snoozeAction, snoozeFieldOf } from './task-review.ts'
 import { statusProperty } from './metrics.ts'
+import { daysBetween, dayOfDate } from './time.ts'
 
 /** Sister queues within the supplied tasks: incoming work, then commitments due for review. */
 export function taskWorkflowQueues<T extends Pick<ObjectRecord, 'props'>>(type: ObjectType | undefined, objects: readonly T[], today: string): { triage: T[]; review: T[] } {
@@ -84,7 +85,7 @@ export function reviewChoices(type: ObjectType | undefined): ReviewChoice[] {
 function statusIcon(option: SelectOption, options: readonly SelectOption[]): string {
   if (option.status === 'done') return options.find((o) => o.status === 'done') === option ? 'ph:check-circle' : 'ph:x-circle'
   const label = option.label.trim().toLowerCase()
-  if (/wait|delegat/.test(label)) return 'ph:hourglass-medium'
+  if (WAITING_LABEL.test(label)) return 'ph:hourglass-medium'
   if (/sched|later|defer/.test(label)) return 'ph:calendar-blank'
   if (/hold|someday|paus/.test(label)) return 'ph:pause-circle'
   return 'ph:arrow-right'
@@ -102,12 +103,41 @@ export interface ReviewAlternative {
 
 /** A button of a review: where the task goes, as a main button or as a link under them. */
 export interface ReviewButton {
-  role: 'today' | 'defer' | 'done' | 'drop' | 'snooze' | 'move'
+  role: 'today' | 'defer' | 'wait' | 'done' | 'drop' | 'snooze' | 'move'
   label: string
   action: QuickActionDef
   option?: SelectOption
   /** Schedule only: the choices its question offers under the calendar (No date, Someday). */
   alternatives?: ReviewAlternative[]
+}
+
+/** A status for work waiting on someone else: "Waiting", "Delegated". */
+export const WAITING_LABEL = /wait|delegat/i
+/** A date for when to look at waiting work again: "Check back", "Follow-up". */
+const CHECK_BACK_LABEL = /check\s*-?\s*back|follow\s*-?\s*up/i
+
+/** The type's Check back date (a date that is not the plan date, deadline, Last reviewed or Snoozed until, named like it), if it has one. */
+export function checkBackFieldOf(type: ObjectType | undefined): DatePropertyDef | undefined {
+  if (type?.system !== 'task') return undefined
+  const { plan, deadline } = taskDatesOf(type)
+  const taken = [plan?.id, deadline?.id, REVIEWED_PROPERTY_ID, SNOOZED_PROPERTY_ID]
+  return type.properties.find((p): p is DatePropertyDef => p.kind === 'date' && !taken.includes(p.id) && CHECK_BACK_LABEL.test(p.name))
+}
+
+/**
+ * Waiting…, once its day is chosen: the button's action (the status Waiting) that also sets Check back
+ * (where the type has one) and Snoozed until to `day`, so the task is out of Review until then, and
+ * moves the Do date there when it is earlier (putting a task off moves its Do date, never Due; none
+ * stays none). `object` is the task, `today` the user's day. The changes are days from today.
+ */
+export function waitingAction(type: ObjectType | undefined, base: QuickActionDef, object: Pick<ObjectRecord, 'props'>, day: string, today: string, timeZone = 'UTC'): QuickActionDef {
+  const fields = [checkBackFieldOf(type), snoozeFieldOf(type)].flatMap((d) => d ?? [])
+  const plan = taskDatesOf(type).plan
+  const planned = plan ? object.props[plan.id] : undefined
+  if (plan && planned?.kind === 'date' && dayOfDate(planned.value, timeZone) < day) fields.push(plan)
+  const days = daysBetween(today, day)
+  const own = new Set(fields.map((d) => d.id))
+  return { ...base, changes: [...base.changes.filter((c) => !own.has(c.field)), ...fields.map((d) => ({ field: d.id, value: { kind: 'day' as const, days } }))] }
 }
 
 /** A status meant for work that has its day: "Scheduled", "Later", "Deferred". */
@@ -128,6 +158,10 @@ const PARKED_LABEL = /hold|someday|paus/i
  * task already is there with no plan date. The other open statuses and any further closing ones
  * are links (`more`). `covered`: the quick actions these stand for. Actions are named for the
  * review's notice and totals: "Moved to Waiting", "Done", "Schedule", "Today", "Snoozed".
+ * Waiting… follows Schedule where the type has a waiting status (the first open one named like
+ * "Waiting" or "Delegated"): even on a task already waiting (still waiting, another week); its
+ * action only sets the status, and waitingAction adds the day once it is asked for. It stands for
+ * that status, which is no link then.
  */
 export function reviewButtons(type: ObjectType | undefined, current: string | undefined, isNew: boolean, planned = false): { main: ReviewButton[]; more: ReviewButton[]; covered: string[] } {
   const choices = reviewChoices(type)
@@ -170,16 +204,18 @@ export function reviewButtons(type: ObjectType | undefined, current: string | un
   const today: QuickActionDef | undefined = plan && { id: 'today', name: 'Today', icon: { kind: 'icon', value: 'ph:calendar-check' }, changes: [{ field: plan.id, value: { kind: 'day', days: 0 } }, ...(placesNew ? [places(placesNew.option)] : [])] }
   const snooze = snoozeAction(type)
   if (snooze) covered.push(snooze.id)
+  const waiting = open.find((c) => WAITING_LABEL.test(c.option.label))
   const [done, drop, ...otherClosing] = closing
   const main: ReviewButton[] = [
     ...(today ? [{ role: 'today' as const, label: 'Today', action: today }] : []),
     ...(defer ? [{ role: 'defer' as const, label: 'Schedule', ...(placed ? { option: placed.option } : {}), ...(alternatives.length ? { alternatives } : {}), action: defer }] : []),
+    ...(waiting ? [button('wait', waiting)] : []),
     ...(done ? [button('done', done)] : []),
     ...(drop ? [button('drop', drop, actions.find((a) => a.id === 'drop' && a.id === drop.action.id)?.name ?? drop.option.label)] : []),
     ...(snooze ? [{ role: 'snooze' as const, label: 'Snooze', action: snooze }] : []),
   ]
   const more = [
-    ...open.filter((c) => c !== first && c !== parked && c !== placed && c !== scheduledStatus && c.option.id !== current).map((c) => button('move', c)),
+    ...open.filter((c) => c !== first && c !== parked && c !== placed && c !== scheduledStatus && c !== waiting && c.option.id !== current).map((c) => button('move', c)),
     ...otherClosing.map((c) => button('move', c)),
   ]
   return { main, more, covered }

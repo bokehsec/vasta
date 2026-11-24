@@ -1,15 +1,15 @@
 // What a review offers for the object at hand (ProcessMode, ReviewDecisionBar): a task type's
 // review buttons and links (core reviewButtons), then any other quick actions of its own as links;
 // another type's view review has its quick actions as the buttons. Keep (Reviewed) is for one that
-// already has a place. Keys: K (or R) keeps; Today, Schedule, Done, Drop and Snooze are T, S, D, X
-// and N whatever the statuses are called; any other main button takes its initial when that is still
+// already has a place. Keys: K (or R) keeps; Today, Schedule, Waiting, Done, Drop and Snooze are T, S,
+// W, D, X and N whatever the statuses are called; any other main button takes its initial when that is still
 // free; links 1-9.
 import { askOf, deferActionOf, nextStepFieldOf, quickActionsOf, reviewButtons, reviewedAction, statusProperty, type ReviewButton } from '@vasta/core'
 import type { ObjectSummary, ObjectType, QuickActionDef, SelectOption } from '@vasta/core'
 
-const ROLE_KEYS: Partial<Record<ReviewButton['role'], string>> = { today: 't', defer: 's', done: 'd', drop: 'x', snooze: 'n' }
-/** Taken by Keep and by the five roles. */
-const RESERVED = 'krtsdxn'
+const ROLE_KEYS: Partial<Record<ReviewButton['role'], string>> = { today: 't', defer: 's', wait: 'w', done: 'd', drop: 'x', snooze: 'n' }
+/** Taken by Keep and by the six roles. */
+const RESERVED = 'krtswdxn'
 
 export function reviewDecisions(type: ObjectType, object: ObjectSummary | undefined, o: { isNew: boolean; planFieldIds: readonly string[]; planned?: boolean }) {
   const status = statusProperty(type)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes } from '../src/builtin-types.ts'
 import type { ObjectType, PropertyValue, QuickActionDef } from '../src/model.ts'
-import { reviewButtons, reviewChoices, reviewQueues, settlesTriage, taskWorkflowQueues } from '../src/task-workflows.ts'
+import { checkBackFieldOf, reviewButtons, reviewChoices, reviewQueues, settlesTriage, taskWorkflowQueues, waitingAction } from '../src/task-workflows.ts'
 import { needsTriage, triageOptionsOf } from '../src/task-status.ts'
 
 const base = createBuiltinTypes('s', '2026-11-14T12:00:00Z').find((t) => t.system === 'task')!
@@ -142,7 +142,7 @@ describe('sister task workflows', () => {
     const shape = (r: ReturnType<typeof reviewButtons>) => ({ main: r.main.map((b) => `${b.role}:${b.label}`), more: r.more.map((b) => b.label) })
 
     it('a new task: Today, Schedule, Done, Drop, Snooze; only the statuses left over as links', () => {
-      expect(shape(reviewButtons(typed, 'in', true))).toEqual({ main: ['today:Today', 'defer:Schedule', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: ['Waiting'] })
+      expect(shape(reviewButtons(typed, 'in', true))).toEqual({ main: ['today:Today', 'defer:Schedule', 'wait:Waiting', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
     })
 
     it('Schedule offers No date (the first open status that is not the scheduled one) and Someday, each clearing the plan date', () => {
@@ -188,11 +188,11 @@ describe('sister task workflows', () => {
       expect(defer.action.id).toBe('defer')
       expect(defer.option?.id).toBe('sched')
       expect(settlesTriage(dayOnly(typed), defer.action)).toBe(true)
-      expect(shape(fresh)).toEqual({ main: ['today:Today', 'defer:Schedule', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: ['Waiting'] })
+      expect(shape(fresh)).toEqual({ main: ['today:Today', 'defer:Schedule', 'wait:Waiting', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
       // A task that has its place keeps it: the type's Defer as it is, and Scheduled stays a link.
       const placed = reviewButtons(dayOnly(typed), 'next', false)
       expect(placed.main.find((b) => b.role === 'defer')!.action.changes).toEqual([{ field: 'dodate', value: { kind: 'ask' } }])
-      expect(shape(placed).more).toEqual(['Waiting'])
+      expect(shape(placed).more).toEqual([])
       // No status for scheduled work: the first open one, which is No date's too.
       const bare = dayOnly({ ...typed, properties: typed.properties.map((p) => p.id === 'status' && p.kind === 'select' ? { ...p, options: p.options.filter((o) => o.id !== 'sched') } : p) })
       const plain = reviewButtons(bare, 'in', true)
@@ -201,9 +201,24 @@ describe('sister task workflows', () => {
     })
 
     it('a check-in never offers the status it has as a link', () => {
-      expect(shape(reviewButtons(typed, 'next', false))).toEqual({ main: ['today:Today', 'defer:Schedule', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: ['Waiting'] })
-      expect(shape(reviewButtons(typed, 'wait', false))).toEqual({ main: ['today:Today', 'defer:Schedule', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
+      expect(shape(reviewButtons(typed, 'next', false))).toEqual({ main: ['today:Today', 'defer:Schedule', 'wait:Waiting', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
+      expect(shape(reviewButtons(typed, 'wait', false))).toEqual({ main: ['today:Today', 'defer:Schedule', 'wait:Waiting', 'done:Done', 'drop:Drop', 'snooze:Snooze'], more: [] })
       expect(shape(reviewButtons(typed, 'sched', false)).main[1]).toBe('defer:Schedule')
+    })
+
+    it('Waiting… follows Schedule for a new, a placed and an already waiting task, and is no link; none without a waiting status', () => {
+      const wait = (current: string | undefined, isNew: boolean) => reviewButtons(typed, current, isNew).main.find((b) => b.role === 'wait')
+      for (const [current, isNew] of [['in', true], ['next', false], ['wait', false]] as const) {
+        const r = reviewButtons(typed, current, isNew)
+        expect(r.main.map((b) => b.role).slice(1, 3)).toEqual(['defer', 'wait'])
+        expect(r.more.map((b) => b.label)).not.toContain('Waiting')
+      }
+      expect(wait('in', true)!.action).toMatchObject({ name: 'Moved to Waiting', changes: [set('wait')] })
+      expect(settlesTriage(typed, wait('in', true)!.action)).toBe(true)
+      const delegated = { ...typed, properties: typed.properties.map((p) => p.id === 'status' && p.kind === 'select' ? { ...p, options: p.options.map((o) => (o.id === 'wait' ? { ...o, label: 'Delegated' } : o)) } : p) }
+      expect(reviewButtons(delegated, 'next', false).main.find((b) => b.role === 'wait')?.label).toBe('Delegated')
+      const none = { ...typed, properties: typed.properties.map((p) => p.id === 'status' && p.kind === 'select' ? { ...p, options: p.options.filter((o) => o.id !== 'wait') } : p) }
+      expect(reviewButtons(none, 'next', false).main.map((b) => b.role)).toEqual(['today', 'defer', 'done', 'drop', 'snooze'])
     })
 
     it('Schedule is the type\'s own Defer action, as rows and the task page run it, named Schedule here', () => {
@@ -217,12 +232,43 @@ describe('sister task workflows', () => {
 
     it('has no Schedule for a type without one, and its Scheduled status is a link', () => {
       const plain = { ...typed, quickActions: {}, properties: typed.properties.filter((p) => p.id !== 'dodate') }
-      expect(shape(reviewButtons(plain, 'next', false)).main).toEqual(['done:Done', 'drop:Drop', 'snooze:Snooze'])
+      expect(shape(reviewButtons(plain, 'next', false)).main).toEqual(['wait:Waiting', 'done:Done', 'drop:Drop', 'snooze:Snooze'])
       expect(shape(reviewButtons(plain, 'next', false)).more).toContain('Scheduled')
     })
 
     it('no buttons without the built-in status', () => {
       expect(reviewButtons({ ...task, system: undefined }, undefined, true)).toEqual({ main: [], more: [], covered: [] })
+    })
+  })
+  describe('waiting', () => {
+    const date = (id: string, name: string, role?: 'plan' | 'deadline'): ObjectType['properties'][number] => ({ id, kind: 'date', name, ...(role ? { role } : {}) }) as ObjectType['properties'][number]
+    const withCheckBack = (name = 'Check back'): ObjectType => ({ ...task, properties: [...task.properties, date('checkback', name)] })
+    const day = (value: string): PropertyValue => ({ kind: 'date', value: { start: `${value}T00:00:00.000Z`, resolution: 'day' } })
+    const base: QuickActionDef = { id: 'status:wait', name: 'Moved to Waiting', changes: [{ field: 'status', value: { kind: 'value', value: { kind: 'select', value: ['wait'] } } }] }
+
+    it('finds the Check back date: named like it, and not the plan, deadline, Last reviewed or Snoozed until', () => {
+      expect(checkBackFieldOf(task)).toBeUndefined()
+      expect(checkBackFieldOf(withCheckBack())?.id).toBe('checkback')
+      expect(checkBackFieldOf(withCheckBack('Follow-up'))?.id).toBe('checkback')
+      expect(checkBackFieldOf(withCheckBack('Check-back day'))?.id).toBe('checkback')
+      expect(checkBackFieldOf(withCheckBack('Review'))).toBeUndefined()
+      // A plan date or deadline with such a name is not it.
+      const named = { ...task, properties: task.properties.map((p) => (p.id === 'dodate' ? { ...p, name: 'Follow up on' } : p)) }
+      expect(checkBackFieldOf(named)).toBeUndefined()
+      expect(checkBackFieldOf({ ...withCheckBack(), system: undefined })).toBeUndefined()
+    })
+
+    it('sets the status, Check back and Snoozed until to the day, and moves an earlier Do date there, never Due', () => {
+      const type = withCheckBack()
+      const days = (action: QuickActionDef) => action.changes.map((c) => `${c.field}:${c.value.kind === 'day' ? c.value.days : c.value.kind}`)
+      const planned = waitingAction(type, base, { props: { dodate: day('2026-11-20'), due: day('2026-11-22') } }, '2026-12-01', '2026-11-24')
+      expect(days(planned)).toEqual(['status:value', 'checkback:7', 'snoozed:7', 'dodate:7'])
+      expect(planned.changes.some((c) => c.field === 'due')).toBe(false)
+      // A Do date already later stays; none stays none.
+      expect(days(waitingAction(type, base, { props: { dodate: day('2026-12-05') } }, '2026-12-01', '2026-11-24'))).toEqual(['status:value', 'checkback:7', 'snoozed:7'])
+      expect(days(waitingAction(type, base, { props: {} }, '2026-12-01', '2026-11-24'))).toEqual(['status:value', 'checkback:7', 'snoozed:7'])
+      // Without a Check back date only Snoozed until.
+      expect(days(waitingAction(task, base, { props: {} }, '2026-11-25', '2026-11-24'))).toEqual(['status:value', 'snoozed:1'])
     })
   })
 })

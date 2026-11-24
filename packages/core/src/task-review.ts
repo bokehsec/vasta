@@ -7,7 +7,9 @@
 // date reviews every open task every time, as before.
 // Snooze hides a task from Review (new tasks and check-ins) until a day (the built-in `snoozed` date,
 // `review.snooze` days from today, 1 unless set): nothing else changes, it is not marked reviewed,
-// and any other decision made on it clears the day.
+// and any other decision made on it clears the day. Waiting… (a task waiting on someone) sets the day
+// it is to be checked again the same way; the task is back in the check-ins on that day even if its
+// weekly review has not come round, unless it has been reviewed since (dueForReview).
 import { REVIEWED_PROPERTY_ID, SNOOZED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
 import type { DatePropertyDef, ObjectRecord, ObjectType, QuickActionDef } from './model.ts'
 import { isClosedTask, needsTriage } from './task-status.ts'
@@ -73,17 +75,24 @@ export function lastReviewedDay(type: ObjectType | undefined, object: Pick<Objec
   return value?.kind === 'date' ? value.value.start.slice(0, 10) : undefined
 }
 
-/** Whether an object is due for review on `today`: never reviewed, or reviewed `review.every` days ago or more. */
+/**
+ * Whether an object is due for review on `today`: never reviewed, or reviewed `review.every` days ago
+ * or more; also one whose Snoozed until day has come (on or before today) and that has not been
+ * reviewed on or after that day: a task put aside for a day (Waiting…) is back on it, whatever the cadence.
+ */
 export function dueForReview(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>, today: string): boolean {
   if (!reviewFieldOf(type)) return true
   const every = reviewEveryOf(type)
   const last = lastReviewedDay(type, object)
+  const snoozed = snoozedUntil(type, object)
+  if (snoozed && snoozed <= today && (!last || last < snoozed)) return true
   return !every || !last || daysBetween(last, today) >= every
 }
 
 /**
  * Whether a task is in Review's check-ins on `today`: open, not new (a new task is Review's first
- * queue, whatever its Last reviewed day), not snoozed and due for review. What the "Due for review" filter and
+ * queue, whatever its Last reviewed day), not snoozed (a snoozed day that has come brings it back, see
+ * dueForReview) and due for review. What the "Due for review" filter and
  * the queues of a Review both ask.
  */
 export function isCheckInDue(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>, today: string): boolean {

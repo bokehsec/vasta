@@ -33,6 +33,20 @@ describe('review dates', () => {
     expect(dueForReview(page, reviewedOn('2026-11-14'), '2026-11-14')).toBe(true)
   })
 
+  it('a task whose Snoozed until day has come is due on it, even reviewed a day earlier, but not before or after a review since', () => {
+    const waiting = (snoozed: string, reviewed?: string) => ({ props: { status: { kind: 'select' as const, value: ['todo'] }, snoozed: day(snoozed), ...(reviewed ? { reviewed: day(reviewed) } : {}) } as Record<string, PropertyValue> })
+    // Reviewed the day it was put off: its week has not passed, the day has.
+    expect(dueForReview(task, waiting('2026-11-21', '2026-11-14'), '2026-11-20')).toBe(false)
+    expect(dueForReview(task, waiting('2026-11-21', '2026-11-14'), '2026-11-21')).toBe(true)
+    expect(isCheckInDue(task, waiting('2026-11-21', '2026-11-14'), '2026-11-21')).toBe(true)
+    expect(isCheckInDue(task, waiting('2026-11-21', '2026-11-14'), '2026-11-20')).toBe(false)
+    expect(dueForReview(task, waiting('2026-11-21', '2026-11-14'), '2026-11-23')).toBe(true)
+    // Reviewed on or after that day: the usual weekly cadence again.
+    expect(dueForReview(task, waiting('2026-11-21', '2026-11-21'), '2026-11-22')).toBe(false)
+    expect(dueForReview(task, waiting('2026-11-21', '2026-11-22'), '2026-11-23')).toBe(false)
+    expect(dueForReview(task, waiting('2026-11-21'), '2026-11-21')).toBe(true)
+  })
+
   it('Reviewed sets today; a decision that leaves the status alone sets it too, without saying so in the notice', () => {
     const reviewed = reviewedAction(task)!
     const edit = quickActionEdit(task, { id: 'a', props: {} }, reviewed, context)

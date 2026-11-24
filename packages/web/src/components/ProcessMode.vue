@@ -4,7 +4,8 @@
 // editable in place) and so are its choices (ReviewDecisionBar: what is offered is
 // lib/review-choices.ts): few and never the status it already has; a task already placed has Keep
 // in that status (reviewed today, back in `review.every` days). A task has Today, Schedule… (its question
-// also offers No date and Someday), Done, Drop and Snooze (hides it for `review.snooze` days, nothing
+// also offers No date and Someday), Waiting… (a question of its own: the day to check back and a note,
+// which goes to the end of the task's Notes; Undo takes it out again), Done, Drop and Snooze (hides it for `review.snooze` days, nothing
 // else changes); where Snooze is offered it replaces Decide later, which then is only the way on
 // past a task already decided here. Neither records a review. The plan is a line of chips under the
 // title: a field with a value shows it, an empty one is a dashed "+ Name" that opens its editor. On
@@ -13,14 +14,16 @@
 // The queue is stable, with Undo, explicit save, and the reading position kept across interruptions.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Doc, ObjectSummary, ObjectType, PropertyDef, PropertyValue, QuickActionDef, SelectOption } from '@vasta/core'
-import { STATUS_PROPERTY_ID, askOf, daysBetween, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, reviewEveryOf, settlesTriage, snoozeDaysOf, SNOOZE_ACTION_ID, taskDatesOf, withReviewed, withSnoozeCleared, type ReviewAlternative } from '@vasta/core'
+import { STATUS_PROPERTY_ID, askOf, daysBetween, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, reviewEveryOf, settlesTriage, snoozeDaysOf, SNOOZE_ACTION_ID, taskDatesOf, waitingAction, withReviewed, withSnoozeCleared, type ReviewAlternative } from '@vasta/core'
 import { addSelectOption, dayKey } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { greyButton, mainButton, quietButton } from '../lib/buttons.ts'
 import type { ListField } from '../lib/columns.ts'
 import { onChange } from '../lib/events.ts'
-import { displayTitle, formatDateShort } from '../lib/format.ts'
+import { displayTitle, formatDateShort, formatDayShort } from '../lib/format.ts'
 import { contextMenu } from '../lib/overlays.ts'
+import { viewerTimeZone } from '../lib/calendar.ts'
+import { appendNote, notesFieldOf } from '../lib/task-notes.ts'
 import { quickAsk, runQuickAction, type QuickSave } from '../lib/quick-actions.ts'
 import { reviewDecisions } from '../lib/review-choices.ts'
 import { currentId, isFinished, moveBy, recordOutcome, skipCurrent, skippedSession, summarize, undoOutcome, workflowTitle, type ReviewSession } from '../lib/review-session.ts'
@@ -35,6 +38,7 @@ import { bodyText, metaText, sheetTitle } from '../lib/type-scale.ts'
 import PropertyDisplay from './PropertyDisplay.vue'
 import PropertyValueEditor from './PropertyValueEditor.vue'
 import ReviewDecisionBar from './ReviewDecisionBar.vue'
+import WaitingAsk from './WaitingAsk.vue'
 
 /** `undone`: Undo of a decision, which may come from the notice after the review has closed. */
 const props = defineProps<{ type: ObjectType; objects: ObjectSummary[]; fields: ListField[]; session: ReviewSession; save: QuickSave; undone: (id: string, name: string) => void }>()
@@ -172,9 +176,23 @@ const stays = (action: QuickActionDef) => askOf(props.type, action)?.def.kind ==
 
 const busy = ref(false)
 const saving = computed(() => busy.value && (!quickAsk.value || quickAsk.value.state.saving))
-async function act(action: QuickActionDef, anchor: HTMLElement | null) {
+/** Waiting…'s question, open: the button's action and where it was pressed. */
+const waitingFor = ref<{ action: QuickActionDef; anchor: HTMLElement | null } | null>(null)
+function answerWaiting(day: string, note: string) {
+  const ask = waitingFor.value
+  const object = current.value
+  waitingFor.value = null
+  if (!ask || !object) return
+  void act(waitingAction(props.type, ask.action, object, day, dayKey(), viewerTimeZone()), ask.anchor, note)
+}
+/** `note`: a line for the end of the task's Notes, with today's date, written once the decision is saved and taken out again by its Undo. */
+async function act(action: QuickActionDef, anchor: HTMLElement | null, note?: string) {
   const object = current.value
   if (!object || busy.value || addingStep.value) return
+  if (note === undefined && choices.value.main.some((b) => b.role === 'wait' && b.action === action)) {
+    waitingFor.value = { action, anchor }
+    return
+  }
   // Keep on one already decided here (a next step set): nothing more to save, on to the next.
   if (action.id === 'reviewed' && outcome.value) return move(1)
   rememberCard()
@@ -186,6 +204,8 @@ async function act(action: QuickActionDef, anchor: HTMLElement | null) {
   // Schedule's question offers No date and Someday: one picked ends the question and is then run as a decision of its own.
   let picked: ReviewAlternative | undefined
   const alternatives = choices.value.main.find((b) => b.role === 'defer' && b.action === action)?.alternatives?.map((a) => ({ id: a.id, label: a.label, hint: a.hint, icon: a.icon, run: () => { picked = a } }))
+  const field = note ? notesFieldOf(props.type) : undefined
+  let noteAdded: Promise<(() => Promise<void>) | undefined> | undefined
   busy.value = true
   try {
     const saved = await runQuickAction(props.type, object, recordsDecision ? withSnoozeCleared(props.type, withReviewed(props.type, action, object), object) : action, {
@@ -193,7 +213,13 @@ async function act(action: QuickActionDef, anchor: HTMLElement | null) {
       save: props.save,
       submitLabel: stay ? 'Save' : `Save & next ${noun.value}`,
       ...(alternatives ? { alternatives } : {}),
-      onUndo: () => { if (recordsDecision) alive ? update((s) => undoOutcome(s, object.id, action.name)) : props.undone(object.id, action.name) },
+      onSaved: () => {
+        if (note && field) noteAdded = appendNote(object.id, field, `${formatDayShort(dayKey())} — ${note}`).catch((error: Error) => { lastError.value = error.message; return undefined })
+      },
+      onUndo: async () => {
+        await (await noteAdded)?.().catch((error: Error) => { lastError.value = error.message })
+        if (recordsDecision) alive ? update((s) => undoOutcome(s, object.id, action.name)) : props.undone(object.id, action.name)
+      },
     })
     if (saved && alive) {
       breakingDown.value = false
@@ -294,7 +320,7 @@ watch(shownTexts, async () => {
   if (card.value && id && props.session.cards?.[id]) card.value.scrollTop = props.session.cards[id]!.scrollTop
 })
 const keepButton = () => panel.value?.querySelector<HTMLElement>('[data-process-reviewed]') ?? null
-watch(() => !!quickAsk.value || contextMenu.open, async (overlay) => {
+watch(() => !!quickAsk.value || !!waitingFor.value || contextMenu.open, async (overlay) => {
   if (overlay) return
   await nextTick()
   if (document.activeElement === document.body) (keepButton() ?? panel.value)?.focus({ preventScroll: true })
@@ -316,7 +342,7 @@ onBeforeUnmount(() => {
 // Keys, while no question or text box has them: K (or R) keeps, letters and 1–9 choose (keys), →
 // later, ← back, Enter opens the page, Escape pauses.
 function onKey(event: KeyboardEvent) {
-  if (event.defaultPrevented || quickAsk.value || contextMenu.open || event.metaKey || event.ctrlKey || event.altKey) return
+  if (event.defaultPrevented || quickAsk.value || waitingFor.value || contextMenu.open || event.metaKey || event.ctrlKey || event.altKey) return
   if ((event.target as Element | null)?.closest('[data-overlay]')) return
   const typing = (event.target as Element | null)?.closest('input, textarea, select, [contenteditable="true"]')
   if (event.key === 'Escape') {
@@ -551,5 +577,6 @@ const sectionName = `font-semibold text-ink-faint ${metaText}`
         </div>
       </section>
     </div>
+    <WaitingAsk v-if="waitingFor" :anchor="waitingFor.anchor" :scope="current ? displayTitle(current, type) : undefined" @submit="answerWaiting" @close="waitingFor = null" />
   </Teleport>
 </template>

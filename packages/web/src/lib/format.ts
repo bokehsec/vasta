@@ -81,6 +81,12 @@ export function formatLongDay(iso: string): string {
   return formatters().longDay.format(new Date(iso))
 }
 
+/** A day ("YYYY-MM-DD") as "Nov 24", with the year when it is not this one (a line in a note). */
+export function formatDayShort(day: string, now: Date = new Date(), loc: string = locale.value): string {
+  const date = new Date(`${day}T00:00:00.000Z`)
+  return date.getUTCFullYear() === now.getFullYear() ? shortPartsFor(loc).day.format(date) : formatDate({ start: date.toISOString(), resolution: 'day' })
+}
+
 export function formatRelative(iso: string): string {
   const f = formatters()
   const diff = Date.now() - new Date(iso).getTime()
