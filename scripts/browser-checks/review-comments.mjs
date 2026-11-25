@@ -2,8 +2,8 @@
 // without pausing). Text typed there goes in the same save as whatever decision is pressed (one Undo takes
 // both back); Enter on a check-in is Keep as planned with it, on a new task it saves the comment alone and
 // stays; leaving the card without a decision (the arrow keys, Pause) saves it alone; blank text is nothing.
-// The newest comment shows under the chips ("Latest comment · Nov 24", and who wrote it when that is not
-// you), three lines at most; the next step chip shows only when it has a value. The tray and the box fit a
+// The newest comment shows under the facts line (its date, and who wrote it when that is not
+// you, no box), three lines at most; the next step chip shows only when it has a value. The tray and the box fit a
 // phone at 320, 390 and 430 without sideways scrolling, and a big screen.
 // node review-comments.mjs [chromium|webkit] [base]   MODE=json: HTTP; default: replica; SHOTS=<dir>
 import assert from 'node:assert/strict'
@@ -47,6 +47,10 @@ const texts = async (id) => (await commentsOf(id)).map((c) => c.text)
 const box = page.locator('[data-process-comment]')
 const callout = page.locator('[data-process-latest-comment]')
 const reviewButton = page.locator('[data-review-tasks]')
+// The chips are under the facts line, closed on each new card.
+const openFacts = async () => {
+  if (!(await page.locator('[data-process-plan]').count())) await click('[data-process-facts]')
+}
 const undo = () => page.locator('[role=status] button').filter({ hasText: 'Undo' }).click()
 const shot = async (name) => {
   if (!process.env.SHOTS) return
@@ -110,7 +114,9 @@ try {
   await until(async () => (await currentTitle()) === a.title, 'the review starts with A')
   assert.equal(await box.getAttribute('placeholder'), 'Add a comment…')
   assert.equal(await callout.count(), 0, 'no comments, no callout')
+  await openFacts()
   assert.equal(await page.locator('[data-process-field="nextstep"]').count(), 0, 'an empty next step has no chip')
+  await click('[data-process-facts]')
   for (const width of [320, 390, 430]) {
     await page.setViewportSize({ width, height: width === 320 ? 568 : 844 })
     await box.scrollIntoViewIfNeeded()
@@ -134,7 +140,7 @@ try {
   assert.equal((await propsOf(a.id)).status.value[0], 'inbox', 'not decided')
   assert.equal(await page.locator('[data-process-outcome]').count(), 0)
   await until(async () => (await box.inputValue()) === '', 'the box clears')
-  assert.equal((await page.locator('[data-process-latest-label]').innerText()).trim(), `Latest comment · ${short(today)}`, 'my own comment names no one')
+  assert.equal((await page.locator('[data-process-latest-label]').innerText()).trim(), short(today), 'my own comment names no one')
   assert.equal((await page.locator('[data-process-latest-text]').innerText()).trim(), 'Asked about the quote')
 
   step('a decision takes the typed text with it, in one save: Schedule… › Tomorrow; it is the latest when the task is shown again; one Undo takes both back')
@@ -171,11 +177,14 @@ try {
 
   step('a check-in with comments: the newest (another author, named, dated, three lines at most), the next step chip filled; widths and screenshots')
   const label = (await page.locator('[data-process-latest-label]').innerText()).trim()
-  assert.equal(label, `Latest comment · ${short(plus(-2))} · Ana Teste`)
+  assert.equal(label, `${short(plus(-2))} · Ana Teste`)
+  assert.equal(await callout.evaluate((el) => [getComputedStyle(el).borderLeftWidth, getComputedStyle(el).backgroundColor].join()), '0px,rgba(0, 0, 0, 0)', 'no stripe, no tinted box')
   const latest = page.locator('[data-process-latest-text]')
   assert.equal((await latest.innerText()).trim(), long.trim())
   const lines = await latest.evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)))
   assert(lines <= 3, `the comment shows ${lines} lines`)
+  assert.match(await page.locator('[data-process-facts]').innerText(), /next step: Call the plumber/, 'the facts line says the next step')
+  await openFacts()
   assert.equal(await page.locator('[data-process-field="nextstep"]').evaluate((el) => (el.querySelector('input, textarea')?.value ?? el.textContent).includes('Call the plumber')), true, 'the next step shows when it has one')
   // Chips above the callout, the callout above the box, the box above the Open page row.
   const order = await page.evaluate(() => ['[data-process-plan]', '[data-process-latest-comment]', '[data-process-comment]', '[data-process-open]'].map((s) => document.querySelector(s).getBoundingClientRect().top))
@@ -203,6 +212,7 @@ try {
   assert.deepEqual(await texts(c.id), ['Asked the landlord', long])
 
   step('D has no next step (no chip); key C writes a comment, Enter on a check-in is Keep as planned with it; Escape first')
+  await openFacts()
   assert.equal(await page.locator('[data-process-field="nextstep"]').count(), 0)
   assert.equal(await page.locator('[data-key="C"]').count(), 0, 'no button has C')
   await page.keyboard.press('c')
@@ -242,7 +252,7 @@ try {
   await until(async () => (await currentTitle()) === f.title, 'F again')
   await page.keyboard.press('ArrowRight')
   await until(async () => (await currentTitle()) === g.title, 'on to G')
-  assert.equal((await page.locator('[data-process-latest-label]').innerText()).trim(), `Latest comment · ${short(plus(-7))}`)
+  assert.equal((await page.locator('[data-process-latest-label]').innerText()).trim(), short(plus(-7)))
   await page.keyboard.press('c')
   await page.keyboard.type('   ')
   await click('[data-process-reviewed]')

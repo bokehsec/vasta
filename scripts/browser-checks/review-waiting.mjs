@@ -101,7 +101,7 @@ try {
     await page.setViewportSize({ width, height: width === 320 ? 568 : 844 })
     const boxes = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => ({ top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width), height: r.height, right: r.right })))
     assert(boxes.every((box) => box.height >= 44 && box.right <= width), `a button under 44px or outside the screen at ${width}: ${JSON.stringify(boxes)}`)
-    assert(boxes[4].width > boxes[0].width * 1.8 && boxes[4].top > boxes[3].top, `Snooze is not a row of its own at ${width}: ${JSON.stringify(boxes)}`)
+    assert(boxes[0].top === boxes[1].top && boxes[2].top > boxes[0].top && boxes[2].width > boxes[0].width * 1.8 && boxes[3].top === boxes[4].top && boxes[3].top > boxes[2].top, `not the tray (Schedule… | Waiting… / Done / Drop | Snooze) at ${width}: ${JSON.stringify(boxes)}`)
     assert.equal(await page.locator('[data-process-mode]').evaluate((el) => el.scrollWidth > innerWidth), false, `overflow at ${width}`)
     assert.equal(await page.locator('[data-process-choices]').evaluate((el) => el.scrollWidth > el.clientWidth), false, `tray overflow at ${width}`)
   }

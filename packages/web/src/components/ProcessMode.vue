@@ -9,20 +9,23 @@
 // Scheduled), Waiting… (a question of its own: the day to check back and a comment, which starts as
 // what is in the comment box), Done, Drop and Snooze (hides it for `review.snooze` days, nothing
 // else changes); where Snooze is offered it replaces Decide later, which then is only the way on
-// past a task already decided here. Neither records a review. The plan is a line of chips under the
-// title: a field with a value shows it, an empty one is a dashed "+ Name" that opens its editor
-// (the next step only when it has one: it stays editable on the task's page). A task's newest comment
-// shows under the chips (date, and who wrote it when not you); under its text is a one-line comment
-// box (key C, Escape leaves it). What is typed there is added as a comment in the same save as
+// past a task already decided here. Neither records a review. The plan is one plain line of the
+// fields that have a value under the title (the status first, "Waiting · due Dec 15 · High"); pressing
+// it opens the chips under it: every field with a value, an empty one a dashed "+ Name" that opens its
+// editor (the next step only when it has one: it stays editable on the task's page). A task's newest
+// comment shows under it, a small date line (and who wrote it when not you) over its text, with no box;
+// under the task's text is a one-line comment box, an underline (key C, Escape leaves it). What is typed there is added as a comment in the same save as
 // whatever decision is pressed (one Undo takes both back; Enter on a check-in is Keep as planned with
 // it, on a new task it saves the comment alone and stays), and leaving the card without deciding
-// (Decide later, Back, Pause) saves it alone, so typed text is never lost. On a
-// big screen the panel is one column as tall as the task needs, the choices right under it; on a
-// phone they are a tray at the bottom.
+// (Decide later, Back, Pause) saves it alone, so typed text is never lost. On a big screen the review
+// fills the window, the same size for every task: a header (the next task's button, which opens the
+// list of the session's tasks and jumps to any of them, then Pause), one column of 37.5rem with the task
+// scrolling in it and the choices pinned under it in a row (ReviewDecisionBar); on a phone it is
+// the whole screen, the same button on a line of its own and the choices a tray at the bottom.
 // The queue is stable, with Undo, explicit save, and the reading position kept across interruptions.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { Doc, ObjectSummary, ObjectType, PropertyDef, PropertyValue, QuickActionDef, SelectOption } from '@vasta/core'
-import { STATUS_PROPERTY_ID, askOf, commentProp, commentsOf, daysBetween, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, reviewEveryOf, settlesTriage, snoozeDaysOf, SNOOZE_ACTION_ID, taskDatesOf, waitingAction, withReviewed, withSnoozeCleared, type ReviewAlternative } from '@vasta/core'
+import type { DateValue, Doc, ObjectSummary, ObjectType, PropertyDef, PropertyValue, QuickActionDef, SelectOption } from '@vasta/core'
+import { STATUS_PROPERTY_ID, askOf, checkBackFieldOf, commentProp, commentsOf, docToPlainText, isClosedTask, lastReviewedDay, needsTriage, nextStepFieldOf, parentFieldOf, quickActionDoneName, reviewEveryOf, settlesTriage, snoozeDaysOf, SNOOZE_ACTION_ID, SNOOZED_PROPERTY_ID, taskDatesOf, waitingAction, withReviewed, withSnoozeCleared, type ReviewAlternative } from '@vasta/core'
 import { addSelectOption, dayKey } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { greyButton, mainButton, quietButton } from '../lib/buttons.ts'
@@ -31,12 +34,13 @@ import { onChange } from '../lib/events.ts'
 import { displayTitle, formatDateShort, formatDayShort } from '../lib/format.ts'
 import { contextMenu } from '../lib/overlays.ts'
 import { viewerTimeZone } from '../lib/calendar.ts'
+import { optionLabel } from '../lib/i18n.ts'
 import { meId, personName } from '../lib/people.ts'
 import { quickAsk, runQuickAction, type QuickSave } from '../lib/quick-actions.ts'
 import { reviewDecisions } from '../lib/review-choices.ts'
 import { savingWithComment } from '../lib/review-comment.ts'
-import { currentId, isFinished, moveBy, recordOutcome, skipCurrent, skippedSession, summarize, undoOutcome, workflowTitle, type ReviewSession } from '../lib/review-session.ts'
-import { lastError, ui } from '../lib/state.ts'
+import { currentId, isFinished, jumpTo, moveBy, outcomeWords, recordOutcome, skipCurrent, skippedSession, summarize, undoOutcome, workflowTitle, type ReviewSession } from '../lib/review-session.ts'
+import { lastError, summaryOf, ui } from '../lib/state.ts'
 import { addSubtask, subtasksOf } from '../lib/subtasks.ts'
 import { cardRelease, DECIDE, tracker } from '../lib/swipe.ts'
 import { closesOnBack } from '../lib/back.ts'
@@ -47,6 +51,7 @@ import { bodyText, metaText, sheetTitle } from '../lib/type-scale.ts'
 import PropertyDisplay from './PropertyDisplay.vue'
 import PropertyValueEditor from './PropertyValueEditor.vue'
 import ReviewDecisionBar from './ReviewDecisionBar.vue'
+import ReviewTaskList from './ReviewTaskList.vue'
 import WaitingAsk from './WaitingAsk.vue'
 
 /** `undone`: Undo of a decision, which may come from the notice after the review has closed. */
@@ -112,19 +117,17 @@ const planned = computed(() => {
 const choices = computed(() => reviewDecisions(props.type, current.value, { isNew: isNew.value, planFieldIds: plan.value.map((d) => d.id), planned: planned.value }))
 const every = computed(() => reviewEveryOf(props.type))
 const snoozeDays = computed(() => snoozeDaysOf(props.type))
-const currentStatus = computed(() => choices.value.currentStatus)
 
-// What it is: new or a check-in, when it was last reviewed, when it was added.
+// What it is: new or a check-in, when it was last reviewed or added, as plain text.
+const dayText = (iso: string) => formatDayShort(dayKey(new Date(iso)))
 const meta = computed(() => {
   const object = current.value
   if (!object) return { kind: '', detail: '' }
-  const added = `added ${formatDateShort({ start: object.createdAt, resolution: 'day' })}`
-  if (isNew.value) return { kind: 'New', detail: [currentStatus.value ? `in ${currentStatus.value.label}` : 'no status yet', added].join(' · ') }
+  const added = `added ${dayText(object.createdAt)}`
+  if (isNew.value) return { kind: 'New', detail: added }
   if (props.session.scope === 'view' && props.session.kind !== 'tasks') return { kind: '', detail: added }
   const last = lastReviewedDay(props.type, object)
-  const ago = last ? daysBetween(last, dayKey()) : undefined
-  const reviewedText = ago === undefined ? 'never reviewed' : ago <= 0 ? 'reviewed today' : ago === 1 ? 'reviewed yesterday' : `reviewed ${ago} days ago`
-  return { kind: 'Check-in', detail: [reviewedText, added].join(' · ') }
+  return { kind: 'Check-in', detail: last ? `reviewed ${formatDayShort(last)}` : 'never reviewed' }
 })
 
 // The plan now: a task's status, dates, priority, project, next step and assignee (each editable but
@@ -133,9 +136,11 @@ const PLAN = ['priority', 'project', 'assignee']
 const plan = computed<PropertyDef[]>(() => {
   if (props.type.system !== 'task') return props.fields.map((f) => f.def).filter((d): d is PropertyDef => !!d && d.kind !== 'rich-text').slice(0, 6)
   const dates = taskDatesOf(props.type)
-  const ids = [...new Set([STATUS_PROPERTY_ID, ...(dates.deadline ? [dates.deadline.id] : []), ...(dates.plan ? [dates.plan.id] : []), ...PLAN, ...(nextStepField.value ? [nextStepField.value.id] : [])])]
+  // Check back (Waiting…'s day) is part of it once it has a day, right after the status.
+  const checkBack = checkBackFieldOf(props.type)?.id
+  const ids = [...new Set([STATUS_PROPERTY_ID, ...(checkBack ? [checkBack] : []), ...(dates.deadline ? [dates.deadline.id] : []), ...(dates.plan ? [dates.plan.id] : []), ...PLAN, ...(nextStepField.value ? [nextStepField.value.id] : [])])]
   return ids.flatMap((id) => props.type.properties.find((p) => p.id === id && p.kind !== 'rich-text') ?? [])
-    .filter((d) => d.id !== 'assignee' || current.value?.props[d.id])
+    .filter((d) => (d.id !== 'assignee' && d.id !== checkBack) || current.value?.props[d.id])
 })
 const editable = (def: PropertyDef) => def.kind !== 'formula' && !(def.id === STATUS_PROPERTY_ID && choices.value.hasButtons)
 const filled = (def: PropertyDef) => !!current.value?.props[def.id]
@@ -145,6 +150,24 @@ const chips = computed(() => {
   const dated = choices.value.main.some((b) => b.role === 'defer')
   return plan.value.filter((def) => filled(def) || (editable(def) && !(dated && def.id === planDate) && def.id !== nextStepField.value?.id))
 })
+/** The plan as one line: the fields with a value, the status first, in words ("check back Dec 1", "High"). */
+const factsOpen = ref(false)
+watch(currentObjectId, () => (factsOpen.value = false))
+function factText(def: PropertyDef, value: PropertyValue | undefined): string {
+  if (!value) return ''
+  switch (value.kind) {
+    case 'select': return def.kind === 'select' ? value.value.map((id) => { const option = def.options.find((o) => o.id === id); return option ? optionLabel(def.id, option) : '' }).filter(Boolean).join(', ') : ''
+    case 'date': return `${def.name.toLowerCase()} ${dateWords(value.value)}`
+    case 'person': return value.value.map((id) => personName(id)).join(', ')
+    case 'relation': return value.value.map((id) => displayTitle(summaryOf(id), undefined)).join(', ')
+    case 'checkbox': return value.value ? def.name : ''
+    // A bare line of text or number says nothing without its field's name.
+    default: return def.kind === 'text' || def.kind === 'number' ? `${def.name.toLowerCase()}: ${value.value}` : String(value.value)
+  }
+}
+/** A date in the facts line and the task list: "Dec 1" (with the year when not this one); a timed one keeps its time. */
+const dateWords = (value: DateValue) => (value.resolution === 'day' && !value.end ? formatDayShort(value.start.slice(0, 10)) : formatDateShort(value))
+const facts = computed(() => plan.value.filter((def) => def.kind !== 'formula').map((def) => ({ def, text: factText(def, current.value?.props[def.id]) })).filter((f) => f.text))
 const chipHint = (def: PropertyDef) => (def.kind === 'relation' ? def.name : `+ ${def.name}`)
 async function setField(def: PropertyDef, value: PropertyValue | undefined) {
   const object = current.value
@@ -189,12 +212,12 @@ const draft = ref('')
 const commentInput = ref<HTMLInputElement | null>(null)
 const commentable = computed(() => props.type.system === 'task' && !!current.value && !!meId())
 watch(currentObjectId, () => (draft.value = ''))
-/** The newest comment on the task, as the card shows it: its day here, and who wrote it unless it is you. */
+/** The newest comment on the task, as the card shows it: its day, and who wrote it unless it is you. */
 const latestComment = computed(() => {
   const comment = current.value ? commentsOf(current.value).at(-1) : undefined
   if (!comment) return undefined
   const who = comment.author === meId() ? '' : ` · ${personName(comment.author)}`
-  return { text: comment.text, label: `Latest comment · ${formatDayShort(dayKey(new Date(comment.at)))}${who}` }
+  return { text: comment.text, label: `${dayText(comment.at)}${who}` }
 })
 /** Saves what is in the box as a comment on its own (not a decision); false when it could not be saved. */
 async function saveDraft(): Promise<boolean> {
@@ -301,6 +324,29 @@ function move(delta: number) {
     update((s) => moveBy(s, delta))
   })
 }
+/** A task chosen in the list: on to it, with what was typed saved first. */
+const listOpen = ref(false)
+function jump(id: string) {
+  void leave(() => {
+    rememberCard()
+    breakingDown.value = false
+    update((s) => jumpTo(s, id))
+  })
+}
+const titleOf = (id: string) => {
+  const object = byId.value.get(id)
+  return object ? displayTitle(object, props.type) : `This ${noun.value}`
+}
+/** What happened to a decided one, for the list: its recorded outcome, in a person's words and with its day. */
+function outcomeOf(id: string, name: string): string {
+  const object = byId.value.get(id)
+  const dayOf = (field: string | undefined) => {
+    const value = field ? object?.props[field] : undefined
+    return value?.kind === 'date' ? dateWords(value.value) : ''
+  }
+  const waiting = reviewDecisions(props.type, object, { isNew: false, planFieldIds: [] }).main.find((b) => b.role === 'wait')?.action.name
+  return outcomeWords(name, { waiting, until: dayOf(SNOOZED_PROPERTY_ID), planned: dayOf(taskDatesOf(props.type).plan?.id) })
+}
 function skip() {
   if (done.value) return
   void leave(() => {
@@ -391,7 +437,7 @@ watch(shownTexts, async () => {
   if (card.value && id && props.session.cards?.[id]) card.value.scrollTop = props.session.cards[id]!.scrollTop
 })
 const keepButton = () => panel.value?.querySelector<HTMLElement>('[data-process-reviewed]') ?? null
-watch(() => !!quickAsk.value || !!waitingFor.value || contextMenu.open, async (overlay) => {
+watch(() => !!quickAsk.value || !!waitingFor.value || listOpen.value || contextMenu.open, async (overlay) => {
   if (overlay) return
   await nextTick()
   if (document.activeElement === document.body) (keepButton() ?? panel.value)?.focus({ preventScroll: true })
@@ -413,7 +459,7 @@ onBeforeUnmount(() => {
 // Keys, while no question or text box has them: K (or R) keeps, C writes a comment, letters and 1–9 choose (keys), →
 // later, ← back, Enter opens the page, Escape leaves a text box, else pauses.
 function onKey(event: KeyboardEvent) {
-  if (event.defaultPrevented || quickAsk.value || waitingFor.value || contextMenu.open || event.metaKey || event.ctrlKey || event.altKey) return
+  if (event.defaultPrevented || quickAsk.value || waitingFor.value || listOpen.value || contextMenu.open || event.metaKey || event.ctrlKey || event.altKey) return
   if ((event.target as Element | null)?.closest('[data-overlay]')) return
   const typing = (event.target as Element | null)?.closest('input, textarea, select, [contenteditable="true"]')
   if (event.key === 'Escape') {
@@ -527,31 +573,29 @@ const sectionName = `font-semibold text-ink-faint ${metaText}`
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-40 grid" :class="isPhone ? 'bg-surface pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]' : 'place-items-center bg-black/30 p-6'" :style="isPhone && keyboardInset ? { bottom: `${keyboardInset}px` } : undefined" data-process-mode>
+    <div class="fixed inset-0 z-40 bg-surface" :class="isPhone ? 'pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]' : ''" :style="isPhone && keyboardInset ? { bottom: `${keyboardInset}px` } : undefined" data-process-mode>
       <section
         ref="panel"
         tabindex="-1"
         aria-modal="true"
-        class="flex min-h-0 w-full flex-col overflow-hidden bg-surface outline-none"
-        :class="isPhone ? 'h-full' : 'max-h-full max-w-[46rem] rounded-2xl border border-line shadow-2xl shadow-black/20'"
+        class="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface outline-none"
         role="dialog"
         :aria-label="title"
         :aria-busy="saving || undefined"
       >
-        <!-- Which review, where in it (new and check-ins apart), and Pause. -->
-        <header class="shrink-0 border-b border-line px-4 pb-3 pt-3 md:px-6">
-          <div class="flex items-center gap-2">
+        <!-- Which review, the next task's button (the place and the list), and Pause; then the progress. -->
+        <header class="shrink-0 px-4 pt-3 md:px-6">
+          <div class="flex items-start gap-2">
             <button v-if="isPhone && !done" class="-ml-2 grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg text-ink-soft hover:bg-hover disabled:opacity-40" :disabled="index === 0 || blocked" aria-label="Back to the previous task" data-process-back @click="move(-1)"><AppIcon fallback="ph:caret-left" :size="18" /></button>
-            <h2 class="min-w-0 flex-1 truncate font-semibold" data-process-heading>{{ title }}<span class="font-normal text-ink-soft max-md:hidden"> · {{ session.scopeLabel }}</span></h2>
-            <span class="tabular-nums text-ink-soft" :class="bodyText" aria-live="polite" data-process-position>{{ saving ? 'Saving…' : position }}</span>
-            <button class="-mr-2 min-h-11 shrink-0 rounded-lg px-3 text-ink-soft hover:bg-hover disabled:opacity-50" :class="bodyText" :disabled="blocked" :aria-label="`Pause ${title.toLowerCase()} (resume later)`" data-process-close @click="pause">{{ done ? 'Close' : 'Pause' }}</button>
+            <h2 class="min-h-9 shrink-0 py-1.5 font-semibold max-md:min-h-11 max-md:py-2.5" data-process-heading>Review</h2>
+            <span class="min-w-0 flex-1" />
+            <span class="sr-only" aria-live="polite" data-process-position>{{ saving ? 'Saving…' : position }}</span>
+            <ReviewTaskList v-if="wide && !done" v-model:open="listOpen" :session="session" :title-of="titleOf" :outcome-of="outcomeOf" :blocked="blocked" @jump="jump" />
+            <button class="-mr-2 min-h-9 shrink-0 rounded-lg px-3 text-ink-soft hover:bg-hover disabled:opacity-50 max-md:min-h-11" :class="bodyText" :disabled="blocked" :aria-label="`Pause ${title.toLowerCase()} (resume later)`" data-process-close @click="pause">{{ done ? 'Close' : 'Pause' }}</button>
           </div>
-          <p class="mt-1 break-words text-ink-soft md:hidden" :class="metaText" data-process-scope>{{ session.scopeLabel }}</p>
+          <div v-if="!wide && !done" class="-mx-2"><ReviewTaskList v-model:open="listOpen" :session="session" :title-of="titleOf" :outcome-of="outcomeOf" :blocked="blocked" @jump="jump" /></div>
           <div class="mt-2 flex items-center gap-1.5" aria-hidden="true">
-            <template v-for="part in parts" :key="part.label">
-              <span v-if="part.label && wide" class="whitespace-nowrap pr-1 tabular-nums text-ink-soft" :class="metaText">{{ part.label }} {{ part.at }}/{{ part.size }}</span>
-              <span class="h-1 min-w-6 rounded-full bg-line" :style="{ flexGrow: part.size }"><span class="block h-full rounded-full bg-ink-soft transition-[width] duration-200" :style="{ width: `${part.size ? (part.at / part.size) * 100 : 0}%` }" /></span>
-            </template>
+            <span v-for="part in parts" :key="part.label" class="h-1 min-w-6 rounded-full bg-line" :style="{ flexGrow: part.size }"><span class="block h-full rounded-full bg-ink-soft transition-[width] duration-200" :style="{ width: `${part.size ? (part.at / part.size) * 100 : 0}%` }" /></span>
           </div>
         </header>
 
@@ -576,8 +620,8 @@ const sectionName = `font-semibold text-ink-faint ${metaText}`
           <!-- The task: what it is, the plan, its text in full, its steps. -->
           <div
             ref="card"
-            class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-5 md:min-h-44 md:px-8 md:pt-6"
-            :class="springing ? 'transition-[transform,opacity] duration-250 ease-[cubic-bezier(0.25,1,0.5,1)]' : ''"
+            class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-5 md:px-6 md:pt-8"
+            :class="[springing ? 'transition-[transform,opacity] duration-250 ease-[cubic-bezier(0.25,1,0.5,1)]' : '', wide ? '[scrollbar-gutter:stable_both-edges]' : '']"
             :style="shift ? { transform: `translateX(${shift}px)`, opacity: String(1 - Math.min(Math.abs(shift) / 400, 0.5)) } : undefined"
             data-process-card
             @touchstart.passive="onTouchStart"
@@ -585,80 +629,88 @@ const sectionName = `font-semibold text-ink-faint ${metaText}`
             @touchend="onTouchEnd"
             @touchcancel="onTouchCancel"
           >
-            <p v-if="missing" class="text-ink-soft" :class="bodyText" data-process-missing>This {{ noun }} is no longer here (deleted or moved since the review started). Choose Next to go on.</p>
-            <template v-else-if="current">
-              <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-ink-soft md:text-sm" :class="metaText" data-process-meta>
-                <span v-if="meta.kind" class="rounded-md px-1.5 py-0.5 font-semibold" :class="isNew ? 'bg-accent/12 text-accent' : 'bg-hover text-ink'">{{ meta.kind }}</span>
-                <span>{{ meta.detail }}</span>
-              </p>
-              <h2 class="mt-2 max-w-[34ch] break-words" :class="sheetTitle" data-process-title>{{ displayTitle(current, type) }}</h2>
-              <p v-if="outcome" class="mt-2 inline-flex items-center gap-1.5 rounded-md bg-hover px-2 py-0.5 text-ink-soft" :class="metaText" data-process-outcome>
-                <AppIcon fallback="ph:check" :size="12" />{{ quickActionDoneName(outcome) }}
-              </p>
+            <div class="mx-auto w-full max-w-[37.5rem]">
+              <p v-if="missing" class="text-ink-soft" :class="bodyText" data-process-missing>This {{ noun }} is no longer here (deleted or moved since the review started). Choose Next to go on.</p>
+              <template v-else-if="current">
+                <p class="text-ink-soft" :class="bodyText" data-process-meta>{{ [meta.kind, meta.detail].filter(Boolean).join(' · ') }}</p>
+                <h2 class="mt-2 break-words" :class="sheetTitle" data-process-title>{{ displayTitle(current, type) }}</h2>
+                <p v-if="outcome" class="mt-2 inline-flex items-center gap-1.5 rounded-md bg-hover px-2 py-0.5 text-ink-soft" :class="metaText" data-process-outcome>
+                  <AppIcon fallback="ph:check" :size="12" />{{ quickActionDoneName(outcome) }}
+                </p>
 
-              <!-- The plan: a chip a field; an empty one reads "+ Name" and opens its editor. -->
-              <div v-if="chips.length" class="mt-3 flex flex-wrap items-center gap-1.5" data-process-plan>
-                <div
-                  v-for="def in chips"
-                  :key="def.id"
-                  class="flex min-h-11 min-w-0 max-w-full items-center rounded-lg border md:min-h-9"
-                  :class="[filled(def) ? 'border-line pl-2.5' : 'border-dashed border-line-strong', def.kind === 'text' ? 'grow basis-56' : '', bodyText]"
-                  :data-process-field="def.id"
-                >
-                  <p class="shrink-0 text-ink-soft" :class="[metaText, filled(def) ? '' : 'sr-only']">{{ def.name }}</p>
-                  <PropertyValueEditor v-if="editable(def)" :def="def" :value="current.props[def.id]" :placeholder="chipHint(def)" class="max-md:[&_button]:min-h-10" @update="setField(def, $event)" @add-option="addOption(def, $event)" />
-                  <div v-else class="flex min-h-8 min-w-0 items-center px-2"><PropertyDisplay :def="def" :value="current.props[def.id]" :object="current" short /></div>
+                <!-- The plan: the fields with a value as one line; pressing it opens the chips (an empty one reads "+ Name"). -->
+                <button type="button" class="-mx-1.5 mt-3 flex min-h-9 w-fit max-w-[calc(100%+0.75rem)] flex-wrap items-center gap-x-1.5 rounded-md px-1.5 py-1 text-left text-ink-soft hover:bg-hover max-md:min-h-11" :class="bodyText" :aria-expanded="factsOpen" :aria-label="['Edit fields', ...facts.map((f) => f.text)].join(' · ')" data-process-facts @click="factsOpen = !factsOpen">
+                  <template v-if="facts.length">
+                    <template v-for="(fact, i) in facts" :key="fact.def.id">
+                      <span v-if="i" aria-hidden="true">·</span>
+                      <span :class="i === 0 && fact.def.id === STATUS_PROPERTY_ID ? 'font-medium text-ink' : ''">{{ fact.text }}</span>
+                    </template>
+                  </template>
+                  <span v-else class="text-ink-faint">Add details</span>
+                </button>
+                <div v-if="factsOpen && chips.length" class="mt-2 flex flex-wrap items-center gap-1.5" data-process-plan>
+                  <div
+                    v-for="def in chips"
+                    :key="def.id"
+                    class="flex min-h-11 min-w-0 max-w-full items-center rounded-lg border md:min-h-9"
+                    :class="[filled(def) ? 'border-line pl-2.5' : 'border-dashed border-line-strong', def.kind === 'text' ? 'grow basis-56' : '', bodyText]"
+                    :data-process-field="def.id"
+                  >
+                    <p class="shrink-0 text-ink-soft" :class="[metaText, filled(def) ? '' : 'sr-only']">{{ def.name }}</p>
+                    <PropertyValueEditor v-if="editable(def)" :def="def" :value="current.props[def.id]" :placeholder="chipHint(def)" class="max-md:[&_button]:min-h-10" @update="setField(def, $event)" @add-option="addOption(def, $event)" />
+                    <div v-else class="flex min-h-8 min-w-0 items-center px-2"><PropertyDisplay :def="def" :value="current.props[def.id]" :object="current" short /></div>
+                  </div>
                 </div>
-              </div>
 
-              <!-- The newest comment, so the task's latest word is in front of the decision. -->
-              <div v-if="latestComment" class="mt-4 max-w-[70ch] rounded-r-lg border-l-2 border-accent bg-accent/8 px-3 py-2" data-process-latest-comment>
-                <p class="font-semibold text-ink-soft" :class="metaText" data-process-latest-label>{{ latestComment.label }}</p>
-                <p class="mt-0.5 line-clamp-3 whitespace-pre-line break-words" :class="bodyText" data-process-latest-text>{{ latestComment.text }}</p>
-              </div>
+                <!-- The newest comment, so the task's latest word is in front of the decision: a date line over its text. -->
+                <div v-if="latestComment" class="mt-4" data-process-latest-comment>
+                  <p class="text-ink-faint" :class="metaText" data-process-latest-label>{{ latestComment.label }}</p>
+                  <p class="mt-0.5 line-clamp-3 whitespace-pre-line break-words" :class="bodyText" data-process-latest-text>{{ latestComment.text }}</p>
+                </div>
 
-              <div v-if="shownTexts.length" class="mt-5 space-y-5" data-process-text>
-                <section v-for="text in shownTexts" :key="text.field" class="max-w-[70ch]">
-                  <h3 :class="sectionName">{{ text.name }}</h3>
-                  <div class="vasta-doc mt-1 text-base leading-relaxed [&_p+p]:mt-2.5"><DocPreview :content="text.doc.content" /></div>
+                <div v-if="shownTexts.length" class="mt-5 space-y-5" data-process-text>
+                  <section v-for="text in shownTexts" :key="text.field">
+                    <h3 :class="sectionName">{{ text.name }}</h3>
+                    <div class="vasta-doc mt-1 text-base leading-relaxed [&_p+p]:mt-2.5"><DocPreview :content="text.doc.content" /></div>
+                  </section>
+                </div>
+                <p v-else-if="notes" class="mt-5 whitespace-pre-line text-base leading-relaxed">{{ notes }}</p>
+
+                <!-- One line, an underline; text typed here goes with the decision (or is kept when the card is left). -->
+                <input v-if="commentable" ref="commentInput" v-model="draft" type="text" enterkeyhint="done" class="mt-5 w-full border-0 border-b border-line bg-transparent px-0 py-2 outline-none placeholder:text-ink-faint focus:border-ink-soft max-md:text-base" :class="bodyText" placeholder="Add a comment…" aria-label="Add a comment" :disabled="blocked" data-process-comment @keydown.enter.prevent="submitComment" />
+
+                <section v-if="steps.length || breakingDown" class="mt-6" data-process-steps>
+                  <h3 :class="sectionName">Steps · {{ steps.length }}</h3>
+                  <ul class="mt-1">
+                    <li v-for="step in steps" :key="step.id" class="border-b border-line">
+                      <button class="flex min-h-11 w-full items-center gap-2.5 text-left hover:text-accent" :class="bodyText" :disabled="blocked" @click="open(step.id)">
+                        <AppIcon :fallback="isClosedTask(type, step) ? 'ph:check-circle' : 'ph:circle'" :size="16" class="shrink-0" :class="isClosedTask(type, step) ? 'text-[var(--color-flow-done)]' : 'text-ink-faint'" />
+                        <span class="min-w-0 flex-1 break-words" :class="isClosedTask(type, step) ? 'text-ink-faint line-through' : ''">{{ displayTitle(step, type) }}</span>
+                        <span v-if="stepDate(step)" class="shrink-0 tabular-nums text-ink-soft" :class="metaText">{{ stepDate(step) }}</span>
+                      </button>
+                    </li>
+                  </ul>
                 </section>
-              </div>
-              <p v-else-if="notes" class="mt-5 max-w-[70ch] whitespace-pre-line text-base leading-relaxed">{{ notes }}</p>
+                <form v-if="breakingDown" class="mt-3 space-y-2" @submit.prevent="addStep">
+                  <div class="flex items-center gap-2 rounded-lg border border-line px-2.5">
+                    <AppIcon fallback="ph:plus" :size="16" class="text-ink-faint" />
+                    <input ref="stepInput" v-model="stepTitle" class="min-w-0 flex-1 bg-transparent py-2 outline-none placeholder:text-ink-faint max-md:text-base" :class="bodyText" placeholder="A step" aria-label="New step" data-process-step />
+                  </div>
+                  <div class="flex justify-end gap-2">
+                    <button type="button" :class="greyButton" data-process-step-done @click="breakingDown = false">Done adding</button>
+                    <button type="submit" :class="mainButton" :disabled="!stepTitle.trim() || addingStep" data-process-step-add>{{ addingStep ? 'Adding…' : 'Add step' }}</button>
+                  </div>
+                </form>
 
-              <!-- One line; text typed here goes with the decision (or is kept when the card is left). -->
-              <input v-if="commentable" ref="commentInput" v-model="draft" type="text" enterkeyhint="done" class="mt-5 w-full max-w-[70ch] rounded-lg border border-line bg-surface px-2.5 py-2 outline-none placeholder:text-ink-faint focus:border-line-strong max-md:text-base" :class="bodyText" placeholder="Add a comment…" aria-label="Add a comment" :disabled="blocked" data-process-comment @keydown.enter.prevent="submitComment" />
-
-              <section v-if="steps.length || breakingDown" class="mt-6 max-w-[70ch]" data-process-steps>
-                <h3 :class="sectionName">Steps · {{ steps.length }}</h3>
-                <ul class="mt-1">
-                  <li v-for="step in steps" :key="step.id" class="border-b border-line">
-                    <button class="flex min-h-11 w-full items-center gap-2.5 text-left hover:text-accent" :class="bodyText" :disabled="blocked" @click="open(step.id)">
-                      <AppIcon :fallback="isClosedTask(type, step) ? 'ph:check-circle' : 'ph:circle'" :size="16" class="shrink-0" :class="isClosedTask(type, step) ? 'text-[var(--color-flow-done)]' : 'text-ink-faint'" />
-                      <span class="min-w-0 flex-1 truncate" :class="isClosedTask(type, step) ? 'text-ink-faint line-through' : ''">{{ displayTitle(step, type) }}</span>
-                      <span v-if="stepDate(step)" class="shrink-0 tabular-nums text-ink-soft" :class="metaText">{{ stepDate(step) }}</span>
-                    </button>
-                  </li>
-                </ul>
-              </section>
-              <form v-if="breakingDown" class="mt-3 max-w-[70ch] space-y-2" @submit.prevent="addStep">
-                <div class="flex items-center gap-2 rounded-lg border border-line px-2.5">
-                  <AppIcon fallback="ph:plus" :size="16" class="text-ink-faint" />
-                  <input ref="stepInput" v-model="stepTitle" class="min-w-0 flex-1 bg-transparent py-2 outline-none placeholder:text-ink-faint max-md:text-base" :class="bodyText" placeholder="A step" aria-label="New step" data-process-step />
+                <div class="-ml-3 mt-4 flex flex-wrap gap-x-2">
+                  <button :class="quietButton" :disabled="blocked" data-process-open @click="open()">Open page</button>
+                  <button v-if="canBreakDown && !breakingDown" :class="quietButton" :disabled="blocked" data-process-break @click="startBreakDown"><AppIcon fallback="ph:tree-structure" :size="16" />Break into steps</button>
                 </div>
-                <div class="flex justify-end gap-2">
-                  <button type="button" :class="greyButton" data-process-step-done @click="breakingDown = false">Done adding</button>
-                  <button type="submit" :class="mainButton" :disabled="!stepTitle.trim() || addingStep" data-process-step-add>{{ addingStep ? 'Adding…' : 'Add step' }}</button>
-                </div>
-              </form>
-
-              <div class="-ml-2 mt-4 flex flex-wrap gap-x-2">
-                <button :class="quietButton" :disabled="blocked" data-process-open @click="open()"><AppIcon fallback="ph:arrow-square-out" :size="16" />Open page</button>
-                <button v-if="canBreakDown && !breakingDown" :class="quietButton" :disabled="blocked" data-process-break @click="startBreakDown"><AppIcon fallback="ph:tree-structure" :size="16" />Break into steps</button>
-              </div>
-            </template>
+              </template>
+            </div>
           </div>
 
-          <ReviewDecisionBar ref="bar" :type="type" :choices="choices" :active="!!current" :blocked="blocked" :outcome="outcome" :noun="noun" :every="every" :snooze-days="snoozeDays" :at-first="index === 0" :wide="wide" @act="act" @skip="skip" @back="move(-1)" />
+          <ReviewDecisionBar ref="bar" :type="type" :choices="choices" :active="!!current" :blocked="blocked" :outcome="outcome" :noun="noun" :every="every" :snooze-days="snoozeDays" :wide="wide" @act="act" @skip="skip" />
         </div>
       </section>
     </div>

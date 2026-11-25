@@ -38,6 +38,19 @@ const click = (selector) => page.locator(selector).click()
 const position = page.locator('[data-process-position]')
 const currentTitle = () => page.locator('[data-process-title]').innerText()
 const propsOf = async (id) => (await get(`/api/objects/${id}`)).props
+// The chips are behind the facts line, closed again on every task.
+const openFields = async () => {
+  if (!(await page.locator('[data-process-plan]').count())) await click('[data-process-facts]')
+  await page.locator('[data-process-plan]').waitFor()
+}
+const nextStepInput = () => page.locator('[data-process-plan] div').filter({ has: page.locator('p', { hasText: /^Next step$/ }) }).locator('input, textarea').first()
+// An empty next step has no chip: one is given through the API, and the chip then edits it.
+const seedNextStep = async (id) => {
+  const object = await get(`/api/objects/${id}`)
+  await put(`/api/objects/${id}`, { ...object, props: { ...object.props, nextstep: { kind: 'text', value: 'Seeded step' } } })
+  await openFields()
+  await nextStepInput().waitFor()
+}
 let space
 try {
   // Log in and make the data before the app first loads, so the replica's first sync has the space.
@@ -111,14 +124,15 @@ try {
   await click('[data-start-review]')
   await until(async () => (await currentTitle()) === a.title, 'the review starts with the oldest new task')
   assert.equal(await page.locator('#app').evaluate((el) => el.inert), true)
-  assert.equal((await page.locator('[data-process-heading]').innerText()).trim(), 'Review tasks')
+  assert.equal((await page.locator('[data-process-heading]').innerText()).trim(), 'Review')
   assert.equal((await position.innerText()).trim(), 'New 1 of 2')
   assert.equal(await page.locator('[data-process-reviewed]').count(), 0, 'a new task has no Keep')
   assert.equal(await page.locator('[data-process-more], [data-process-notes-toggle]').count(), 0)
-  // Five buttons (Snooze quiet, last), none highlighted (a new task has no status of its own to keep); no links: Next is No date's, On hold Someday's, Scheduled Schedule's.
-  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => `${el.dataset.processRole}:${el.dataset.processChoice}`)), ['today:today', 'defer:scheduled', 'done:done', 'drop:drop', 'snooze:snooze'])
+  // Four buttons (no Waiting…: this type has no waiting status; Drop and Snooze quiet, last), none highlighted (a new task has no status of its own to keep); no links: Next is No date's, On hold Someday's, Scheduled Schedule's.
+  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole)), ['defer', 'done', 'drop', 'snooze'])
+  assert.equal(await page.locator('[data-process-choice="today"]').count(), 0, 'Today is inside Schedule…')
   assert.deepEqual(await page.locator('[data-process-links] [data-process-choice]').evaluateAll((els) => els.map((el) => el.dataset.processChoice)), [])
-  assert.equal(new Set(await page.locator('[data-process-role]:not([data-process-role="snooze"])').evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor))).size, 1, 'no button highlighted on a new task')
+  assert.equal(new Set(await page.locator('[data-process-role]:not([data-process-role="drop"], [data-process-role="snooze"])').evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor))).size, 1, 'no button highlighted on a new task')
   assert.equal(await page.locator('[data-process-skip]').count(), 0, 'Snooze replaces Decide later')
   assert.match(await page.locator('[data-process-role="snooze"]').getAttribute('title'), /Hidden from Review for 1 day\. Nothing else changes\./)
   assert.match(await page.locator('[data-process-text]').innerText(), /Context 18:/, 'the notes are shown in full')
@@ -129,10 +143,11 @@ try {
     assert.equal(await page.locator('[data-process-mode]').evaluate((el) => el.scrollWidth > innerWidth), false, `overflow at ${width}`)
     assert.equal(await page.locator('[data-process-card]').evaluate((el) => el.scrollWidth > el.clientWidth), false, `card overflow at ${width}`)
     for (const selector of ['[data-process-choice]', '[data-process-skip]']) for (const button of await page.locator(selector).all()) assert((await button.boundingBox()).height >= 44, `${selector} under 44px at ${width}`)
-    // The plan: a line of chips in the scroll area, the empty fields as "+ Name"; no chip for an empty Do date (Today and Schedule… set it).
+    // The plan: behind the facts line, a few chips in the scroll area, the empty fields as "+ Name"; no chip for an empty Do date (Schedule… sets it).
+    await openFields()
     const plan = await page.locator('[data-process-plan]').boundingBox()
     const fields = await page.locator('[data-process-plan] > div').evaluateAll((els) => els.map((el) => el.innerText.trim().replace(/\s+/g, ' ')))
-    assert(fields.length >= 3 && plan.height <= 160, `plan is not a few chips at ${width}: ${plan.height} ${fields}`)
+    assert(fields.length >= 2 && plan.height <= 160, `plan is not a few chips at ${width}: ${plan.height} ${fields}`)
     assert(fields.some((f) => /\+ /.test(f)), `no empty field offered at ${width}: ${fields}`)
     assert.equal(await page.locator('[data-process-field="dodate"]').count(), 0, 'an empty Do date has no chip')
   }
@@ -140,7 +155,9 @@ try {
   await page.screenshot({ path: path.join(tmpdir(), `vasta-workflow-${engine}-new.png`) })
 
   step('the next step is a plan field: saved in place, the review stays on the task and records nothing')
-  const nextStep = page.locator('[data-process-plan] div').filter({ has: page.locator('p', { hasText: /^Next step$/ }) }).locator('input, textarea').first()
+  assert.equal(await nextStepInput().count(), 0, 'an empty next step has no chip')
+  await seedNextStep(a.id)
+  const nextStep = nextStepInput()
   await nextStep.fill('Call the owner')
   await nextStep.press('Enter')
   await until(async () => (await propsOf(a.id)).nextstep?.value === 'Call the owner', 'next step saved')
@@ -176,7 +193,7 @@ try {
   step('a check-in: its status is pressed, Keep names it, Keep records Reviewed and leaves the plan')
   // The status it has is Keep (highlighted), never a button of its own; Next is not a link either.
   assert.equal(await page.locator('[data-process-choice="next"]').count(), 0)
-  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole)), ['today', 'defer', 'done', 'drop', 'snooze'])
+  assert.deepEqual(await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.dataset.processRole)), ['defer', 'done', 'drop', 'snooze'])
   assert.notEqual(await page.locator('[data-process-reviewed]').evaluate((el) => getComputedStyle(el).backgroundColor), await page.locator('[data-process-role="done"]').evaluate((el) => getComputedStyle(el).backgroundColor))
   assert.equal(await page.locator('[data-process-links]').count(), 0, 'On hold is Someday, not a link')
   assert.match(await page.locator('[data-process-reviewed]').innerText(), /^\s*Keep as planned/)
@@ -196,12 +213,15 @@ try {
   assert.match(summary, /2 left for later/, 'the undone task and the one left for later')
   assert.equal((await propsOf(d.id)).status.value[0], 'hold')
   await click('[data-process-review-skipped]')
-  assert.match(await page.locator('[data-process-heading]').innerText(), /Review tasks/)
+  assert.equal((await page.locator('[data-process-heading]').innerText()).trim(), 'Review')
   assert.equal((await position.innerText()).trim(), 'New 1 of 1', 'the skipped new task, counted apart')
   assert.equal(await currentTitle(), a.title)
 
   step('the full text and reading position survive Pause, reload and the page return; Resume from the one button')
+  // The full text is loaded after the card: scrolled before it is there, the position would be cut short.
+  await until(async () => /Context 18:/.test(await page.locator('[data-process-text]').allInnerTexts().then((t) => t.join())), 'the full text is loaded')
   await page.locator('[data-process-card]').evaluate((el) => el.scrollTop = 150)
+  assert.equal(await page.locator('[data-process-card]').evaluate((el) => el.scrollTop), 150)
   await click('[data-process-close]')
   assert.equal(await page.locator('#app').evaluate((el) => el.inert), false)
   await until(async () => /Resume\s+1 of 2/.test(await page.locator('[data-review-tasks]').innerText()), 'the button offers the paused session')
@@ -257,11 +277,12 @@ try {
   assert.match(await page.locator('[data-process]').innerText(), /Review 1 task/)
   await click('[data-process]')
   await page.locator('[data-process-mode]').waitFor()
-  assert.match(await page.locator('[data-process-heading]').innerText(), /Review tasks/)
+  assert.equal((await page.locator('[data-process-heading]').innerText()).trim(), 'Review')
   assert.equal((await position.innerText()).trim(), 'Check-in 1 of 1')
   await until(async () => (await currentTitle()) === d.title, 'targeted queue matches view')
-  await page.locator('[data-process-plan] div').filter({ has: page.locator('p', { hasText: /^Next step$/ }) }).locator('input, textarea').first().fill('Revisit the plan')
-  await page.locator('[data-process-plan] div').filter({ has: page.locator('p', { hasText: /^Next step$/ }) }).locator('input, textarea').first().press('Enter')
+  await seedNextStep(d.id)
+  await nextStepInput().fill('Revisit the plan')
+  await nextStepInput().press('Enter')
   await until(async () => (await propsOf(d.id)).nextstep?.value === 'Revisit the plan', 'review edit saved')
   assert.equal((await position.innerText()).trim(), 'Check-in 1 of 1')
   await click('[data-process-reviewed]')
@@ -292,18 +313,21 @@ try {
   await page.locator('[data-process-mode]').waitFor()
   assert.equal((await position.innerText()).trim(), 'New 1 of 1')
   assert.equal(await currentTitle(), g.title)
-  // One column as tall as the task needs: the choices right under the task, centred, the plan as chips above the text.
+  // The choices pinned under the task, the row in the task's column and centred, the plan behind the facts line above the text.
   const choices = await page.locator('[data-process-choices]').boundingBox()
   const card = await page.locator('[data-process-card]').boundingBox()
   assert.equal(await page.locator('[data-process-side]').count(), 0)
-  assert(Math.abs(choices.y - (card.y + card.height)) < 2 && choices.width <= 740, `choices under the task: ${JSON.stringify({ choices, card })}`)
+  assert(Math.abs(choices.y - (card.y + card.height)) < 2 && (await page.locator('[data-process-row]').boundingBox()).width <= 600.5, `choices under the task: ${JSON.stringify({ choices, card })}`)
+  const line = await page.locator('[data-process-row]').boundingBox()
   const row = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => [r.left, r.right]))
-  assert(Math.abs((row[0][0] - choices.x) - (choices.x + choices.width - row.at(-1)[1])) < 4, 'the row is centred')
-  assert.equal(await page.locator('[data-process-role]').count(), 5)
-  // No status yet: said above the title, so no empty Status chip.
+  assert(Math.abs(row[0][0] - line.x) < 2 && Math.abs(line.x + line.width - row.at(-1)[1]) < 2, 'the row spans the column')
+  assert(Math.abs((line.x - choices.x) - (choices.x + choices.width - line.x - line.width)) < 4, 'the row is centred')
+  assert.equal(await page.locator('[data-process-role]').count(), 4)
+  // No status yet: the task reads as New, with no empty Status chip.
+  await openFields()
   assert.match(await page.locator('[data-process-plan]').innerText(), /\+ Due/)
   assert.equal(await page.locator('[data-process-field="status"]').count(), 0)
-  assert.match(await page.locator('[data-process-meta]').innerText(), /no status yet/)
+  assert.match(await page.locator('[data-process-meta]').innerText(), /^New · added /)
   assert.equal(await page.locator('[data-process-reviewed]').count(), 0)
   assert.equal(await page.locator('[data-process-skip]').count(), 0, 'Snooze replaces Decide later')
   assert.equal(await page.locator('[data-process-mode]').evaluate((el) => el.scrollWidth > innerWidth), false)

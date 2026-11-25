@@ -8,6 +8,17 @@ GitHub release page.
 
 ### Added
 
+- **Review tasks: a calmer screen that stays the same size.** On a laptop or bigger screen the review
+  now fills the window, so it no longer grows and shrinks from task to task. The task and its buttons
+  share one centred column, and the buttons sit in one row at the bottom, always in the same place:
+  **Keep as planned**, **Schedule…**, **Waiting…**, **Done**, then **Drop** and **Snooze** as quieter
+  text at the end. Button labels are never cut off; in a narrow window the buttons switch to the
+  phone layout. The top shows where you are and what comes next ("3 of 7 · Next: Renew passport");
+  click it for the list of tasks done, current and coming, and jump to any of them. The fields are one
+  plain line ("Waiting · check back Dec 1 · due Dec 15"); click it to edit them. The latest comment
+  has no coloured stripe, the buttons have no icons, and key hints show when you point at a button.
+  On a phone: the same top line and calmer card, and the buttons in thumb reach: Keep as planned,
+  Schedule… and Waiting…, Done, then Drop and Snooze.
 - **Review tasks: a comment box, and the latest comment on top.** Every task in a review has an
   **Add a comment…** box (key `C`). What you type is saved as a comment on the task together with
   whatever you choose next (Keep, Schedule…, Waiting…, Done, Drop, Snooze), and one Undo takes back

@@ -205,7 +205,10 @@ try {
   await click('[data-filters-done]')
   await count(4)
   await reviewButton.click()
-  assert.equal(await page.locator('[data-process-scope]').innerText(), 'Work · Mine')
+  await click('[data-process-next]')
+  assert.equal(await page.locator('[data-process-list-scope]').innerText(), 'Work · Mine')
+  await page.keyboard.press('Escape')
+  await page.locator('[data-process-list]').waitFor({ state: 'detached' })
   for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight')
   await click('[data-process-finish]')
   if (process.env.SHOTS) {

@@ -5,7 +5,7 @@
 // one space), so closing the review, opening an object and coming back, or a reload, all return to
 // the same object, and a review of one type never replaces another's. Each object counts once in
 // the end's totals: its last outcome, taken off again by Undo.
-import type { Id } from '@vasta/core'
+import { quickActionDoneName, type Id } from '@vasta/core'
 
 /** `tasks`: Review tasks, the new ones first and then those due for a check-in; `review`: a view's open objects of any other type. */
 export type ReviewKind = 'tasks' | 'review'
@@ -52,6 +52,42 @@ export const currentId = (session: ReviewSession): Id | undefined => session.ids
 /** Moves by `delta`, between the first object and the end; nothing is recorded. */
 export function moveBy(session: ReviewSession, delta: number): ReviewSession {
   return { ...session, index: Math.max(0, Math.min(session.ids.length, session.index + delta)) }
+}
+
+/**
+ * The session as the task list shows it: what was decided here (in the order of the session, with its
+ * outcome), the one at hand, and the rest (the ones after it first, then any passed over earlier).
+ */
+export function sessionList(session: ReviewSession): { done: { id: Id; outcome: string }[]; now: Id | undefined; coming: Id[] } {
+  const now = currentId(session)
+  const rest = session.ids.filter((id) => id !== now && !session.outcomes[id])
+  const after = rest.filter((id) => session.ids.indexOf(id) > session.index)
+  return {
+    done: session.ids.filter((id) => id !== now && session.outcomes[id]).map((id) => ({ id, outcome: session.outcomes[id]! })),
+    now,
+    coming: [...after, ...rest.filter((id) => !after.includes(id))],
+  }
+}
+
+/**
+ * A recorded outcome as the task list says it: "Kept", "Waiting until Dec 1" (`waiting`: the name
+ * Waiting… records, `until` the day it set), Schedule's day alone ("Dec 2"), "Dropped"; any other
+ * name as it is ("Done", "Snoozed", "Today", "Moved to Next").
+ */
+export function outcomeWords(name: string, days: { waiting?: string; until?: string; planned?: string } = {}): string {
+  if (name === 'Reviewed') return 'Kept'
+  if (days.waiting && name === days.waiting) return days.until ? `Waiting until ${days.until}` : 'Waiting'
+  if (name === 'Schedule' || name === 'Defer') return days.planned || 'Scheduled'
+  if (name === 'Drop') return 'Dropped'
+  return quickActionDoneName(name)
+}
+
+/** Goes straight to `id`; undecided objects passed on the way forward count as skipped, as with →. Nothing else is recorded. */
+export function jumpTo(session: ReviewSession, id: Id): ReviewSession {
+  const at = session.ids.indexOf(id)
+  if (at < 0 || at === session.index) return session
+  const passed = at > session.index ? session.ids.slice(session.index, at).filter((p) => !session.outcomes[p] && !session.skipped.includes(p)) : []
+  return { ...session, index: at, skipped: [...session.skipped, ...passed] }
 }
 
 /** Skips the current object: counted as skipped unless it was decided, once however often. */

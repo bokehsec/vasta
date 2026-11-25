@@ -2,7 +2,7 @@
 // a day (Snoozed until; the status stays, it is not marked reviewed) and goes on, with Undo; it is gone
 // from a fresh review and back on its day. Schedule…'s question also offers No date (the first open
 // status, no Do date) and Someday (On Hold, no Do date), each settling a new task at once. The
-// setting in Type settings › Review changes the days. A phone has Snooze as a quiet row of its own.
+// setting in Type settings › Review changes the days. A phone has Snooze quiet beside Drop in the tray.
 // node review-snooze.mjs [chromium|webkit] [base]   MODE=json: HTTP; default: replica; SHOTS=<dir>
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync } from 'node:fs'
@@ -85,7 +85,7 @@ try {
     return page.locator('[data-review-tasks]').waitFor({ timeout: 2000 }).then(() => true, () => false)
   }, 'the replica has the test space')
 
-  step('phone, a new task: Schedule…, Waiting…, Done, Drop, then Snooze as a quiet row of its own, nothing overflowing')
+  step('phone, a new task: Schedule… | Waiting…, Done, then Drop | a quiet Snooze, nothing overflowing')
   await until(async () => /^Review\s+4$/.test((await reviewButton.innerText()).trim()), 'Review 4')
   await reviewButton.click()
   await until(async () => (await currentTitle()) === a.title, 'the review starts with the oldest new task')
@@ -95,7 +95,7 @@ try {
     await page.setViewportSize({ width, height: width === 320 ? 568 : 844 })
     const boxes = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => ({ top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width), height: r.height })))
     assert(boxes.every((box) => box.height >= 44), `a button under 44px at ${width}`)
-    assert(boxes[4].width > boxes[0].width * 1.8 && boxes[4].top > boxes[3].top, `Snooze is not a row of its own at ${width}: ${JSON.stringify(boxes)}`)
+    assert(boxes[0].top === boxes[1].top && boxes[2].top > boxes[0].top && boxes[2].width > boxes[0].width * 1.8 && boxes[3].top === boxes[4].top && boxes[3].top > boxes[2].top, `not the tray (Schedule… | Waiting… / Done / Drop | Snooze) at ${width}: ${JSON.stringify(boxes)}`)
     assert.equal(await page.locator('[data-process-mode]').evaluate((el) => el.scrollWidth > innerWidth), false, `overflow at ${width}`)
     assert.equal(await page.locator('[data-process-choices]').evaluate((el) => el.scrollWidth > el.clientWidth), false, `tray overflow at ${width}`)
   }
@@ -181,14 +181,14 @@ try {
   await until(async () => day((await propsOf(a.id)).snoozed) === today, 'Undo put Snoozed until back')
   await click('[data-process-close]')
 
-  step('desktop: Snooze is last in the centred buttons and quiet, key N; Settings › Review sets the days')
+  step('desktop: Snooze is last in the one row of buttons and quiet, key N; Settings › Review sets the days')
   await page.setViewportSize({ width: 1280, height: 800 })
   await reviewButton.click()
   await page.locator('[data-process-mode]').waitFor()
   assert.deepEqual(await roles(), ['defer', 'wait', 'done', 'drop', 'snooze'])
   assert.equal(await page.locator('[data-process-role="snooze"]').getAttribute('data-key'), 'N')
   const row = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()))
-  assert(row.at(-1).top > row[3].top || row.at(-1).left > row[3].right, 'Snooze last (the five buttons may wrap to a second row)')
+  assert(row.every((r) => r.top === row[0].top) && row.at(-1).left > row[3].right, 'one row, Snooze last')
   await shot('desktop-new')
   await page.keyboard.press('Escape')
   await page.locator('[data-process-mode]').waitFor({ state: 'detached' })

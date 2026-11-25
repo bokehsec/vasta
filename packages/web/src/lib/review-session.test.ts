@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { currentId, isFinished, moveBy, recordOutcome, sessionKey, skipCurrent, skippedSession, startSession, summarize, undoOutcome, validSession, workflowTitle, type ReviewSession } from './review-session.ts'
+import { currentId, isFinished, jumpTo, moveBy, outcomeWords, recordOutcome, sessionKey, sessionList, skipCurrent, skippedSession, startSession, summarize, undoOutcome, validSession, workflowTitle, type ReviewSession } from './review-session.ts'
 
 const scope = { spaceId: 's1', typeId: 't', viewId: 'v', viewName: 'Open tasks', kind: 'review' as const, scope: 'view' as const, scopeLabel: 'Open tasks' }
 const begin = (ids: string[] = ['a', 'b', 'c']) => startSession(scope, ids)
@@ -248,5 +248,30 @@ describe('review session', () => {
       const old = { ...stored(), userId: 'u1', fieldIds: ['status'], cards: { a: { scrollTop: 3, notesOpen: true } } }
       expect(validSession(old)).toEqual({ ...stored(), cards: { a: { scrollTop: 3 } } })
     })
+  })
+
+  it('lists what was decided, the object at hand and the rest, and jumps to any of them', () => {
+    let session = begin(['a', 'b', 'c', 'd'])
+    session = recordOutcome(session, 'a', 'Done')
+    session = skipCurrent(session)
+    expect(currentId(session)).toBe('c')
+    expect(sessionList(session)).toEqual({ done: [{ id: 'a', outcome: 'Done' }], now: 'c', coming: ['d', 'b'] })
+    const forward = jumpTo(session, 'd')
+    expect(forward).toMatchObject({ index: 3, skipped: ['b', 'c'] })
+    expect(jumpTo(session, 'b')).toMatchObject({ index: 1, skipped: ['b'] })
+    expect(jumpTo(session, 'c')).toBe(session)
+    expect(jumpTo(session, 'zzz')).toBe(session)
+  })
+
+  it('says what happened in the list, with the day that was set', () => {
+    const days = { waiting: 'Moved to Waiting', until: 'Dec 1', planned: 'Dec 2' }
+    expect(outcomeWords('Reviewed', days)).toBe('Kept')
+    expect(outcomeWords('Moved to Waiting', days)).toBe('Waiting until Dec 1')
+    expect(outcomeWords('Schedule', days)).toBe('Dec 2')
+    expect(outcomeWords('Schedule')).toBe('Scheduled')
+    expect(outcomeWords('Drop')).toBe('Dropped')
+    expect(outcomeWords('Mark done')).toBe('Done')
+    expect(outcomeWords('Snoozed', days)).toBe('Snoozed')
+    expect(outcomeWords('Moved to Next', days)).toBe('Moved to Next')
   })
 })

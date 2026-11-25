@@ -142,7 +142,7 @@ const openReviewChooser = async () => {
   await page.locator('main header button[title="More"]').click()
   await page.locator('[data-review-view]').click()
 }
-// The next step is a field of the plan on the review screen (no menu any more).
+// The next step is a field of the plan on the review screen (no menu any more), under the facts line.
 const nextStepInput = () => page.locator('[data-process-plan] div').filter({ has: page.locator('p', { hasText: /^Next step$/ }) }).locator('input, textarea').first()
 const toast = () => page.locator('[role=status]')
 
@@ -292,6 +292,8 @@ try {
 
   step('phone: the next step shows only when it has one (no empty chip); then it is a plan field: saved in place, the review stays on the task; → goes on without deciding')
   const stepTitle = (await page.locator('[data-process-title]').innerText()).trim()
+  await tap(page.locator('[data-process-facts]'))
+  await page.locator('[data-process-plan]').waitFor()
   if (await nextStepInput().count()) throw new Error('an empty next step has a chip')
   const seeded = tasks.find((t) => t.title === stepTitle)
   await put(`/api/objects/${seeded.id}`, { ...(await get(`/api/objects/${seeded.id}`)), props: { ...(await propsOf(seeded.id)), reviewnext: { kind: 'text', value: 'Call someone' } } })

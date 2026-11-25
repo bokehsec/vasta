@@ -2,7 +2,7 @@
 // new task also goes to Next, not Scheduled: what the Today button did before it was dropped) and
 // Tomorrow, which place a new task (the type's Defer only sets the day, the default; Tomorrow puts it in
 // Scheduled); both settle the task and go on, with Undo. A task that has its place keeps it. Keys S, then
-// T inside the question. There is no Today button. Phone (Snooze a full-width row of its own) and desktop.
+// T inside the question. There is no Today button. Phone (the tray) and desktop.
 // node review-today.mjs [chromium|webkit] [base]   MODE=json: HTTP; default: replica; SHOTS=<dir>
 import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
@@ -85,7 +85,7 @@ try {
     return page.locator('[data-review-tasks]').waitFor({ timeout: 2000 }).then(() => true, () => false)
   }, 'the replica has the test space')
 
-  step('phone, a new task: no Today button; Schedule…, Waiting…, Done, Drop in two columns, Snooze a row of its own')
+  step('phone, a new task: no Today button; Schedule… | Waiting…, Done a full row, Drop | Snooze')
   await click('[data-review-tasks]')
   await until(async () => (await currentTitle()) === a.title, 'the review starts with the oldest new task')
   assert.deepEqual(await roles(), ['defer', 'wait', 'done', 'drop', 'snooze'])
@@ -94,8 +94,7 @@ try {
     await page.setViewportSize({ width, height: width === 320 ? 568 : 844 })
     const boxes = await page.locator('[data-process-role]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => ({ top: Math.round(r.top), width: Math.round(r.width), height: r.height })))
     assert(boxes.every((box) => box.height >= 44), `a button under 44px at ${width}`)
-    assert(boxes[4].width > boxes[0].width * 1.8, `Snooze is not a row of its own at ${width}`)
-    assert(boxes[0].top === boxes[1].top && boxes[2].top === boxes[3].top && boxes[0].top < boxes[2].top && boxes[2].top < boxes[4].top, `not two to a row at ${width}: ${JSON.stringify(boxes)}`)
+    assert(boxes[0].top === boxes[1].top && boxes[2].top > boxes[0].top && boxes[2].width > boxes[0].width * 1.8 && boxes[3].top === boxes[4].top && boxes[3].top > boxes[2].top, `not the tray (Schedule… | Waiting… / Done / Drop | Snooze) at ${width}: ${JSON.stringify(boxes)}`)
     assert.equal(await page.locator('[data-process-mode]').evaluate((el) => el.scrollWidth > innerWidth), false, `overflow at ${width}`)
   }
   await page.setViewportSize({ width: 390, height: 844 })
@@ -138,7 +137,7 @@ try {
   assert.equal(day((await propsOf(c.id)).dodate), today)
   assert.equal((await position.innerText()).trim(), 'Check-in 1 of 2')
   assert.deepEqual(await roles(), ['defer', 'wait', 'done', 'drop', 'snooze'])
-  assert.equal((await page.locator('[data-process-reviewed]').innerText()).replace(/\s*K$/, ''), 'Keep as planned')
+  assert.equal((await page.locator('[data-process-reviewed]').innerText()).trim(), 'Keep as planned', 'the key hint shows only on hover or focus')
   await shot('desktop-checkin')
   await click('[data-process-role="defer"]')
   await click('[data-ask-today]')
