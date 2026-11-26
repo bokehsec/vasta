@@ -88,6 +88,7 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   title: isString,
   typeId: isNonEmpty,
   description: optional(isString),
+  agentNotes: optional(isString),
   coverUrl: optional(isString),
   color: optional(isString),
   parentId: optional(isNonEmpty),

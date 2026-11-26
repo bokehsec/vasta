@@ -215,7 +215,7 @@ function insertField(def: FormulaPropertyDef, name: string) {
 const otherTypes = computed(() => [...workspace.types].sort((a, b) => a.name.localeCompare(b.name)))
 
 /** The fields this dialog edits: the others (the views) are changed where they are shown. */
-const EDITED = ['name', 'pluralName', 'description', 'icon', 'color', 'properties', 'openIn', 'quickActions', 'review', 'subtasks', 'rules'] as const
+const EDITED = ['name', 'pluralName', 'description', 'agentNotes', 'icon', 'color', 'properties', 'openIn', 'quickActions', 'review', 'subtasks', 'rules'] as const
 
 async function save() {
   if (!draft.value.name.trim()) {
@@ -287,6 +287,16 @@ async function leave(path: string) {
             :placeholder="t('typeSettings.descriptionPlaceholder')"
           />
           <span class="mt-0.5 block">{{ t('typeSettings.descriptionHint', { plural: (draft.pluralName ? typePluralName(draft) : t('object.objectsFallback')).toLowerCase() }) }}</span>
+        </label>
+        <label class="col-span-2 text-xs text-ink-faint">
+          {{ t('typeSettings.agentNotes') }}
+          <textarea
+            v-model="draft.agentNotes"
+            rows="4"
+            class="mt-1 w-full resize-y rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-line-strong"
+            :placeholder="t('typeSettings.agentNotesPlaceholder')"
+          />
+          <span class="mt-0.5 block">{{ t('typeSettings.agentNotesHint') }}</span>
         </label>
       </div>
     </section>

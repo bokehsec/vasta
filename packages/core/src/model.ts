@@ -237,6 +237,8 @@ export interface ObjectType {
   name: string
   pluralName: string
   description?: string
+  /** Written by the user for agents only (the MCP's list_types and get_object); never shown on the type's page. */
+  agentNotes?: string
   icon?: Icon
   color?: ColorName
   properties: PropertyDef[]

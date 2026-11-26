@@ -30,7 +30,8 @@ or the one named by "template", with its questions answered by "answers". Whiteb
 "Whiteboard") hold cards of objects, text, sticky notes, shapes, frames and arrows: read one with
 get_board, change it with edit_board (a Mermaid flowchart becomes a board there too).
 Types may have a description the user wrote (list_types; typeDescription in get_object): follow it
-when writing objects of that type. create_type and update_type make and change types (ask first). Properties may be required, and types may ask for a cover or a tag
+when writing objects of that type. They may also have notes for agents (agentNotes in list_types;
+typeAgentNotes in get_object) that the user doesn't see on the type's page: follow them too. create_type and update_type make and change types (ask first). Properties may be required, and types may ask for a cover or a tag
 (every object must have them): a write without them is refused with what is missing. Start a session with
 recall: the user's instructions for agents, the objects they marked as agent context, and what
 matches a topic. Objects are never deleted for good: trash_object moves one to the trash, where
@@ -121,7 +122,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
 
   server.registerTool(
     'list_types',
-    { title: 'List types', description: "The types of objects in a space: the user's description of each (how they want its objects written), whether its objects need a cover or a tag (rules), its properties (required ones marked, select options) and how many objects each has.", inputSchema: { space }, annotations: READ },
+    { title: 'List types', description: "The types of objects in a space: the user's description of each (how they want its objects written) and notes for agents (agentNotes), whether its objects need a cover or a tag (rules), its properties (required ones marked, select options) and how many objects each has.", inputSchema: { space }, annotations: READ },
     ({ space }) => run(() => tools.types(space))
   )
 
@@ -138,6 +139,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
   const typeShape = {
     plural: z.string().optional(),
     description: z.string().nullable().optional().describe('How the user wants its objects written: agents follow it (list_types, typeDescription in get_object). Write it the user’s way, in their language'),
+    agentNotes: z.string().nullable().optional().describe('Notes for agents only: agents follow them (list_types, typeAgentNotes in get_object) but the type’s page does not show them. Long rules go here, in the user’s language'),
     icon,
     color,
     rules: z.object({ cover: z.boolean().optional(), tags: z.boolean().optional() }).optional().describe('Every object needs a cover, at least one tag'),
@@ -295,7 +297,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     'get_object',
     {
       title: 'Get object',
-      description: "An object: type (and the user's description of it), icon, color, properties, tags (nested ones as paths, \"recipe/breakfast\"), its text fields as Markdown, what links to it (backlinks: id, title, kind), who wrote it and through which agent (createdVia, updatedVia), and what its type's rules say it lacks (missing). The id is in vasta://o/<id> links and in other tools' results.",
+      description: "An object: type (and the user's description of it, typeDescription, and notes for agents, typeAgentNotes), icon, color, properties, tags (nested ones as paths, \"recipe/breakfast\"), its text fields as Markdown, what links to it (backlinks: id, title, kind), who wrote it and through which agent (createdVia, updatedVia), and what its type's rules say it lacks (missing). The id is in vasta://o/<id> links and in other tools' results.",
       inputSchema: { id: z.string() },
       annotations: READ,
     },

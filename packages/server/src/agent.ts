@@ -264,6 +264,7 @@ export interface AgentPropertyInput {
 export interface AgentTypeInput {
   plural?: string
   description?: string | null
+  agentNotes?: string | null
   icon?: string | null
   color?: string | null
   rules?: { cover?: boolean; tags?: boolean }
@@ -458,6 +459,7 @@ export class AgentTools {
         plural: t.pluralName,
         ...(t.system ? { builtIn: t.system } : {}),
         ...(t.description ? { description: t.description } : {}),
+        ...(t.agentNotes ? { agentNotes: t.agentNotes } : {}),
         ...(this.rulesOf(t) ? { rules: this.rulesOf(t) } : {}),
         objects: counts[t.id] ?? 0,
         properties: t.properties.map((p) => describeProperty(p, typeNames, t, all)),
@@ -538,6 +540,11 @@ export class AgentTools {
       const text = input.description?.trim()
       if (text) type.description = text
       else delete type.description
+    }
+    if (input.agentNotes !== undefined) {
+      const text = input.agentNotes?.trim()
+      if (text) type.agentNotes = text
+      else delete type.agentNotes
     }
     if (input.icon !== undefined) {
       if (input.icon === null) delete type.icon
@@ -715,6 +722,8 @@ export class AgentTools {
       type: type?.name ?? '',
       // The user's own description of the type: how they want its objects written.
       ...(type?.description ? { typeDescription: type.description } : {}),
+      // What the user wrote for agents only; the type's page never shows it.
+      ...(type?.agentNotes ? { typeAgentNotes: type.agentNotes } : {}),
       space: space?.name ?? '',
       url: this.url(object.id),
       coverUrl: object.coverUrl ?? null,

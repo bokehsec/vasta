@@ -54,6 +54,8 @@ export const ADDED_COLUMNS: { table: string; column: string; definition: string 
   // an object was made or last changed through, also on its activity.
   { table: 'spaces', column: 'agents', definition: 'TEXT' },
   { table: 'types', column: 'rules', definition: 'TEXT' },
+  // What the user wrote for agents only about a type (ObjectType.agentNotes).
+  { table: 'types', column: 'agent_notes', definition: 'TEXT' },
   { table: 'objects', column: 'created_via', definition: 'TEXT' },
   { table: 'objects', column: 'updated_via', definition: 'TEXT' },
   { table: 'activity', column: 'via', definition: 'TEXT' },

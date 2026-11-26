@@ -8,6 +8,10 @@ GitHub release page.
 
 ### Added
 
+- **Notes for agents on each type.** A type's settings have a new **Notes for agents** box under
+  Description. Agents read it and follow it when they write that type's objects, but it isn't shown
+  on the type's page, so long rules for agents no longer crowd the top of a page like Tasks. Agents
+  can also set it themselves when they make or change a type.
 - **Review tasks: a calmer screen that stays the same size.** On a laptop or bigger screen the review
   now fills the window, so it no longer grows and shrinks from task to task. The task and its buttons
   share one centred column, and the buttons sit in one row at the bottom, always in the same place:
