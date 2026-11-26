@@ -1,12 +1,12 @@
-// Which groups of a list and which columns of a board this person folded: their own choice, on every
+// Which groups of a list and which columns and swimlanes of a board this person folded: their own choice, on every
 // device of theirs (an account preference, lib/preferences.ts), never the view's. `scope` names the
 // view or embedded query (`type/<id>/view/<id>`), so deleting it drops its folds. An embed without
 // an identity keeps its folds for the instance that is mounted rather than sharing another's.
 import { computed, ref } from 'vue'
 import { preference } from './preferences.ts'
 
-/** The preference holding the folds of `field`'s groups (`folds`) or of a board's columns (`columns`) in `scope`; undefined until both are known. */
-export function foldKey(kind: 'folds' | 'columns', scope: string | undefined, field: string): string | undefined {
+/** The preference holding the folds of `field`'s groups (`folds`) or of a board's columns (`columns`) or swimlanes (`lanes`) in `scope`; undefined until both are known. */
+export function foldKey(kind: 'folds' | 'columns' | 'lanes', scope: string | undefined, field: string): string | undefined {
   return scope && field ? `${scope}/${kind}/${field}` : undefined
 }
 

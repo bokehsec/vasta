@@ -2,7 +2,9 @@
 // first steps back to the menu), a quick action's question (Defer), the Filters sheet, the side
 // menu, Review tasks and its chooser, Search, the quick card ("+" on a type's page) and Quick
 // capture (its text kept as the draft) each close, and the page and its address stay; with nothing open Back leaves the page as before. A sheet's grabber pulled
-// down closes it, a small pull springs back. Quick capture saves with no connection (the replica
+// down closes it, a small pull springs back. A dialog (New type) and a type page's More menu close
+// too; Type settings opened from the sidebar drop ?settings=1 from the address, and with a change
+// they ask first. Quick capture saves with no connection (the replica
 // takes it; not in MODE=json, where it needs the server).
 //   node phone-back.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
@@ -223,6 +225,61 @@ try {
   step('with nothing open, Back leaves the list as before')
   await back()
   await until(async () => !(await where()).startsWith(listPath), 'Back leaves the list')
+
+  const dialog = '[role=dialog]'
+  const openList = async () => {
+    await page.goto(base)
+    await page.waitForSelector('main', { timeout: 30000 })
+    await page.locator('[data-tab="Tasks"]').click()
+    await row.waitFor()
+    return where()
+  }
+
+  step('Back with a dialog open (New type, from Search) closes it; the list stays')
+  let at = await openList()
+  await page.locator('[data-tab="Search"]').click()
+  await page.locator('input[placeholder="Search or create…"]').fill('new type')
+  await sleep(400)
+  await page.keyboard.press('Enter')
+  await page.locator(dialog).waitFor()
+  await back()
+  await gone(dialog, 'Back closes the dialog')
+  if ((await where()) !== at) throw new Error(`Back with a dialog open left the list: ${await where()}`)
+
+  step("Back with the type page's More menu open closes it; the list stays")
+  await page.locator('main header button[title="More"]').click()
+  await page.getByText('Type settings…').first().waitFor()
+  await back()
+  await gone('text=Type settings…', 'Back closes the menu')
+  if ((await where()) !== at) throw new Error(`Back with a menu open left the list: ${await where()}`)
+
+  step('Type settings opened from the side menu (?settings=1): Back closes them and the address loses ?settings')
+  await page.locator('[data-top-menu]').click()
+  // A long press on a phone opens the same menu a right-click does.
+  const books = page.locator('nav a[href^="/t/"]', { hasText: 'Books' }).first()
+  const booksPath = await books.getAttribute('href')
+  await books.dispatchEvent('contextmenu', { clientX: 120, clientY: 300 })
+  await page.getByText('Type settings…').first().click()
+  await page.locator(dialog).waitFor()
+  await until(async () => (await where()) === `${booksPath}?settings=1`, 'the address with ?settings=1')
+  await back()
+  await gone(dialog, 'Back closes Type settings')
+  await until(async () => (await where()) === booksPath, `the address back to ${booksPath} (is ${await where()})`, 3000)
+
+  step('Back in Type settings with a change asks first; Back again keeps the change')
+  at = await openList()
+  await page.locator('main header button[title="More"]').click()
+  await page.getByText('Type settings…').first().click()
+  await page.locator(dialog).waitFor()
+  await page.locator(`${dialog} input`).first().fill(`Tasks ${tag}`)
+  await back()
+  await page.getByText('Discard your changes to this type?').waitFor({ timeout: 3000 })
+  await back()
+  await gone('text=Discard your changes to this type?', 'Back closes the question')
+  if ((await page.locator(`${dialog} input`).first().inputValue()) !== `Tasks ${tag}`) throw new Error('the change was lost')
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Discard' }).click()
+  await gone(dialog, 'Discard closes Type settings')
 
   if (problems.length) throw new Error(problems.join('\n'))
   console.log(`\nAll phone-back checks passed for ${engine}${json ? ' (MODE=json)' : ''}.`)

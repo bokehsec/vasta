@@ -1,161 +1,304 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Router } from 'vue-router'
+import { nextTick, ref } from 'vue'
+import type { NavigationFailure, NavigationGuardWithThis, NavigationHookAfter, RouteLocationNormalized, Router } from 'vue-router'
 import { keepsScroll } from './scroll-memory.ts'
 
-type Route = { path: string; fullPath: string }
-const route = (fullPath: string): Route => ({ path: fullPath.split('?')[0]!, fullPath })
+type Listener = (...args: unknown[]) => void
 
-/** A router with the parts keepsScroll reads: the history entry (position, current) and the guards. */
-function fakeRouter(start: string) {
-  const state = { position: 0, current: start }
-  const before: ((to: Route) => void)[] = []
-  const after: ((to: Route, from: Route, failure?: unknown) => void)[] = []
-  let at = route(start)
+/** Minimal EventTarget with listener tracking so tests can verify cleanup. */
+class FakeTarget {
+  listeners = new Map<string, Set<Listener>>()
+  addEventListener(type: string, fn: Listener) {
+    let set = this.listeners.get(type)
+    if (!set) this.listeners.set(type, (set = new Set()))
+    set.add(fn)
+  }
+  removeEventListener(type: string, fn: Listener) {
+    this.listeners.get(type)?.delete(fn)
+  }
+  dispatch(type: string) {
+    for (const fn of [...(this.listeners.get(type) ?? [])]) fn()
+  }
+  count() {
+    let total = 0
+    for (const set of this.listeners.values()) total += set.size
+    return total
+  }
+}
+
+/** Fake `<main>` whose `scrollTop` clamps to `[0, maxScroll]` like a real scroller. */
+class FakeMain extends FakeTarget {
+  private _scrollTop = 0
+  maxScroll = 3000
+  get scrollTop() {
+    return this._scrollTop
+  }
+  set scrollTop(value: number) {
+    this._scrollTop = Math.max(0, Math.min(value, this.maxScroll))
+  }
+}
+
+const routeOf = (fullPath: string): RouteLocationNormalized =>
+  ({ path: fullPath.split(/[?#]/)[0]!, fullPath }) as RouteLocationNormalized
+
+/** Fake router that mirrors vue-router's history state timing for push vs popstate. */
+function makeRouter(initial = '/t/tasks') {
+  const before: NavigationGuardWithThis<undefined>[] = []
+  const after: NavigationHookAfter[] = []
+  const entries = [initial]
+  let position = 0
+  const state = { position, current: initial }
+  const currentRoute = ref(routeOf(initial))
+
   const router = {
     options: { history: { state } },
-    get currentRoute() {
-      return { value: at }
+    currentRoute,
+    beforeEach(guard: NavigationGuardWithThis<undefined>) {
+      before.push(guard)
+      return () => {
+        const at = before.indexOf(guard)
+        if (at >= 0) before.splice(at, 1)
+      }
     },
-    beforeEach: (fn: (to: Route) => void) => (before.push(fn), () => before.splice(before.indexOf(fn), 1)),
-    afterEach: (fn: (to: Route, from: Route, failure?: unknown) => void) => (after.push(fn), () => after.splice(after.indexOf(fn), 1)),
+    afterEach(hook: NavigationHookAfter) {
+      after.push(hook)
+      return () => {
+        const at = after.indexOf(hook)
+        if (at >= 0) after.splice(at, 1)
+      }
+    },
+  } as unknown as Router
+
+  function runHooks(to: RouteLocationNormalized, from: RouteLocationNormalized, failure?: NavigationFailure) {
+    if (!failure) {
+      for (const guard of before) guard.call(undefined, to, from, () => {})
+      currentRoute.value = to
+    }
+    for (const hook of after) hook(to, from, failure)
   }
-  /** A link or push: the history does not hold the target yet. */
-  const push = (to: string) => navigate(to, state.position + 1, false)
-  /** Back or Forward: the history already holds the entry being gone to. */
-  const traverse = (to: string, position: number) => navigate(to, position, true)
-  function navigate(to: string, position: number, traversing: boolean) {
-    const target = route(to)
-    if (traversing) state.current = to
-    for (const fn of before) fn(target)
-    const from = at
-    at = target
-    state.position = position
-    state.current = to
-    for (const fn of after) fn(target, from)
+
+  return {
+    router,
+    push(fullPath: string) {
+      const from = currentRoute.value
+      const to = routeOf(fullPath)
+      // On push, history.state still points at the old entry during beforeEach.
+      for (const guard of before) guard.call(undefined, to, from, () => {})
+      entries.splice(position + 1)
+      entries.push(fullPath)
+      position = entries.length - 1
+      state.position = position
+      state.current = fullPath
+      currentRoute.value = to
+      for (const hook of after) hook(to, from)
+    },
+    pop(delta: number, cancelled = false) {
+      const from = currentRoute.value
+      const targetPosition = position + delta
+      const fullPath = entries[targetPosition]!
+      const to = routeOf(fullPath)
+      if (cancelled) {
+        // An earlier guard aborted the navigation before keepsScroll's beforeEach ran.
+        runHooks(to, from, {} as NavigationFailure)
+        return
+      }
+      // On popstate, history.state already holds the destination entry during beforeEach.
+      position = targetPosition
+      state.position = position
+      state.current = fullPath
+      runHooks(to, from)
+    },
   }
-  return { router: router as unknown as Router, push, traverse, listeners: before.length + after.length, guards: { before, after } }
 }
 
-/** A page element whose scroll is held at `limit` (how tall its content is so far). */
-function fakeMain(limit = 5000) {
-  const handlers = new Map<string, () => void>()
-  let top = 0
-  const element = {
-    limit,
-    get scrollTop() {
-      return top
-    },
-    set scrollTop(value: number) {
-      top = Math.min(value, element.limit)
-    },
-    addEventListener: (name: string, fn: () => void) => handlers.set(name, fn),
-    removeEventListener: (name: string) => handlers.delete(name),
-  }
-  return { element: element as unknown as HTMLElement, handlers, raw: element }
+let fakeWindow: FakeTarget
+let frames: Map<number, FrameRequestCallback>
+let nextFrameId: number
+let now: number
+let stops: (() => void)[]
+
+function stepFrame(ms = 16) {
+  now += ms
+  const batch = [...frames.entries()]
+  frames.clear()
+  for (const [, cb] of batch) cb(now)
 }
 
-/** Lets the restore loop (animation frames) run. */
-const frames = async (count = 3) => {
-  for (let i = 0; i < count; i++) await vi.advanceTimersByTimeAsync(20)
-}
+beforeEach(() => {
+  fakeWindow = new FakeTarget()
+  frames = new Map()
+  nextFrameId = 1
+  now = 0
+  stops = []
+  vi.stubGlobal('window', fakeWindow)
+  vi.stubGlobal('performance', { now: () => now })
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    const id = nextFrameId++
+    frames.set(id, cb)
+    return id
+  })
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+    frames.delete(id)
+  })
+})
+
+afterEach(() => {
+  while (stops.length) stops.pop()!()
+  vi.unstubAllGlobals()
+})
 
 describe('keepsScroll', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-    vi.stubGlobal('requestAnimationFrame', (fn: () => void) => setTimeout(fn, 16))
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-    vi.unstubAllGlobals()
+  it('starts a new page at the top and restores the old scroll on Back and Forward', async () => {
+    const { router, push, pop } = makeRouter('/t/tasks')
+    const main = new FakeMain()
+    stops.push(keepsScroll(router, () => main as unknown as HTMLElement))
+
+    main.scrollTop = 1200
+    push('/o/task-1')
+    await nextTick()
+    expect(main.scrollTop).toBe(0)
+
+    main.scrollTop = 450
+    pop(-1)
+    await nextTick()
+    expect(main.scrollTop).toBe(1200)
+    expect(frames.size).toBe(0)
+    expect(main.count()).toBe(0)
+    expect(fakeWindow.count()).toBe(0)
+
+    pop(1)
+    await nextTick()
+    expect(main.scrollTop).toBe(450)
   })
 
-  it('opens a new page at its top', async () => {
-    const { router, push } = fakeRouter('/t/tasks')
-    const main = fakeMain()
-    keepsScroll(router, () => main.element)
-    main.raw.scrollTop = 800
-    push('/o/one')
-    await frames()
-    expect(main.raw.scrollTop).toBe(0)
+  it('retries until an async list grows tall enough, then cleans up listeners', async () => {
+    const { router, push, pop } = makeRouter('/t/tasks')
+    const main = new FakeMain()
+    stops.push(keepsScroll(router, () => main as unknown as HTMLElement))
+
+    main.scrollTop = 1200
+    push('/o/task-1')
+    await nextTick()
+
+    // Returning while the list has not loaded its items yet.
+    main.maxScroll = 0
+    pop(-1)
+    await nextTick()
+    expect(main.scrollTop).toBe(0)
+    expect(frames.size).toBe(1)
+
+    stepFrame()
+    expect(main.scrollTop).toBe(0)
+    expect(frames.size).toBe(1)
+
+    // Items arrive and the page becomes tall enough.
+    main.maxScroll = 2000
+    stepFrame()
+    expect(main.scrollTop).toBe(1200)
+    expect(frames.size).toBe(0)
+    expect(main.count()).toBe(0)
+    expect(fakeWindow.count()).toBe(0)
   })
 
-  it('brings Back to where the page was left, once the page is tall enough', async () => {
-    const { router, push, traverse } = fakeRouter('/t/tasks')
-    const main = fakeMain()
-    keepsScroll(router, () => main.element)
-    main.raw.scrollTop = 800
-    push('/o/one')
-    await frames()
-    main.raw.scrollTop = 40
-    traverse('/t/tasks', 0)
-    await frames()
-    expect(main.raw.scrollTop).toBe(800)
+  it('keeps scroll when only the query changes on the same page', async () => {
+    const { router, push } = makeRouter('/t/tasks')
+    const main = new FakeMain()
+    stops.push(keepsScroll(router, () => main as unknown as HTMLElement))
+
+    main.scrollTop = 900
+    push('/t/tasks?pane=abc')
+    await nextTick()
+    expect(main.scrollTop).toBe(900)
   })
 
-  it('keeps each entry of the same page apart', async () => {
-    const { router, push, traverse } = fakeRouter('/t/tasks')
-    const main = fakeMain()
-    keepsScroll(router, () => main.element)
-    main.raw.scrollTop = 100
-    push('/o/one')
-    await frames()
-    push('/t/tasks')
-    await frames()
-    expect(main.raw.scrollTop).toBe(0)
-    main.raw.scrollTop = 600
-    push('/o/two')
-    await frames()
-    traverse('/t/tasks', 2)
-    await frames()
-    expect(main.raw.scrollTop).toBe(600)
-    traverse('/o/one', 1)
-    await frames()
-    traverse('/t/tasks', 0)
-    await frames()
-    expect(main.raw.scrollTop).toBe(100)
+  it('ignores cancelled navigations (such as phone Back closing an overlay)', async () => {
+    const { router, push, pop } = makeRouter('/t/tasks')
+    const main = new FakeMain()
+    stops.push(keepsScroll(router, () => main as unknown as HTMLElement))
+
+    main.scrollTop = 800
+    push('/o/task-1')
+    await nextTick()
+    main.scrollTop = 300
+
+    pop(-1, true)
+    await nextTick()
+    expect(main.scrollTop).toBe(300)
   })
 
-  it('leaves the scroll alone when a page only changes its own query', async () => {
-    const { router, push } = fakeRouter('/calendar?view=month&date=2026-11-01')
-    const main = fakeMain()
-    keepsScroll(router, () => main.element)
-    main.raw.scrollTop = 300
-    push('/calendar?view=month&date=2026-12-01')
-    await frames()
-    expect(main.raw.scrollTop).toBe(300)
+  it('stops restoring as soon as the user touches, scrolls, clicks or presses a key', async () => {
+    for (const [target, event] of [
+      ['main', 'touchstart'],
+      ['main', 'wheel'],
+      ['main', 'pointerdown'],
+      ['window', 'keydown'],
+    ] as const) {
+      const { router, push, pop } = makeRouter('/t/tasks')
+      const main = new FakeMain()
+      const stop = keepsScroll(router, () => main as unknown as HTMLElement)
+      stops.push(stop)
+
+      main.scrollTop = 1200
+      push('/o/task-1')
+      await nextTick()
+
+      main.maxScroll = 0
+      pop(-1)
+      await nextTick()
+      expect(frames.size).toBe(1)
+
+      if (target === 'main') main.dispatch(event)
+      else fakeWindow.dispatch(event)
+
+      expect(frames.size).toBe(0)
+      expect(main.count()).toBe(0)
+      expect(fakeWindow.count()).toBe(0)
+
+      main.maxScroll = 2000
+      stepFrame()
+      expect(main.scrollTop).toBe(0)
+      stop()
+    }
   })
 
-  it('a finger or the wheel takes over from a restore', async () => {
-    const { router, push, traverse } = fakeRouter('/t/tasks')
-    const main = fakeMain()
-    keepsScroll(router, () => main.element)
-    main.raw.scrollTop = 800
-    push('/o/one')
-    await frames()
-    // The page is still short when Back arrives: the restore waits for it to grow, until touched.
-    main.raw.limit = 100
-    traverse('/t/tasks', 0)
-    await frames()
-    expect(main.raw.scrollTop).toBe(100)
-    main.handlers.get('touchstart')?.()
-    main.raw.limit = 5000
-    await frames(5)
-    expect(main.raw.scrollTop).toBe(100)
+  it('gives up after the wait window if the list is shorter than before', async () => {
+    const { router, push, pop } = makeRouter('/t/tasks')
+    const main = new FakeMain()
+    stops.push(keepsScroll(router, () => main as unknown as HTMLElement))
+
+    main.scrollTop = 1200
+    push('/o/task-1')
+    await nextTick()
+
+    main.maxScroll = 900
+    pop(-1)
+    await nextTick()
+    expect(main.scrollTop).toBe(900)
+    expect(frames.size).toBe(1)
+
+    stepFrame(2100)
+    expect(frames.size).toBe(0)
+    expect(main.count()).toBe(0)
+    expect(fakeWindow.count()).toBe(0)
   })
 
-  it('stops listening when told to', () => {
-    const { router, guards } = fakeRouter('/')
-    const stop = keepsScroll(router, () => null)
-    expect(guards.before.length + guards.after.length).toBe(2)
+  it('cancels an in-flight restore and removes listeners on teardown', async () => {
+    const { router, push, pop } = makeRouter('/t/tasks')
+    const main = new FakeMain()
+    const stop = keepsScroll(router, () => main as unknown as HTMLElement)
+
+    main.scrollTop = 1200
+    push('/o/task-1')
+    await nextTick()
+
+    main.maxScroll = 0
+    pop(-1)
+    await nextTick()
+    expect(frames.size).toBe(1)
+
     stop()
-    expect(guards.before.length + guards.after.length).toBe(0)
-  })
-
-  it('does nothing without a page element', async () => {
-    const { router, push, traverse } = fakeRouter('/')
-    keepsScroll(router, () => null)
-    push('/t/tasks')
-    traverse('/', 0)
-    await frames()
+    expect(frames.size).toBe(0)
+    expect(main.count()).toBe(0)
+    expect(fakeWindow.count()).toBe(0)
   })
 })

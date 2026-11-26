@@ -63,6 +63,12 @@ GitHub release page.
 - **Home:** every person has their own Home page in each space, opened from the top of the sidebar, `G H`, or Home on the phone.
 - **Widgets:** Add widget on your Home (or `/Widget` on any page) adds Agenda, Due soon, Planned, Waiting on, Pinned, Recently changed, a saved query, a page or block, Habits today, Food today or Quick capture. Your Home can use one or two columns.
 - **Starting Home:** when a space opens on a page, its owner's Home is that page, and other members start from their own copy of it, with their own saved queries.
+- **Upgraded our installation to Vasta 0.14.** Adds card settings on Board, Gallery, Grid and Wall
+  views (under **Cards**: cover, fit, text preview, property names, size, and which fields in what
+  order) and board swimlanes you can collapse, with swimlanes and columns you can reorder. The
+  order is saved on the view; which lanes you collapse is yours, like folded columns. On our
+  install the swipe from the screen's left edge still does not open the side menu, also in the
+  Home Screen app.
 - **Upgraded our installation to Vasta 0.13.** Adds the app in five languages (our own screens
   stay in English), Settings › Object types with type templates, a Tasks sidebar on the calendar,
   automatic reminders set per space, and agents that can create and change types, while keeping
@@ -368,10 +374,6 @@ GitHub release page.
   day and leave the task in Inbox, still waiting in the review. It now moves to Scheduled (or your
   first open status when there is none) and the review goes on to the next task. Tasks that already
   have a status keep it.
-- **iPhone: the line you are typing in a note stays above the keyboard.** Writing low in a note, or at the end of a long one, went on behind the keyboard and its toolbar (also in a note opened in a window).
-
-- **Back on a phone with Type settings open** closes them and leaves no `?settings=1` behind, so a reload no longer reopens them. Menus kept by their button close on Back too, and going back to a list no longer fights a scrollbar drag or a key press while it finds its place.
-
 - Subscribed calendars show times without a zone in the zone the feed names (X-WR-TIMEZONE) instead of yours. A swim club feed set to Mountain time showed a 5:20 am practice in Toronto as 3:20 am. Feeds naming America/Edmonton are read by Alberta's pre-2026 rules, which their servers still use.
 - **Overdue tasks read normally on a phone.** In an agenda's Overdue list (on Home, for one), a
   task late on both dates had its title squeezed to one letter per line beside its "Due" and
@@ -447,6 +449,30 @@ GitHub release page.
 - **The ⋮⋮ handle of a block in a second or third column** sits in the gap before that column
   and holds still while the pointer goes to it. It sat at the page's left edge, so on the way the
   pointer crossed the first column and the handle jumped to a block there.
+
+## 0.14.0 (2026-11-24)
+
+### Added
+
+- **Customisable cards on Board, Gallery, Grid and Wall views.** Under **Cards**, each layout of a
+  view can independently toggle cover images (with a **Fit image** option for book covers and
+  vertical images), text previews, property names, card size (S/M/L), and choose and reorder which
+  fields — including tags — appear on cards.
+- **Board: collapse and reorder sections.** Swimlanes can now be collapsed individually (or all at
+  once from a section's menu), keeping column headers visible at the top; holding a dragged card
+  over a collapsed section opens it. Both swimlanes and columns can be reordered by dragging their
+  handle or from their menu (and reset back to default order), saved per view.
+
+### Fixed
+
+- **Board: folded tag and relation columns now show their title** instead of `…`.
+- **Back on a phone closes what is open first.** With a dialog, a menu, the search or the side menu
+  open, Back (or the iPhone's edge swipe) now closes it and stays on the page, instead of changing the
+  page underneath it. Back and Forward also return a list to where you scrolled it, instead of its top.
+- **iPhone: the left-edge swipe no longer opens the side menu in Safari**, where it is the browser's
+  Back. It still opens it in the Home Screen app.
+- **iPhone: the line you are typing in a note stays above the keyboard.** Writing low in a note, or
+  at the end of a long one, went on behind the keyboard and its toolbar.
 
 ## 0.13.0 (2026-11-23)
 

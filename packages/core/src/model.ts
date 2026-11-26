@@ -616,6 +616,8 @@ export interface QueryDef {
   table?: TableSettings
   /** The board layout's settings. */
   board?: BoardSettings
+  /** Per-layout card settings for grid, wall and gallery (independent of each other and of `board`). */
+  cards?: Partial<Record<CardLayout, CardSettings>>
   /** The list layout's rows. */
   list?: ListSettings
   /** The agenda layout's settings. */
@@ -671,6 +673,8 @@ export interface ViewDef {
   groupBy?: GroupRule[]
   table?: TableSettings
   board?: BoardSettings
+  /** Per-layout card settings for grid, wall and gallery (independent of each other and of `board`). */
+  cards?: Partial<Record<CardLayout, CardSettings>>
   list?: ListSettings
   agenda?: AgendaSettings
   /** Where a click on an object opens it; unset: as the type says. */
@@ -701,16 +705,41 @@ export interface AgendaSettings {
  * without one opens the window. */
 export type ViewOpenIn = 'page' | 'pane' | 'popup'
 
+export type CardSize = 'sm' | 'md' | 'lg'
+export type CardLayout = 'grid' | 'wall' | 'gallery'
+
 /**
- * The board layout's settings: which fields cards show, a second grouping in rows (swimlanes),
- * folded columns and the most cards a column should hold, by the group's key.
+ * How cards look in a view (board, gallery, grid, wall). Stored independently per layout and per
+ * view (on `board` for kanban, and per-layout in `cards` for the other card views), so customising
+ * one layout or view never affects another.
  */
-export interface BoardSettings {
-  /** Property ids, in order; unset: the first two with a value that are not the columns or lanes. */
+export interface CardSettings {
+  /** Property ids (and `'tags'`) shown on cards, in order; unset: automatic (first few with a value + tags). */
   cardFields?: string[]
+  /** Show the object's cover or media image. Defaults: false on board, true on gallery/grid/wall. */
+  cardCover?: boolean
+  /** Fit the whole image inside the frame (`object-contain`) instead of cropping (`object-cover`). */
+  cardFit?: boolean
+  /** Show the plain-text excerpt (`object.preview`). Defaults: false on gallery, true elsewhere. */
+  cardPreview?: boolean
+  /** Show property names before values on cards. */
+  cardLabels?: boolean
+  /** Card / column size: 'sm', 'md' (default) or 'lg'. */
+  cardSize?: CardSize
+}
+
+/**
+ * The board layout's settings: card appearance, a second grouping in rows (swimlanes), folded
+ * columns and collapsed lanes, custom section orders, and the most cards a column should hold,
+ * by the group's key.
+ */
+export interface BoardSettings extends CardSettings {
   /** A field to group cards in rows by, across the columns. */
   swimlanes?: string
   collapsed?: string[]
+  collapsedLanes?: string[]
+  columnOrder?: string[]
+  laneOrder?: string[]
   wip?: Record<string, number>
 }
 

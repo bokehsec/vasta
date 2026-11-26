@@ -66,7 +66,6 @@ const stopDesktopWatch = watch(
 
 // On a phone the sidebar is a drawer over the page: it closes when a page opens and on Escape.
 watch(() => route.fullPath, () => (ui.sidebarOpen = false))
-closesOnBack(() => isPhone.value && ui.sidebarOpen, () => (ui.sidebarOpen = false))
 // What was opened over a page is about that page: another page closes it. On a phone Back closes
 // the top layer first and stays (lib/back.ts); this is every other way, and Back on a desktop. The
 // capture text is kept as its draft (QuickCapture).
@@ -82,6 +81,7 @@ watch(
   }
 )
 watch(isPhone, () => (ui.sidebarOpen = false))
+closesOnBack(() => isPhone.value && ui.sidebarOpen, () => (ui.sidebarOpen = false))
 function onKey(event: KeyboardEvent) {
   if (event.key === 'Escape' && ui.sidebarOpen && isPhone.value) ui.sidebarOpen = false
 }
@@ -141,6 +141,7 @@ function onTouchEnd(event: TouchEvent) {
         <div class="flex min-h-0 flex-1">
           <main
             ref="main"
+            data-drag-scroll
             class="isolate min-h-0 min-w-0 flex-1 overflow-y-auto bg-surface md:mb-2 md:mr-2 md:rounded-xl md:border md:border-line md:shadow-[0_1px_3px_rgb(0_0_0/0.04)]"
             :class="[ui.sidebarCollapsed ? 'md:ml-2' : '', isPhone ? (notice || lastError ? 'pb-[calc(13rem+env(safe-area-inset-bottom))]' : 'pb-[calc(9rem+env(safe-area-inset-bottom))]') : 'pb-[env(safe-area-inset-bottom)]']"
           >

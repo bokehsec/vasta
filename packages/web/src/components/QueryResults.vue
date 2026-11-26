@@ -122,6 +122,7 @@ defineExpose({ count: computed(() => display.value.length), empty })
         :table="query.table"
         :list="query.list"
         :board="query.board"
+        :cards="query.cards"
         :manual="!query.sort?.length"
         :agenda="query.agenda"
         :filter="query.filter"

@@ -97,7 +97,7 @@ await until(() => card('Alpha').count(), 'the board', 20000)
 // shows one column at a time, the next one peeking in at its right edge).
 const center = async (locator) => {
   const box = await locator.boundingBox()
-  const board = await page.locator('[data-drag-scroll]').first().boundingBox()
+  const board = await page.locator('[data-board-root]').boundingBox()
   const left = Math.max(box.x, board?.x ?? 0, 0)
   const right = Math.min(box.x + box.width, board ? board.x + board.width : Infinity, page.viewportSize().width)
   return { x: (left + right) / 2, y: box.y + Math.min(box.height, 120) / 2 }
@@ -205,13 +205,14 @@ if (phone) {
 } else await page.getByRole('button', { name: 'Cards' }).click()
 await page.locator('select[aria-label="Swimlanes"]').selectOption({ label: 'Priority' })
 await until(() => page.locator('[data-board-cell="todo|high"]').count(), 'a High lane')
-await page.locator('button', { hasText: /^\s*Blocked\s*$/ }).last().click()
-await until(async () => JSON.stringify((await get(`/api/types/${task.id}`)).views[0].board?.cardFields) === JSON.stringify(['blocked']), 'card fields saved')
+if (await page.locator('[data-card-field="blocked"]').count()) throw new Error('Blocked is offered as a card field (its flag always shows)')
+await page.locator('[data-card-field="due"] button').last().click()
+await until(async () => JSON.stringify((await get(`/api/types/${task.id}`)).views[0].board?.cardFields) === JSON.stringify(['due']), 'card fields saved')
 await page.keyboard.press('Escape')
 if (phone) await page.keyboard.press('Escape') // the Filters sheet under it
 // Dragging into another lane changes that field too.
 await until(() => page.locator('[data-board-cell="doing|low"]').count(), 'a Low lane in progress')
-await page.locator('[data-drag-scroll]').evaluate((board) => board.scrollTo({ left: 0 }))
+await page.locator('[data-board-root]').evaluate((board) => board.scrollTo({ left: 0 }))
 await drag(await center(card('Alpha')), await center(page.locator('[data-board-cell="doing|low"]')))
 await until(async () => {
   const o = await get(`/api/objects/${made.Alpha.id}`)

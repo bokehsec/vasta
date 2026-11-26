@@ -65,8 +65,6 @@ const COMMANDS: Command[] = [
 ]
 
 const router = useRouter()
-// Back on a phone closes Search and stays on the page (lib/back.ts).
-closesOnBack(() => ui.paletteOpen, () => (ui.paletteOpen = false))
 const query = ref('')
 const objects = ref<ObjectSummary[]>([])
 const active = ref(0)
@@ -145,6 +143,7 @@ watch(query, () => {
   })
 })
 
+closesOnBack(() => ui.paletteOpen, () => (ui.paletteOpen = false))
 watch(
   () => ui.paletteOpen,
   async (open) => {

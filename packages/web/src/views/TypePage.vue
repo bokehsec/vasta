@@ -304,6 +304,7 @@ async function newMenu(event: MouseEvent) {
       :table="view.table"
       :list="view.list"
       :board="view.board"
+      :cards="view.cards"
       :manual="toolbar.manual.value"
       :agenda="view.agenda"
       :filter="toolbar.viewFilter.value"

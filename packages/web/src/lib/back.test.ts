@@ -71,6 +71,16 @@ describe('closesOnBack and closeTopLayer', () => {
     expect(close).not.toHaveBeenCalled()
   })
 
+  it('closes when `later` says, not before: the navigation is cancelled at once', () => {
+    const close = vi.fn()
+    layer(ref(true), close)
+    let run: (() => void) | undefined
+    expect(closeTopLayer((go) => (run = go))).toBe(true)
+    expect(close).not.toHaveBeenCalled()
+    run!()
+    expect(close).toHaveBeenCalledOnce()
+  })
+
   it('a layer registered while closed is not there until it opens', async () => {
     const open = ref(false)
     layer(open, vi.fn())

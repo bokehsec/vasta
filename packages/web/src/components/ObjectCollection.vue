@@ -5,8 +5,9 @@
 // whether a table is drawn as rows (a phone); the table (ObjectTable), the rows (ObjectRows), the
 // cards, the board and the agenda draw themselves.
 import { computed, inject, provide, ref, watch } from 'vue'
-import type { AgendaSettings, BoardSettings, FilterGroup, Id, ListSettings, ObjectRecord, ObjectSummary, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
+import type { AgendaSettings, BoardSettings, CardLayout, CardSettings, FilterGroup, Id, ListSettings, ObjectRecord, ObjectSummary, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { parentFieldOf } from '@vasta/core'
+import { resolveCard } from '../lib/cards.ts'
 import { COMPLETION_FEEDBACK } from '../lib/completion-feedback.ts'
 import type { Section } from '../lib/collection-rows.ts'
 import { listFields, QUICK_ACTIONS_COLUMN, rowFieldsFromTable, tableColumns } from '../lib/columns.ts'
@@ -42,6 +43,8 @@ const props = defineProps<{
   board?: BoardSettings
   /** The list layout's rows, as saved on the view or query; unset: tags and the last change. */
   list?: ListSettings
+  /** Per-layout card settings for grid, wall and gallery. */
+  cards?: Partial<Record<CardLayout, CardSettings>>
   manual?: boolean
   /** The agenda layout's settings; it shows what the filter selects from the calendar feed, not `objects` (parentId: the object a query is embedded in). */
   agenda?: AgendaSettings
@@ -120,8 +123,31 @@ const nests = computed(() => asRows.value && !props.flat && types.value.some((t)
 /** List rows: with fields chosen, each row shows those after its title. */
 const listColumns = computed(() => (phoneRows.value ? rowFieldsFromTable(shownColumns.value) : props.list?.fields ? listFields(props.list, props.typeIds) : undefined))
 
-const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 'embed' ? 'wall' : props.layout === 'gallery' ? 'gallery' : 'grid'))
-const cards = (group: Group) => group.items.slice(0, drawLimit(group))
+const cardVariant = computed<CardLayout>(() => (props.layout === 'wall' || props.layout === 'embed' ? 'wall' : props.layout === 'gallery' ? 'gallery' : 'grid'))
+const activeCard = computed(() => props.cards?.[cardVariant.value])
+const cardSize = computed(() => resolveCard(cardVariant.value, activeCard.value).size)
+const wallGridClass = computed(() =>
+  cardSize.value === 'sm'
+    ? 'columns-1 gap-3 @md:columns-2 @2xl:columns-3 @5xl:columns-4 @7xl:columns-5'
+    : cardSize.value === 'lg'
+      ? 'columns-1 gap-3 @2xl:columns-2 @6xl:columns-3'
+      : 'columns-1 gap-3 @lg:columns-2 @4xl:columns-3 @7xl:columns-4'
+)
+const cardGridClass = computed(() => {
+  if (cardVariant.value === 'gallery') {
+    return cardSize.value === 'sm'
+      ? 'grid-cols-[repeat(auto-fill,minmax(11rem,1fr))]'
+      : cardSize.value === 'lg'
+        ? 'grid-cols-[repeat(auto-fill,minmax(19rem,1fr))]'
+        : 'grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]'
+  }
+  return cardSize.value === 'sm'
+    ? 'grid-cols-[repeat(auto-fill,minmax(12rem,1fr))]'
+    : cardSize.value === 'lg'
+      ? 'grid-cols-[repeat(auto-fill,minmax(21rem,1fr))]'
+      : 'grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]'
+})
+const cardsIn = (group: Group) => group.items.slice(0, drawLimit(group))
 </script>
 
 <template>
@@ -193,13 +219,13 @@ const cards = (group: Group) => group.items.slice(0, drawLimit(group))
           />
           <!-- Wall: masonry columns; grid and gallery: a grid of cards. -->
           <template v-else>
-            <div v-if="cardVariant === 'wall'" class="columns-1 gap-3 @lg:columns-2 @4xl:columns-3 @7xl:columns-4">
-              <ObjectCard v-for="object in cards(section.group)" :key="object.id" :object="object" :type="typeOf(object)" variant="wall" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
+            <div v-if="cardVariant === 'wall'" :class="wallGridClass">
+              <ObjectCard v-for="object in cardsIn(section.group)" :key="object.id" :object="object" :type="typeOf(object)" variant="wall" :card="activeCard" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
             </div>
-            <div v-else class="grid gap-3" :class="cardVariant === 'gallery' ? 'grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]'">
-              <ObjectCard v-for="object in cards(section.group)" :key="object.id" :object="object" :type="typeOf(object)" :variant="cardVariant" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
+            <div v-else class="grid gap-3" :class="cardGridClass">
+              <ObjectCard v-for="object in cardsIn(section.group)" :key="object.id" :object="object" :type="typeOf(object)" :variant="cardVariant" :card="activeCard" @contextmenu="emit('menu', $event, object)" @moved="emit('moved', $event)" />
             </div>
-            <ShowMore v-if="section.group.items.length > section.limit" :key="cards(section.group).length" :shown="cards(section.group).length" :total="section.group.items.length" :auto="auto" @more="drawMore(section.group)" />
+            <ShowMore v-if="section.group.items.length > section.limit" :key="cardsIn(section.group).length" :shown="cardsIn(section.group).length" :total="section.group.items.length" :auto="auto" @more="drawMore(section.group)" />
           </template>
         </template>
       </section>

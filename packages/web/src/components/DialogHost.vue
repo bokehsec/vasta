@@ -33,6 +33,8 @@ watch(activeDialog, async (dialog) => {
   } else confirmButton.value?.focus()
 })
 
+closesOnBack(() => !!activeDialog.value, () => cancel())
+
 function cancel() {
   const dialog = activeDialog.value
   if (dialog?.kind === 'prompt' || dialog?.kind === 'choice' || dialog?.kind === 'asks') dialog.resolve(null)
@@ -57,7 +59,6 @@ function onKey(event: KeyboardEvent) {
   }
 }
 // Capture phase so Escape closes this dialog before anything underneath reacts.
-closesOnBack(() => !!activeDialog.value, cancel)
 onMounted(() => window.addEventListener('keydown', onKey, true))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 </script>

@@ -46,25 +46,32 @@ export const router = createRouter({
 })
 
 // Back or forward (the history already holds the entry being gone to) on a phone with a sheet,
-// dialog, Triage or the side menu open closes that instead, and the page stays (lib/back.ts); the
-// router puts the history entry back.
-router.beforeEach((to) => {
-  if (router.options.history.state.current !== to.fullPath || !isPhone.value) return
-  if (closeTopLayer(afterEntryBack)) return false
+// dialog, Triage or the side menu open closes that instead, and the page stays (lib/back.ts). The
+// router puts the entry back by going the other way; the close waits for that, so a dialog whose
+// close changes the address (Type settings, ?settings=1) changes the entry it was opened on.
+router.beforeEach((to, from) => {
+  if (router.options.history.state?.current !== to.fullPath || !isPhone.value) return
+  if (closeTopLayer((close) => afterEntryBack(from.fullPath, close))) return false
 })
 
-// The router puts the entry back by going the other way; the close waits for that, so a dialog whose
-// close changes the address (Type settings, ?settings=1) changes the entry it was opened on.
-function afterEntryBack(close: () => void) {
+let pendingBackClose: (() => void) | undefined
+function afterEntryBack(expected: string, close: () => void) {
+  if (pendingBackClose === close) return
+  pendingBackClose = close
   let done = false
-  const run = () => {
+  const finish = () => {
     if (done) return
     done = true
-    window.removeEventListener('popstate', run)
+    if (pendingBackClose === close) pendingBackClose = undefined
+    clearTimeout(timer)
+    window.removeEventListener('popstate', onPop)
     close()
   }
-  window.addEventListener('popstate', run)
-  setTimeout(run, 500) // no entry to go back to (a history state without a position)
+  const onPop = () => {
+    if (router.options.history.state?.current === expected) finish()
+  }
+  window.addEventListener('popstate', onPop)
+  const timer = setTimeout(finish, 500) // no entry to go back to (a history state without a position)
 }
 
 // The side pane and the popup (lib/open.ts) live in the query, as ?pane=<id>&paneBlock=<id> and
@@ -75,7 +82,7 @@ export const closingOverlay = { pane: false, popup: false }
 router.beforeEach((to, from) => {
   const { pane, paneBlock, popup, popupBlock, new: isNew, cursor } = from.query
   if (closingOverlay.pane || closingOverlay.popup || to.path !== from.path) return
-  if (router.options.history.state.current === to.fullPath) return
+  if (router.options.history.state?.current === to.fullPath) return
   const carry =
     pane && !('pane' in to.query) ? { pane, ...(paneBlock ? { paneBlock } : {}) } : undefined
   const carryPopup =

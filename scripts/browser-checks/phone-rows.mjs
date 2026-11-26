@@ -352,7 +352,7 @@ try {
   const column = page.locator('[data-board-column]').first()
   const columnWidth = (await column.boundingBox()).width
   if (columnWidth < W * 0.8 || columnWidth > W * 0.9) throw new Error(`a column is ${columnWidth}px wide on a ${W}px phone`)
-  const snap = await page.locator('[data-drag-scroll]').evaluate((el) => getComputedStyle(el).scrollSnapType)
+  const snap = await page.locator('[data-board-root]').evaluate((el) => getComputedStyle(el).scrollSnapType)
   if (!snap.includes('x')) throw new Error(`the board does not snap: ${snap}`)
   const second = chips.nth(1)
   const key = await second.getAttribute('data-board-chip')

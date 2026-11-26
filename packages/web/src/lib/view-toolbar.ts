@@ -3,12 +3,15 @@
 // done), how the view is arranged (sort, group, layout, fields) and the menus that change it
 // (ArrangeMenus). Nothing here edits the view but "Save to view" and the arrange menus, which
 // save on the type (updateView). The narrowing is gone when the person leaves the page.
-import { RANK_PROPERTY_ID, savedShowsClosed, savedWithNarrowing, shownFilter, withSavedConditions, quickActionsOf } from '@vasta/core'
-import type { FilterGroup, GroupRule, ObjectSummary, ObjectType, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
+import { BLOCKED_PROPERTY_ID, RANK_PROPERTY_ID, savedShowsClosed, savedWithNarrowing, shownFilter, withSavedConditions, quickActionsOf } from '@vasta/core'
+import type { CardLayout, CardSettings, FilterGroup, GroupRule, ObjectSummary, ObjectType, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { computed, reactive, ref, type ComputedRef } from 'vue'
+import { patchCardSettings, type CardFieldOption, type CardVariant } from './cards.ts'
 import { listFields, quickActionsColumnShown, rowFieldsFromTable, tableColumns, toggleQuickActionsColumn } from './columns.ts'
+import { propName, t } from './i18n.ts'
 import { meId, sharedSpace } from './people.ts'
 import { preference } from './preferences.ts'
+import { kindIcon } from './properties.ts'
 import { groupOptions } from './query.ts'
 
 export const LAYOUTS: { layout: ViewLayout; label: string; icon: string }[] = [
@@ -104,24 +107,50 @@ export function useViewToolbar(o: { typeId: () => string; type: ComputedRef<Obje
     const direction: SortRule['direction'] = sort.value.field === field ? (sort.value.direction === 'asc' ? 'desc' : 'asc') : field === 'title' ? 'asc' : 'desc'
     updateView({ sort: [{ field, direction }] })
   }
-  const setGroup = (field: string) => updateView({ groupBy: field ? [{ field } as GroupRule] : undefined })
-
-  // Board options: the fields cards show and the rows (swimlanes) they are in.
-  const cardFieldChoices = computed(() => valueProps.value.filter((p) => p.id !== groupField.value))
-  const cardFieldIds = computed(() => view.value.board?.cardFields)
-  function toggleCardField(id: string) {
-    const current = cardFieldIds.value ?? []
-    const next = current.includes(id) ? current.filter((f) => f !== id) : cardFieldChoices.value.map((p) => p.id).filter((f) => f === id || current.includes(f))
-    updateView({ board: { ...view.value.board, cardFields: next } })
+  function setGroup(field: string) {
+    const { collapsed: _, columnOrder: _o, ...restBoard } = view.value.board ?? {}
+    const board = view.value.layout === 'kanban' && field !== groupField.value ? (Object.keys(restBoard).length ? restBoard : undefined) : view.value.board
+    updateView({ groupBy: field ? [{ field } as GroupRule] : undefined, ...(view.value.layout === 'kanban' ? { board } : {}) })
   }
-  function resetCardFields() {
-    const { cardFields: _, ...rest } = view.value.board ?? {}
-    updateView({ board: Object.keys(rest).length ? rest : undefined })
+
+  // Card & board options: each card layout (board, gallery, grid, wall) keeps its own settings on the view.
+  const cardVariant = computed<CardVariant | null>(() => {
+    const layout = view.value.layout
+    if (layout === 'kanban' || layout === 'gallery' || layout === 'grid' || layout === 'wall') return layout
+    return null
+  })
+  const activeCardSettings = computed<CardSettings | undefined>(() => {
+    if (!cardVariant.value) return undefined
+    return cardVariant.value === 'kanban' ? view.value.board : view.value.cards?.[cardVariant.value]
+  })
+  const cardFieldChoices = computed<CardFieldOption[]>(() => [
+    ...valueProps.value
+      .filter((p) => p.id !== BLOCKED_PROPERTY_ID && (view.value.layout !== 'kanban' || p.id !== groupField.value))
+      .map((p) => ({ id: p.id, label: propName(p), icon: kindIcon(p.kind), def: p })),
+    { id: 'tags', label: t('builtin.type.tag.other'), icon: 'ph:tag' },
+  ])
+  function patchCard(patch: Partial<CardSettings>) {
+    const variant = cardVariant.value
+    if (!variant) return
+    if (variant === 'kanban') {
+      updateView({ board: patchCardSettings(view.value.board, patch, 'kanban') })
+      return
+    }
+    const layout: CardLayout = variant
+    const nextForLayout = patchCardSettings(view.value.cards?.[layout], patch, layout)
+    const nextCards = { ...(view.value.cards ?? {}) }
+    if (nextForLayout) nextCards[layout] = nextForLayout
+    else delete nextCards[layout]
+    updateView({ cards: Object.keys(nextCards).length ? nextCards : undefined })
   }
   function setSwimlanes(field: string) {
-    const { swimlanes: _, ...rest } = view.value.board ?? {}
+    const { swimlanes: _, collapsedLanes: _c, laneOrder: _o, ...rest } = view.value.board ?? {}
     const next = field ? { ...rest, swimlanes: field } : rest
     updateView({ board: Object.keys(next).length ? next : undefined })
+  }
+  function resetBoardOrder() {
+    const { columnOrder: _, laneOrder: _l, ...rest } = view.value.board ?? {}
+    updateView({ board: Object.keys(rest).length ? rest : undefined })
   }
 
   // Layout menu: where objects open, nested steps, a table as rows on a phone, quick actions on rows.
@@ -152,7 +181,7 @@ export function useViewToolbar(o: { typeId: () => string; type: ComputedRef<Obje
     const more =
       layout === 'table' ? { id: 'columns', menu: 'columns' as const, label: 'Columns', icon: 'ph:columns', open: menus.columns }
       : layout === 'list' ? { id: 'fields', menu: 'columns' as const, label: 'Fields', icon: 'ph:list-checks', open: menus.columns }
-      : layout === 'kanban' ? { id: 'cards', menu: 'cards' as const, label: 'Cards', icon: 'ph:cards', open: menus.cards }
+      : cardVariant.value ? { id: 'cards', menu: 'cards' as const, label: 'Cards', icon: 'ph:cards', open: menus.cards }
       : layout === 'agenda' ? { id: 'options', menu: 'options' as const, label: 'Options', icon: 'ph:sliders-horizontal', open: menus.options }
       : undefined
     return [
@@ -171,7 +200,7 @@ export function useViewToolbar(o: { typeId: () => string; type: ComputedRef<Obje
     type, view, updateView, fixedActive: o.fixedActive, agendaActive, valueProps,
     filterText, personProps, mineOnly, toggleMine, showMine, mineTitle, minePasses, mineOn, showClosed, narrowing, viewFilter, filterCount, setNarrowing, clearNarrowing, saveNarrowing, editViewFilter, searching, activeFilterCount, clearFilters,
     sortFields, groupFields, manual, sort, groupField, sortLabel, groupLabel, currentLayout, setSort, setGroup,
-    cardFieldChoices, cardFieldIds, toggleCardField, resetCardFields, setSwimlanes,
+    cardVariant, activeCardSettings, cardFieldChoices, patchCard, setSwimlanes, resetBoardOrder,
     openChoices, phoneTable, togglePhoneTable, hasQuickActions, quickActionsOn, toggleQuickActions,
     menus, anchors, arrangeRows,
   }

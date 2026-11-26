@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// The menus that arrange a view (sort, group, layout, columns and fields, board cards, agenda
+// The menus that arrange a view (sort, group, layout, columns and fields, cards, agenda
 // options). A desktop's toolbar buttons open them; on a phone the Filters sheet's Arrange rows
 // open them, each a sheet over it (PopoverMenu). They save on the type through the toolbar model.
 import { parentFieldOf } from '@vasta/core'
@@ -9,6 +9,7 @@ import { isPhone } from '../lib/viewport.ts'
 import { bodyText, metaText } from '../lib/type-scale.ts'
 import AgendaMenu from './AgendaMenu.vue'
 import AppIcon from './AppIcon.vue'
+import CardOptionsMenu from './CardOptionsMenu.vue'
 import ColumnsMenu from './ColumnsMenu.vue'
 import ListFieldsMenu from './ListFieldsMenu.vue'
 import MenuRow from './MenuRow.vue'
@@ -30,21 +31,20 @@ const heading = `px-2.5 pb-1 pt-0.5 font-medium uppercase tracking-wide text-ink
   <PopoverMenu v-model:open="menus.group.value" :anchor="anchors.group" placement="bottom-end" width="13rem">
     <MenuRow v-for="f in toolbar.groupFields.value" :key="f.field" :check="toolbar.groupField.value === f.field" @click="toolbar.setGroup(f.field), (menus.group.value = false)">{{ f.label }}</MenuRow>
   </PopoverMenu>
-  <PopoverMenu v-model:open="menus.cards.value" :anchor="anchors.cards" placement="bottom-end" width="15rem">
-    <div :class="heading">Swimlanes</div>
-    <select :value="view.board?.swimlanes ?? ''" class="mx-1.5 mb-2 w-[calc(100%-0.75rem)] rounded-md bg-hover px-2 py-1 outline-none max-md:min-h-11" :class="bodyText" aria-label="Swimlanes" @change="toolbar.setSwimlanes(($event.target as HTMLSelectElement).value)">
-      <option value="">None</option>
-      <option v-for="f in toolbar.groupFields.value.filter((g) => g.field && g.field !== toolbar.groupField.value)" :key="f.field" :value="f.field">{{ f.label }}</option>
-    </select>
-    <div class="flex items-center" :class="heading">
-      Card fields
-      <button v-if="toolbar.cardFieldIds.value" class="ml-auto normal-case tracking-normal text-ink-faint hover:text-ink max-md:min-h-11" @click="toolbar.resetCardFields">Automatic</button>
-    </div>
-    <p v-if="!toolbar.cardFieldIds.value" class="px-2.5 pb-1 text-ink-faint" :class="metaText">The first two with a value. Pick to choose.</p>
-    <button v-for="p in toolbar.cardFieldChoices.value" :key="p.id" type="button" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-hover max-md:min-h-11" :class="bodyText" @click="toolbar.toggleCardField(p.id)">
-      <AppIcon :fallback="toolbar.cardFieldIds.value?.includes(p.id) ? 'ph:check-square-fill' : 'ph:square'" :class="toolbar.cardFieldIds.value?.includes(p.id) ? 'text-accent' : 'text-ink-faint'" />
-      {{ p.name }}
-    </button>
+  <PopoverMenu v-model:open="menus.cards.value" :anchor="anchors.cards" placement="bottom-end" width="16.5rem">
+    <template v-if="view.layout === 'kanban'">
+      <div :class="heading">Swimlanes</div>
+      <select :value="view.board?.swimlanes ?? ''" class="mx-1.5 mb-2 w-[calc(100%-0.75rem)] rounded-md bg-hover px-2 py-1 outline-none max-md:min-h-11" :class="bodyText" aria-label="Swimlanes" @change="toolbar.setSwimlanes(($event.target as HTMLSelectElement).value)">
+        <option value="">None</option>
+        <option v-for="f in toolbar.groupFields.value.filter((g) => g.field && g.field !== toolbar.groupField.value)" :key="f.field" :value="f.field">{{ f.label }}</option>
+      </select>
+      <div class="my-1 border-t border-line" />
+    </template>
+    <CardOptionsMenu v-if="toolbar.cardVariant.value" :variant="toolbar.cardVariant.value" :card="toolbar.activeCardSettings.value" :choices="toolbar.cardFieldChoices.value" @patch="toolbar.patchCard" />
+    <template v-if="view.layout === 'kanban' && (view.board?.columnOrder?.length || view.board?.laneOrder?.length)">
+      <div class="my-1 border-t border-line" />
+      <MenuRow icon="ph:arrow-counter-clockwise" @click="toolbar.resetBoardOrder">Reset order</MenuRow>
+    </template>
   </PopoverMenu>
   <PopoverMenu v-model:open="menus.columns.value" :anchor="anchors.columns" placement="bottom-end" width="17rem">
     <ColumnsMenu v-if="view.layout === 'table'" :table="view.table" :type-ids="typeIds" @update="updateView({ table: $event })" />

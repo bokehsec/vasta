@@ -234,6 +234,7 @@ watch(
  */
 const boardLayout = computed(() => isWhiteboard.value && !embedded.value && !inFrame.value && !info.value)
 const detailsOpen = preference<boolean>('board/details', false, { scope: 'device' })
+closesOnBack(() => isPhone.value && boardLayout.value && detailsOpen.value, () => (detailsOpen.value = false))
 /** Ids of the places the board and its details go in that layout (two pages can be open: the page and the pane). */
 const boardSlot = computed(() => `board-slot-${props.id}`)
 const detailsSlot = computed(() => `board-details-${props.id}`)
