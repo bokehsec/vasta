@@ -44,7 +44,7 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none max-md:min
       <span class="text-ink-soft">Check in on each {{ type.name.toLowerCase() }} every</span>
       <input :value="reviewEveryOf(type)" type="number" min="0" step="1" inputmode="numeric" :class="[control, 'w-16']" data-review-every @change="setEvery(($event.target as HTMLInputElement).value)" />
       <span class="text-ink-soft">days</span>
-      <span class="w-full text-xs text-ink-faint">A placed, open task comes back once it has not been reviewed for this many days (0: every time). Keep marks it reviewed.</span>
+      <span class="w-full text-xs text-ink-faint">A placed, open task with no date, or one that has passed, comes back once it has not been reviewed for this many days (0: every time); one with a date ahead waits for it, unless Snooze or Waiting… brings it back sooner. Keep marks it reviewed.</span>
     </label>
     <label v-if="snoozeFieldOf(type)" class="mt-2 flex flex-wrap items-center gap-2 text-sm">
       <span class="text-ink-soft">Snooze hides a {{ type.name.toLowerCase() }} from Review for</span>

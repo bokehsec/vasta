@@ -257,6 +257,12 @@ GitHub release page.
 
 ### Changed
 
+- **Review tasks skips tasks with a date ahead.** A task’s check-in now comes up only when it has no
+  Do date or Due, or when one of them has passed; a task planned or due today or later waits for
+  that day. New tasks still always come first, and a task back from **Waiting…** or **Snooze** on its
+  day still comes up. The **Due for review** filter follows the same rule, and **Review all** in a
+  view still goes through every open task.
+
 - **Dragging on the calendar moves the date you drag**, as in Vasta itself: a task's Due chip moves
   its Due date, its Do date chip moves its Do date, with Undo. A task dropped from the Tasks
   sidebar gets that Due date.

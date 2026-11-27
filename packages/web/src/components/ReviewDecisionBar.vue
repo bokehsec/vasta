@@ -37,7 +37,7 @@ const emit = defineEmits<{ act: [action: QuickActionDef, anchor: HTMLElement | n
 
 const label = (button: ReviewButton) => (button.role === 'wait' || askOf(props.type, button.action) ? `${button.label}…` : button.label)
 const keepLabel = computed(() => (props.outcome ? `Next ${props.noun}` : 'Keep as planned'))
-const keepHint = computed(() => (props.outcome ? 'Decided. Go on to the next one.' : props.every ? `Marks it reviewed today. It comes back in ${props.every} ${props.every === 1 ? 'day' : 'days'}.` : 'Marks it reviewed today.'))
+const keepHint = computed(() => (props.outcome ? 'Decided. Go on to the next one.' : props.every ? `Marks it reviewed today. It comes back in ${props.every} ${props.every === 1 ? 'day' : 'days'}, or once its date has passed if that is later.` : 'Marks it reviewed today.'))
 const laterHint = 'Not reviewed; it stays in the queue.'
 const snoozeHint = computed(() => `Hidden from Review for ${props.snoozeDays} ${props.snoozeDays === 1 ? 'day' : 'days'}. Nothing else changes.`)
 /** Decide later stays where there is no Snooze (another type's review), after a decision (Next) and for a task that is gone. */

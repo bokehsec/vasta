@@ -10,9 +10,14 @@
 // and any other decision made on it clears the day. Waiting… (a task waiting on someone) sets the day
 // it is to be checked again the same way; the task is back in the check-ins on that day even if its
 // weekly review has not come round, unless it has been reviewed since (dueForReview).
+// A check-in is for a task without a day ahead: one with no Do date or Due, or with one that has
+// passed. A task whose dates are all today or later is left alone until then (hasDayAhead), unless
+// its Snoozed until day brought it back.
 import { REVIEWED_PROPERTY_ID, SNOOZED_PROPERTY_ID, STATUS_PROPERTY_ID } from './builtin-types.ts'
 import type { DatePropertyDef, ObjectRecord, ObjectType, QuickActionDef } from './model.ts'
+import { taskDatesOf } from './task-dates.ts'
 import { isClosedTask, needsTriage } from './task-status.ts'
+import { currentDays } from './calendar.ts'
 import { daysBetween } from './time.ts'
 
 export const DEFAULT_REVIEW_EVERY = 7
@@ -84,19 +89,43 @@ export function dueForReview(type: ObjectType | undefined, object: Pick<ObjectRe
   if (!reviewFieldOf(type)) return true
   const every = reviewEveryOf(type)
   const last = lastReviewedDay(type, object)
-  const snoozed = snoozedUntil(type, object)
-  if (snoozed && snoozed <= today && (!last || last < snoozed)) return true
+  if (backFromSnooze(type, object, today)) return true
   return !every || !last || daysBetween(last, today) >= every
+}
+
+/** Whether the object's Snoozed until day has come (on or before `today`) and it has not been reviewed on or after it. */
+function backFromSnooze(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>, today: string): boolean {
+  const snoozed = snoozedUntil(type, object)
+  const last = lastReviewedDay(type, object)
+  return !!snoozed && snoozed <= today && (!last || last < snoozed)
+}
+
+/**
+ * Whether a task has a day ahead: a Do date or Due, and none of them late on `today`, read as the
+ * overdue list reads them (calendar.ts currentDays): a span is late once it has ended, a repeating
+ * date at its current occurrence, and a date today is not late. One with no date (or a repeat with
+ * none left), or with one that has passed, has none.
+ */
+export function hasDayAhead(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>, today: string, timeZone = 'UTC'): boolean {
+  const { plan, deadline } = taskDatesOf(type)
+  const days = [plan, deadline].flatMap((def) => {
+    const value = def ? object.props[def.id] : undefined
+    const current = value?.kind === 'date' ? currentDays(value.value, timeZone) : undefined
+    return current ? [current.days.endDay] : []
+  })
+  return days.length > 0 && days.every((day) => day >= today)
 }
 
 /**
  * Whether a task is in Review's check-ins on `today`: open, not new (a new task is Review's first
  * queue, whatever its Last reviewed day), not snoozed (a snoozed day that has come brings it back, see
- * dueForReview) and due for review. What the "Due for review" filter and
- * the queues of a Review both ask.
+ * dueForReview), due for review, and without a day ahead (no Do date or Due, or one that has passed),
+ * unless it is back from Snooze or Waiting… on its day. What the "Due for review" filter and the
+ * queues of a Review both ask. `timeZone` reads timed dates (the viewer's).
  */
-export function isCheckInDue(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>, today: string): boolean {
+export function isCheckInDue(type: ObjectType | undefined, object: Pick<ObjectRecord, 'props'>, today: string, timeZone = 'UTC'): boolean {
   return type?.system === 'task' && !isClosedTask(type, object) && !needsTriage(type, object) && !isSnoozed(type, object, today) && dueForReview(type, object, today)
+    && (backFromSnooze(type, object, today) || !hasDayAhead(type, object, today, timeZone))
 }
 
 /** Reviewed: today as the Last reviewed day, nothing else changed. None without the date. */

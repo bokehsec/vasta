@@ -217,9 +217,9 @@ function readField(object: ObjectSummary, field: string, context: QueryContext):
       // The site a weblink points to, without "www.".
       return object.media?.host ? { kind: 'text', value: object.media.host.replace(/^www\./, '') } : EMPTY
     case REVIEW_DUE_FIELD: {
-      // A task in Review's check-ins (task-review.ts): open, not new, not reviewed in its type's number of days; a type without review dates has none.
+      // A task in Review's check-ins (task-review.ts): open, not new, not reviewed in its type's number of days, no day ahead; a type without review dates has none.
       const type = context.types.get(object.typeId)
-      return reviewFieldOf(type) ? { kind: 'checkbox', value: isCheckInDue(type, object, context.today) } : EMPTY
+      return reviewFieldOf(type) ? { kind: 'checkbox', value: isCheckInDue(type, object, context.today, context.timeZone) } : EMPTY
     }
   }
   const own = context.types.get(object.typeId)?.properties.find((p) => p.id === field)

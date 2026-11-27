@@ -1019,7 +1019,7 @@ export class AgentTools {
    * in the app. Fields are property names (or ids), a relation's field as "Author.Country", or
    * built-in fields: title, tags, createdAt, updatedAt, createdBy, updatedBy, date, type, host, and
    * "Due for review" (checked on a task in Review's check-ins: open, not new, not reviewed in its
-   * type's number of days). Select values
+   * type's number of days, no Do date or Due ahead unless back from Snooze or Waiting). Select values
    * are option labels; people are usernames or names ("me": the user).
    */
   query(options: { space?: string; types?: string[]; where?: AgentFilter[]; match?: 'all' | 'any'; sort?: { field: string; direction?: 'asc' | 'desc' }[]; limit?: number } = {}) {

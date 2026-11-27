@@ -3,7 +3,7 @@
 // of one view. Everything about the task is on screen (its text in full, steps, the plan's fields,
 // editable in place) and so are its choices (ReviewDecisionBar: what is offered is
 // lib/review-choices.ts): few and never the status it already has; a task already placed has Keep
-// in that status (reviewed today, back in `review.every` days). A task has Schedule… (its question
+// in that status (reviewed today, back in `review.every` days or once its date has passed, whichever is later). A task has Schedule… (its question
 // offers Today first, then Tomorrow, Next week, any day, No date and Someday; Today is what the old
 // Today button did, key T inside the question; a new task lands in the first open status, not
 // Scheduled), Waiting… (a question of its own: the day to check back and a comment, which starts as

@@ -12,7 +12,7 @@ import { statusProperty } from './metrics.ts'
 import { daysBetween, dayOfDate } from './time.ts'
 
 /** Sister queues within the supplied tasks: incoming work, then commitments due for review. */
-export function taskWorkflowQueues<T extends Pick<ObjectRecord, 'props'>>(type: ObjectType | undefined, objects: readonly T[], today: string): { triage: T[]; review: T[] } {
+export function taskWorkflowQueues<T extends Pick<ObjectRecord, 'props'>>(type: ObjectType | undefined, objects: readonly T[], today: string, timeZone = 'UTC'): { triage: T[]; review: T[] } {
   const triage: T[] = []
   const review: T[] = []
   if (type?.system !== 'task') return { triage, review }
@@ -20,19 +20,19 @@ export function taskWorkflowQueues<T extends Pick<ObjectRecord, 'props'>>(type: 
     if (needsTriage(type, object)) {
       if (!isSnoozed(type, object, today)) triage.push(object)
     }
-    else if (isCheckInDue(type, object, today)) review.push(object)
+    else if (isCheckInDue(type, object, today, timeZone)) review.push(object)
   }
   return { triage, review }
 }
 
 /**
  * What a Review of tasks goes through: the new tasks of the whole space (`space`, oldest first),
- * then the check-ins due among `place`'s tasks, in its order (the view it started from; the space
+ * then the check-ins due among `place`'s tasks (none with a day ahead, isCheckInDue), in its order (the view it started from; the space
  * itself for a sweep of all). Counts are these lists' lengths.
  */
-export function reviewQueues<T extends Pick<ObjectRecord, 'props' | 'createdAt' | 'id'>>(type: ObjectType | undefined, space: readonly T[], place: readonly T[], today: string): { incoming: T[]; checkIns: T[] } {
+export function reviewQueues<T extends Pick<ObjectRecord, 'props' | 'createdAt' | 'id'>>(type: ObjectType | undefined, space: readonly T[], place: readonly T[], today: string, timeZone = 'UTC'): { incoming: T[]; checkIns: T[] } {
   const oldestFirst = [...space].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-  return { incoming: taskWorkflowQueues(type, oldestFirst, today).triage, checkIns: taskWorkflowQueues(type, place, today).review }
+  return { incoming: taskWorkflowQueues(type, oldestFirst, today, timeZone).triage, checkIns: taskWorkflowQueues(type, place, today, timeZone).review }
 }
 
 /** A decision explicitly places/closes the task. Dates or notes alone leave triage unfinished. */

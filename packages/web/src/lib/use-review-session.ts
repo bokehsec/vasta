@@ -1,6 +1,6 @@
 // Everything a type page does to start, resume and end a review (ProcessMode): which tasks it goes
 // through, the button that says where it stands, and the paused session. A review of tasks always
-// starts with every new task in the space, then the check-ins of the place it started from (a view,
+// starts with every new task in the space, then the check-ins (no day ahead) of the place it started from (a view,
 // or the whole space for "Review all"): core's reviewQueues. A review of any other type goes through
 // the view's open objects due for one. One session is kept per type on this device, so a review of
 // another type never replaces it; starting another of the same type asks first.
@@ -8,6 +8,7 @@ import { dueForReview, isClosedTask, needsTriage, reviewFieldOf, reviewQueues, q
 import type { Id, ObjectSummary, ObjectType } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch, type ComputedRef } from 'vue'
 import { dayKey } from './actions.ts'
+import { viewerTimeZone } from './calendar.ts'
 import { openObject } from './open.ts'
 import { confirmDialog } from './overlays.ts'
 import { readSession, writeSession } from './review-storage.ts'
@@ -49,8 +50,8 @@ export function useReviewSession(host: ReviewHost) {
 
   // What each place would go through. A task type: the space's new tasks, then check-ins; another: the view's open objects.
   const openRows = computed(() => host.rows().filter((o) => !isClosedTask(type.value, o)))
-  const viewQueues = computed(() => reviewQueues(type.value, host.objects(), openRows.value, dayKey()))
-  const spaceQueues = computed(() => reviewQueues(type.value, host.objects(), sorted.value, dayKey()))
+  const viewQueues = computed(() => reviewQueues(type.value, host.objects(), openRows.value, dayKey(), viewerTimeZone()))
+  const spaceQueues = computed(() => reviewQueues(type.value, host.objects(), sorted.value, dayKey(), viewerTimeZone()))
   const dueRows = computed(() => openRows.value.filter((o) => dueForReview(type.value, o, dayKey())))
   /** The place the button starts a review from: the view, or the whole space where the page has no list. */
   const primaryScope = computed(() => (reviewable.value ? ('view' as const) : ('space' as const)))

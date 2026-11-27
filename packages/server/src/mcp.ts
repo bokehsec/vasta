@@ -331,7 +331,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     {
       title: 'Query objects',
       description:
-        'Objects of some types, filtered and sorted, like a query in the app. Fields are property names, "Relation.Field" through a relation, or title, tags, createdAt, updatedAt, createdBy, updatedBy, createdVia, updatedVia (the agent an object was written through), date, type, host, and "Due for review" (is-checked: a task in Review\'s check-ins, open and not new, not reviewed in its type\'s number of days). People by username or name, "me" for the user ("Assignee contains me"). Operators: is, is-not, contains, not-contains, starts-with, is-empty, is-not-empty, is-checked, is-not-checked, gt, gte, lt, lte, before, after. Dates as YYYY-MM-DD.',
+        'Objects of some types, filtered and sorted, like a query in the app. Fields are property names, "Relation.Field" through a relation, or title, tags, createdAt, updatedAt, createdBy, updatedBy, createdVia, updatedVia (the agent an object was written through), date, type, host, and "Due for review" (is-checked: a task in Review\'s check-ins, open and not new, not reviewed in its type\'s number of days, and with no Do date or Due ahead unless back from Snooze or Waiting on its day). People by username or name, "me" for the user ("Assignee contains me"). Operators: is, is-not, contains, not-contains, starts-with, is-empty, is-not-empty, is-checked, is-not-checked, gt, gte, lt, lte, before, after. Dates as YYYY-MM-DD.',
       inputSchema: {
         space,
         types: z.array(z.string()).optional().describe('Type names or ids; all types when omitted'),

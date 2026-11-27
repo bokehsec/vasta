@@ -517,6 +517,18 @@ export function objectEntries(objects: ObjectSummary[], types: Map<Id, ObjectTyp
 }
 
 /**
+ * A date as it stands now (in `timeZone`): its days, and for a date that repeats those of its current
+ * occurrence (moved or not). None for a repeating date with no occurrence left. What makes a task's
+ * date late (overdueEntries) or still ahead (task-review.ts hasDayAhead).
+ */
+export function currentDays(value: DateValue, timeZone: string): { occurrence?: IsoDateTime; times: { start: IsoDateTime; end?: IsoDateTime }; days: { startDay: string; endDay: string } } | undefined {
+  const occurrence = value.rrule ? currentOccurrence(value, timeZone) : undefined
+  if (value.rrule && !occurrence) return undefined
+  const times = occurrence ? currentTimes(value, occurrence) : { start: value.start, ...(value.end ? { end: value.end } : {}) }
+  return { ...(occurrence ? { occurrence } : {}), times, days: spanOf({ ...times, resolution: value.resolution }, timeZone) }
+}
+
+/**
  * The tasks that are late on `today` (in `timeZone`): open ones with a deadline or a plan on a day
  * before it. A date that spans days is late once it has ended; a time earlier today is not late
  * yet; a date that repeats counts only at its current occurrence (the one a repeating task is done
@@ -533,10 +545,9 @@ export function overdueEntries(objects: ObjectSummary[], types: Map<Id, ObjectTy
     for (const def of [deadline, plan]) {
       const value = def && object.props[def.id]
       if (!def || value?.kind !== 'date') continue
-      const occurrence = value.value.rrule ? currentOccurrence(value.value, timeZone) : undefined
-      if (value.value.rrule && !occurrence) continue
-      const times = occurrence ? currentTimes(value.value, occurrence) : { start: value.value.start, ...(value.value.end ? { end: value.value.end } : {}) }
-      const days = spanOf({ ...times, resolution: value.value.resolution }, timeZone)
+      const current = currentDays(value.value, timeZone)
+      if (!current) continue
+      const { occurrence, times, days } = current
       if (days.endDay >= today) continue
       late.push({
         field: def.id,

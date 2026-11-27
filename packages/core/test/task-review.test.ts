@@ -5,7 +5,7 @@ import type { ObjectSummary } from '../src/model.ts'
 import { fieldKind, matchesFilter } from '../src/query.ts'
 import { quickActionEdit, quickActionMessage } from '../src/task-actions.ts'
 import { taskWorkflowQueues } from '../src/task-workflows.ts'
-import { DEFAULT_SNOOZE_DAYS, dueForReview, isCheckInDue, isSnoozed, reviewEveryOf, reviewFieldOf, reviewedAction, reviewedByStatusChange, snoozeAction, snoozeDaysOf, snoozeFieldOf, withReviewed, withSnoozeCleared } from '../src/task-review.ts'
+import { DEFAULT_SNOOZE_DAYS, dueForReview, hasDayAhead, isCheckInDue, isSnoozed, reviewEveryOf, reviewFieldOf, reviewedAction, reviewedByStatusChange, snoozeAction, snoozeDaysOf, snoozeFieldOf, withReviewed, withSnoozeCleared } from '../src/task-review.ts'
 
 const AT = '2026-11-14T12:00:00.000Z'
 const types = createBuiltinTypes('s', AT)
@@ -45,6 +45,34 @@ describe('review dates', () => {
     expect(dueForReview(task, waiting('2026-11-21', '2026-11-21'), '2026-11-22')).toBe(false)
     expect(dueForReview(task, waiting('2026-11-21', '2026-11-22'), '2026-11-23')).toBe(false)
     expect(dueForReview(task, waiting('2026-11-21'), '2026-11-21')).toBe(true)
+  })
+
+  it('a check-in is for a task with no date or one that has passed; one with a day ahead waits for it', () => {
+    const plan = task.properties.find((p) => p.kind === 'date' && p.role === 'plan')!.id
+    const placed = (dates: Record<string, string>) => ({ props: { status: { kind: 'select' as const, value: ['todo'] }, ...Object.fromEntries(Object.entries(dates).map(([k, v]) => [k, day(v)])) } as Record<string, PropertyValue> })
+    expect(isCheckInDue(task, placed({}), '2026-11-14')).toBe(true)
+    expect(isCheckInDue(task, placed({ [plan]: '2026-11-13' }), '2026-11-14')).toBe(true)
+    expect(isCheckInDue(task, placed({ due: '2026-11-10' }), '2026-11-14')).toBe(true)
+    // Planned or due today, or later: not yet.
+    expect(isCheckInDue(task, placed({ [plan]: '2026-11-14' }), '2026-11-14')).toBe(false)
+    expect(isCheckInDue(task, placed({ due: '2026-12-01' }), '2026-11-14')).toBe(false)
+    expect(hasDayAhead(task, placed({ [plan]: '2026-11-20', due: '2026-12-01' }), '2026-11-14')).toBe(true)
+    // Planned ahead but already overdue: it has passed.
+    expect(isCheckInDue(task, placed({ [plan]: '2026-11-20', due: '2026-11-13' }), '2026-11-14')).toBe(true)
+    // A timed Due is read in the viewer's zone: 03:00 UTC on the 14th is still the 13th in Toronto.
+    const timed = { props: { status: { kind: 'select' as const, value: ['todo'] }, due: { kind: 'date', value: { start: '2026-11-14T03:00:00.000Z', resolution: 'time' } } } as Record<string, PropertyValue> }
+    expect(isCheckInDue(task, timed, '2026-11-14', 'UTC')).toBe(false)
+    expect(isCheckInDue(task, timed, '2026-11-14', 'America/Toronto')).toBe(true)
+    // A span is passed only once it has ended, as on the overdue list.
+    const span = (start: string, end: string) => ({ props: { status: { kind: 'select' as const, value: ['todo'] }, [plan]: { kind: 'date', value: { start: `${start}T00:00:00.000Z`, end: `${end}T00:00:00.000Z`, resolution: 'day' } } } as Record<string, PropertyValue> })
+    expect(isCheckInDue(task, span('2026-11-10', '2026-11-20'), '2026-11-14')).toBe(false)
+    expect(isCheckInDue(task, span('2026-11-10', '2026-11-13'), '2026-11-14')).toBe(true)
+    // A repeating date is read at its current occurrence (the next one not done), as on the overdue list.
+    const repeating = (start: string) => ({ props: { status: { kind: 'select' as const, value: ['todo'] }, due: { kind: 'date', value: { start: `${start}T00:00:00.000Z`, resolution: 'day', rrule: 'FREQ=WEEKLY' } } } as Record<string, PropertyValue> })
+    expect(isCheckInDue(task, repeating('2026-11-20'), '2026-11-14')).toBe(false)
+    expect(isCheckInDue(task, repeating('2026-11-06'), '2026-11-14')).toBe(true)
+    // Back from Waiting… on its day (its Do date moved there): in the check-ins even so.
+    expect(isCheckInDue(task, { props: { ...placed({ [plan]: '2026-11-21', snoozed: '2026-11-21', reviewed: '2026-11-14' }).props } }, '2026-11-21')).toBe(true)
   })
 
   it('Reviewed sets today; a decision that leaves the status alone sets it too, without saying so in the notice', () => {
@@ -148,6 +176,12 @@ describe('the Due for review filter', () => {
     expect(matches(fortnight, '2026-11-07')).toBe(false)
     expect(matches({ ...task, review: { every: 3 } }, '2026-11-10')).toBe(true)
     expect(matches(page)).toBe(false)
+  })
+
+  it('leaves out a task with a day ahead', () => {
+    const dated = { ...summary(task), props: { ...summary(task).props, due: day('2026-12-01') } } as ObjectSummary
+    expect(matchesFilter(dated, due, { types: new Map([[task.id, task]]), today: '2026-11-14', timeZone: 'UTC' })).toBe(false)
+    expect(matchesFilter(dated, due, { types: new Map([[task.id, task]]), today: '2026-12-02', timeZone: 'UTC' })).toBe(true)
   })
 
   it('is Review\'s check-ins: not closed tasks, not new ones', () => {

@@ -45,10 +45,10 @@ const choice = 'flex min-h-14 w-full items-center gap-3 rounded-lg px-3 py-3 tex
           <span class="tabular-nums">{{ newCount + checkInCount }}</span>
         </button>
         <p v-if="!newCount && !checkInCount" class="break-words px-3 pb-2 text-sm text-ink-soft" data-review-none>Nothing to review in {{ mode === 'view' ? viewScope : spaceName }}.</p>
-        <button v-if="mode === 'view' && viewAllCount > newCount + checkInCount" :class="choice" data-process-all @click="emit('start', 'tasks', 'view', true)">Review all {{ viewAllCount }} — including recently reviewed</button>
+        <button v-if="mode === 'view' && viewAllCount > newCount + checkInCount" :class="choice" data-process-all @click="emit('start', 'tasks', 'view', true)">Review all {{ viewAllCount }} — including recently reviewed and dated ahead</button>
         <dl class="space-y-2 px-3 pb-2 pt-1 text-xs leading-relaxed text-ink-soft">
           <div><dt class="inline font-medium text-ink">New first. </dt><dd class="inline">Tasks with no status<template v-if="triageOptionsOf(type).length"> or {{ triageOptionsOf(type).map((o) => o.label).join(', ') }}</template>: you choose where each one goes.</dd></div>
-          <div><dt class="inline font-medium text-ink">Then check-ins. </dt><dd class="inline">{{ reviewEveryOf(type) ? `Open tasks not reviewed in the last ${reviewEveryOf(type)} ${reviewEveryOf(type) === 1 ? 'day' : 'days'}` : 'Every open task, each time' }}: keep the plan or change it. How often is in Type settings › Review.</dd></div>
+          <div><dt class="inline font-medium text-ink">Then check-ins. </dt><dd class="inline">{{ reviewEveryOf(type) ? `Open tasks with no date or one that has passed, not reviewed in the last ${reviewEveryOf(type)} ${reviewEveryOf(type) === 1 ? 'day' : 'days'}` : 'Open tasks with no date or one that has passed, each time' }}: keep the plan or change it. Tasks with a date ahead wait for it, unless Snooze or Waiting… brings them back. How often is in Type settings › Review.</dd></div>
         </dl>
         <button v-if="mode === 'view'" :class="choice" data-start-space @click="emit('start', 'tasks', 'space')" :disabled="!spaceCount">
           <AppIcon fallback="ph:globe" class="shrink-0 text-ink-soft" />

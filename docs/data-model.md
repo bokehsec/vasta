@@ -96,7 +96,9 @@ without doing it), and *new* (incoming) is no status, or an option in `review.in
 called Inbox. Review (Tasks' Review button, a view's ⋯ for other types) goes through the new tasks
 of the space first, then the check-ins: open tasks that are not new and whose **Last reviewed**
 date (the built-in `reviewed` date, never an entry on the calendar) is `review.every` days old or
-more (default 7; 0 every time) — the same list the "Due for review" filter matches. `review`
+more (default 7; 0 every time), and that have no day ahead: no Do date or Due, or one that has
+passed (read as the overdue list reads it: a span once it ends, a repeat at its current occurrence;
+today is not passed), unless the task is back from Snooze or Waiting… on its day — the same list the "Due for review" filter matches. `review`
 (Type settings › Review, column `types.review`) holds just those two settings. Keep records today
 in Last reviewed; any save that changes a task's status does too, in the saving user's day, unless
 it sets the date itself (`reviewedByStatusChange`). A review's paused session is a preference of
